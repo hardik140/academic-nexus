@@ -1,0 +1,170 @@
+@import "tailwindcss";
+
+/*
+ * Academic Nexus — Design System Tokens
+ * Source: stitch_comprehensive_sis_portal_ecosystem / DESIGN.md
+ *
+ * Multi-tenant SaaS SIS Platform
+ * Color palette, typography, spacing, and component tokens
+ */
+
+@theme {
+  /* ─── Color Tokens (from Stitch DESIGN.md) ─── */
+
+  /* Surface hierarchy */
+  --color-surface: #f8f9ff;
+  --color-surface-dim: #cbdbf5;
+  --color-surface-bright: #f8f9ff;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-low: #eff4ff;
+  --color-surface-container: #e5eeff;
+  --color-surface-container-high: #dce9ff;
+  --color-surface-container-highest: #d3e4fe;
+
+  /* On-surface */
+  --color-on-surface: #0b1c30;
+  --color-on-surface-variant: #45464d;
+  --color-inverse-surface: #213145;
+  --color-inverse-on-surface: #eaf1ff;
+
+  /* Outline */
+  --color-outline: #76777d;
+  --color-outline-variant: #c6c6cd;
+
+  /* Primary */
+  --color-primary: #000000;
+  --color-on-primary: #ffffff;
+  --color-primary-container: #131b2e;
+  --color-on-primary-container: #7c839b;
+  --color-primary-fixed: #dae2fd;
+  --color-primary-fixed-dim: #bec6e0;
+
+  /* Secondary (Brand Blue) */
+  --color-secondary: #0051d5;
+  --color-on-secondary: #ffffff;
+  --color-secondary-container: #316bf3;
+  --color-on-secondary-container: #fefcff;
+  --color-secondary-fixed: #dbe1ff;
+  --color-secondary-fixed-dim: #b4c5ff;
+  --color-on-secondary-fixed: #00174b;
+
+  /* Tertiary */
+  --color-tertiary: #000000;
+  --color-on-tertiary: #ffffff;
+  --color-tertiary-container: #191c1e;
+
+  /* Error / Destructive */
+  --color-error: #ba1a1a;
+  --color-on-error: #ffffff;
+  --color-error-container: #ffdad6;
+  --color-on-error-container: #93000a;
+
+  /* Semantic */
+  --color-success: #10b981;
+  --color-on-success: #ffffff;
+  --color-warning: #f59e0b;
+  --color-on-warning: #ffffff;
+  --color-info: #3b82f6;
+
+  /* Background */
+  --color-background: #f8f9ff;
+  --color-on-background: #0b1c30;
+
+  /* ─── Typography ─── */
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  /* ─── Spacing Scale ─── */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+  --spacing-2xl: 48px;
+  --spacing-3xl: 64px;
+
+  /* ─── Border Radius ─── */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-full: 9999px;
+
+  /* ─── Shadows ─── */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.07), 0 2px 4px -2px rgb(0 0 0 / 0.07);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.08);
+  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+
+  /* ─── Animations ─── */
+  --animate-fade-in: fade-in 0.3s ease-out;
+  --animate-slide-up: slide-up 0.3s ease-out;
+  --animate-slide-in-right: slide-in-right 0.25s ease-out;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slide-in-right {
+  from { opacity: 0; transform: translateX(16px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* ─── Dark Mode Overrides ─── */
+.dark {
+  --color-surface: #0b1c30;
+  --color-surface-dim: #0a1625;
+  --color-surface-bright: #162a42;
+  --color-surface-container-lowest: #060e1a;
+  --color-surface-container-low: #0d1f34;
+  --color-surface-container: #132640;
+  --color-surface-container-high: #1a2f4c;
+  --color-surface-container-highest: #213858;
+  --color-on-surface: #eaf1ff;
+  --color-on-surface-variant: #c6c6cd;
+  --color-background: #0b1c30;
+  --color-on-background: #eaf1ff;
+  --color-outline: #8e8f96;
+  --color-outline-variant: #45464d;
+}
+
+/* ─── Base Resets ─── */
+html {
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--color-background);
+  color: var(--color-on-background);
+}
+
+::selection {
+  background-color: var(--color-secondary);
+  color: var(--color-on-secondary);
+}
+
+/* ─── Scrollbar ─── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-outline-variant);
+  border-radius: var(--radius-full);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-outline);
+}

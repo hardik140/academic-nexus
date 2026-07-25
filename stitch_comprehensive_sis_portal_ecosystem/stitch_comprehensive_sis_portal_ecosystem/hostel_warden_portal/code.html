@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Academic Nexus SIS - Warden Portal</title>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .material-symbols-outlined.fill {
+            font-variation-settings: 'FILL' 1;
+        }
+        /* Custom Scrollbar for inner content */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #c6c6cd; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #76777d; }
+    </style>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "surface-container": "#e5eeff",
+                    "secondary-container": "#316bf3",
+                    "on-secondary-fixed": "#00174b",
+                    "secondary-fixed-dim": "#b4c5ff",
+                    "surface-container-high": "#dce9ff",
+                    "error": "#ba1a1a",
+                    "primary-fixed": "#dae2fd",
+                    "primary": "#000000",
+                    "on-tertiary-fixed-variant": "#444749",
+                    "on-secondary-fixed-variant": "#003ea8",
+                    "on-tertiary-container": "#818486",
+                    "surface-dim": "#cbdbf5",
+                    "tertiary": "#000000",
+                    "background": "#f8f9ff",
+                    "on-error-container": "#93000a",
+                    "tertiary-container": "#191c1e",
+                    "primary-container": "#131b2e",
+                    "on-tertiary-fixed": "#191c1e",
+                    "on-tertiary": "#ffffff",
+                    "on-error": "#ffffff",
+                    "surface-container-low": "#eff4ff",
+                    "error-container": "#ffdad6",
+                    "inverse-on-surface": "#eaf1ff",
+                    "surface-variant": "#d3e4fe",
+                    "outline": "#76777d",
+                    "surface-container-lowest": "#ffffff",
+                    "surface-container-highest": "#d3e4fe",
+                    "primary-fixed-dim": "#bec6e0",
+                    "on-surface": "#0b1c30",
+                    "on-primary-fixed-variant": "#3f465c",
+                    "tertiary-fixed": "#e0e3e5",
+                    "surface-bright": "#f8f9ff",
+                    "secondary": "#0051d5",
+                    "on-background": "#0b1c30",
+                    "inverse-primary": "#bec6e0",
+                    "on-primary-container": "#7c839b",
+                    "on-secondary-container": "#fefcff",
+                    "surface": "#f8f9ff",
+                    "tertiary-fixed-dim": "#c4c7c9",
+                    "surface-tint": "#565e74",
+                    "outline-variant": "#c6c6cd",
+                    "on-surface-variant": "#45464d",
+                    "on-primary-fixed": "#131b2e",
+                    "on-primary": "#ffffff",
+                    "inverse-surface": "#213145",
+                    "secondary-fixed": "#dbe1ff",
+                    "on-secondary": "#ffffff"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "spacing": {
+                    "xs": "4px",
+                    "md": "16px",
+                    "gutter": "24px",
+                    "grid_columns": "12",
+                    "sm": "8px",
+                    "base": "4px",
+                    "lg": "24px",
+                    "margin": "32px",
+                    "xl": "32px"
+            },
+            "fontFamily": {
+                    "body-sm": ["Inter", "sans-serif"],
+                    "display-lg": ["Inter", "sans-serif"],
+                    "label-md": ["Inter", "sans-serif"],
+                    "headline-sm": ["Inter", "sans-serif"],
+                    "headline-lg": ["Inter", "sans-serif"],
+                    "body-lg": ["Inter", "sans-serif"],
+                    "headline-md": ["Inter", "sans-serif"],
+                    "mono-sm": ["monospace"],
+                    "body-md": ["Inter", "sans-serif"]
+            },
+            "fontSize": {
+                    "body-sm": ["13px", {"lineHeight": "18px", "fontWeight": "400"}],
+                    "display-lg": ["36px", {"lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                    "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                    "headline-sm": ["16px", {"lineHeight": "24px", "fontWeight": "600"}],
+                    "headline-lg": ["28px", {"lineHeight": "36px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                    "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "headline-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                    "mono-sm": ["12px", {"lineHeight": "16px", "fontWeight": "400"}],
+                    "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background h-screen w-full flex overflow-hidden">
+<!-- Shared Component: NavigationDrawer (Desktop) -->
+<aside class="hidden md:flex flex-col h-full w-[280px] rounded-r-xl bg-surface dark:bg-surface-dim py-lg border-r border-outline-variant shadow-xl z-20 flex-shrink-0 transition-all ease-in-out duration-300">
+<!-- Header -->
+<div class="px-lg pb-lg mb-sm border-b border-outline-variant flex items-center gap-md">
+<div class="w-10 h-10 rounded-full overflow-hidden bg-surface-variant flex-shrink-0">
+<img alt="User Avatar" class="w-full h-full object-cover" data-alt="Professional headshot of a school administrator in soft office lighting, conveying authority and approachability in a modern academic setting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBTAgwxkVc6oXhtpvAm2zUAcGNIiWYdklJUcrXlmNtK3UB68pEpogd5s7dAYF9dsWDMnlagsgPkya94m6KeMf-AOFPUARkMLHS0yNaBpuv2Yc93JbqktMi7dpwlB-aUzW8TU0S7BD46PDMHwwNekYepxL7d3eMqCvWDgfdkW47Nz3BFIaNQobYT623xusTmaCZ84xplhZGvzrn5Pk-P7Ggg39QywsuNVzHbsOylJiB6ALJbDascI7EcRRmOgBjCycCg-EEID1l_LUs"/>
+</div>
+<div class="flex flex-col">
+<span class="font-headline-sm text-headline-sm font-bold text-secondary">Academic System</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Switch Role</span>
+</div>
+</div>
+<!-- Navigation Links -->
+<nav class="flex flex-col gap-xs px-sm flex-1 overflow-y-auto">
+<a class="flex items-center gap-md px-md py-sm rounded-full text-on-surface-variant hover:bg-surface-container-highest transition-colors font-body-md text-body-md mx-2" href="#">
+<span class="material-symbols-outlined">school</span>
+                Teacher Portal
+            </a>
+<a class="flex items-center gap-md px-md py-sm rounded-full text-on-surface-variant hover:bg-surface-container-highest transition-colors font-body-md text-body-md mx-2" href="#">
+<span class="material-symbols-outlined">psychology</span>
+                HOD Dashboard
+            </a>
+<a class="flex items-center gap-md px-md py-sm rounded-full text-on-surface-variant hover:bg-surface-container-highest transition-colors font-body-md text-body-md mx-2" href="#">
+<span class="material-symbols-outlined">account_balance</span>
+                Finance Ledger
+            </a>
+<a class="flex items-center gap-md px-md py-sm rounded-full text-on-surface-variant hover:bg-surface-container-highest transition-colors font-body-md text-body-md mx-2" href="#">
+<span class="material-symbols-outlined">leaderboard</span>
+                Director Insights
+            </a>
+<!-- Active State -->
+<a class="flex items-center gap-md px-md py-sm rounded-full bg-secondary-fixed text-on-secondary-fixed font-body-md text-body-md mx-2" href="#">
+<span class="material-symbols-outlined fill">admin_panel_settings</span>
+                Admin Console
+            </a>
+<a class="flex items-center gap-md px-md py-sm rounded-full text-on-surface-variant hover:bg-surface-container-highest transition-colors font-body-md text-body-md mx-2" href="#">
+<span class="material-symbols-outlined">family_restroom</span>
+                Student/Guardian
+            </a>
+</nav>
+<div class="px-lg pt-md mt-auto">
+<span class="font-mono-sm text-mono-sm text-outline">v2.4.0</span>
+</div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="flex-1 flex flex-col min-w-0 h-full relative z-10 pb-[72px] md:pb-0">
+<!-- Shared Component: TopAppBar -->
+<header class="flex justify-between items-center w-full px-lg py-md max-w-full bg-surface border-b border-outline-variant flex-shrink-0">
+<div class="flex items-center gap-md">
+<!-- Mobile Menu Trigger (Visual only) -->
+<button class="md:hidden text-on-surface-variant p-sm hover:bg-surface-container-low rounded-full transition-colors">
+<span class="material-symbols-outlined">menu</span>
+</button>
+<h1 class="font-headline-lg text-headline-lg font-bold text-secondary">SIS Portal</h1>
+</div>
+<div class="flex items-center gap-md">
+<button class="text-on-surface-variant hover:bg-surface-container-low p-sm rounded-full transition-colors relative active:scale-95 duration-100">
+<span class="material-symbols-outlined">notifications</span>
+<span class="absolute top-2 right-2 w-2 h-2 bg-error rounded-full"></span>
+</button>
+<div class="w-8 h-8 rounded-full overflow-hidden bg-surface-variant md:hidden">
+<img alt="User Profile" class="w-full h-full object-cover" data-alt="Professional headshot of a school administrator in soft office lighting, conveying authority and approachability in a modern academic setting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCphe-fjvxM-n9KsjvLhH0V4mrv-j3H-UecYhXwvzw8jM0iI20DPhSpWIT6VKhL1XTxQikq52cvKyw6CnktslJvkJCXovpZuCJcn0rQCgc9Lf2b4jCwj5k0sImFuHuCebQZ2qpGzr3-Er4rnhdbXouPNwveBxDAfBryqzWewqxs2MybLvX2J4f2OuM9uvGjAsNaLZ0FGAAAEE-JAZnA3-Z_pIIx4OimrPtDWEd5SlqTDFrz_jFRw0ue3HzKnTtVf_Z42dSik1GlkDU"/>
+</div>
+</div>
+</header>
+<!-- Scrollable Dashboard Content -->
+<div class="flex-1 overflow-y-auto p-md md:p-lg lg:p-margin">
+<!-- Page Header & Actions -->
+<div class="flex flex-col md:flex-row md:items-end justify-between gap-md mb-lg">
+<div>
+<h2 class="font-display-lg text-display-lg text-on-surface mb-xs">Hostel Overview - Block A</h2>
+<p class="font-body-md text-body-md text-on-surface-variant">Real-time occupancy, logistics, and alert monitoring.</p>
+</div>
+<!-- Quick Search -->
+<div class="relative w-full md:w-80 group">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline group-focus-within:text-secondary transition-colors">search</span>
+<input class="w-full bg-surface-container-lowest border border-outline-variant rounded-full py-2 pl-10 pr-4 font-body-md text-body-md text-on-surface focus:outline-none focus:ring-2 focus:ring-secondary focus:border-transparent transition-all placeholder:text-outline-variant shadow-[0_2px_4px_rgba(0,0,0,0.02)]" placeholder="Search student name or room..." type="text"/>
+</div>
+</div>
+<!-- Bento Grid Layout -->
+<div class="grid grid-cols-4 md:grid-cols-8 lg:grid-cols-12 gap-md md:gap-gutter">
+<!-- KPI 1: Occupancy -->
+<div class="col-span-4 lg:col-span-4 bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col gap-sm shadow-[0_2px_4px_rgba(0,0,0,0.02)] hover:border-outline transition-colors relative overflow-hidden group">
+<div class="flex justify-between items-start z-10 relative">
+<div class="flex flex-col">
+<span class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Total Occupancy</span>
+<span class="font-display-lg text-display-lg text-on-surface mt-1">94%</span>
+</div>
+<div class="p-sm bg-surface-container rounded-lg text-secondary">
+<span class="material-symbols-outlined">meeting_room</span>
+</div>
+</div>
+<div class="mt-auto flex items-center gap-2 z-10 relative">
+<div class="flex-1 h-1.5 bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-secondary w-[94%] rounded-full"></div>
+</div>
+<span class="font-mono-sm text-mono-sm text-outline">470/500 Rooms</span>
+</div>
+<!-- Decorative subtle background -->
+<div class="absolute -bottom-6 -right-6 text-surface-container opacity-50 group-hover:scale-110 transition-transform duration-500">
+<span class="material-symbols-outlined !text-9xl">apartment</span>
+</div>
+</div>
+<!-- KPI 2: Maintenance -->
+<div class="col-span-4 lg:col-span-4 bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col gap-sm shadow-[0_2px_4px_rgba(0,0,0,0.02)] hover:border-outline transition-colors">
+<div class="flex justify-between items-start">
+<div class="flex flex-col">
+<span class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Maintenance</span>
+<span class="font-display-lg text-display-lg text-on-error-container mt-1">5</span>
+</div>
+<div class="p-sm bg-error-container rounded-lg text-on-error-container">
+<span class="material-symbols-outlined">build</span>
+</div>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-auto">Pending requests requiring attention.</p>
+</div>
+<!-- KPI 3: Out of Campus -->
+<div class="col-span-4 lg:col-span-4 bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col gap-sm shadow-[0_2px_4px_rgba(0,0,0,0.02)] hover:border-outline transition-colors">
+<div class="flex justify-between items-start">
+<div class="flex flex-col">
+<span class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Out-of-Campus</span>
+<span class="font-display-lg text-display-lg text-on-surface mt-1">12</span>
+</div>
+<div class="p-sm bg-surface-variant rounded-lg text-on-surface">
+<span class="material-symbols-outlined">directions_walk</span>
+</div>
+</div>
+<div class="mt-auto flex items-center gap-xs text-secondary font-body-sm text-body-sm cursor-pointer hover:underline">
+<span>View active gate passes</span>
+<span class="material-symbols-outlined !text-sm">arrow_forward</span>
+</div>
+</div>
+<!-- Mess Management -->
+<div class="col-span-4 md:col-span-8 lg:col-span-6 bg-surface-container-lowest border border-outline-variant rounded-xl flex flex-col shadow-[0_2px_4px_rgba(0,0,0,0.02)] overflow-hidden">
+<div class="px-md py-sm border-b border-outline-variant bg-surface flex justify-between items-center">
+<h3 class="font-headline-md text-headline-md text-on-surface flex items-center gap-sm">
+<span class="material-symbols-outlined text-secondary">restaurant_menu</span>
+                            Mess Schedule
+                        </h3>
+<div class="flex items-center gap-xs px-2 py-1 bg-surface-container-high rounded-md">
+<span class="material-symbols-outlined !text-sm text-secondary">star</span>
+<span class="font-label-md text-label-md text-on-surface">4.2/5 Rating</span>
+</div>
+</div>
+<div class="p-md flex flex-col gap-sm flex-1">
+<div class="flex items-start gap-md p-sm rounded-lg hover:bg-surface-container-lowest border border-transparent hover:border-outline-variant transition-all">
+<div class="w-12 h-12 rounded-lg bg-surface-container flex items-center justify-center flex-shrink-0 text-on-surface-variant">
+<span class="material-symbols-outlined">bakery_dining</span>
+</div>
+<div class="flex-1">
+<div class="flex justify-between">
+<h4 class="font-headline-sm text-headline-sm text-on-surface">Breakfast</h4>
+<span class="font-mono-sm text-mono-sm text-outline">07:30 - 09:00</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-1">Oatmeal, Toast, Scrambled Eggs, Fresh Fruit, Coffee/Tea.</p>
+</div>
+</div>
+<div class="flex items-start gap-md p-sm rounded-lg bg-surface-container-low border border-outline-variant relative overflow-hidden">
+<div class="absolute left-0 top-0 bottom-0 w-1 bg-secondary"></div>
+<div class="w-12 h-12 rounded-lg bg-surface-container-high flex items-center justify-center flex-shrink-0 text-secondary">
+<span class="material-symbols-outlined fill">lunch_dining</span>
+</div>
+<div class="flex-1">
+<div class="flex justify-between">
+<h4 class="font-headline-sm text-headline-sm text-on-surface">Lunch <span class="ml-2 inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-secondary-container text-on-secondary-container uppercase">Active</span></h4>
+<span class="font-mono-sm text-mono-sm text-outline">12:30 - 14:30</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-1">Grilled Chicken Wrap, Quinoa Salad, Vegetable Soup, Lemonade.</p>
+</div>
+</div>
+<div class="flex items-start gap-md p-sm rounded-lg hover:bg-surface-container-lowest border border-transparent hover:border-outline-variant transition-all mt-auto">
+<div class="w-12 h-12 rounded-lg bg-surface-container flex items-center justify-center flex-shrink-0 text-on-surface-variant">
+<span class="material-symbols-outlined">local_dining</span>
+</div>
+<div class="flex-1">
+<div class="flex justify-between">
+<h4 class="font-headline-sm text-headline-sm text-on-surface">Dinner</h4>
+<span class="font-mono-sm text-mono-sm text-outline">19:30 - 21:00</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-1">Spaghetti Bolognese, Garlic Bread, Caesar Salad, Brownie.</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Maintenance Log -->
+<div class="col-span-4 md:col-span-8 lg:col-span-6 bg-surface-container-lowest border border-outline-variant rounded-xl flex flex-col shadow-[0_2px_4px_rgba(0,0,0,0.02)] overflow-hidden">
+<div class="px-md py-sm border-b border-outline-variant bg-surface flex justify-between items-center">
+<h3 class="font-headline-md text-headline-md text-on-surface flex items-center gap-sm">
+<span class="material-symbols-outlined text-secondary">plumbing</span>
+                            Recent Maintenance
+                        </h3>
+<button class="font-label-md text-label-md text-secondary hover:underline">View All</button>
+</div>
+<div class="flex flex-col divide-y divide-outline-variant">
+<!-- Log Item 1 -->
+<div class="p-md flex items-center gap-md hover:bg-surface-container-low transition-colors">
+<div class="w-2 h-2 rounded-full bg-error flex-shrink-0"></div>
+<div class="flex-1 min-w-0">
+<p class="font-body-md text-body-md text-on-surface truncate">Leaky tap in bathroom</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Room 204 • Reported 2h ago</p>
+</div>
+<span class="inline-flex items-center px-2 py-1 rounded-md bg-surface-container text-on-surface font-label-md text-label-md border border-outline-variant">Pending</span>
+</div>
+<!-- Log Item 2 -->
+<div class="p-md flex items-center gap-md hover:bg-surface-container-low transition-colors">
+<div class="w-2 h-2 rounded-full bg-secondary flex-shrink-0"></div>
+<div class="flex-1 min-w-0">
+<p class="font-body-md text-body-md text-on-surface truncate">AC cooling issue</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Common Room B • Reported 5h ago</p>
+</div>
+<span class="inline-flex items-center px-2 py-1 rounded-md bg-secondary-container text-on-secondary-container font-label-md text-label-md">In Progress</span>
+</div>
+<!-- Log Item 3 -->
+<div class="p-md flex items-center gap-md hover:bg-surface-container-low transition-colors">
+<div class="w-2 h-2 rounded-full bg-error flex-shrink-0"></div>
+<div class="flex-1 min-w-0">
+<p class="font-body-md text-body-md text-on-surface truncate">Broken window latch</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Room 112 • Reported 1d ago</p>
+</div>
+<span class="inline-flex items-center px-2 py-1 rounded-md bg-surface-container text-on-surface font-label-md text-label-md border border-outline-variant">Pending</span>
+</div>
+<!-- Log Item 4 -->
+<div class="p-md flex items-center gap-md hover:bg-surface-container-low transition-colors mt-auto">
+<div class="w-2 h-2 rounded-full bg-outline flex-shrink-0"></div>
+<div class="flex-1 min-w-0">
+<p class="font-body-md text-body-md text-outline truncate line-through">Replace corridor light</p>
+<p class="font-body-sm text-body-sm text-outline-variant">Corridor 2nd Floor • Resolved</p>
+</div>
+<span class="inline-flex items-center px-2 py-1 rounded-md bg-surface text-outline font-label-md text-label-md border border-outline-variant">Closed</span>
+</div>
+</div>
+</div>
+<!-- Emergency Contacts -->
+<div class="col-span-4 lg:col-span-12 bg-surface-container-high border border-outline-variant rounded-xl p-md flex flex-col md:flex-row items-center justify-between gap-md shadow-sm">
+<div class="flex items-center gap-md w-full md:w-auto">
+<div class="w-12 h-12 rounded-full bg-error-container text-on-error-container flex items-center justify-center">
+<span class="material-symbols-outlined">local_hospital</span>
+</div>
+<div>
+<h4 class="font-headline-sm text-headline-sm text-on-surface">Emergency Response</h4>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Quick dial for immediate campus assistance.</p>
+</div>
+</div>
+<div class="flex w-full md:w-auto gap-sm">
+<button class="flex-1 md:flex-none flex items-center justify-center gap-xs px-md py-sm bg-surface-container-lowest border border-outline-variant text-on-surface font-label-md text-label-md rounded-lg hover:bg-surface-container-low transition-colors shadow-sm">
+<span class="material-symbols-outlined !text-sm text-secondary">security</span>
+                            Security
+                        </button>
+<button class="flex-1 md:flex-none flex items-center justify-center gap-xs px-md py-sm bg-error text-on-error font-label-md text-label-md rounded-lg hover:opacity-90 transition-opacity shadow-sm">
+<span class="material-symbols-outlined !text-sm">call</span>
+                            Medical
+                        </button>
+</div>
+</div>
+</div>
+<!-- Bottom padding for mobile nav clearance -->
+<div class="h-6 md:h-0"></div>
+</div>
+</main>
+<!-- Shared Component: BottomNavBar (Mobile Only) -->
+<nav class="md:hidden fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-md pb-sm pt-xs rounded-t-xl border-t border-outline-variant bg-surface-container-lowest shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
+<!-- Active Item -->
+<a class="flex flex-col items-center justify-center bg-secondary-container text-on-secondary-container rounded-full px-4 py-1 active:translate-y-[-2px] transition-transform w-16 h-12" href="#">
+<span class="material-symbols-outlined fill">dashboard</span>
+<span class="font-label-md text-[10px] mt-0.5 whitespace-nowrap">Dashboard</span>
+</a>
+<!-- Inactive Items -->
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-variant/50 rounded-full px-2 py-1 transition-colors w-16 h-12" href="#">
+<span class="material-symbols-outlined">group</span>
+<span class="font-label-md text-[10px] mt-0.5 whitespace-nowrap">Rosters</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-variant/50 rounded-full px-2 py-1 transition-colors w-16 h-12" href="#">
+<span class="material-symbols-outlined">payments</span>
+<span class="font-label-md text-[10px] mt-0.5 whitespace-nowrap">Finance</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-variant/50 rounded-full px-2 py-1 transition-colors w-16 h-12" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-label-md text-[10px] mt-0.5 whitespace-nowrap">Settings</span>
+</a>
+</nav>
+</body></html>
