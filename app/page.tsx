@@ -30,6 +30,8 @@ export default async function Home() {
     finance: "/finance/dashboard",
     director: "/director/dashboard",
     admin: "/admin/dashboard",
+    warden: "/warden/dashboard",
+    parent: "/parent/dashboard",
   };
 
   const destination = roleRoutes[profile?.role || "student"] || "/student/dashboard";

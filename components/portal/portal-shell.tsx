@@ -67,6 +67,18 @@ const NAV_MAP: Record<
     { label: "Audit Log", href: "/admin/audit", icon: "📜" },
     { label: "Settings", href: "/admin/settings", icon: "⚙️" },
   ],
+  warden: [
+    { label: "Dashboard", href: "/warden/dashboard", icon: "📊" },
+    { label: "Rooms", href: "/warden/rooms", icon: "🏠" },
+    { label: "Gate Passes", href: "/warden/gatepasses", icon: "🚪" },
+    { label: "Complaints", href: "/warden/complaints", icon: "🛠️" },
+  ],
+  parent: [
+    { label: "Dashboard", href: "/parent/dashboard", icon: "📊" },
+    { label: "Attendance", href: "/parent/attendance", icon: "✅" },
+    { label: "Fees", href: "/parent/fees", icon: "💰" },
+    { label: "Grades", href: "/parent/grades", icon: "📝" },
+  ],
 };
 
 export function PortalShell({ profile, children }: PortalShellProps) {
@@ -90,6 +102,8 @@ export function PortalShell({ profile, children }: PortalShellProps) {
     finance: "Finance Portal",
     director: "Director Portal",
     admin: "System Admin",
+    warden: "Warden Portal",
+    parent: "Parent Portal",
   };
 
   return (
