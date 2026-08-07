@@ -1,15 +1,34 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { getCached } from "@/lib/cache";
 
 export default async function AdminRoles() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: permissions } = await supabase.from("permissions").select("*").order("module").order("name");
-  const { data: rolePerms } = await supabase.from("role_permissions").select("*, permissions(name, description)");
+  const { data: viewerProfile } = await supabase
+    .from("profiles")
+    .select("college_id")
+    .eq("id", user.id)
+    .single();
 
-  const roles = ["student", "teacher", "hod", "finance", "director", "admin", "warden", "parent"];
+  // This data changes essentially never — a 5 minute TTL is safe.
+  // `permissions` is a global catalog (no college_id column); `role_permissions`
+  // is college-scoped, so its cache key must be too.
+  const { permissions, rolePerms } = await getCached(
+    `admin:roles:${viewerProfile?.college_id}:matrix`,
+    300,
+    async () => {
+      const [permissionsRes, rolePermsRes] = await Promise.all([
+        supabase.from("permissions").select("*").order("module").order("name"),
+        supabase.from("role_permissions").select("*, permissions(name, description)"),
+      ]);
+      return { permissions: permissionsRes.data, rolePerms: rolePermsRes.data };
+    }
+  );
+
+  const roles = ["student", "teacher", "hod", "finance", "director", "admin", "warden"];
   const modules = [...new Set((permissions || []).map((p: any) => p.module))];
 
   // Build role → permission set

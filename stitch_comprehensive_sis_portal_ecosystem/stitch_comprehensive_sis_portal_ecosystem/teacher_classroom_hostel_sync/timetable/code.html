@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>My Timetable - Academic Nexus</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-tertiary-container": "#818486",
+                        "inverse-surface": "#213145",
+                        "tertiary-fixed-dim": "#c4c7c9",
+                        "on-tertiary-fixed-variant": "#444749",
+                        "on-tertiary-fixed": "#191c1e",
+                        "on-background": "#0b1c30",
+                        "secondary-container": "#316bf3",
+                        "on-secondary-container": "#fefcff",
+                        "on-error": "#ffffff",
+                        "primary-fixed-dim": "#bec6e0",
+                        "outline": "#76777d",
+                        "on-surface": "#0b1c30",
+                        "surface-bright": "#f8f9ff",
+                        "on-secondary": "#ffffff",
+                        "primary-container": "#131b2e",
+                        "surface-variant": "#d3e4fe",
+                        "error-container": "#ffdad6",
+                        "secondary-fixed": "#dbe1ff",
+                        "error": "#ba1a1a",
+                        "surface": "#f8f9ff",
+                        "secondary": "#0051d5",
+                        "on-secondary-fixed-variant": "#003ea8",
+                        "primary-fixed": "#dae2fd",
+                        "surface-container-highest": "#d3e4fe",
+                        "surface-container": "#e5eeff",
+                        "secondary-fixed-dim": "#b4c5ff",
+                        "surface-dim": "#cbdbf5",
+                        "outline-variant": "#c6c6cd",
+                        "on-surface-variant": "#45464d",
+                        "on-secondary-fixed": "#00174b",
+                        "inverse-primary": "#bec6e0",
+                        "surface-tint": "#565e74",
+                        "on-primary-fixed": "#131b2e",
+                        "on-primary-fixed-variant": "#3f465c",
+                        "surface-container-high": "#dce9ff",
+                        "on-primary": "#ffffff",
+                        "on-error-container": "#93000a",
+                        "primary": "#000000",
+                        "surface-container-lowest": "#ffffff",
+                        "surface-container-low": "#eff4ff",
+                        "inverse-on-surface": "#eaf1ff",
+                        "tertiary-fixed": "#e0e3e5",
+                        "background": "#f8f9ff",
+                        "on-primary-container": "#7c839b",
+                        "tertiary-container": "#191c1e",
+                        "on-tertiary": "#ffffff",
+                        "tertiary": "#000000"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "xl": "32px",
+                        "sm": "8px",
+                        "md": "16px",
+                        "gutter": "24px",
+                        "lg": "24px",
+                        "margin": "32px",
+                        "grid_columns": "12",
+                        "xs": "4px",
+                        "base": "4px"
+                    },
+                    "fontFamily": {
+                        "headline-lg": ["Inter"],
+                        "mono-sm": ["monospace"],
+                        "headline-sm": ["Inter"],
+                        "body-sm": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "label-md": ["Inter"],
+                        "display-lg": ["Inter"],
+                        "body-md": ["Inter"],
+                        "headline-md": ["Inter"]
+                    },
+                    "fontSize": {
+                        "headline-lg": ["28px", { "lineHeight": "36px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "mono-sm": ["12px", { "lineHeight": "16px", "fontWeight": "400" }],
+                        "headline-sm": ["16px", { "lineHeight": "24px", "fontWeight": "600" }],
+                        "body-sm": ["13px", { "lineHeight": "18px", "fontWeight": "400" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "display-lg": ["36px", { "lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "headline-md": ["20px", { "lineHeight": "28px", "fontWeight": "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .material-symbols-outlined[data-weight="fill"] {
+            font-variation-settings: 'FILL' 1;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background font-body-lg min-h-screen flex flex-col pb-24 md:pb-0">
+<!-- TopAppBar -->
+<header class="bg-surface border-b border-outline-variant flex justify-between items-center w-full px-lg h-16 docked full-width top-0 sticky z-40 hidden md:flex">
+<div class="flex items-center gap-md">
+<button class="text-on-surface-variant hover:bg-surface-container-low transition-colors rounded-full p-2 active:opacity-80 flex items-center justify-center">
+<span class="material-symbols-outlined" data-icon="menu">menu</span>
+</button>
+<span class="font-headline-md text-headline-md font-bold text-secondary">Academic Nexus</span>
+</div>
+<div class="flex items-center gap-md">
+<!-- Desktop Nav Cluster -->
+<nav class="hidden md:flex gap-lg mr-lg">
+<a class="font-label-md text-label-md text-secondary font-semibold hover:bg-surface-container-low transition-colors py-2 px-4 rounded" href="#">Dashboard</a>
+<a class="font-label-md text-label-md text-on-surface-variant hover:bg-surface-container-low transition-colors py-2 px-4 rounded" href="#">Rosters</a>
+<a class="font-label-md text-label-md text-on-surface-variant hover:bg-surface-container-low transition-colors py-2 px-4 rounded" href="#">Finance</a>
+<a class="font-label-md text-label-md text-on-surface-variant hover:bg-surface-container-low transition-colors py-2 px-4 rounded" href="#">Settings</a>
+</nav>
+<div class="w-8 h-8 rounded-full bg-surface-container-high overflow-hidden cursor-pointer active:opacity-80 border border-outline-variant flex items-center justify-center">
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="person">person</span>
+</div>
+</div>
+</header>
+<!-- Mobile Header Fallback -->
+<header class="bg-surface border-b border-outline-variant flex justify-between items-center w-full px-md h-16 sticky top-0 z-40 md:hidden">
+<div class="flex items-center gap-sm">
+<span class="font-headline-md text-headline-md font-bold text-secondary">Academic Nexus</span>
+</div>
+<div class="w-8 h-8 rounded-full bg-surface-container-high overflow-hidden border border-outline-variant flex items-center justify-center">
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="person">person</span>
+</div>
+</header>
+<main class="flex-grow flex justify-center w-full">
+<div class="w-full max-w-[1440px] flex flex-col md:flex-row">
+<!-- Side Navigation (Desktop Persistent) -->
+<aside class="hidden md:flex flex-col w-[240px] border-r border-outline-variant bg-surface min-h-[calc(100vh-64px)] p-md gap-sm shrink-0">
+<div class="mb-lg px-sm">
+<button class="w-full flex items-center justify-between bg-surface-container p-sm rounded-lg border border-outline-variant hover:bg-surface-container-high transition-colors text-left">
+<div>
+<span class="font-label-md text-label-md block text-on-surface-variant">Portal View</span>
+<span class="font-body-md text-body-md font-bold text-on-surface">Faculty</span>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant">unfold_more</span>
+</button>
+</div>
+<a class="flex items-center gap-md p-sm rounded-lg bg-secondary-container text-on-secondary-container font-label-md text-label-md" href="#">
+<span class="material-symbols-outlined" data-weight="fill">calendar_month</span>
+                    My Timetable
+                </a>
+<a class="flex items-center gap-md p-sm rounded-lg text-on-surface-variant hover:bg-surface-container-low transition-colors font-label-md text-label-md" href="#">
+<span class="material-symbols-outlined">group</span>
+                    My Rosters
+                </a>
+<a class="flex items-center gap-md p-sm rounded-lg text-on-surface-variant hover:bg-surface-container-low transition-colors font-label-md text-label-md" href="#">
+<span class="material-symbols-outlined">grading</span>
+                    Gradebook
+                </a>
+</aside>
+<!-- Content Area -->
+<div class="flex-grow p-md md:p-margin">
+<!-- Page Header -->
+<div class="mb-xl">
+<nav aria-label="Breadcrumb" class="flex text-on-surface-variant font-body-sm text-body-sm mb-sm">
+<ol class="inline-flex items-center gap-2">
+<li class="inline-flex items-center">
+<a class="hover:text-secondary transition-colors" href="#">Faculty Portal</a>
+</li>
+<li>
+<div class="flex items-center">
+<span class="material-symbols-outlined text-[16px]">chevron_right</span>
+<span class="ml-2 text-on-surface font-medium">My Timetable</span>
+</div>
+</li>
+</ol>
+</nav>
+<div class="flex flex-col sm:flex-row sm:items-end justify-between gap-md">
+<div>
+<h1 class="font-display-lg text-display-lg text-on-surface">My Timetable</h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant mt-xs">Fall 2024 Semester</p>
+</div>
+<div class="flex gap-sm">
+<button class="bg-surface text-on-surface border border-outline px-4 py-2 rounded font-label-md text-label-md flex items-center gap-2 hover:bg-surface-container-low transition-colors">
+<span class="material-symbols-outlined text-[18px]">print</span>
+                                Print
+                            </button>
+<button class="bg-secondary text-on-secondary px-4 py-2 rounded font-label-md text-label-md hover:bg-on-secondary-fixed-variant transition-colors shadow-sm">
+                                Export PDF
+                            </button>
+</div>
+</div>
+</div>
+<!-- Timetable Grid/List -->
+<div class="flex flex-col gap-lg">
+<!-- Monday -->
+<section class="bg-surface rounded-xl border border-outline-variant shadow-sm overflow-hidden">
+<header class="bg-surface-container-highest px-md py-sm border-b border-outline-variant">
+<h2 class="font-headline-sm text-headline-sm text-on-surface">Monday, Oct 24</h2>
+</header>
+<div class="divide-y divide-outline-variant">
+<!-- Class Block 1 -->
+<div class="p-md hover:bg-surface-container-lowest transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-md">
+<div class="flex gap-md">
+<div class="w-1 h-auto bg-secondary rounded-full"></div>
+<div>
+<div class="flex items-center gap-sm mb-xs">
+<span class="font-mono-sm text-mono-sm bg-surface-container px-2 py-0.5 rounded text-on-surface-variant border border-outline-variant">AP101</span>
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Advanced Physics</h3>
+</div>
+<div class="flex flex-wrap items-center gap-x-md gap-y-1 font-body-sm text-body-sm text-on-surface-variant">
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">schedule</span>
+                                                08:30 AM - 10:00 AM
+                                            </div>
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">meeting_room</span>
+                                                Room 302, Science Bldg
+                                            </div>
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">group</span>
+                                                32 Students
+                                            </div>
+</div>
+</div>
+</div>
+<div>
+<button class="text-secondary hover:bg-surface-container-low px-3 py-1.5 rounded border border-transparent hover:border-outline-variant transition-colors font-label-md text-label-md">
+                                        View Roster
+                                    </button>
+</div>
+</div>
+<!-- Class Block 2 -->
+<div class="p-md hover:bg-surface-container-lowest transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-md">
+<div class="flex gap-md">
+<div class="w-1 h-auto bg-tertiary rounded-full"></div>
+<div>
+<div class="flex items-center gap-sm mb-xs">
+<span class="font-mono-sm text-mono-sm bg-surface-container px-2 py-0.5 rounded text-on-surface-variant border border-outline-variant">QM205</span>
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Quantum Mechanics Intro</h3>
+</div>
+<div class="flex flex-wrap items-center gap-x-md gap-y-1 font-body-sm text-body-sm text-on-surface-variant">
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">schedule</span>
+                                                11:00 AM - 12:30 PM
+                                            </div>
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">meeting_room</span>
+                                                Room 305, Science Bldg
+                                            </div>
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">group</span>
+                                                18 Students
+                                            </div>
+</div>
+</div>
+</div>
+<div>
+<button class="text-secondary hover:bg-surface-container-low px-3 py-1.5 rounded border border-transparent hover:border-outline-variant transition-colors font-label-md text-label-md">
+                                        View Roster
+                                    </button>
+</div>
+</div>
+</div>
+</section>
+<!-- Tuesday -->
+<section class="bg-surface rounded-xl border border-outline-variant shadow-sm overflow-hidden">
+<header class="bg-surface-container-highest px-md py-sm border-b border-outline-variant">
+<h2 class="font-headline-sm text-headline-sm text-on-surface">Tuesday, Oct 25</h2>
+</header>
+<div class="divide-y divide-outline-variant">
+<!-- Class Block 1 -->
+<div class="p-md hover:bg-surface-container-lowest transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-md">
+<div class="flex gap-md">
+<div class="w-1 h-auto bg-primary-container rounded-full"></div>
+<div>
+<div class="flex items-center gap-sm mb-xs">
+<span class="font-mono-sm text-mono-sm bg-surface-container px-2 py-0.5 rounded text-on-surface-variant border border-outline-variant">PHYS-LAB</span>
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Physics Laboratory 1</h3>
+</div>
+<div class="flex flex-wrap items-center gap-x-md gap-y-1 font-body-sm text-body-sm text-on-surface-variant">
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">schedule</span>
+                                                01:00 PM - 04:00 PM
+                                            </div>
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">meeting_room</span>
+                                                Lab 101, Science Bldg
+                                            </div>
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">group</span>
+                                                24 Students
+                                            </div>
+</div>
+</div>
+</div>
+<div>
+<button class="text-secondary hover:bg-surface-container-low px-3 py-1.5 rounded border border-transparent hover:border-outline-variant transition-colors font-label-md text-label-md">
+                                        View Roster
+                                    </button>
+</div>
+</div>
+</div>
+</section>
+<!-- Saturday (Empty State) -->
+<section class="bg-surface rounded-xl border border-outline-variant shadow-sm overflow-hidden">
+<header class="bg-surface-container-highest px-md py-sm border-b border-outline-variant">
+<h2 class="font-headline-sm text-headline-sm text-on-surface">Saturday, Oct 29</h2>
+</header>
+<div class="p-xl flex flex-col items-center justify-center text-center bg-surface-container-lowest">
+<div class="w-16 h-16 bg-surface-container-high rounded-full flex items-center justify-center mb-md text-on-surface-variant border border-outline-variant">
+<span class="material-symbols-outlined text-[32px]">event_busy</span>
+</div>
+<h3 class="font-headline-sm text-headline-sm text-on-surface mb-xs">No classes scheduled</h3>
+<p class="font-body-md text-body-md text-on-surface-variant max-w-md">You have no teaching blocks assigned for this day. Enjoy your time off or use this block for grading and preparation.</p>
+</div>
+</section>
+</div>
+</div>
+</div>
+</main>
+<!-- BottomNavBar (Mobile Only) -->
+<nav class="fixed bottom-0 left-0 w-full flex justify-around items-center h-20 bg-surface dark:bg-surface-container-lowest px-md pb-safe border-t border-outline-variant shadow-sm z-50 md:hidden">
+<a class="flex flex-col items-center justify-center bg-secondary-container text-on-secondary-container rounded-full px-4 py-1 transition-transform duration-200 active:scale-95" href="#">
+<span class="material-symbols-outlined font-label-md text-label-md" data-icon="dashboard">dashboard</span>
+<span class="font-label-md text-label-md mt-1">Dashboard</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:text-secondary px-4 py-1 transition-transform duration-200 active:scale-95" href="#">
+<span class="material-symbols-outlined font-label-md text-label-md" data-icon="group">group</span>
+<span class="font-label-md text-label-md mt-1">Rosters</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:text-secondary px-4 py-1 transition-transform duration-200 active:scale-95" href="#">
+<span class="material-symbols-outlined font-label-md text-label-md" data-icon="account_balance_wallet">account_balance_wallet</span>
+<span class="font-label-md text-label-md mt-1">Finance</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:text-secondary px-4 py-1 transition-transform duration-200 active:scale-95" href="#">
+<span class="material-symbols-outlined font-label-md text-label-md" data-icon="settings">settings</span>
+<span class="font-label-md text-label-md mt-1">Settings</span>
+</a>
+</nav>
+</body></html>

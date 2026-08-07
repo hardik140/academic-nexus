@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { getCached } from "@/lib/cache";
 
 export default async function HodReports() {
   const supabase = await createClient();
@@ -14,23 +15,28 @@ export default async function HodReports() {
 
   const deptId = dept?.id || "";
 
-  const [enrollRes, attendanceRes, coursesRes] = await Promise.all([
-    supabase.from("mv_department_enrollment").select("*").eq("department_id", deptId).maybeSingle(),
-    supabase.from("mv_attendance_summary").select("*").eq("department_id", deptId),
-    supabase.from("courses").select("id, name, code").eq("department_id", deptId),
-  ]);
+  const { enrollment, attendance, backlogs } = await getCached(
+    `reports:hod:${deptId}:mv`,
+    60,
+    async () => {
+      const [enrollRes, attendanceRes, coursesRes] = await Promise.all([
+        supabase.from("mv_department_enrollment").select("*").eq("department_id", deptId).maybeSingle(),
+        supabase.from("mv_attendance_summary").select("*").eq("department_id", deptId),
+        supabase.from("courses").select("id, name, code").eq("department_id", deptId),
+      ]);
+      const courseIds = (coursesRes.data || []).map((c) => c.id);
 
-  const enrollment = enrollRes.data;
-  const attendance = attendanceRes.data || [];
-  const courseIds = (coursesRes.data || []).map((c) => c.id);
+      const { data: backlogs } = courseIds.length
+        ? await supabase
+            .from("course_enrollments")
+            .select("*, courses(name, code), profiles:student_id(full_name)")
+            .in("course_id", courseIds)
+            .eq("status", "failed")
+        : { data: [] };
 
-  const { data: backlogs } = courseIds.length
-    ? await supabase
-        .from("course_enrollments")
-        .select("*, courses(name, code), profiles:student_id(full_name)")
-        .in("course_id", courseIds)
-        .eq("status", "failed")
-    : { data: [] };
+      return { enrollment: enrollRes.data, attendance: attendanceRes.data || [], backlogs: backlogs || [] };
+    }
+  );
 
   return (
     <div className="space-y-lg animate-[fade-in_0.3s_ease-out]">
@@ -62,7 +68,7 @@ export default async function HodReports() {
       {/* Attendance Audit */}
       <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-sm overflow-hidden">
         <div className="px-lg py-md border-b border-outline-variant">
-          <h2 className="text-sm font-bold text-on-surface">Attendance Audit — By Course</h2>
+          <h2 className="text-sm font-bold text-on-surface flex items-center gap-sm">📊 Attendance Audit — By Course</h2>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -101,7 +107,7 @@ export default async function HodReports() {
       {/* Backlogs */}
       <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-sm overflow-hidden">
         <div className="px-lg py-md border-b border-outline-variant">
-          <h2 className="text-sm font-bold text-on-surface">Backlog Students</h2>
+          <h2 className="text-sm font-bold text-on-surface flex items-center gap-sm">📉 Backlog Students</h2>
         </div>
         <div className="divide-y divide-outline-variant">
           {(backlogs || []).length > 0 ? (backlogs || []).map((b: any) => (

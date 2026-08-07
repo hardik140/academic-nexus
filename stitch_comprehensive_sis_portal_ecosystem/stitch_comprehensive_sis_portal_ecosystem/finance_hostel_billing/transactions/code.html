@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+
+<html class="h-full" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Academic Nexus - Finance Transactions</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        "colors": {
+                "outline-variant": "#c6c6cd",
+                "secondary-fixed": "#dbe1ff",
+                "primary-fixed-dim": "#bec6e0",
+                "surface-dim": "#cbdbf5",
+                "inverse-surface": "#213145",
+                "surface-container-highest": "#d3e4fe",
+                "outline": "#76777d",
+                "on-primary-fixed-variant": "#3f465c",
+                "on-tertiary-fixed": "#191c1e",
+                "tertiary": "#000000",
+                "on-error": "#ffffff",
+                "tertiary-fixed-dim": "#c4c7c9",
+                "tertiary-container": "#191c1e",
+                "surface-tint": "#565e74",
+                "primary-container": "#131b2e",
+                "surface-container-lowest": "#ffffff",
+                "tertiary-fixed": "#e0e3e5",
+                "inverse-primary": "#bec6e0",
+                "surface-container-low": "#eff4ff",
+                "surface-container-high": "#dce9ff",
+                "on-secondary": "#ffffff",
+                "on-primary": "#ffffff",
+                "on-secondary-fixed-variant": "#003ea8",
+                "on-primary-fixed": "#131b2e",
+                "on-tertiary-container": "#818486",
+                "on-surface-variant": "#45464d",
+                "primary": "#000000",
+                "on-tertiary": "#ffffff",
+                "on-secondary-container": "#fefcff",
+                "error": "#ba1a1a",
+                "background": "#f8f9ff",
+                "secondary-container": "#316bf3",
+                "on-background": "#0b1c30",
+                "secondary": "#0051d5",
+                "on-surface": "#0b1c30",
+                "surface": "#f8f9ff",
+                "inverse-on-surface": "#eaf1ff",
+                "on-error-container": "#93000a",
+                "on-tertiary-fixed-variant": "#444749",
+                "on-secondary-fixed": "#00174b",
+                "surface-variant": "#d3e4fe",
+                "primary-fixed": "#dae2fd",
+                "surface-container": "#e5eeff",
+                "surface-bright": "#f8f9ff",
+                "secondary-fixed-dim": "#b4c5ff",
+                "on-primary-container": "#7c839b",
+                "error-container": "#ffdad6"
+        },
+        "borderRadius": {
+                "DEFAULT": "0.125rem",
+                "lg": "0.25rem",
+                "xl": "0.5rem",
+                "full": "0.75rem"
+        },
+        "spacing": {
+                "xl": "32px",
+                "gutter": "24px",
+                "sm": "8px",
+                "margin": "32px",
+                "grid_columns": "12",
+                "xs": "4px",
+                "md": "16px",
+                "lg": "24px",
+                "base": "4px"
+        },
+        "fontFamily": {
+                "label-md": [
+                        "Inter"
+                ],
+                "headline-lg": [
+                        "Inter"
+                ],
+                "display-lg": [
+                        "Inter"
+                ],
+                "body-lg": [
+                        "Inter"
+                ],
+                "body-sm": [
+                        "Inter"
+                ],
+                "headline-sm": [
+                        "Inter"
+                ],
+                "headline-md": [
+                        "Inter"
+                ],
+                "mono-sm": [
+                        "monospace"
+                ],
+                "body-md": [
+                        "Inter"
+                ]
+        },
+        "fontSize": {
+                "label-md": [
+                        "12px",
+                        {
+                                "lineHeight": "16px",
+                                "letterSpacing": "0.05em",
+                                "fontWeight": "600"
+                        }
+                ],
+                "headline-lg": [
+                        "28px",
+                        {
+                                "lineHeight": "36px",
+                                "letterSpacing": "-0.01em",
+                                "fontWeight": "600"
+                        }
+                ],
+                "display-lg": [
+                        "36px",
+                        {
+                                "lineHeight": "44px",
+                                "letterSpacing": "-0.02em",
+                                "fontWeight": "700"
+                        }
+                ],
+                "body-lg": [
+                        "16px",
+                        {
+                                "lineHeight": "24px",
+                                "fontWeight": "400"
+                        }
+                ],
+                "body-sm": [
+                        "13px",
+                        {
+                                "lineHeight": "18px",
+                                "fontWeight": "400"
+                        }
+                ],
+                "headline-sm": [
+                        "16px",
+                        {
+                                "lineHeight": "24px",
+                                "fontWeight": "600"
+                        }
+                ],
+                "headline-md": [
+                        "20px",
+                        {
+                                "lineHeight": "28px",
+                                "fontWeight": "600"
+                        }
+                ],
+                "mono-sm": [
+                        "12px",
+                        {
+                                "lineHeight": "16px",
+                                "fontWeight": "400"
+                        }
+                ],
+                "body-md": [
+                        "14px",
+                        {
+                                "lineHeight": "20px",
+                                "fontWeight": "400"
+                        }
+                ]
+        }
+},
+    },
+  }
+</script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface text-on-surface h-full flex flex-col font-body-md">
+<!-- TopAppBar -->
+<header class="bg-surface dark:bg-inverse-surface text-primary dark:text-inverse-primary font-headline-md text-headline-md fixed top-0 w-full z-50 border-b border-outline-variant dark:border-outline flat no shadows flex justify-between items-center px-lg h-16">
+<div class="flex items-center gap-md">
+<span class="material-symbols-outlined cursor-pointer active:scale-95 transition-transform" data-icon="account_balance">account_balance</span>
+<span class="font-headline-md text-headline-md font-bold text-secondary dark:text-secondary-fixed">Academic Nexus</span>
+</div>
+<div class="flex items-center">
+<span class="material-symbols-outlined hover:bg-surface-container-low dark:hover:bg-primary-container transition-colors cursor-pointer active:scale-95 transition-transform p-sm rounded-full" data-icon="notifications">notifications</span>
+</div>
+</header>
+<!-- Main Content Area -->
+<main class="flex-1 mt-16 md:ml-[240px] p-margin pb-24 md:pb-margin overflow-y-auto w-full max-w-[1440px] mx-auto hidden md:block">
+<!-- Breadcrumbs & Portal Switcher Placeholder (Desktop Sidebar would normally handle this) -->
+<div class="mb-md flex justify-between items-center">
+<div class="flex items-center gap-sm text-on-surface-variant font-label-md text-label-md">
+<span>Finance</span>
+<span class="material-symbols-outlined text-[16px]">chevron_right</span>
+<span class="text-on-surface">Transactions</span>
+</div>
+<div>
+<button class="bg-secondary-container text-on-secondary-container px-md py-sm rounded-lg flex items-center gap-sm font-label-md text-label-md hover:opacity-90 transition-opacity">
+<span class="material-symbols-outlined text-[18px]">add</span> Add Transaction
+                </button>
+</div>
+</div>
+<!-- KPI Cards -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-gutter mb-lg">
+<!-- Total Billed -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md shadow-sm hover:border-secondary transition-colors cursor-pointer group">
+<div class="flex justify-between items-start mb-sm">
+<h3 class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wide">Total Billed</h3>
+<span class="material-symbols-outlined text-outline group-hover:text-secondary transition-colors" data-icon="receipt_long">receipt_long</span>
+</div>
+<div class="font-display-lg text-display-lg text-on-surface mb-xs">$12.4M</div>
+<div class="font-body-sm text-body-sm text-on-surface-variant flex items-center gap-xs">
+<span class="text-secondary font-medium">+5.2%</span> vs last term
+                </div>
+</div>
+<!-- Total Collected -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md shadow-sm hover:border-secondary transition-colors cursor-pointer group">
+<div class="flex justify-between items-start mb-sm">
+<h3 class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wide">Total Collected</h3>
+<span class="material-symbols-outlined text-outline group-hover:text-secondary transition-colors" data-icon="account_balance_wallet">account_balance_wallet</span>
+</div>
+<div class="font-display-lg text-display-lg text-on-surface mb-xs">$8.2M</div>
+<div class="font-body-sm text-body-sm text-on-surface-variant flex items-center gap-xs">
+<div class="w-full bg-surface-container h-1.5 rounded-full overflow-hidden mt-1">
+<div class="bg-secondary h-full" style="width: 66%"></div>
+</div>
+</div>
+</div>
+<!-- Total Pending -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md shadow-sm hover:border-secondary transition-colors cursor-pointer group">
+<div class="flex justify-between items-start mb-sm">
+<h3 class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wide">Total Pending</h3>
+<span class="material-symbols-outlined text-outline group-hover:text-secondary transition-colors" data-icon="pending_actions">pending_actions</span>
+</div>
+<div class="font-display-lg text-display-lg text-on-surface mb-xs">$3.1M</div>
+<div class="font-body-sm text-body-sm text-on-surface-variant flex items-center gap-xs">
+                     Across 1,240 active invoices
+                </div>
+</div>
+<!-- Total Overdue -->
+<div class="bg-error-container border border-error/20 rounded-xl p-md shadow-sm hover:border-error transition-colors cursor-pointer group">
+<div class="flex justify-between items-start mb-sm">
+<h3 class="font-label-md text-label-md text-on-error-container uppercase tracking-wide">Total Overdue</h3>
+<span class="material-symbols-outlined text-error" data-icon="warning">warning</span>
+</div>
+<div class="font-display-lg text-display-lg text-on-error-container mb-xs">$1.1M</div>
+<div class="font-body-sm text-body-sm text-error flex items-center gap-xs font-medium">
+                    Requires immediate action
+                </div>
+</div>
+</div>
+<!-- Search & Filters Container -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm mb-lg">
+<div class="p-md border-b border-outline-variant flex flex-col md:flex-row gap-md justify-between items-center">
+<!-- Search Box -->
+<div class="relative w-full md:max-w-md">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none" data-icon="search">search</span>
+<input class="w-full bg-surface pl-10 pr-4 py-2 border border-outline-variant rounded-lg focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary font-body-md text-body-md text-on-surface placeholder-on-surface-variant transition-colors" placeholder="Search student or reference..." type="text"/>
+</div>
+<!-- Filter Actions -->
+<div class="flex gap-sm w-full md:w-auto">
+<button class="bg-surface text-on-surface border border-outline-variant px-md py-2 rounded-lg flex items-center gap-sm font-label-md text-label-md hover:bg-surface-container-low transition-colors">
+<span class="material-symbols-outlined text-[18px]">filter_list</span> Filter
+                    </button>
+<button class="bg-surface text-on-surface border border-outline-variant px-md py-2 rounded-lg flex items-center gap-sm font-label-md text-label-md hover:bg-surface-container-low transition-colors">
+<span class="material-symbols-outlined text-[18px]">download</span> Export
+                    </button>
+</div>
+</div>
+<!-- Tabbed Interface -->
+<div class="px-md flex gap-lg border-b border-outline-variant">
+<button class="py-3 font-label-md text-label-md text-secondary border-b-2 border-secondary uppercase tracking-wide">Invoices</button>
+<button class="py-3 font-label-md text-label-md text-on-surface-variant hover:text-on-surface transition-colors uppercase tracking-wide">Payments</button>
+</div>
+<!-- Data Table (Invoices) -->
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead class="bg-surface-container-low border-b border-outline-variant">
+<tr>
+<th class="py-3 px-md font-label-md text-label-md text-on-surface-variant uppercase tracking-wide sticky left-0 bg-surface-container-low z-10">Student</th>
+<th class="py-3 px-md font-label-md text-label-md text-on-surface-variant uppercase tracking-wide">Enroll. No.</th>
+<th class="py-3 px-md font-label-md text-label-md text-on-surface-variant uppercase tracking-wide">Fee Type</th>
+<th class="py-3 px-md font-label-md text-label-md text-on-surface-variant uppercase tracking-wide text-right">Amount</th>
+<th class="py-3 px-md font-label-md text-label-md text-on-surface-variant uppercase tracking-wide text-right">Paid</th>
+<th class="py-3 px-md font-label-md text-label-md text-on-surface-variant uppercase tracking-wide">Due Date</th>
+<th class="py-3 px-md font-label-md text-label-md text-on-surface-variant uppercase tracking-wide">Status</th>
+<th class="py-3 px-md font-label-md text-label-md text-on-surface-variant uppercase tracking-wide text-center">Action</th>
+</tr>
+</thead>
+<tbody class="font-body-sm text-body-sm text-on-surface divide-y divide-outline-variant">
+<!-- Row 1 -->
+<tr class="hover:bg-surface-container-low transition-colors group">
+<td class="py-3 px-md sticky left-0 bg-surface-container-lowest group-hover:bg-surface-container-low transition-colors z-10">
+<div class="flex items-center gap-sm min-w-[200px]">
+<img class="w-8 h-8 rounded-full object-cover border border-outline-variant" data-alt="A professional headshot of a young female university student in a bright modern campus setting, clear lighting, shallow depth of field, corporate SaaS avatar style" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD_LsEHxO6L6bKL4bClaVjM-mBGLnkc5tJnH9lBl9TsqPVokKROziuKd5HS-OWHZVL50-CFX94opXvhTa1pO35-Z8AcOFuPbXwmtqLlnDPzGXbOZrDv2OZiWEOsrELze3PW1dis0YzAP6m6G0t3sc4WrOHcx_GJK3JncXDIZc0j9C3f331x40Ky3q8lQEXfhdwdtNGfM2ZxEXN5-4U4R6cYnYUuPLr2dGI3ur-DU_27rrqcTTDJNVygNrQmp_xO5-kP1W0cCsFVxx8"/>
+<span class="font-medium">Sarah Jenkins</span>
+</div>
+</td>
+<td class="py-3 px-md whitespace-nowrap text-on-surface-variant">2023-CS-104</td>
+<td class="py-3 px-md whitespace-nowrap">Tuition - Fall 24</td>
+<td class="py-3 px-md text-right font-mono-sm text-mono-sm">$4,500.00</td>
+<td class="py-3 px-md text-right font-mono-sm text-mono-sm">$4,500.00</td>
+<td class="py-3 px-md whitespace-nowrap text-on-surface-variant">Oct 15, 2023</td>
+<td class="py-3 px-md">
+<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold tracking-wide bg-[#e6f4ea] text-[#137333] border border-[#ceead6]">PAID</span>
+</td>
+<td class="py-3 px-md text-center">
+<button class="text-on-surface-variant hover:text-secondary transition-colors p-1 rounded-full hover:bg-surface">
+<span class="material-symbols-outlined text-[18px]" data-icon="more_vert">more_vert</span>
+</button>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="bg-surface hover:bg-surface-container-low transition-colors group">
+<td class="py-3 px-md sticky left-0 bg-surface group-hover:bg-surface-container-low transition-colors z-10">
+<div class="flex items-center gap-sm min-w-[200px]">
+<img class="w-8 h-8 rounded-full object-cover border border-outline-variant" data-alt="A professional headshot of a young male university student in a library setting, natural lighting, looking slightly off-camera, corporate SaaS avatar style" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDyK6oI_weYVocfz5QRUKe-cn9RQ1r4ANnzHJPzTHtb_jDhk06DtMJYtuFGSHDEXhi3pGZRiRgctAj-bT_y80LwcNy3Ncfpee3uTQPfq28Xj0jQ01itEKXjAYpbJMIYr18B-gVt1BxPDe2bl78NuFwxz0z7YHe5A1O9GXOTwpQWcKAPm9EdFPVKrxTA3zc2F6TFUiRmg6ah59in494sqjmsLF3HQkBcv-oteP61iScRZTi7SM-VCvyt1sEzkoWG_k3DeKYN8LDxRm0"/>
+<span class="font-medium">Michael Chang</span>
+</div>
+</td>
+<td class="py-3 px-md whitespace-nowrap text-on-surface-variant">2022-EE-089</td>
+<td class="py-3 px-md whitespace-nowrap">Hostel Fees</td>
+<td class="py-3 px-md text-right font-mono-sm text-mono-sm">$1,200.00</td>
+<td class="py-3 px-md text-right font-mono-sm text-mono-sm">$600.00</td>
+<td class="py-3 px-md whitespace-nowrap text-on-surface-variant">Nov 01, 2023</td>
+<td class="py-3 px-md">
+<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold tracking-wide bg-[#fef7e0] text-[#b06000] border border-[#fde293]">PARTIAL</span>
+</td>
+<td class="py-3 px-md text-center">
+<button class="text-secondary hover:text-secondary-container transition-colors p-1 rounded-full hover:bg-surface-container" title="Record Payment">
+<span class="material-symbols-outlined text-[18px]" data-icon="payments">payments</span>
+</button>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="hover:bg-surface-container-low transition-colors group">
+<td class="py-3 px-md sticky left-0 bg-surface-container-lowest group-hover:bg-surface-container-low transition-colors z-10">
+<div class="flex items-center gap-sm min-w-[200px]">
+<div class="w-8 h-8 rounded-full bg-primary-fixed-dim text-on-primary-fixed flex items-center justify-center font-bold text-[12px] border border-outline-variant">
+                                        EJ
+                                    </div>
+<span class="font-medium">Emily Johnson</span>
+</div>
+</td>
+<td class="py-3 px-md whitespace-nowrap text-on-surface-variant">2024-BA-211</td>
+<td class="py-3 px-md whitespace-nowrap">Lab Fees</td>
+<td class="py-3 px-md text-right font-mono-sm text-mono-sm">$350.00</td>
+<td class="py-3 px-md text-right font-mono-sm text-mono-sm">$0.00</td>
+<td class="py-3 px-md whitespace-nowrap text-error font-medium">Sep 30, 2023</td>
+<td class="py-3 px-md">
+<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold tracking-wide bg-error-container text-on-error-container border border-error/30">OVERDUE</span>
+</td>
+<td class="py-3 px-md text-center">
+<button class="text-secondary hover:text-secondary-container transition-colors p-1 rounded-full hover:bg-surface-container" title="Record Payment">
+<span class="material-symbols-outlined text-[18px]" data-icon="payments">payments</span>
+</button>
+</td>
+</tr>
+<!-- Row 4 -->
+<tr class="bg-surface hover:bg-surface-container-low transition-colors group">
+<td class="py-3 px-md sticky left-0 bg-surface group-hover:bg-surface-container-low transition-colors z-10">
+<div class="flex items-center gap-sm min-w-[200px]">
+<img class="w-8 h-8 rounded-full object-cover border border-outline-variant" data-alt="A professional headshot of a mature female student in a modern cafe setting, bright diffuse lighting, corporate SaaS avatar style" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAx0k3BNJPTSZfdYchYEBPNMxIeNFfNua8QNbUQ7IDA9WjCSmLQPgdAWF0SxBPSNCZKb9wh_mLs3yaBnxExE0I57n4UdVuwwVt4ppMfHxbdtHLXFqLk40Z6Ff89FQcMGT_Jrk2hguVc76RvgmF2j-d7PVbbS9tJNqyjWvJuwxft0ZLIrNGi8viOBz0JJBaBxwjowdef0jj8ymc_T2C6vBBnUGdnzGGWsJOcTcKhOyXQ-_CxnYamENDZcdAWk_FEGtmGcqS3PE5MATY"/>
+<span class="font-medium">David Rodriguez</span>
+</div>
+</td>
+<td class="py-3 px-md whitespace-nowrap text-on-surface-variant">2021-ME-045</td>
+<td class="py-3 px-md whitespace-nowrap">Tuition - Fall 24</td>
+<td class="py-3 px-md text-right font-mono-sm text-mono-sm">$4,500.00</td>
+<td class="py-3 px-md text-right font-mono-sm text-mono-sm">$4,500.00</td>
+<td class="py-3 px-md whitespace-nowrap text-on-surface-variant">Oct 15, 2023</td>
+<td class="py-3 px-md">
+<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold tracking-wide bg-[#e6f4ea] text-[#137333] border border-[#ceead6]">PAID</span>
+</td>
+<td class="py-3 px-md text-center">
+<button class="text-on-surface-variant hover:text-secondary transition-colors p-1 rounded-full hover:bg-surface">
+<span class="material-symbols-outlined text-[18px]" data-icon="more_vert">more_vert</span>
+</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Pagination Footer -->
+<div class="p-sm px-md border-t border-outline-variant flex justify-between items-center bg-surface-container-lowest rounded-b-xl">
+<span class="font-body-sm text-body-sm text-on-surface-variant">Showing 1 to 4 of 1,240 entries</span>
+<div class="flex gap-1">
+<button class="p-1 text-on-surface-variant hover:bg-surface-container-low rounded"><span class="material-symbols-outlined text-[20px]">chevron_left</span></button>
+<button class="w-8 h-8 text-sm font-medium rounded bg-secondary-container text-on-secondary-container">1</button>
+<button class="w-8 h-8 text-sm font-medium rounded text-on-surface-variant hover:bg-surface-container-low">2</button>
+<button class="w-8 h-8 text-sm font-medium rounded text-on-surface-variant hover:bg-surface-container-low">3</button>
+<span class="w-8 h-8 flex items-center justify-center text-on-surface-variant">...</span>
+<button class="p-1 text-on-surface-variant hover:bg-surface-container-low rounded"><span class="material-symbols-outlined text-[20px]">chevron_right</span></button>
+</div>
+</div>
+</div>
+</main>
+<!-- Mobile Warning / Fallback (Design system specifies mobile reflow, but prompt asks for high density table which needs space. Showing basic mobile nav structure) -->
+<main class="flex-1 mt-16 p-md md:hidden overflow-y-auto">
+<div class="bg-surface-container-lowest p-md rounded-xl border border-outline-variant text-center mb-24">
+<span class="material-symbols-outlined text-[48px] text-outline mb-sm" data-icon="desktop_windows">desktop_windows</span>
+<h2 class="font-headline-sm text-headline-sm mb-xs">Desktop View Recommended</h2>
+<p class="font-body-sm text-body-sm text-on-surface-variant">High-density financial ledgers are best viewed on a larger screen.</p>
+</div>
+</main>
+<!-- BottomNavBar (Mobile Only) -->
+<nav class="bg-surface-container-lowest dark:bg-inverse-surface text-secondary dark:text-secondary-fixed-dim font-label-md text-label-md fixed bottom-0 w-full z-50 rounded-t-xl border-t border-outline-variant dark:border-outline shadow-sm fixed bottom-0 left-0 w-full z-50 flex justify-around items-center h-16 px-md pb-safe md:hidden block">
+<a class="flex flex-col items-center justify-center text-on-surface-variant dark:text-outline-variant hover:bg-surface-container-high dark:hover:bg-surface-container-highest active:scale-90 transition-all duration-150 p-2 rounded-lg" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="dashboard">dashboard</span>
+<span>Dashboard</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant dark:text-outline-variant hover:bg-surface-container-high dark:hover:bg-surface-container-highest active:scale-90 transition-all duration-150 p-2 rounded-lg" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="group">group</span>
+<span>Rosters</span>
+</a>
+<a class="flex flex-col items-center justify-center bg-secondary-fixed dark:bg-secondary-container text-on-secondary-fixed dark:text-on-secondary-container rounded-full px-4 py-1 hover:bg-surface-container-high dark:hover:bg-surface-container-highest active:scale-90 transition-all duration-150" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="payments" style="font-variation-settings: 'FILL' 1;">payments</span>
+<span>Finance</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant dark:text-outline-variant hover:bg-surface-container-high dark:hover:bg-surface-container-highest active:scale-90 transition-all duration-150 p-2 rounded-lg" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="settings">settings</span>
+<span>Settings</span>
+</a>
+</nav>
+</body></html>

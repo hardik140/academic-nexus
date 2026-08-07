@@ -2,18 +2,23 @@
 
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { Button, FormField } from "@/components/ui/modal";
+import { Button } from "@/components/ui/modal";
+import { saveMarks as saveMarksAction } from "./actions";
+import type { Database } from "@/types/database";
+
+type ExamType = Database["public"]["Tables"]["marks"]["Row"]["exam_type"];
 
 export default function TeacherGrading() {
   const supabase = createClient();
   const [courses, setCourses] = useState<any[]>([]);
   const [selectedCourse, setSelectedCourse] = useState("");
   const [students, setStudents] = useState<any[]>([]);
-  const [examType, setExamType] = useState("internal_1");
+  const [examType, setExamType] = useState<ExamType>("internal_1");
   const [maxMarks, setMaxMarks] = useState("100");
   const [marks, setMarks] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => { loadCourses(); }, []);
 
@@ -63,36 +68,32 @@ export default function TeacherGrading() {
 
   const saveMarks = async () => {
     setLoading(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    const { data: profile } = await supabase.from("profiles").select("college_id").eq("id", user.id).single();
+    setError(null);
+    try {
+      const studentUserIds = Object.keys(marks);
+      const { data: studentRecords } = await supabase
+        .from("students")
+        .select("id, user_id")
+        .in("user_id", studentUserIds);
 
-    const studentUserIds = Object.keys(marks);
-    const { data: studentRecords } = await supabase
-      .from("students")
-      .select("id, user_id")
-      .in("user_id", studentUserIds);
+      const entries = (studentRecords || [])
+        .map((s) => ({ studentDbId: s.id, obtainedMarks: parseFloat(marks[s.user_id] || "0") }))
+        .filter((e) => !isNaN(e.obtainedMarks));
 
-    for (const s of (studentRecords || [])) {
-      const obtained = parseFloat(marks[s.user_id] || "0");
-      if (isNaN(obtained)) continue;
-
-      await supabase.from("marks").upsert({
-        college_id: profile?.college_id || "",
-        student_id: s.id,
-        course_id: selectedCourse,
-        exam_type: examType,
-        max_marks: parseFloat(maxMarks),
-        obtained_marks: obtained,
-        entered_by: user.id,
-      }, {
-        onConflict: "student_id,course_id,exam_type",
+      await saveMarksAction({
+        courseId: selectedCourse,
+        examType,
+        maxMarks: parseFloat(maxMarks),
+        entries,
       });
-    }
 
-    setSaved(true);
-    setLoading(false);
-    setTimeout(() => setSaved(false), 3000);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to save marks.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const examTypes = [
@@ -119,6 +120,10 @@ export default function TeacherGrading() {
         </div>
       )}
 
+      {error && (
+        <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium">{error}</div>
+      )}
+
       {/* Controls */}
       <div className="flex flex-wrap gap-md items-end">
         <div className="space-y-xs">
@@ -131,7 +136,7 @@ export default function TeacherGrading() {
         </div>
         <div className="space-y-xs">
           <label className="text-xs font-semibold text-outline uppercase tracking-wider">Exam Type</label>
-          <select value={examType} onChange={(e) => setExamType(e.target.value)}
+          <select value={examType} onChange={(e) => setExamType(e.target.value as ExamType)}
             className="bg-surface-container-low border border-outline-variant rounded-xl px-md py-sm text-sm text-on-surface focus:ring-2 focus:ring-secondary outline-none">
             {examTypes.map((t) => (<option key={t.value} value={t.value}>{t.label}</option>))}
           </select>
@@ -150,8 +155,8 @@ export default function TeacherGrading() {
       {selectedCourse && (
         <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-sm overflow-hidden">
           <div className="px-lg py-md border-b border-outline-variant">
-            <h2 className="text-sm font-bold text-on-surface">
-              Enter Marks — {examTypes.find(t => t.value === examType)?.label} (Max: {maxMarks})
+            <h2 className="text-sm font-bold text-on-surface flex items-center gap-sm">
+              📝 Enter Marks — {examTypes.find(t => t.value === examType)?.label} (Max: {maxMarks})
             </h2>
           </div>
           <div className="divide-y divide-outline-variant">

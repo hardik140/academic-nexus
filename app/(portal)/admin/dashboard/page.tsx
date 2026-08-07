@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { getCached } from "@/lib/cache";
 
 export default async function AdminDashboard() {
   const supabase = await createClient();
@@ -9,22 +10,43 @@ export default async function AdminDashboard() {
 
   if (!user) redirect("/login");
 
-  // Fetch aggregate counts
+  const { data: viewerProfile } = await supabase
+    .from("profiles")
+    .select("college_id")
+    .eq("id", user.id)
+    .single();
+
+  // Cache key is college-scoped — this table is multi-tenant, and a cached
+  // count from one college must never be served to another's admin.
   const [
-    { count: totalStudents },
-    { count: totalTeachers },
-    { count: totalCourses },
-    { count: totalDepartments },
-    { count: pendingComplaints },
-    { count: pendingGatePasses },
-  ] = await Promise.all([
-    supabase.from("profiles").select("*", { count: "exact", head: true }).eq("role", "student"),
-    supabase.from("profiles").select("*", { count: "exact", head: true }).eq("role", "teacher"),
-    supabase.from("courses").select("*", { count: "exact", head: true }),
-    supabase.from("departments").select("*", { count: "exact", head: true }),
-    supabase.from("complaints").select("*", { count: "exact", head: true }).eq("status", "open"),
-    supabase.from("gate_passes").select("*", { count: "exact", head: true }).eq("status", "pending"),
-  ]);
+    totalStudents,
+    totalTeachers,
+    totalCourses,
+    totalDepartments,
+    pendingComplaints,
+    pendingGatePasses,
+  ] = await getCached(
+    `dashboard:admin:${viewerProfile?.college_id}:counts`,
+    60,
+    async () => {
+      const [
+        { count: totalStudents },
+        { count: totalTeachers },
+        { count: totalCourses },
+        { count: totalDepartments },
+        { count: pendingComplaints },
+        { count: pendingGatePasses },
+      ] = await Promise.all([
+        supabase.from("profiles").select("*", { count: "exact", head: true }).eq("role", "student"),
+        supabase.from("profiles").select("*", { count: "exact", head: true }).eq("role", "teacher"),
+        supabase.from("courses").select("*", { count: "exact", head: true }),
+        supabase.from("departments").select("*", { count: "exact", head: true }),
+        supabase.from("complaints").select("*", { count: "exact", head: true }).eq("status", "open"),
+        supabase.from("gate_passes").select("*", { count: "exact", head: true }).eq("status", "pending"),
+      ]);
+      return [totalStudents, totalTeachers, totalCourses, totalDepartments, pendingComplaints, pendingGatePasses];
+    }
+  );
 
   // Recent audit logs
   const { data: recentLogs } = await supabase

@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Department Matrix - Academic Nexus</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-error": "#ffffff",
+                        "on-secondary-fixed": "#00174b",
+                        "surface": "#f8f9ff",
+                        "surface-tint": "#565e74",
+                        "on-tertiary-container": "#818486",
+                        "outline": "#76777d",
+                        "primary": "#000000",
+                        "secondary-fixed-dim": "#b4c5ff",
+                        "error-container": "#ffdad6",
+                        "tertiary": "#000000",
+                        "background": "#f8f9ff",
+                        "primary-container": "#131b2e",
+                        "on-tertiary": "#ffffff",
+                        "surface-container": "#e5eeff",
+                        "surface-container-highest": "#d3e4fe",
+                        "surface-variant": "#d3e4fe",
+                        "surface-container-lowest": "#ffffff",
+                        "secondary": "#0051d5",
+                        "on-surface": "#0b1c30",
+                        "surface-container-high": "#dce9ff",
+                        "on-surface-variant": "#45464d",
+                        "tertiary-container": "#191c1e",
+                        "primary-fixed": "#dae2fd",
+                        "inverse-surface": "#213145",
+                        "surface-bright": "#f8f9ff",
+                        "on-secondary-container": "#fefcff",
+                        "on-primary": "#ffffff",
+                        "on-primary-fixed-variant": "#3f465c",
+                        "on-tertiary-fixed": "#191c1e",
+                        "error": "#ba1a1a",
+                        "outline-variant": "#c6c6cd",
+                        "surface-dim": "#cbdbf5",
+                        "tertiary-fixed-dim": "#c4c7c9",
+                        "surface-container-low": "#eff4ff",
+                        "on-error-container": "#93000a",
+                        "on-tertiary-fixed-variant": "#444749",
+                        "on-secondary": "#ffffff",
+                        "secondary-fixed": "#dbe1ff",
+                        "on-primary-fixed": "#131b2e",
+                        "secondary-container": "#316bf3",
+                        "on-primary-container": "#7c839b",
+                        "inverse-primary": "#bec6e0",
+                        "primary-fixed-dim": "#bec6e0",
+                        "on-secondary-fixed-variant": "#003ea8",
+                        "inverse-on-surface": "#eaf1ff",
+                        "tertiary-fixed": "#e0e3e5",
+                        "on-background": "#0b1c30"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "margin": "32px",
+                        "grid_columns": "12",
+                        "gutter": "24px",
+                        "xs": "4px",
+                        "sm": "8px",
+                        "xl": "32px",
+                        "lg": "24px",
+                        "base": "4px",
+                        "md": "16px"
+                    },
+                    "fontFamily": {
+                        "display-lg": ["Inter"],
+                        "headline-sm": ["Inter"],
+                        "headline-md": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "body-sm": ["Inter"],
+                        "body-md": ["Inter"],
+                        "mono-sm": ["monospace"],
+                        "body-lg": ["Inter"],
+                        "label-md": ["Inter"]
+                    },
+                    "fontSize": {
+                        "display-lg": ["36px", { "lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "headline-sm": ["16px", { "lineHeight": "24px", "fontWeight": "600" }],
+                        "headline-md": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "headline-lg": ["28px", { "lineHeight": "36px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "body-sm": ["13px", { "lineHeight": "18px", "fontWeight": "400" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "mono-sm": ["12px", { "lineHeight": "16px", "fontWeight": "400" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .glass-card {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(226, 232, 240, 0.5);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+        }
+        
+        .department-card {
+            transition: all 0.2s ease-in-out;
+        }
+        
+        .department-card:hover {
+            transform: translateY(-2px);
+            border-color: #0051d5;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background min-h-screen flex flex-col font-body-md antialiased">
+<!-- TopAppBar -->
+<header class="bg-surface dark:bg-surface-dim text-primary dark:text-primary-fixed font-headline-md text-headline-md w-full top-0 sticky border-b border-outline-variant dark:border-outline flat no shadows flex items-center justify-between px-margin py-sm z-40">
+<div class="flex items-center gap-4 cursor-pointer active:scale-95 transition-transform hover:bg-surface-container-high dark:hover:bg-surface-container-highest transition-colors rounded-full p-2">
+<span class="material-symbols-outlined">menu</span>
+</div>
+<div class="font-headline-lg text-headline-lg font-bold text-primary dark:text-primary-fixed">
+            Academic Nexus
+        </div>
+<div class="flex items-center gap-4 cursor-pointer active:scale-95 transition-transform hover:bg-surface-container-high dark:hover:bg-surface-container-highest transition-colors rounded-full p-2">
+<div class="w-8 h-8 rounded-full overflow-hidden bg-surface-variant flex items-center justify-center">
+<span class="material-symbols-outlined text-on-surface-variant">person</span>
+</div>
+</div>
+</header>
+<div class="flex flex-1 overflow-hidden relative">
+<!-- NavigationDrawer -->
+<nav class="bg-surface-container-low dark:bg-inverse-surface text-primary dark:text-primary-fixed font-body-md text-body-md h-full w-[240px] fixed left-0 top-0 flat no shadows hidden lg:flex flex-col py-xl px-md space-y-xs z-50 border-r border-outline-variant">
+<div class="flex items-center gap-4 mb-8 px-4 mt-16">
+<div class="w-10 h-10 rounded-full overflow-hidden bg-surface-variant flex items-center justify-center">
+<img class="object-cover w-full h-full" data-alt="A highly detailed close-up portrait of a professional academic director in a well-lit, modern administrative office. The setting features subtle, high-key white lighting creating a bright, authoritative light-mode aesthetic. The director exudes calm competence, dressed in sleek corporate attire. The background is slightly blurred but suggests a high-end SaaS software environment with clean, orderly lines." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDozpMJ5m3a4K2PL8kMGS3yGS29lxjzDvZlJFcoqoFnNVgWMI2bjN1PoFaVQsr-2x_AZCt20K_fX-3nTwDfVaRiZYiTbrXuu0DgLt51veSI-GHQE5BVzJjQlbzvrep0XAo7kYlkMj5jSn8_Y0aGQNkgFT3TkiVX1kvrGPsybH9oeSsNUVUuW_7PXxoaEGenVxUp70VisbP6cEcGtE3V-yHiaH2S70cK8U6UB2AEoiRIg5-4vqKAFnMoNmISXlMZiHdPYRXn0T-D8XI"/>
+</div>
+<div>
+<div class="font-headline-sm text-headline-sm font-bold text-primary dark:text-primary-fixed">College Director</div>
+<div class="text-xs text-on-surface-variant">SIS Admin • Main Campus</div>
+</div>
+</div>
+<div class="space-y-1">
+<a class="flex items-center gap-md px-md py-sm text-on-surface-variant dark:text-on-surface-variant hover:bg-surface-variant dark:hover:bg-surface-variant rounded-full transition-all duration-200 ease-in-out cursor-pointer" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span>Dashboard</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm bg-secondary-container dark:bg-secondary text-on-secondary-container dark:text-on-secondary rounded-full transition-all duration-200 ease-in-out cursor-pointer" href="#">
+<span class="material-symbols-outlined">domain</span>
+<span class="font-bold">Departments</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm text-on-surface-variant dark:text-on-surface-variant hover:bg-surface-variant dark:hover:bg-surface-variant rounded-full transition-all duration-200 ease-in-out cursor-pointer" href="#">
+<span class="material-symbols-outlined">school</span>
+<span>Faculty</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm text-on-surface-variant dark:text-on-surface-variant hover:bg-surface-variant dark:hover:bg-surface-variant rounded-full transition-all duration-200 ease-in-out cursor-pointer" href="#">
+<span class="material-symbols-outlined">group</span>
+<span>Students</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm text-on-surface-variant dark:text-on-surface-variant hover:bg-surface-variant dark:hover:bg-surface-variant rounded-full transition-all duration-200 ease-in-out cursor-pointer" href="#">
+<span class="material-symbols-outlined">account_balance_wallet</span>
+<span>Financials</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm text-on-surface-variant dark:text-on-surface-variant hover:bg-surface-variant dark:hover:bg-surface-variant rounded-full transition-all duration-200 ease-in-out cursor-pointer" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span>Settings</span>
+</a>
+</div>
+</nav>
+<!-- Main Content -->
+<main class="flex-1 w-full lg:ml-[240px] p-4 md:p-8 lg:p-margin pb-24 overflow-y-auto bg-background bg-opacity-90 relative">
+<!-- Atmospheric Pattern Background -->
+<div class="absolute inset-0 pointer-events-none opacity-20" style="background-image: radial-gradient(#0051d5 1px, transparent 1px); background-size: 24px 24px;"></div>
+<div class="relative z-10 max-w-7xl mx-auto">
+<!-- Page Header -->
+<div class="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
+<div>
+<div class="flex items-center gap-2 text-on-surface-variant font-label-md text-label-md mb-2">
+<span>Academic Nexus</span>
+<span class="material-symbols-outlined text-[14px]">chevron_right</span>
+<span>Institutional Views</span>
+</div>
+<h1 class="font-display-lg text-display-lg text-primary mb-2 tracking-tight">Department Matrix</h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant max-w-2xl">
+                            Institutional academic divisions overview and key performance metrics.
+                        </p>
+</div>
+<div class="flex items-center gap-2">
+<button class="bg-surface border border-outline-variant text-on-surface font-label-md px-4 py-2 rounded flex items-center gap-2 hover:bg-surface-variant transition-colors">
+<span class="material-symbols-outlined text-[18px]">filter_list</span>
+                            Filter
+                        </button>
+<button class="bg-surface border border-outline-variant text-on-surface font-label-md px-4 py-2 rounded flex items-center gap-2 hover:bg-surface-variant transition-colors">
+<span class="material-symbols-outlined text-[18px]">download</span>
+                            Export
+                        </button>
+</div>
+</div>
+<!-- Bento Grid Layout -->
+<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+<!-- Card 1: CS -->
+<div class="glass-card rounded-xl p-6 department-card cursor-pointer group relative overflow-hidden">
+<!-- Decorative gradient blob -->
+<div class="absolute -right-8 -top-8 w-32 h-32 bg-blue-100 rounded-full blur-2xl opacity-50 group-hover:bg-blue-200 transition-colors"></div>
+<div class="relative z-10">
+<div class="flex justify-between items-start mb-4">
+<div class="flex items-center gap-3">
+<div class="w-12 h-12 rounded bg-surface-container-high flex items-center justify-center font-headline-md text-primary font-bold shadow-sm">
+                                        CS
+                                    </div>
+<div>
+<h3 class="font-headline-md text-headline-md text-primary">Computer Science</h3>
+<div class="flex items-center gap-1 mt-1">
+<span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+<span class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider text-[10px]">Active</span>
+</div>
+</div>
+</div>
+</div>
+<div class="mb-6 border-b border-outline-variant/50 pb-4">
+<div class="font-label-md text-label-md text-on-surface-variant mb-1">Head of Department</div>
+<div class="font-body-md text-body-md text-on-surface flex items-center gap-2">
+<span class="material-symbols-outlined text-[16px] text-primary">person</span>
+                                    DR. ALAN TURING
+                                </div>
+</div>
+<div class="grid grid-cols-2 gap-4">
+<div>
+<div class="font-label-md text-label-md text-on-surface-variant mb-1 flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">group</span>
+                                        Students
+                                    </div>
+<div class="font-mono-sm text-mono-sm text-primary font-bold text-lg">1,245</div>
+</div>
+<div>
+<div class="font-label-md text-label-md text-on-surface-variant mb-1 flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">grade</span>
+                                        Avg CGPA
+                                    </div>
+<div class="font-mono-sm text-mono-sm text-primary font-bold text-lg">3.45</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Card 2: ENG -->
+<div class="glass-card rounded-xl p-6 department-card cursor-pointer group relative overflow-hidden">
+<div class="absolute -right-8 -top-8 w-32 h-32 bg-indigo-100 rounded-full blur-2xl opacity-50 group-hover:bg-indigo-200 transition-colors"></div>
+<div class="relative z-10">
+<div class="flex justify-between items-start mb-4">
+<div class="flex items-center gap-3">
+<div class="w-12 h-12 rounded bg-surface-container-high flex items-center justify-center font-headline-md text-primary font-bold shadow-sm">
+                                        ENG
+                                    </div>
+<div>
+<h3 class="font-headline-md text-headline-md text-primary">Engineering</h3>
+<div class="flex items-center gap-1 mt-1">
+<span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+<span class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider text-[10px]">Active</span>
+</div>
+</div>
+</div>
+</div>
+<div class="mb-6 border-b border-outline-variant/50 pb-4">
+<div class="font-label-md text-label-md text-on-surface-variant mb-1">Head of Department</div>
+<div class="font-body-md text-body-md text-on-surface flex items-center gap-2">
+<span class="material-symbols-outlined text-[16px] text-primary">person</span>
+                                    DR. NIKOLA TESLA
+                                </div>
+</div>
+<div class="grid grid-cols-2 gap-4">
+<div>
+<div class="font-label-md text-label-md text-on-surface-variant mb-1 flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">group</span>
+                                        Students
+                                    </div>
+<div class="font-mono-sm text-mono-sm text-primary font-bold text-lg">2,108</div>
+</div>
+<div>
+<div class="font-label-md text-label-md text-on-surface-variant mb-1 flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">grade</span>
+                                        Avg CGPA
+                                    </div>
+<div class="font-mono-sm text-mono-sm text-primary font-bold text-lg">3.32</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Card 3: BUS -->
+<div class="glass-card rounded-xl p-6 department-card cursor-pointer group relative overflow-hidden">
+<div class="absolute -right-8 -top-8 w-32 h-32 bg-green-100 rounded-full blur-2xl opacity-50 group-hover:bg-green-200 transition-colors"></div>
+<div class="relative z-10">
+<div class="flex justify-between items-start mb-4">
+<div class="flex items-center gap-3">
+<div class="w-12 h-12 rounded bg-surface-container-high flex items-center justify-center font-headline-md text-primary font-bold shadow-sm">
+                                        BUS
+                                    </div>
+<div>
+<h3 class="font-headline-md text-headline-md text-primary">Business</h3>
+<div class="flex items-center gap-1 mt-1">
+<span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+<span class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider text-[10px]">Active</span>
+</div>
+</div>
+</div>
+</div>
+<div class="mb-6 border-b border-outline-variant/50 pb-4">
+<div class="font-label-md text-label-md text-on-surface-variant mb-1">Head of Department</div>
+<div class="font-body-md text-body-md text-on-surface flex items-center gap-2">
+<span class="material-symbols-outlined text-[16px] text-primary">person</span>
+                                    DR. PETER DRUCKER
+                                </div>
+</div>
+<div class="grid grid-cols-2 gap-4">
+<div>
+<div class="font-label-md text-label-md text-on-surface-variant mb-1 flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">group</span>
+                                        Students
+                                    </div>
+<div class="font-mono-sm text-mono-sm text-primary font-bold text-lg">1,890</div>
+</div>
+<div>
+<div class="font-label-md text-label-md text-on-surface-variant mb-1 flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">grade</span>
+                                        Avg CGPA
+                                    </div>
+<div class="font-mono-sm text-mono-sm text-primary font-bold text-lg">3.51</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Card 4: ART -->
+<div class="glass-card rounded-xl p-6 department-card cursor-pointer group relative overflow-hidden bg-surface-container-lowest/40">
+<div class="absolute -right-8 -top-8 w-32 h-32 bg-gray-100 rounded-full blur-2xl opacity-50 transition-colors"></div>
+<div class="relative z-10">
+<div class="flex justify-between items-start mb-4">
+<div class="flex items-center gap-3">
+<div class="w-12 h-12 rounded bg-surface-container-low flex items-center justify-center font-headline-md text-on-surface-variant font-bold border border-outline-variant border-dashed">
+                                        ART
+                                    </div>
+<div>
+<h3 class="font-headline-md text-headline-md text-on-surface-variant">Fine Arts</h3>
+<div class="flex items-center gap-1 mt-1">
+<span class="w-2 h-2 rounded-full bg-red-400"></span>
+<span class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider text-[10px]">Inactive</span>
+</div>
+</div>
+</div>
+</div>
+<div class="mb-6 border-b border-outline-variant/30 pb-4 opacity-60">
+<div class="font-label-md text-label-md text-on-surface-variant mb-1">Head of Department</div>
+<div class="font-body-md text-body-md text-on-surface-variant flex items-center gap-2">
+<span class="material-symbols-outlined text-[16px]">person</span>
+                                    UNASSIGNED
+                                </div>
+</div>
+<div class="grid grid-cols-2 gap-4 opacity-60">
+<div>
+<div class="font-label-md text-label-md text-on-surface-variant mb-1 flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">group</span>
+                                        Students
+                                    </div>
+<div class="font-mono-sm text-mono-sm text-on-surface-variant font-bold text-lg">0</div>
+</div>
+<div>
+<div class="font-label-md text-label-md text-on-surface-variant mb-1 flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">grade</span>
+                                        Avg CGPA
+                                    </div>
+<div class="font-mono-sm text-mono-sm text-on-surface-variant font-bold text-lg">0.00</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+<!-- BottomNavBar -->
+<nav class="bg-surface-container dark:bg-surface-container-high text-primary dark:text-primary-fixed font-label-md text-label-md w-full shadow-lg fixed bottom-0 left-0 z-50 lg:hidden flex justify-around items-center px-sm pb-xs pt-xs">
+<a class="flex flex-col items-center justify-center text-on-surface-variant dark:text-on-surface-variant hover:bg-surface-variant dark:hover:bg-surface-variant active:scale-90 transition-transform p-2 rounded-lg" href="#">
+<span class="material-symbols-outlined mb-1">home</span>
+<span>Home</span>
+</a>
+<a class="flex flex-col items-center justify-center bg-secondary-container dark:bg-secondary text-on-secondary-container dark:text-on-secondary rounded-full px-4 py-1 active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined mb-1" style="font-variation-settings: 'FILL' 1;">domain</span>
+<span>Depts</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant dark:text-on-surface-variant hover:bg-surface-variant dark:hover:bg-surface-variant active:scale-90 transition-transform p-2 rounded-lg" href="#">
+<span class="material-symbols-outlined mb-1">groups</span>
+<span>People</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant dark:text-on-surface-variant hover:bg-surface-variant dark:hover:bg-surface-variant active:scale-90 transition-transform p-2 rounded-lg" href="#">
+<span class="material-symbols-outlined mb-1">payments</span>
+<span>Pay</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant dark:text-on-surface-variant hover:bg-surface-variant dark:hover:bg-surface-variant active:scale-90 transition-transform p-2 rounded-lg" href="#">
+<span class="material-symbols-outlined mb-1">more_horiz</span>
+<span>More</span>
+</a>
+</nav>
+</body></html>

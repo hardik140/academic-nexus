@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+
+<html class="h-full" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Complaints &amp; Feedback - Academic Nexus</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "surface-container-lowest": "#ffffff",
+                      "on-secondary-fixed": "#00174b",
+                      "error": "#ba1a1a",
+                      "surface-container-high": "#dce9ff",
+                      "surface-bright": "#f8f9ff",
+                      "on-primary-container": "#7c839b",
+                      "error-container": "#ffdad6",
+                      "on-surface": "#0b1c30",
+                      "on-error": "#ffffff",
+                      "surface-container": "#e5eeff",
+                      "on-error-container": "#93000a",
+                      "on-secondary": "#ffffff",
+                      "inverse-primary": "#bec6e0",
+                      "on-tertiary-container": "#818486",
+                      "background": "#f8f9ff",
+                      "surface": "#f8f9ff",
+                      "on-secondary-fixed-variant": "#003ea8",
+                      "outline": "#76777d",
+                      "surface-dim": "#cbdbf5",
+                      "surface-tint": "#565e74",
+                      "primary-container": "#131b2e",
+                      "on-primary-fixed": "#131b2e",
+                      "tertiary": "#000000",
+                      "on-tertiary": "#ffffff",
+                      "primary-fixed": "#dae2fd",
+                      "secondary-container": "#316bf3",
+                      "on-tertiary-fixed": "#191c1e",
+                      "tertiary-fixed-dim": "#c4c7c9",
+                      "on-surface-variant": "#45464d",
+                      "surface-container-low": "#eff4ff",
+                      "on-secondary-container": "#fefcff",
+                      "on-background": "#0b1c30",
+                      "inverse-surface": "#213145",
+                      "surface-container-highest": "#d3e4fe",
+                      "tertiary-container": "#191c1e",
+                      "outline-variant": "#c6c6cd",
+                      "on-primary": "#ffffff",
+                      "secondary-fixed": "#dbe1ff",
+                      "on-primary-fixed-variant": "#3f465c",
+                      "secondary-fixed-dim": "#b4c5ff",
+                      "primary": "#000000",
+                      "inverse-on-surface": "#eaf1ff",
+                      "on-tertiary-fixed-variant": "#444749",
+                      "primary-fixed-dim": "#bec6e0",
+                      "surface-variant": "#d3e4fe",
+                      "tertiary-fixed": "#e0e3e5",
+                      "secondary": "#0051d5"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.125rem",
+                      "lg": "0.25rem",
+                      "xl": "0.5rem",
+                      "full": "0.75rem"
+              },
+              "spacing": {
+                      "gutter": "24px",
+                      "grid_columns": "12",
+                      "base": "4px",
+                      "md": "16px",
+                      "margin": "32px",
+                      "lg": "24px",
+                      "xl": "32px",
+                      "xs": "4px",
+                      "sm": "8px"
+              },
+              "fontFamily": {
+                      "label-md": [
+                              "Inter"
+                      ],
+                      "headline-lg": [
+                              "Inter"
+                      ],
+                      "body-lg": [
+                              "Inter"
+                      ],
+                      "headline-md": [
+                              "Inter"
+                      ],
+                      "headline-sm": [
+                              "Inter"
+                      ],
+                      "body-sm": [
+                              "Inter"
+                      ],
+                      "mono-sm": [
+                              "monospace"
+                      ],
+                      "display-lg": [
+                              "Inter"
+                      ],
+                      "body-md": [
+                              "Inter"
+                      ]
+              },
+              "fontSize": {
+                      "label-md": [
+                              "12px",
+                              {
+                                      "lineHeight": "16px",
+                                      "letterSpacing": "0.05em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "headline-lg": [
+                              "28px",
+                              {
+                                      "lineHeight": "36px",
+                                      "letterSpacing": "-0.01em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "body-lg": [
+                              "16px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "headline-md": [
+                              "20px",
+                              {
+                                      "lineHeight": "28px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "headline-sm": [
+                              "16px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "body-sm": [
+                              "13px",
+                              {
+                                      "lineHeight": "18px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "mono-sm": [
+                              "12px",
+                              {
+                                      "lineHeight": "16px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "display-lg": [
+                              "36px",
+                              {
+                                      "lineHeight": "44px",
+                                      "letterSpacing": "-0.02em",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "body-md": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "fontWeight": "400"
+                              }
+                      ]
+              }
+      },
+          },
+        }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background h-full flex flex-col antialiased selection:bg-secondary-container selection:text-on-secondary-container">
+<!-- TopAppBar -->
+<header class="bg-surface dark:bg-surface-dim text-primary dark:text-primary-fixed-dim font-headline-md text-headline-md w-full sticky top-0 z-50 border-b border-outline-variant dark:border-on-surface-variant flex items-center justify-between px-md py-sm max-w-full">
+<div class="flex items-center gap-sm cursor-pointer active:opacity-80">
+<span class="font-headline-md text-headline-md font-bold text-primary dark:text-primary-fixed-dim">Academic Nexus</span>
+</div>
+<div class="flex items-center gap-md">
+<div class="flex items-center justify-center w-8 h-8 rounded-full bg-surface-container-high cursor-pointer hover:bg-surface-container-low dark:hover:bg-surface-container-high transition-colors active:opacity-80">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</div>
+<img class="w-8 h-8 rounded-full object-cover border border-outline-variant cursor-pointer hover:opacity-80 transition-opacity" data-alt="A professional corporate headshot of a young male student, Alex Mercer, wearing a crisp white collared shirt against a neutral gray background. The lighting is bright and even, typical of a modern SaaS application avatar. High resolution, clear focus, professional demeanor." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDFg3KomlFV3PcHNWDu4VYeipDhNK7P9wIN7xgsEf_tvDe1VTfZ4cl1jFSMyiAcllbYg85WsLmZfa-BGFSrUGCZP5GeGFU43zfrjGGLjGqw5i_A61Fkq9C1xDH5R0AfP9R0V2541LmFC6pshqwIRkDZnsAOe7FpSDG18OXaB_zcADg7llFf33efBeQ_MNsgmWDwUE1Pj32CMDaEctohLhkpzcM9_3ytfzVrrSpXrS964N1EmZ-pxP9R9qwXlK2SJTRskHUCgKuA8UM"/>
+</div>
+</header>
+<!-- Main Canvas -->
+<main class="flex-1 overflow-y-auto pb-24 md:pb-8">
+<div class="max-w-[1440px] mx-auto px-4 md:px-margin pt-lg">
+<!-- Page Header & Action -->
+<div class="flex flex-col md:flex-row md:items-center justify-between gap-md mb-lg">
+<div>
+<h1 class="font-headline-lg text-headline-lg text-on-surface">Complaints &amp; Feedback</h1>
+<p class="font-body-md text-body-md text-on-surface-variant mt-xs">Manage and track your submitted reports.</p>
+</div>
+<button class="bg-primary text-on-primary hover:bg-primary/90 font-label-md text-label-md px-md py-sm rounded flex items-center justify-center gap-xs transition-colors shadow-sm active:scale-95 duration-150 whitespace-nowrap w-full md:w-auto">
+<span class="material-symbols-outlined text-[18px]">add</span>
+                    New Complaint
+                </button>
+</div>
+<!-- Dashboard Content Area -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-gutter">
+<!-- Main List Column -->
+<div class="lg:col-span-8 flex flex-col gap-sm">
+<h2 class="font-headline-sm text-headline-sm text-on-surface mb-xs border-b border-outline-variant pb-2">My Complaints</h2>
+<!-- Complaint Card 1 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-lg p-md hover:border-secondary transition-colors cursor-pointer group shadow-[0_2px_4px_rgba(0,0,0,0.02)] relative overflow-hidden">
+<!-- Subtle status indicator line on the left -->
+<div class="absolute left-0 top-0 bottom-0 w-1 bg-secondary"></div>
+<div class="flex flex-wrap items-center gap-xs mb-sm">
+<span class="bg-secondary-container text-on-secondary-container font-label-md text-label-md px-2 py-0.5 rounded-full">Plumbing</span>
+<span class="bg-error-container text-on-error-container font-label-md text-label-md px-2 py-0.5 rounded-full flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">warning</span> High Priority
+                            </span>
+<span class="ml-auto bg-surface-container-high text-on-surface font-label-md text-label-md px-2 py-0.5 rounded border border-outline-variant">Open</span>
+</div>
+<h3 class="font-headline-md text-headline-md text-on-surface group-hover:text-secondary transition-colors line-clamp-1">Water Leak in Bathroom</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-xs line-clamp-2">
+                            The sink in the 3rd floor bathroom has been leaking continuously since yesterday evening. It's causing a small puddle to form near the entrance, creating a slipping hazard.
+                        </p>
+<div class="flex flex-wrap items-center gap-md mt-sm pt-sm border-t border-outline-variant/50">
+<div class="flex items-center gap-xs text-on-surface-variant">
+<span class="material-symbols-outlined text-[16px]">location_on</span>
+<span class="font-mono-sm text-mono-sm">Block B / 304</span>
+</div>
+<div class="flex items-center gap-xs text-on-surface-variant">
+<span class="material-symbols-outlined text-[16px]">calendar_today</span>
+<span class="font-mono-sm text-mono-sm">Oct 24, 2024</span>
+</div>
+<div class="flex items-center gap-xs text-on-surface-variant ml-auto">
+<span class="material-symbols-outlined text-[16px] text-primary">arrow_forward</span>
+</div>
+</div>
+</div>
+<!-- Complaint Card 2 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-lg p-md hover:border-secondary transition-colors cursor-pointer group shadow-[0_2px_4px_rgba(0,0,0,0.02)] relative overflow-hidden">
+<div class="absolute left-0 top-0 bottom-0 w-1 bg-surface-tint"></div>
+<div class="flex flex-wrap items-center gap-xs mb-sm">
+<span class="bg-surface-container text-on-surface font-label-md text-label-md px-2 py-0.5 rounded-full">Academic</span>
+<span class="bg-surface-variant text-on-surface-variant font-label-md text-label-md px-2 py-0.5 rounded-full">Low Priority</span>
+<span class="ml-auto bg-primary-container text-on-primary-container font-label-md text-label-md px-2 py-0.5 rounded border border-outline-variant">In Progress</span>
+</div>
+<h3 class="font-headline-md text-headline-md text-on-surface group-hover:text-secondary transition-colors line-clamp-1">Missing Course Material</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-xs line-clamp-2">
+                            The syllabus for CS301 was supposed to be uploaded to the portal by Monday, but the folder is still empty. Several students are asking about the reading list.
+                        </p>
+<div class="flex flex-wrap items-center gap-md mt-sm pt-sm border-t border-outline-variant/50">
+<div class="flex items-center gap-xs text-on-surface-variant">
+<span class="material-symbols-outlined text-[16px]">location_on</span>
+<span class="font-mono-sm text-mono-sm">Portal / CS301</span>
+</div>
+<div class="flex items-center gap-xs text-on-surface-variant">
+<span class="material-symbols-outlined text-[16px]">calendar_today</span>
+<span class="font-mono-sm text-mono-sm">Oct 20, 2024</span>
+</div>
+<div class="flex items-center gap-xs text-on-surface-variant ml-auto">
+<span class="material-symbols-outlined text-[16px] text-primary">arrow_forward</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Side Panel (Summary/Metrics) -->
+<div class="lg:col-span-4 flex flex-col gap-sm hidden md:flex">
+<h2 class="font-headline-sm text-headline-sm text-on-surface mb-xs border-b border-outline-variant pb-2">Overview</h2>
+<div class="bg-surface-container-lowest border border-outline-variant rounded-lg p-md shadow-[0_2px_4px_rgba(0,0,0,0.02)]">
+<div class="flex flex-col gap-sm">
+<div class="flex justify-between items-center pb-sm border-b border-outline-variant/30">
+<span class="font-label-md text-label-md text-on-surface-variant">Total Open</span>
+<span class="font-headline-md text-headline-md text-on-surface">1</span>
+</div>
+<div class="flex justify-between items-center pb-sm border-b border-outline-variant/30">
+<span class="font-label-md text-label-md text-on-surface-variant">In Progress</span>
+<span class="font-headline-md text-headline-md text-on-surface">1</span>
+</div>
+<div class="flex justify-between items-center">
+<span class="font-label-md text-label-md text-on-surface-variant">Resolved (30d)</span>
+<span class="font-headline-md text-headline-md text-on-surface text-secondary">4</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- BottomNavBar (Mobile Only per Semantic Shell Mandate) -->
+<nav class="md:hidden bg-surface dark:bg-surface-dim text-secondary dark:text-secondary-fixed-dim font-label-md text-label-md fixed bottom-0 w-full z-50 border-t border-outline-variant dark:border-on-surface-variant shadow-sm flex justify-around items-center h-16 px-md">
+<div class="flex flex-col items-center justify-center text-on-surface-variant dark:text-on-tertiary-container px-4 py-1 hover:text-secondary dark:hover:text-secondary-fixed active:scale-95 transition-transform duration-150 cursor-pointer">
+<span class="material-symbols-outlined" data-icon="home">home</span>
+<span>Home</span>
+</div>
+<div class="flex flex-col items-center justify-center text-on-surface-variant dark:text-on-tertiary-container px-4 py-1 hover:text-secondary dark:hover:text-secondary-fixed active:scale-95 transition-transform duration-150 cursor-pointer">
+<span class="material-symbols-outlined" data-icon="gate">gate</span>
+<span>Passes</span>
+</div>
+<div class="flex flex-col items-center justify-center text-on-surface-variant dark:text-on-tertiary-container px-4 py-1 hover:text-secondary dark:hover:text-secondary-fixed active:scale-95 transition-transform duration-150 cursor-pointer">
+<span class="material-symbols-outlined" data-icon="account_balance_wallet">account_balance_wallet</span>
+<span>Wallet</span>
+</div>
+<!-- Assuming Complaints falls under Profile/Account management contextually if no exact match -->
+<div class="flex flex-col items-center justify-center bg-secondary-container dark:bg-secondary text-on-secondary-container dark:text-on-secondary rounded-full px-4 py-1 active:scale-95 transition-transform duration-150 cursor-pointer">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+<span>Profile</span>
+</div>
+</nav>
+</body></html>

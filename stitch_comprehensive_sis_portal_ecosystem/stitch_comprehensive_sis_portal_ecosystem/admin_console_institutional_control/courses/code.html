@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Course Catalog - Academic Nexus</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "primary-fixed": "#dae2fd",
+                        "surface-container-highest": "#d3e4fe",
+                        "surface-container-low": "#eff4ff",
+                        "on-error": "#ffffff",
+                        "primary": "#000000",
+                        "on-secondary-container": "#fefcff",
+                        "on-secondary": "#ffffff",
+                        "on-tertiary-fixed": "#191c1e",
+                        "secondary": "#0051d5",
+                        "secondary-fixed-dim": "#b4c5ff",
+                        "surface-tint": "#565e74",
+                        "on-surface": "#0b1c30",
+                        "on-primary-fixed": "#131b2e",
+                        "primary-fixed-dim": "#bec6e0",
+                        "on-error-container": "#93000a",
+                        "surface": "#f8f9ff",
+                        "primary-container": "#131b2e",
+                        "on-background": "#0b1c30",
+                        "surface-dim": "#cbdbf5",
+                        "background": "#f8f9ff",
+                        "surface-variant": "#d3e4fe",
+                        "surface-bright": "#f8f9ff",
+                        "tertiary-container": "#191c1e",
+                        "on-secondary-fixed": "#00174b",
+                        "on-primary-fixed-variant": "#3f465c",
+                        "on-tertiary": "#ffffff",
+                        "on-tertiary-fixed-variant": "#444749",
+                        "surface-container-lowest": "#ffffff",
+                        "on-primary-container": "#7c839b",
+                        "inverse-surface": "#213145",
+                        "error-container": "#ffdad6",
+                        "inverse-primary": "#bec6e0",
+                        "error": "#ba1a1a",
+                        "tertiary-fixed-dim": "#c4c7c9",
+                        "on-primary": "#ffffff",
+                        "surface-container-high": "#dce9ff",
+                        "outline-variant": "#c6c6cd",
+                        "secondary-fixed": "#dbe1ff",
+                        "tertiary-fixed": "#e0e3e5",
+                        "tertiary": "#000000",
+                        "on-secondary-fixed-variant": "#003ea8",
+                        "on-surface-variant": "#45464d",
+                        "secondary-container": "#316bf3",
+                        "on-tertiary-container": "#818486",
+                        "outline": "#76777d",
+                        "surface-container": "#e5eeff",
+                        "inverse-on-surface": "#eaf1ff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "base": "4px",
+                        "gutter": "24px",
+                        "grid_columns": "12",
+                        "lg": "24px",
+                        "xl": "32px",
+                        "xs": "4px",
+                        "margin": "32px",
+                        "sm": "8px",
+                        "md": "16px"
+                    },
+                    "fontFamily": {
+                        "body-sm": ["Inter"],
+                        "headline-sm": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "headline-md": ["Inter"],
+                        "display-lg": ["Inter"],
+                        "mono-sm": ["monospace"],
+                        "headline-lg": ["Inter"],
+                        "body-md": ["Inter"],
+                        "label-md": ["Inter"]
+                    },
+                    "fontSize": {
+                        "body-sm": ["13px", { "lineHeight": "18px", "fontWeight": "400" }],
+                        "headline-sm": ["16px", { "lineHeight": "24px", "fontWeight": "600" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "headline-md": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "display-lg": ["36px", { "lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "mono-sm": ["12px", { "lineHeight": "16px", "fontWeight": "400" }],
+                        "headline-lg": ["28px", { "lineHeight": "36px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; background-color: theme('colors.background'); color: theme('colors.on-background'); }
+        /* Custom scrollbar for data tables */
+        .table-container::-webkit-scrollbar { height: 8px; width: 8px; }
+        .table-container::-webkit-scrollbar-track { background: theme('colors.surface-container-low'); }
+        .table-container::-webkit-scrollbar-thumb { background-color: theme('colors.outline-variant'); border-radius: theme('borderRadius.full'); }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="flex flex-col min-h-screen bg-background text-on-background antialiased">
+<!-- TopAppBar (from JSON) -->
+<header class="w-full top-0 sticky bg-surface-container-lowest border-b border-outline-variant shadow-sm z-40">
+<div class="flex justify-between items-center px-margin py-md w-full max-w-full">
+<div class="flex items-center gap-sm">
+<span class="material-symbols-outlined text-secondary cursor-pointer hover:bg-surface-container-high transition-colors p-1 rounded-full active:opacity-80" data-weight="fill" style="font-variation-settings: 'FILL' 1;">school</span>
+<span class="font-headline-lg text-headline-lg text-on-surface font-bold">Academic Nexus</span>
+</div>
+<div class="flex items-center gap-md">
+<img alt="User profile avatar" class="w-8 h-8 rounded-full object-cover border border-outline-variant cursor-pointer hover:opacity-80 transition-opacity" data-alt="A small, professional headshot of an administrator in a modern office setting. Clear lighting, neutral background, high resolution, suitable for a web application avatar in a corporate environment. The person looks approachable but serious." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBoUoNJghKcEnEkGQ_e93K4TmVIevgoH2_0DnmcBSbDdEAPpoHPoQnCFNSDCiGTjsYHUMvFHV0hakmR5eDlAU0RgZJEzAjDYc89NkPRAkVTyPLzjOKzLyah4BbotssZNg5k41QJUiL8dkY16LdM3bjrmdHL_a0K1SltUnnkKQnW1QmUhAcUeE1-793keNDeLiA8vHe404ifEoHTrkn-URKfRzbEIOBQ0C5gDVeBSSIFTvjr9yRvU1DsGeezMG85jKNpa516b1xUGEY"/>
+</div>
+</div>
+</header>
+<div class="flex flex-1 overflow-hidden">
+<!-- NavigationDrawer (from JSON) -->
+<nav class="hidden md:flex flex-col h-screen w-[240px] sticky left-0 top-0 bg-surface-container-low border-r border-outline-variant py-md gap-xs overflow-y-auto">
+<div class="px-4 py-2 mb-4">
+<div class="flex items-center gap-3">
+<img alt="Academic Nexus Logo" class="w-10 h-10 rounded-lg object-cover" data-alt="A stylized geometric logo representing an academic institution. Modern design, combining themes of networking and education. Colors match the application's primary blue and dark slate tones, presented in a crisp, vector-like style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDdC4tuEbFsibSRrxMTeuQTmqwEBmywp3Yd3fwtmxEaeOEfryoJiXTR3my3Kisc8GjRZ0LWtfy-ZkYRvPip15lrsF1yj7VPCMR2QFnLxLHI-MZiwbHRRD8KbtjYzJvQL0HICLLKORaCMBaep_XqNghgjGvaS01VhhvunRLdyCrPyMr94Kydqf0E9KEEKHYNMlUb2PzmTgRsBhnScyQ86qnT24_NCTHrqCR6LQO6LxsleRd_h_JAgc0mO091ywJgak3ryOxJlMDbv1g"/>
+<div>
+<h2 class="font-headline-sm text-headline-sm font-bold text-on-surface">Academic Nexus</h2>
+<p class="font-body-sm text-body-sm text-on-surface-variant">SIS Portal</p>
+</div>
+</div>
+</div>
+<!-- Portal Switcher -->
+<div class="px-4 py-2 mb-2">
+<button class="w-full flex justify-between items-center bg-surface-container-highest px-3 py-2 rounded border border-outline-variant hover:bg-surface-variant transition-colors text-left">
+<span class="font-label-md text-label-md text-on-surface font-bold">Admin Portal</span>
+<span class="material-symbols-outlined text-[16px] text-on-surface-variant">expand_more</span>
+</button>
+</div>
+<div class="flex flex-col gap-xs w-full">
+<a class="flex items-center gap-3 text-on-surface-variant hover:bg-surface-variant px-4 py-3 transition-all cursor-pointer font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined">person</span> Students
+                </a>
+<a class="flex items-center gap-3 text-on-surface-variant hover:bg-surface-variant px-4 py-3 transition-all cursor-pointer font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined">diversity_3</span> Faculty
+                </a>
+<a class="flex items-center gap-3 text-on-surface-variant hover:bg-surface-variant px-4 py-3 transition-all cursor-pointer font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined">payments</span> Financials
+                </a>
+<!-- Active Item -->
+<a class="flex items-center gap-3 text-secondary font-bold border-l-4 border-secondary bg-surface-container-high px-4 py-3 transition-all cursor-pointer font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">account_tree</span> Department
+                </a>
+<a class="flex items-center gap-3 text-on-surface-variant hover:bg-surface-variant px-4 py-3 transition-all cursor-pointer font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined">analytics</span> Reports
+                </a>
+<a class="flex items-center gap-3 text-on-surface-variant hover:bg-surface-variant px-4 py-3 transition-all cursor-pointer font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined">admin_panel_settings</span> Admin
+                </a>
+</div>
+<div class="mt-auto px-4 py-4 border-t border-outline-variant">
+<p class="font-mono-sm text-mono-sm text-on-surface-variant text-center">v2.4.0</p>
+</div>
+</nav>
+<!-- Main Content -->
+<main class="flex-1 flex flex-col h-full overflow-y-auto bg-surface px-md md:px-xl py-lg md:py-xl mb-24 md:mb-0">
+<!-- Breadcrumbs -->
+<div class="flex items-center gap-2 mb-4 text-on-surface-variant font-body-sm text-body-sm">
+<a class="hover:text-secondary transition-colors" href="#">Department</a>
+<span class="material-symbols-outlined text-[16px]">chevron_right</span>
+<span class="text-on-surface font-semibold">Course Catalog</span>
+</div>
+<!-- Page Header & Actions -->
+<div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-lg">
+<div>
+<h1 class="font-display-lg text-display-lg text-on-surface">Course Catalog</h1>
+<p class="font-body-md text-body-md text-on-surface-variant mt-1">Manage institutional course offerings and curriculum details.</p>
+</div>
+<div class="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+<!-- Search Box -->
+<div class="relative w-full sm:w-64">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-[20px]">search</span>
+<input class="w-full pl-10 pr-3 py-2 bg-surface-container-lowest border border-outline-variant rounded-lg font-body-md text-body-md text-on-surface focus:outline-none focus:ring-2 focus:ring-secondary focus:border-secondary transition-all placeholder:text-on-surface-variant" placeholder="Search code or name..." type="text"/>
+</div>
+<!-- Primary Action -->
+<button class="flex items-center justify-center gap-2 bg-secondary text-on-secondary px-4 py-2 rounded-lg font-label-md text-label-md hover:bg-secondary-container hover:text-on-secondary-container transition-colors shadow-sm whitespace-nowrap">
+<span class="material-symbols-outlined text-[18px]">add</span>
+                        Add Course
+                    </button>
+</div>
+</div>
+<!-- Data Table Container -->
+<div class="bg-surface-container-lowest rounded-xl border border-outline-variant shadow-sm overflow-hidden flex flex-col">
+<!-- Table Filters / Toolbar (Optional but good for density) -->
+<div class="px-4 py-3 border-b border-outline-variant bg-surface flex justify-between items-center flex-wrap gap-2">
+<div class="flex gap-2">
+<select class="bg-surface-container-lowest border border-outline-variant rounded text-on-surface font-body-sm text-body-sm px-2 py-1 focus:ring-2 focus:ring-secondary">
+<option>All Departments</option>
+<option>Computer Science</option>
+<option>Mathematics</option>
+</select>
+<select class="bg-surface-container-lowest border border-outline-variant rounded text-on-surface font-body-sm text-body-sm px-2 py-1 focus:ring-2 focus:ring-secondary">
+<option>All Semesters</option>
+<option>Fall 2024</option>
+<option>Spring 2025</option>
+</select>
+</div>
+<div class="flex items-center gap-2">
+<button class="p-1 text-on-surface-variant hover:text-secondary hover:bg-surface-container-high rounded transition-colors" title="Filter">
+<span class="material-symbols-outlined text-[20px]">filter_list</span>
+</button>
+<button class="p-1 text-on-surface-variant hover:text-secondary hover:bg-surface-container-high rounded transition-colors" title="Export">
+<span class="material-symbols-outlined text-[20px]">download</span>
+</button>
+</div>
+</div>
+<!-- Actual Table -->
+<div class="overflow-x-auto table-container">
+<table class="w-full text-left border-collapse min-w-[800px]">
+<thead>
+<tr class="bg-surface-variant text-on-surface-variant border-b border-outline-variant font-label-md text-label-md uppercase tracking-wider sticky top-0 z-10">
+<th class="py-3 px-4 font-semibold w-24">Code</th>
+<th class="py-3 px-4 font-semibold">Course Name</th>
+<th class="py-3 px-4 font-semibold">Department</th>
+<th class="py-3 px-4 font-semibold text-right w-20">Credits</th>
+<th class="py-3 px-4 font-semibold">Semester</th>
+<th class="py-3 px-4 font-semibold">Type</th>
+<th class="py-3 px-4 font-semibold">Instructor</th>
+<th class="py-3 px-4 font-semibold text-center w-24">Status</th>
+<th class="py-3 px-4 font-semibold text-right w-16">Actions</th>
+</tr>
+</thead>
+<tbody class="font-body-sm text-body-sm divide-y divide-surface-container-high">
+<!-- Row 1 -->
+<tr class="hover:bg-surface-container-low transition-colors group cursor-pointer">
+<td class="py-2.5 px-4 font-mono-sm text-mono-sm text-on-surface font-medium">CS101</td>
+<td class="py-2.5 px-4 text-on-surface font-semibold">Introduction to Computer Science</td>
+<td class="py-2.5 px-4 text-on-surface-variant">Computer Science</td>
+<td class="py-2.5 px-4 text-right font-mono-sm text-mono-sm">3.0</td>
+<td class="py-2.5 px-4 text-on-surface-variant">Fall 2024</td>
+<td class="py-2.5 px-4">
+<span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-surface-container-highest text-on-surface-variant border border-outline-variant">Core</span>
+</td>
+<td class="py-2.5 px-4 text-on-surface-variant">Dr. Alan Turing</td>
+<td class="py-2.5 px-4 text-center">
+<span class="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-secondary-container text-on-secondary-container">Active</span>
+</td>
+<td class="py-2.5 px-4 text-right">
+<button class="text-on-surface-variant hover:text-secondary opacity-0 group-hover:opacity-100 transition-opacity">
+<span class="material-symbols-outlined text-[20px]">more_vert</span>
+</button>
+</td>
+</tr>
+<!-- Row 2 (Zebra stripe simulation via bg) -->
+<tr class="bg-surface hover:bg-surface-container-low transition-colors group cursor-pointer">
+<td class="py-2.5 px-4 font-mono-sm text-mono-sm text-on-surface font-medium">MATH205</td>
+<td class="py-2.5 px-4 text-on-surface font-semibold">Linear Algebra &amp; Applications</td>
+<td class="py-2.5 px-4 text-on-surface-variant">Mathematics</td>
+<td class="py-2.5 px-4 text-right font-mono-sm text-mono-sm">4.0</td>
+<td class="py-2.5 px-4 text-on-surface-variant">Spring 2025</td>
+<td class="py-2.5 px-4">
+<span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-surface-container-highest text-on-surface-variant border border-outline-variant">Core</span>
+</td>
+<td class="py-2.5 px-4 text-on-surface-variant">Prof. E. Noether</td>
+<td class="py-2.5 px-4 text-center">
+<span class="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-secondary-container text-on-secondary-container">Active</span>
+</td>
+<td class="py-2.5 px-4 text-right">
+<button class="text-on-surface-variant hover:text-secondary opacity-0 group-hover:opacity-100 transition-opacity">
+<span class="material-symbols-outlined text-[20px]">more_vert</span>
+</button>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="hover:bg-surface-container-low transition-colors group cursor-pointer">
+<td class="py-2.5 px-4 font-mono-sm text-mono-sm text-on-surface font-medium">ENG301</td>
+<td class="py-2.5 px-4 text-on-surface font-semibold">Advanced Technical Writing</td>
+<td class="py-2.5 px-4 text-on-surface-variant">English</td>
+<td class="py-2.5 px-4 text-right font-mono-sm text-mono-sm">3.0</td>
+<td class="py-2.5 px-4 text-on-surface-variant">Fall 2024</td>
+<td class="py-2.5 px-4">
+<span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-surface-container text-on-surface-variant border border-outline-variant border-dashed">Elective</span>
+</td>
+<td class="py-2.5 px-4 text-on-surface-variant">Dr. S. Plath</td>
+<td class="py-2.5 px-4 text-center">
+<span class="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-surface-variant text-on-surface-variant">Inactive</span>
+</td>
+<td class="py-2.5 px-4 text-right">
+<button class="text-on-surface-variant hover:text-secondary opacity-0 group-hover:opacity-100 transition-opacity">
+<span class="material-symbols-outlined text-[20px]">more_vert</span>
+</button>
+</td>
+</tr>
+<!-- Row 4 -->
+<tr class="bg-surface hover:bg-surface-container-low transition-colors group cursor-pointer">
+<td class="py-2.5 px-4 font-mono-sm text-mono-sm text-on-surface font-medium">PHY420</td>
+<td class="py-2.5 px-4 text-on-surface font-semibold">Quantum Mechanics II</td>
+<td class="py-2.5 px-4 text-on-surface-variant">Physics</td>
+<td class="py-2.5 px-4 text-right font-mono-sm text-mono-sm">4.0</td>
+<td class="py-2.5 px-4 text-on-surface-variant">Spring 2025</td>
+<td class="py-2.5 px-4">
+<span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-surface-container-highest text-on-surface-variant border border-outline-variant">Core</span>
+</td>
+<td class="py-2.5 px-4 text-on-surface-variant">Dr. R. Feynman</td>
+<td class="py-2.5 px-4 text-center">
+<span class="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-secondary-container text-on-secondary-container">Active</span>
+</td>
+<td class="py-2.5 px-4 text-right">
+<button class="text-on-surface-variant hover:text-secondary opacity-0 group-hover:opacity-100 transition-opacity">
+<span class="material-symbols-outlined text-[20px]">more_vert</span>
+</button>
+</td>
+</tr>
+<!-- Row 5 -->
+<tr class="hover:bg-surface-container-low transition-colors group cursor-pointer">
+<td class="py-2.5 px-4 font-mono-sm text-mono-sm text-on-surface font-medium">ART110</td>
+<td class="py-2.5 px-4 text-on-surface font-semibold">Digital Media Foundation</td>
+<td class="py-2.5 px-4 text-on-surface-variant">Fine Arts</td>
+<td class="py-2.5 px-4 text-right font-mono-sm text-mono-sm">3.0</td>
+<td class="py-2.5 px-4 text-on-surface-variant">Fall 2024</td>
+<td class="py-2.5 px-4">
+<span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-surface-container text-on-surface-variant border border-outline-variant border-dashed">Elective</span>
+</td>
+<td class="py-2.5 px-4 text-on-surface-variant">TBA</td>
+<td class="py-2.5 px-4 text-center">
+<span class="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-error-container text-on-error-container">Draft</span>
+</td>
+<td class="py-2.5 px-4 text-right">
+<button class="text-on-surface-variant hover:text-secondary opacity-0 group-hover:opacity-100 transition-opacity">
+<span class="material-symbols-outlined text-[20px]">more_vert</span>
+</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Pagination Footer -->
+<div class="px-4 py-3 border-t border-outline-variant bg-surface flex justify-between items-center text-on-surface-variant font-body-sm text-body-sm">
+<div>Showing 1 to 5 of 124 courses</div>
+<div class="flex items-center gap-1">
+<button class="p-1 rounded hover:bg-surface-container-high transition-colors disabled:opacity-50" disabled="">
+<span class="material-symbols-outlined text-[20px]">chevron_left</span>
+</button>
+<button class="px-2 py-1 rounded bg-secondary-container text-on-secondary-container font-medium">1</button>
+<button class="px-2 py-1 rounded hover:bg-surface-container-high transition-colors">2</button>
+<button class="px-2 py-1 rounded hover:bg-surface-container-high transition-colors">3</button>
+<span class="px-1">...</span>
+<button class="px-2 py-1 rounded hover:bg-surface-container-high transition-colors">25</button>
+<button class="p-1 rounded hover:bg-surface-container-high transition-colors">
+<span class="material-symbols-outlined text-[20px]">chevron_right</span>
+</button>
+</div>
+</div>
+</div>
+</main>
+</div>
+<!-- BottomNavBar (from JSON) -->
+<nav class="md:hidden flex justify-around items-center w-full px-sm pb-safe pt-xs fixed bottom-0 z-50 rounded-t-xl bg-surface-container-lowest border-t border-outline-variant shadow-lg h-[72px]">
+<button class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-variant transition-all duration-200 active:scale-95 w-16 h-14 rounded-lg">
+<span class="material-symbols-outlined text-[24px]">dashboard</span>
+<span class="font-label-md text-label-md mt-1 text-[10px]">Dashboard</span>
+</button>
+<!-- Map 'Department/Courses' intent to 'Rosters' as closest conceptual fit for admin data management if strict matching is required, though 'Dashboard' might also be valid. Opting for a general fallback or strict exact match. Since no exact match for "Department" or "Courses", and "Rosters" implies lists of people/things, let's keep Dashboard active as the generic landing, or just highlight one based on intent. Let's assume this falls under Rosters/Entities. Actually, JSON says: "Rosters" -->
+<button class="flex flex-col items-center justify-center bg-secondary-container text-on-secondary-container rounded-full px-4 py-1 transition-all duration-200 active:scale-95">
+<span class="material-symbols-outlined text-[24px]" style="font-variation-settings: 'FILL' 1;">groups</span>
+<span class="font-label-md text-label-md mt-1 text-[10px]">Rosters</span>
+</button>
+<button class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-variant transition-all duration-200 active:scale-95 w-16 h-14 rounded-lg">
+<span class="material-symbols-outlined text-[24px]">account_balance_wallet</span>
+<span class="font-label-md text-label-md mt-1 text-[10px]">Finance</span>
+</button>
+<button class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-variant transition-all duration-200 active:scale-95 w-16 h-14 rounded-lg">
+<span class="material-symbols-outlined text-[24px]">settings</span>
+<span class="font-label-md text-label-md mt-1 text-[10px]">Settings</span>
+</button>
+</nav>
+</body></html>

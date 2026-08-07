@@ -1,19 +1,36 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { formatCurrency } from "@/lib/utils";
+import { getCached } from "@/lib/cache";
 
 export default async function FinanceReports() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const [summaryRes, feesRes] = await Promise.all([
-    supabase.from("mv_fee_summary").select("*").maybeSingle(),
-    supabase.from("fees").select("amount, paid_amount, status, students(departments(name, code))"),
-  ]);
+  const { data: viewerProfile } = await supabase
+    .from("profiles")
+    .select("college_id")
+    .eq("id", user.id)
+    .single();
 
-  const summary = summaryRes.data;
-  const fees = feesRes.data || [];
+  // NOTE: `fees` is intentionally unbounded — the department/status breakdowns
+  // below sum over the full result set client-side. A naive .limit() would
+  // silently understate totals past the cap. Real fix is pushing this
+  // aggregation into Postgres (extend mv_fee_summary or add a grouped view);
+  // same deferred issue as finance/transactions.tsx. Caching this college-
+  // scoped result at least keeps that full-table pull off the hot path.
+  const { summary, fees } = await getCached(
+    `reports:finance:${viewerProfile?.college_id}:mv`,
+    60,
+    async () => {
+      const [summaryRes, feesRes] = await Promise.all([
+        supabase.from("mv_fee_summary").select("*").maybeSingle(),
+        supabase.from("fees").select("amount, paid_amount, status, students(departments(name, code))"),
+      ]);
+      return { summary: summaryRes.data, fees: feesRes.data || [] };
+    }
+  );
 
   // Department-wise breakdown
   const byDept: Record<string, { name: string; code: string; billed: number; collected: number }> = {};

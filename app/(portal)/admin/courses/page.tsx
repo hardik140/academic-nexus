@@ -1,21 +1,34 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Suspense, useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { DataTable } from "@/components/ui/data-table";
 import { Modal, Button, FormField, StatusBadge } from "@/components/ui/modal";
+import { createCourse } from "./actions";
+import type { Database } from "@/types/database";
 
-export default function AdminCourses() {
+type CourseType = Database["public"]["Tables"]["courses"]["Row"]["type"];
+
+function AdminCoursesInner() {
   const supabase = createClient();
+  const searchParams = useSearchParams();
   const [courses, setCourses] = useState<any[]>([]);
   const [departments, setDepartments] = useState<any[]>([]);
   const [showCreate, setShowCreate] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState({
+  const [error, setError] = useState<string | null>(null);
+  const [form, setForm] = useState<{
+    name: string; code: string; credits: string; semester: string; type: CourseType; department_id: string; description: string;
+  }>({
     name: "", code: "", credits: "3", semester: "1", type: "core", department_id: "", description: "",
   });
 
   useEffect(() => { loadData(); }, []);
+
+  useEffect(() => {
+    if (searchParams.get("action") === "create") setShowCreate(true);
+  }, [searchParams]);
 
   const loadData = async () => {
     const [coursesRes, deptsRes] = await Promise.all([
@@ -26,28 +39,19 @@ export default function AdminCourses() {
     setDepartments(deptsRes.data || []);
   };
 
-  const createCourse = async () => {
+  const handleCreate = async () => {
     setLoading(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    const { data: profile } = await supabase.from("profiles").select("college_id").eq("id", user.id).single();
-    if (!profile) return;
-
-    await supabase.from("courses").insert({
-      college_id: profile.college_id,
-      department_id: form.department_id,
-      name: form.name,
-      code: form.code,
-      credits: parseInt(form.credits),
-      semester: parseInt(form.semester),
-      type: form.type,
-      description: form.description,
-    });
-
-    setForm({ name: "", code: "", credits: "3", semester: "1", type: "core", department_id: "", description: "" });
-    setShowCreate(false);
-    setLoading(false);
-    loadData();
+    setError(null);
+    try {
+      await createCourse(form.name, form.code, form.department_id, parseInt(form.credits), parseInt(form.semester), form.type, form.description || undefined);
+      setForm({ name: "", code: "", credits: "3", semester: "1", type: "core", department_id: "", description: "" });
+      setShowCreate(false);
+      await loadData();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to create course.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -59,6 +63,10 @@ export default function AdminCourses() {
         </div>
         <Button onClick={() => setShowCreate(true)}>+ Add Course</Button>
       </div>
+
+      {error && !showCreate && (
+        <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium">{error}</div>
+      )}
 
       <DataTable
         columns={[
@@ -86,15 +94,18 @@ export default function AdminCourses() {
         footer={
           <>
             <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
-            <Button onClick={createCourse} disabled={loading}>{loading ? "Creating..." : "Create Course"}</Button>
+            <Button onClick={handleCreate} disabled={loading}>{loading ? "Creating..." : "Create Course"}</Button>
           </>
         }
       >
+        {error && (
+          <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium mb-md">{error}</div>
+        )}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-md">
           <FormField label="Course Name" id="course_name" value={form.name} onChange={(v) => setForm({ ...form, name: v })} placeholder="e.g. Data Structures" required />
           <FormField label="Course Code" id="course_code" value={form.code} onChange={(v) => setForm({ ...form, code: v })} placeholder="e.g. CS201" required />
           <FormField label="Department" id="course_dept" type="select" value={form.department_id} onChange={(v) => setForm({ ...form, department_id: v })} options={departments.map(d => ({ value: d.id, label: `${d.code} — ${d.name}` }))} required />
-          <FormField label="Type" id="course_type" type="select" value={form.type} onChange={(v) => setForm({ ...form, type: v })} options={[
+          <FormField label="Type" id="course_type" type="select" value={form.type} onChange={(v) => setForm({ ...form, type: v as CourseType })} options={[
             { value: "core", label: "Core" }, { value: "elective", label: "Elective" },
             { value: "lab", label: "Lab" }, { value: "project", label: "Project" }, { value: "seminar", label: "Seminar" },
           ]} />
@@ -106,5 +117,13 @@ export default function AdminCourses() {
         </div>
       </Modal>
     </div>
+  );
+}
+
+export default function AdminCourses() {
+  return (
+    <Suspense>
+      <AdminCoursesInner />
+    </Suspense>
   );
 }

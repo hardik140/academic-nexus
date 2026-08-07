@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Hostel Warden Portal - Hostel Rooms</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-container-lowest": "#ffffff",
+                        "on-primary-fixed-variant": "#3f465c",
+                        "on-tertiary-fixed-variant": "#444749",
+                        "inverse-primary": "#bec6e0",
+                        "secondary": "#0051d5",
+                        "primary": "#000000",
+                        "on-secondary-fixed": "#00174b",
+                        "surface-container-low": "#eff4ff",
+                        "on-secondary-container": "#fefcff",
+                        "primary-fixed": "#dae2fd",
+                        "outline-variant": "#c6c6cd",
+                        "on-primary-fixed": "#131b2e",
+                        "surface-container": "#e5eeff",
+                        "on-primary": "#ffffff",
+                        "surface-tint": "#565e74",
+                        "on-background": "#0b1c30",
+                        "tertiary-container": "#191c1e",
+                        "secondary-fixed": "#dbe1ff",
+                        "on-secondary-fixed-variant": "#003ea8",
+                        "on-secondary": "#ffffff",
+                        "outline": "#76777d",
+                        "on-tertiary-fixed": "#191c1e",
+                        "secondary-fixed-dim": "#b4c5ff",
+                        "surface-variant": "#d3e4fe",
+                        "surface-dim": "#cbdbf5",
+                        "tertiary-fixed-dim": "#c4c7c9",
+                        "primary-container": "#131b2e",
+                        "inverse-surface": "#213145",
+                        "secondary-container": "#316bf3",
+                        "surface-bright": "#f8f9ff",
+                        "error-container": "#ffdad6",
+                        "surface": "#f8f9ff",
+                        "surface-container-high": "#dce9ff",
+                        "tertiary-fixed": "#e0e3e5",
+                        "on-primary-container": "#7c839b",
+                        "inverse-on-surface": "#eaf1ff",
+                        "tertiary": "#000000",
+                        "on-surface-variant": "#45464d",
+                        "background": "#f8f9ff",
+                        "error": "#ba1a1a",
+                        "primary-fixed-dim": "#bec6e0",
+                        "on-tertiary": "#ffffff",
+                        "on-surface": "#0b1c30",
+                        "on-tertiary-container": "#818486",
+                        "on-error": "#ffffff",
+                        "surface-container-highest": "#d3e4fe",
+                        "on-error-container": "#93000a"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "sm": "8px",
+                        "grid_columns": "12",
+                        "gutter": "24px",
+                        "base": "4px",
+                        "md": "16px",
+                        "lg": "24px",
+                        "xl": "32px",
+                        "margin": "32px",
+                        "xs": "4px"
+                    },
+                    "fontFamily": {
+                        "label-md": ["Inter"],
+                        "body-sm": ["Inter"],
+                        "display-lg": ["Inter"],
+                        "headline-sm": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "mono-sm": ["monospace"],
+                        "headline-md": ["Inter"],
+                        "body-md": ["Inter"],
+                        "headline-lg": ["Inter"]
+                    },
+                    "fontSize": {
+                        "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "body-sm": ["13px", { "lineHeight": "18px", "fontWeight": "400" }],
+                        "display-lg": ["36px", { "lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "headline-sm": ["16px", { "lineHeight": "24px", "fontWeight": "600" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "mono-sm": ["12px", { "lineHeight": "16px", "fontWeight": "400" }],
+                        "headline-md": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "headline-lg": ["28px", { "lineHeight": "36px", "letterSpacing": "-0.01em", "fontWeight": "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .filled-icon { font-variation-settings: 'FILL' 1; }
+        
+        /* High density table styles */
+        .table-container { scrollbar-width: thin; scrollbar-color: var(--outline-variant) transparent; }
+        .table-container::-webkit-scrollbar { height: 6px; }
+        .table-container::-webkit-scrollbar-track { background: transparent; }
+        .table-container::-webkit-scrollbar-thumb { background-color: #c6c6cd; border-radius: 4px; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background min-h-screen flex flex-col md:flex-row antialiased">
+<!-- JSON Component: NavigationDrawer (Desktop) -->
+<nav class="bg-surface-container-low dark:bg-surface-container text-secondary dark:text-secondary-fixed font-label-md text-label-md fixed left-0 top-0 h-full w-60 border-r border-outline-variant flat no shadows hidden md:flex flex-col h-full z-40">
+<div class="p-margin flex items-center gap-md border-b border-outline-variant">
+<img class="w-12 h-12 rounded-full object-cover shadow-sm" data-alt="A professional, modern corporate headshot of a student administrator against a neutral light grey background, wearing a smart casual outfit, well-lit with high key lighting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDYKXZ8k2vUGPWl2kkpIyCqAL6TN2kyS-CDujpMKpTG3GKsgnPhs1EOpxcxOcNYElCnra6e7MwfM3s8Is5el5sX0KF5mSrZkLjQxl8waViQFctvZ3ECiuBVOj-vLWZGOv2XtNWD6VOuSCk1iNbHqXU2zBeEZDrHDiCSi1ws8Uq99FUNN71g44npMtxSfB0BQc7mk47XqDtqn7efyo7xXq1Y4qkSSU1iFESWuZE9rxxJEKpSKTq2Ku75gUING_AtaxR6QJtQxRZ3eQU"/>
+<div class="flex flex-col">
+<span class="font-headline-sm text-headline-sm font-black text-on-surface">Alex Rivers</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Student ID: 20240912</span>
+</div>
+</div>
+<div class="flex-1 overflow-y-auto py-md flex flex-col gap-base">
+<!-- Active Tab: Dashboard (Fallback for Home/Rooms intent) -->
+<a class="bg-secondary-container text-on-secondary-container rounded-lg mx-2 my-1 px-4 py-2 flex items-center gap-md transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined filled-icon" data-icon="dashboard">dashboard</span>
+                Dashboard
+            </a>
+<a class="text-on-surface-variant hover:text-on-surface mx-2 my-1 px-4 py-2 hover:bg-surface-container-high dark:hover:bg-surface-container-highest transition-all duration-200 ease-in-out flex items-center gap-md" href="#">
+<span class="material-symbols-outlined" data-icon="gate">gate</span>
+                Gate Passes
+            </a>
+<a class="text-on-surface-variant hover:text-on-surface mx-2 my-1 px-4 py-2 hover:bg-surface-container-high dark:hover:bg-surface-container-highest transition-all duration-200 ease-in-out flex items-center gap-md" href="#">
+<span class="material-symbols-outlined" data-icon="history_edu">history_edu</span>
+                Academic Log
+            </a>
+<a class="text-on-surface-variant hover:text-on-surface mx-2 my-1 px-4 py-2 hover:bg-surface-container-high dark:hover:bg-surface-container-highest transition-all duration-200 ease-in-out flex items-center gap-md" href="#">
+<span class="material-symbols-outlined" data-icon="account_balance_wallet">account_balance_wallet</span>
+                Financials
+            </a>
+<a class="text-on-surface-variant hover:text-on-surface mx-2 my-1 px-4 py-2 hover:bg-surface-container-high dark:hover:bg-surface-container-highest transition-all duration-200 ease-in-out flex items-center gap-md" href="#">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+                Profile
+            </a>
+</div>
+</nav>
+<!-- JSON Component: TopAppBar (Mobile/Tablet) -->
+<header class="bg-surface dark:bg-on-background text-primary dark:text-primary-fixed font-headline-md text-headline-md fixed top-0 w-full z-50 border-b border-outline-variant dark:border-outline flat no shadows flex justify-between items-center px-margin h-16 w-full md:hidden">
+<div class="flex items-center gap-md">
+<button class="text-on-surface-variant dark:text-on-surface-variant hover:bg-surface-container-low dark:hover:bg-surface-container-highest transition-colors active:scale-95 duration-100 p-sm rounded-full flex items-center justify-center">
+<span class="material-symbols-outlined" data-icon="menu">menu</span>
+</button>
+<span class="font-headline-md text-headline-md font-bold text-primary dark:text-primary-fixed">Gate Pass Management</span>
+</div>
+<button class="text-secondary dark:text-secondary-fixed font-bold hover:bg-surface-container-low dark:hover:bg-surface-container-highest transition-colors active:scale-95 duration-100 px-md py-sm rounded-full text-label-md">
+            + New Request
+        </button>
+</header>
+<!-- Main Canvas -->
+<main class="flex-1 md:ml-60 pt-16 md:pt-0 pb-20 md:pb-0 min-h-screen flex flex-col">
+<!-- Page Header & Actions -->
+<div class="px-margin py-xl flex flex-col sm:flex-row sm:items-center justify-between gap-md">
+<div>
+<h1 class="font-headline-lg text-headline-lg text-on-surface">Hostel Rooms</h1>
+<p class="font-body-md text-body-md text-on-surface-variant mt-1">Manage allocations, track occupancy, and monitor maintenance status across all blocks.</p>
+</div>
+<div class="relative w-full sm:w-72">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant">search</span>
+<input class="w-full pl-10 pr-4 py-2 bg-surface-container-lowest border border-outline-variant rounded-lg font-body-md text-body-md text-on-surface placeholder:text-on-surface-variant focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary transition-all" placeholder="Search by Block or Room #..." type="text"/>
+</div>
+</div>
+<!-- High-Density Data Table Canvas -->
+<div class="px-margin flex-1 pb-xl">
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-[0_2px_4px_rgba(0,0,0,0.02)] overflow-hidden flex flex-col">
+<!-- Toolbar -->
+<div class="px-md py-sm border-b border-outline-variant bg-surface-bright flex items-center justify-between">
+<div class="flex items-center gap-2">
+<button class="px-3 py-1.5 border border-outline-variant rounded-lg font-label-md text-label-md text-on-surface-variant hover:bg-surface-container-low transition-colors flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">filter_list</span> Filter
+                        </button>
+<button class="px-3 py-1.5 border border-outline-variant rounded-lg font-label-md text-label-md text-on-surface-variant hover:bg-surface-container-low transition-colors flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">sort</span> Sort
+                        </button>
+</div>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Showing 1-15 of 240 Rooms</span>
+</div>
+<!-- Table -->
+<div class="overflow-x-auto table-container">
+<table class="w-full text-left border-collapse min-w-[800px]">
+<thead class="bg-surface-tint text-on-primary sticky top-0 z-10 shadow-sm">
+<tr>
+<th class="py-sm px-md font-label-md text-label-md uppercase tracking-wider">Block</th>
+<th class="py-sm px-md font-label-md text-label-md uppercase tracking-wider w-24">Room #</th>
+<th class="py-sm px-md font-label-md text-label-md uppercase tracking-wider">Category</th>
+<th class="py-sm px-md font-label-md text-label-md uppercase tracking-wider text-center w-20">AC</th>
+<th class="py-sm px-md font-label-md text-label-md uppercase tracking-wider text-center w-28">Occupancy</th>
+<th class="py-sm px-md font-label-md text-label-md uppercase tracking-wider text-right pr-md">Status</th>
+<th class="py-sm px-md w-12"></th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant">
+<!-- Row 1 -->
+<tr class="bg-surface-container-lowest hover:bg-surface-container-low transition-colors group">
+<td class="py-sm px-md font-body-sm text-body-sm text-on-surface font-medium">North Block</td>
+<td class="py-sm px-md font-mono-sm text-mono-sm text-on-surface-variant">N-101</td>
+<td class="py-sm px-md font-body-sm text-body-sm text-on-surface">Single</td>
+<td class="py-sm px-md text-center text-on-surface-variant"><span class="material-symbols-outlined text-[20px]">ac_unit</span></td>
+<td class="py-sm px-md text-center font-mono-sm text-mono-sm text-on-surface">1/1</td>
+<td class="py-sm px-md text-right pr-md">
+<span class="inline-flex items-center px-2 py-0.5 rounded-full bg-error-container text-on-error-container font-label-md text-label-md">Full</span>
+</td>
+<td class="py-sm px-md text-right">
+<button class="text-on-surface-variant opacity-0 group-hover:opacity-100 transition-opacity"><span class="material-symbols-outlined text-[20px]">more_vert</span></button>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="bg-surface-container-low hover:bg-surface-container transition-colors group">
+<td class="py-sm px-md font-body-sm text-body-sm text-on-surface font-medium">North Block</td>
+<td class="py-sm px-md font-mono-sm text-mono-sm text-on-surface-variant">N-102</td>
+<td class="py-sm px-md font-body-sm text-body-sm text-on-surface">Double</td>
+<td class="py-sm px-md text-center text-outline"><span class="material-symbols-outlined text-[20px]">mode_fan_off</span></td>
+<td class="py-sm px-md text-center font-mono-sm text-mono-sm text-on-surface">1/2</td>
+<td class="py-sm px-md text-right pr-md">
+<span class="inline-flex items-center px-2 py-0.5 rounded-full bg-surface-variant text-on-surface font-label-md text-label-md">Available</span>
+</td>
+<td class="py-sm px-md text-right">
+<button class="text-on-surface-variant opacity-0 group-hover:opacity-100 transition-opacity"><span class="material-symbols-outlined text-[20px]">more_vert</span></button>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="bg-surface-container-lowest hover:bg-surface-container-low transition-colors group">
+<td class="py-sm px-md font-body-sm text-body-sm text-on-surface font-medium">South Block</td>
+<td class="py-sm px-md font-mono-sm text-mono-sm text-on-surface-variant">S-205</td>
+<td class="py-sm px-md font-body-sm text-body-sm text-on-surface">Triple</td>
+<td class="py-sm px-md text-center text-on-surface-variant"><span class="material-symbols-outlined text-[20px]">ac_unit</span></td>
+<td class="py-sm px-md text-center font-mono-sm text-mono-sm text-on-surface">3/3</td>
+<td class="py-sm px-md text-right pr-md">
+<span class="inline-flex items-center px-2 py-0.5 rounded-full bg-error-container text-on-error-container font-label-md text-label-md">Full</span>
+</td>
+<td class="py-sm px-md text-right">
+<button class="text-on-surface-variant opacity-0 group-hover:opacity-100 transition-opacity"><span class="material-symbols-outlined text-[20px]">more_vert</span></button>
+</td>
+</tr>
+<!-- Row 4 -->
+<tr class="bg-surface-container-low hover:bg-surface-container transition-colors group">
+<td class="py-sm px-md font-body-sm text-body-sm text-on-surface font-medium">East Wing</td>
+<td class="py-sm px-md font-mono-sm text-mono-sm text-on-surface-variant">E-110</td>
+<td class="py-sm px-md font-body-sm text-body-sm text-on-surface">Double</td>
+<td class="py-sm px-md text-center text-outline"><span class="material-symbols-outlined text-[20px]">mode_fan_off</span></td>
+<td class="py-sm px-md text-center font-mono-sm text-mono-sm text-on-surface">0/2</td>
+<td class="py-sm px-md text-right pr-md">
+<span class="inline-flex items-center px-2 py-0.5 rounded-full bg-tertiary-container text-on-tertiary-container font-label-md text-label-md">Maintenance</span>
+</td>
+<td class="py-sm px-md text-right">
+<button class="text-on-surface-variant opacity-0 group-hover:opacity-100 transition-opacity"><span class="material-symbols-outlined text-[20px]">more_vert</span></button>
+</td>
+</tr>
+<!-- Row 5 -->
+<tr class="bg-surface-container-lowest hover:bg-surface-container-low transition-colors group">
+<td class="py-sm px-md font-body-sm text-body-sm text-on-surface font-medium">East Wing</td>
+<td class="py-sm px-md font-mono-sm text-mono-sm text-on-surface-variant">E-111</td>
+<td class="py-sm px-md font-body-sm text-body-sm text-on-surface">Single</td>
+<td class="py-sm px-md text-center text-on-surface-variant"><span class="material-symbols-outlined text-[20px]">ac_unit</span></td>
+<td class="py-sm px-md text-center font-mono-sm text-mono-sm text-on-surface">0/1</td>
+<td class="py-sm px-md text-right pr-md">
+<span class="inline-flex items-center px-2 py-0.5 rounded-full bg-surface-variant text-on-surface font-label-md text-label-md">Available</span>
+</td>
+<td class="py-sm px-md text-right">
+<button class="text-on-surface-variant opacity-0 group-hover:opacity-100 transition-opacity"><span class="material-symbols-outlined text-[20px]">more_vert</span></button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+</main>
+<!-- JSON Component: BottomNavBar (Mobile) -->
+<nav class="bg-surface dark:bg-surface-container-lowest text-secondary dark:text-secondary-fixed font-label-md text-label-md fixed bottom-0 w-full z-50 border-t border-outline-variant shadow-lg md:hidden flex justify-around items-center h-16 w-full px-4 pb-safe shadow-md">
+<!-- Active Tab: Home -->
+<a class="flex flex-col items-center justify-center bg-secondary-container text-on-secondary-container rounded-full px-4 py-1 active:scale-90 duration-150 hover:bg-surface-container-highest" href="#">
+<span class="material-symbols-outlined filled-icon" data-icon="home">home</span>
+<span class="mt-1 text-[10px] leading-tight font-medium">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant active:scale-90 duration-150 hover:bg-surface-container-highest rounded-full px-4 py-1 transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="fact_check">fact_check</span>
+<span class="mt-1 text-[10px] leading-tight font-medium">Passes</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant active:scale-90 duration-150 hover:bg-surface-container-highest rounded-full px-4 py-1 transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="payments">payments</span>
+<span class="mt-1 text-[10px] leading-tight font-medium">Wallet</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant active:scale-90 duration-150 hover:bg-surface-container-highest rounded-full px-4 py-1 transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+<span class="mt-1 text-[10px] leading-tight font-medium">Profile</span>
+</a>
+</nav>
+</body></html>

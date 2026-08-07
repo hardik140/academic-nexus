@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { StatusBadge } from "@/components/ui/modal";
 
 export default async function StudentFees() {
   const supabase = await createClient();
@@ -55,10 +56,30 @@ export default async function StudentFees() {
         </div>
       </div>
 
+      {/* Outstanding balance banner + decorative Pay Now (no payment gateway wired up yet) */}
+      {totalDue > 0 && (
+        <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-lg shadow-sm flex items-center justify-between gap-md flex-wrap">
+          <div>
+            <div className="text-xs font-semibold text-outline uppercase tracking-wider mb-xs">Outstanding Balance</div>
+            <div className="text-3xl font-extrabold text-error font-mono">{formatCurrency(totalDue)}</div>
+          </div>
+          <div className="text-right">
+            <button
+              disabled
+              title="Online payments aren't wired up yet — pay through the finance office for now."
+              className="px-lg py-md bg-secondary/40 text-on-secondary rounded-xl font-semibold text-sm cursor-not-allowed"
+            >
+              Pay Now
+            </button>
+            <div className="text-[11px] text-outline mt-xs">Online payments coming soon</div>
+          </div>
+        </div>
+      )}
+
       {/* Fee Invoices */}
       <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-sm overflow-hidden">
         <div className="px-lg py-md border-b border-outline-variant">
-          <h2 className="text-sm font-bold text-on-surface">Fee Invoices</h2>
+          <h2 className="text-sm font-bold text-on-surface flex items-center gap-sm">🧾 Fee Invoices</h2>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -80,13 +101,7 @@ export default async function StudentFees() {
                   <td className="px-lg py-md text-success">{formatCurrency(f.paid_amount)}</td>
                   <td className="px-lg py-md font-semibold text-on-surface">{formatCurrency(f.amount - f.paid_amount)}</td>
                   <td className="px-lg py-md text-on-surface-variant">{formatDate(f.due_date)}</td>
-                  <td className="px-lg py-md">
-                    <span className={`text-xs font-semibold px-sm py-xs rounded-full capitalize ${
-                      f.status === "paid" ? "bg-success/10 text-success" :
-                      f.status === "overdue" ? "bg-error/10 text-error" :
-                      f.status === "partial" ? "bg-warning/10 text-warning" : "bg-info/10 text-info"
-                    }`}>{f.status}</span>
-                  </td>
+                  <td className="px-lg py-md"><StatusBadge status={f.status} /></td>
                 </tr>
               ))}
               {(!fees || fees.length === 0) && (
@@ -100,7 +115,7 @@ export default async function StudentFees() {
       {/* Payment History */}
       <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-sm overflow-hidden">
         <div className="px-lg py-md border-b border-outline-variant">
-          <h2 className="text-sm font-bold text-on-surface">Payment History</h2>
+          <h2 className="text-sm font-bold text-on-surface flex items-center gap-sm">💳 Payment History</h2>
         </div>
         <div className="divide-y divide-outline-variant">
           {(payments || []).map((p: any) => (
@@ -110,9 +125,7 @@ export default async function StudentFees() {
                 <div className="text-xs text-outline">{p.method} • Ref: {p.transaction_ref || "—"}</div>
               </div>
               <div className="text-right">
-                <span className={`text-xs font-semibold px-sm py-xs rounded-full capitalize ${
-                  p.status === "cleared" ? "bg-success/10 text-success" : "bg-warning/10 text-warning"
-                }`}>{p.status}</span>
+                <StatusBadge status={p.status} />
                 <div className="text-[10px] text-outline mt-xs">{formatDate(p.created_at)}</div>
               </div>
             </div>

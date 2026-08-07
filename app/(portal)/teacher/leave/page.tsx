@@ -3,6 +3,10 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Button, FormField, StatusBadge } from "@/components/ui/modal";
+import { applyForLeave } from "./actions";
+import type { Database } from "@/types/database";
+
+type LeaveType = Database["public"]["Tables"]["leave_requests"]["Row"]["leave_type"];
 
 export default function TeacherLeave() {
   const supabase = createClient();
@@ -10,6 +14,7 @@ export default function TeacherLeave() {
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({
     leave_type: "casual",
     start_date: "",
@@ -33,26 +38,24 @@ export default function TeacherLeave() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    const { data: profile } = await supabase.from("profiles").select("college_id").eq("id", user.id).single();
-    if (!profile) return;
-
-    await supabase.from("leave_requests").insert({
-      college_id: profile.college_id,
-      requested_by: user.id,
-      leave_type: form.leave_type,
-      start_date: form.start_date,
-      end_date: form.end_date,
-      reason: form.reason,
-    });
-
-    setForm({ leave_type: "casual", start_date: "", end_date: "", reason: "" });
-    setShowForm(false);
-    setSubmitted(true);
-    setLoading(false);
-    loadRequests();
-    setTimeout(() => setSubmitted(false), 3000);
+    setError(null);
+    try {
+      await applyForLeave({
+        leaveType: form.leave_type as LeaveType,
+        startDate: form.start_date,
+        endDate: form.end_date,
+        reason: form.reason,
+      });
+      setForm({ leave_type: "casual", start_date: "", end_date: "", reason: "" });
+      setShowForm(false);
+      setSubmitted(true);
+      await loadRequests();
+      setTimeout(() => setSubmitted(false), 3000);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to submit leave request.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const leaveTypes = [
@@ -89,18 +92,22 @@ export default function TeacherLeave() {
         </div>
       )}
 
+      {error && (
+        <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium">{error}</div>
+      )}
+
       {/* Summary */}
       <div className="grid grid-cols-3 gap-md">
         <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-lg shadow-sm text-center">
-          <div className="text-2xl font-extrabold text-success">{approved}</div>
+          <div className="text-2xl font-extrabold text-success">✅ {approved}</div>
           <div className="text-xs text-outline uppercase tracking-wider mt-xs">Approved</div>
         </div>
         <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-lg shadow-sm text-center">
-          <div className="text-2xl font-extrabold text-warning">{pending}</div>
+          <div className="text-2xl font-extrabold text-warning">🕐 {pending}</div>
           <div className="text-xs text-outline uppercase tracking-wider mt-xs">Pending</div>
         </div>
         <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-lg shadow-sm text-center">
-          <div className="text-2xl font-extrabold text-error">{rejected}</div>
+          <div className="text-2xl font-extrabold text-error">❌ {rejected}</div>
           <div className="text-xs text-outline uppercase tracking-wider mt-xs">Rejected</div>
         </div>
       </div>
@@ -108,7 +115,7 @@ export default function TeacherLeave() {
       {/* Form */}
       {showForm && (
         <form onSubmit={handleSubmit} className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-xl shadow-sm space-y-md">
-          <h2 className="text-sm font-bold text-on-surface">New Leave Application</h2>
+          <h2 className="text-sm font-bold text-on-surface">📝 New Leave Application</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-md">
             <FormField label="Leave Type" id="leave_type" type="select" value={form.leave_type} onChange={(v) => setForm({ ...form, leave_type: v })} options={leaveTypes} required />
             <div></div>
@@ -128,7 +135,7 @@ export default function TeacherLeave() {
       {/* Request History */}
       <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-sm">
         <div className="px-lg py-md border-b border-outline-variant">
-          <h2 className="text-sm font-bold text-on-surface">Leave History</h2>
+          <h2 className="text-sm font-bold text-on-surface flex items-center gap-sm">🗓️ Leave History</h2>
         </div>
         <div className="divide-y divide-outline-variant">
           {requests.map((req: any) => (
@@ -136,7 +143,7 @@ export default function TeacherLeave() {
               <div>
                 <div className="text-sm font-medium text-on-surface capitalize">{req.leave_type.replace(/_/g, " ")} Leave</div>
                 <div className="text-xs text-outline">
-                  {new Date(req.start_date).toLocaleDateString()} → {new Date(req.end_date).toLocaleDateString()}
+                  🕐 {new Date(req.start_date).toLocaleDateString()} → {new Date(req.end_date).toLocaleDateString()}
                 </div>
                 <div className="text-xs text-outline mt-xs">{req.reason}</div>
               </div>

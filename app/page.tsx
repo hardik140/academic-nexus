@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { dashboardPathFor } from "@/lib/auth/role-routes";
 
 /**
  * Root page — redirects based on auth status.
@@ -23,17 +24,5 @@ export default async function Home() {
     .eq("id", user.id)
     .single();
 
-  const roleRoutes: Record<string, string> = {
-    student: "/student/dashboard",
-    teacher: "/teacher/dashboard",
-    hod: "/hod/dashboard",
-    finance: "/finance/dashboard",
-    director: "/director/dashboard",
-    admin: "/admin/dashboard",
-    warden: "/warden/dashboard",
-    parent: "/parent/dashboard",
-  };
-
-  const destination = roleRoutes[profile?.role || "student"] || "/student/dashboard";
-  redirect(destination);
+  redirect(dashboardPathFor(profile?.role));
 }

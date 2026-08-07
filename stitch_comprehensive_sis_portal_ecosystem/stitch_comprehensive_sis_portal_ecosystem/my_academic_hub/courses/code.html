@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Academic Nexus - My Courses</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-primary-container": "#7c839b",
+                        "on-background": "#0b1c30",
+                        "surface-tint": "#565e74",
+                        "surface-container-high": "#dce9ff",
+                        "tertiary-fixed-dim": "#c4c7c9",
+                        "secondary-container": "#316bf3",
+                        "primary-container": "#131b2e",
+                        "tertiary": "#000000",
+                        "secondary-fixed-dim": "#b4c5ff",
+                        "primary-fixed": "#dae2fd",
+                        "on-tertiary-fixed-variant": "#444749",
+                        "on-tertiary-fixed": "#191c1e",
+                        "on-primary-fixed-variant": "#3f465c",
+                        "on-secondary-fixed": "#00174b",
+                        "primary-fixed-dim": "#bec6e0",
+                        "on-tertiary-container": "#818486",
+                        "primary": "#000000",
+                        "secondary": "#0051d5",
+                        "on-secondary-fixed-variant": "#003ea8",
+                        "on-primary": "#ffffff",
+                        "surface-dim": "#cbdbf5",
+                        "error": "#ba1a1a",
+                        "tertiary-fixed": "#e0e3e5",
+                        "on-error": "#ffffff",
+                        "on-secondary-container": "#fefcff",
+                        "on-surface-variant": "#45464d",
+                        "surface": "#f8f9ff",
+                        "secondary-fixed": "#dbe1ff",
+                        "on-surface": "#0b1c30",
+                        "on-error-container": "#93000a",
+                        "surface-container-highest": "#d3e4fe",
+                        "background": "#f8f9ff",
+                        "on-primary-fixed": "#131b2e",
+                        "on-secondary": "#ffffff",
+                        "surface-variant": "#d3e4fe",
+                        "surface-container-low": "#eff4ff",
+                        "on-tertiary": "#ffffff",
+                        "outline": "#76777d",
+                        "error-container": "#ffdad6",
+                        "surface-container-lowest": "#ffffff",
+                        "inverse-surface": "#213145",
+                        "inverse-on-surface": "#eaf1ff",
+                        "outline-variant": "#c6c6cd",
+                        "surface-container": "#e5eeff",
+                        "inverse-primary": "#bec6e0",
+                        "tertiary-container": "#191c1e",
+                        "surface-bright": "#f8f9ff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "margin": "32px",
+                        "xl": "32px",
+                        "grid_columns": "12",
+                        "md": "16px",
+                        "xs": "4px",
+                        "gutter": "24px",
+                        "base": "4px",
+                        "sm": "8px",
+                        "lg": "24px"
+                    },
+                    "fontFamily": {
+                        "body-lg": ["Inter"],
+                        "headline-md": ["Inter"],
+                        "body-md": ["Inter"],
+                        "label-md": ["Inter"],
+                        "headline-sm": ["Inter"],
+                        "body-sm": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "mono-sm": ["monospace"],
+                        "display-lg": ["Inter"]
+                    },
+                    "fontSize": {
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "headline-md": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "headline-sm": ["16px", { "lineHeight": "24px", "fontWeight": "600" }],
+                        "body-sm": ["13px", { "lineHeight": "18px", "fontWeight": "400" }],
+                        "headline-lg": ["28px", { "lineHeight": "36px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "mono-sm": ["12px", { "lineHeight": "16px", "fontWeight": "400" }],
+                        "display-lg": ["36px", { "lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; background-color: theme('colors.background'); color: theme('colors.on-background'); }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .icon-fill { font-variation-settings: 'FILL' 1; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="min-h-screen pb-20 md:pb-0 flex flex-col antialiased">
+<!-- TopAppBar -->
+<header class="w-full sticky top-0 z-50 bg-surface dark:bg-surface-dim border-b border-outline-variant dark:border-outline flat no shadows flex items-center justify-between px-md py-sm max-w-full">
+<div class="flex items-center gap-sm">
+<div class="w-8 h-8 rounded-full overflow-hidden flex-shrink-0 cursor-pointer active:opacity-80">
+<img alt="Alex Mercer profile photo" class="w-full h-full object-cover" data-alt="Professional headshot of a male college student with short dark hair, wearing a casual light blue button-down shirt. The background is a blurred academic campus setting with modern architecture and soft, natural daylight. High resolution, corporate modern aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAOceqpniKXql-ft_B4gIJpG_YeGqH2cjJD1HUEog5VPnecKsEzC7ml08hXrqyIkAeEDrKEgT9uAZIGv9X_DnxZg3CoHFBE5bswJXuFIE0b1ShVpS0uLsZ3wQcCuC8OXDhyS61d2YdHXBjHlyhcSS7fFy4x93396meNRnnLuCCEagN40ync0qCF0w80wSvj4CjZvBoOAxQkhUKrc5tFTOd4V-aQHWRMQqKf9MfSCPczAiwDnz5E0zt5mUZBxC34S0E25FphaGOGUqg"/>
+</div>
+<span class="font-headline-md text-headline-md font-bold text-secondary dark:text-secondary-fixed">Academic Nexus</span>
+</div>
+<div class="flex items-center">
+<button aria-label="Notifications" class="p-2 rounded-full text-primary dark:text-primary-fixed hover:bg-surface-container-low dark:hover:bg-surface-container-high transition-colors cursor-pointer active:opacity-80">
+<span class="material-symbols-outlined text-xl">notifications</span>
+</button>
+</div>
+</header>
+<div class="flex flex-1 overflow-hidden">
+<!-- Desktop SideNav (Hidden on Mobile) -->
+<nav class="hidden md:flex flex-col w-64 bg-surface-container border-r border-outline-variant p-md gap-sm overflow-y-auto">
+<div class="font-label-md text-label-md text-on-surface-variant uppercase mb-xs mt-sm px-sm">Main Menu</div>
+<a class="flex items-center gap-3 px-sm py-2 rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-secondary transition-colors" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="font-body-md text-body-md">Dashboard</span>
+</a>
+<a class="flex items-center gap-3 px-sm py-2 rounded-lg bg-secondary-container text-on-secondary-container font-bold transition-colors" href="#">
+<span class="material-symbols-outlined icon-fill">school</span>
+<span class="font-body-md text-body-md">Courses</span>
+</a>
+<a class="flex items-center gap-3 px-sm py-2 rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-secondary transition-colors" href="#">
+<span class="material-symbols-outlined">payments</span>
+<span class="font-body-md text-body-md">Finance</span>
+</a>
+<a class="flex items-center gap-3 px-sm py-2 rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-secondary transition-colors mt-auto" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-body-md text-body-md">Settings</span>
+</a>
+</nav>
+<!-- Main Canvas -->
+<main class="flex-1 overflow-y-auto p-md md:p-margin mx-auto max-w-7xl w-full">
+<div class="mb-lg">
+<h1 class="font-display-lg text-display-lg text-on-background mb-xs">My Courses</h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant">Manage and review your academic progress.</p>
+</div>
+<!-- Filters -->
+<div class="flex overflow-x-auto gap-sm mb-lg pb-2 scrollbar-hide border-b border-outline-variant">
+<button class="px-md py-2 border-b-2 border-secondary text-secondary font-label-md text-label-md uppercase whitespace-nowrap">All</button>
+<button class="px-md py-2 border-b-2 border-transparent text-on-surface-variant hover:text-on-background font-label-md text-label-md uppercase whitespace-nowrap transition-colors">Enrolled</button>
+<button class="px-md py-2 border-b-2 border-transparent text-on-surface-variant hover:text-on-background font-label-md text-label-md uppercase whitespace-nowrap transition-colors">Completed</button>
+<button class="px-md py-2 border-b-2 border-transparent text-on-surface-variant hover:text-on-background font-label-md text-label-md uppercase whitespace-nowrap transition-colors">Dropped</button>
+</div>
+<!-- Bento Grid / Cards -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-md">
+<!-- Card 1 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md shadow-sm hover:border-secondary transition-colors flex flex-col">
+<div class="flex justify-between items-start mb-sm">
+<span class="font-mono-sm text-mono-sm bg-surface-container px-2 py-1 rounded text-on-surface-variant">CS101</span>
+<span class="font-label-md text-label-md uppercase bg-emerald-100 text-emerald-800 px-2 py-1 rounded-full text-[10px]">ENROLLED</span>
+</div>
+<h3 class="font-headline-md text-headline-md text-on-background mb-xs">Intro to Programming</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant mb-md flex-1">3.0 • Lab • Fall 2024</p>
+<div class="border-t border-outline-variant pt-sm mt-auto">
+<div class="flex justify-between items-center mb-xs">
+<span class="font-label-md text-label-md text-on-surface-variant">Department</span>
+<span class="font-body-sm text-body-sm text-on-background text-right">Computer Science</span>
+</div>
+<div class="flex justify-between items-center">
+<span class="font-label-md text-label-md text-on-surface-variant">Instructor</span>
+<span class="font-body-sm text-body-sm text-on-background text-right">Dr. Smith</span>
+</div>
+</div>
+</div>
+<!-- Card 2 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md shadow-sm hover:border-secondary transition-colors flex flex-col">
+<div class="flex justify-between items-start mb-sm">
+<span class="font-mono-sm text-mono-sm bg-surface-container px-2 py-1 rounded text-on-surface-variant">MATH201</span>
+<span class="font-label-md text-label-md uppercase bg-secondary-container text-on-secondary-container px-2 py-1 rounded-full text-[10px]">COMPLETED</span>
+</div>
+<h3 class="font-headline-md text-headline-md text-on-background mb-xs">Linear Algebra</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant mb-md flex-1">4.0 • Lecture • Spring 2024</p>
+<div class="border-t border-outline-variant pt-sm mt-auto">
+<div class="flex justify-between items-center mb-xs">
+<span class="font-label-md text-label-md text-on-surface-variant">Department</span>
+<span class="font-body-sm text-body-sm text-on-background text-right">Mathematics</span>
+</div>
+<div class="flex justify-between items-center mb-sm">
+<span class="font-label-md text-label-md text-on-surface-variant">Instructor</span>
+<span class="font-body-sm text-body-sm text-on-background text-right">Prof. Turing</span>
+</div>
+<div class="bg-surface-variant px-sm py-2 rounded-lg flex justify-between items-center">
+<span class="font-label-md text-label-md text-on-surface-variant uppercase">Final Grade</span>
+<span class="font-headline-sm text-headline-sm text-on-background">A</span>
+</div>
+</div>
+</div>
+<!-- Card 3 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md shadow-sm hover:border-secondary transition-colors flex flex-col">
+<div class="flex justify-between items-start mb-sm">
+<span class="font-mono-sm text-mono-sm bg-surface-container px-2 py-1 rounded text-on-surface-variant">ENG105</span>
+<span class="font-label-md text-label-md uppercase bg-emerald-100 text-emerald-800 px-2 py-1 rounded-full text-[10px]">ENROLLED</span>
+</div>
+<h3 class="font-headline-md text-headline-md text-on-background mb-xs">Technical Writing</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant mb-md flex-1">3.0 • Seminar • Fall 2024</p>
+<div class="border-t border-outline-variant pt-sm mt-auto">
+<div class="flex justify-between items-center mb-xs">
+<span class="font-label-md text-label-md text-on-surface-variant">Department</span>
+<span class="font-body-sm text-body-sm text-on-background text-right">Arts &amp; Humanities</span>
+</div>
+<div class="flex justify-between items-center">
+<span class="font-label-md text-label-md text-on-surface-variant">Instructor</span>
+<span class="font-body-sm text-body-sm text-on-background text-right">Dr. Wright</span>
+</div>
+</div>
+</div>
+<!-- Card 4 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md shadow-sm hover:border-secondary transition-colors flex flex-col opacity-75">
+<div class="flex justify-between items-start mb-sm">
+<span class="font-mono-sm text-mono-sm bg-surface-container px-2 py-1 rounded text-on-surface-variant line-through">PHY101</span>
+<span class="font-label-md text-label-md uppercase bg-error-container text-on-error-container px-2 py-1 rounded-full text-[10px]">DROPPED</span>
+</div>
+<h3 class="font-headline-md text-headline-md text-on-surface-variant mb-xs">Physics I</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant mb-md flex-1">4.0 • Lab • Spring 2024</p>
+<div class="border-t border-outline-variant pt-sm mt-auto">
+<div class="flex justify-between items-center mb-xs">
+<span class="font-label-md text-label-md text-on-surface-variant">Department</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant text-right">Science</span>
+</div>
+<div class="flex justify-between items-center">
+<span class="font-label-md text-label-md text-on-surface-variant">Instructor</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant text-right">Dr. Newton</span>
+</div>
+</div>
+</div>
+<!-- Card 5 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md shadow-sm hover:border-secondary transition-colors flex flex-col">
+<div class="flex justify-between items-start mb-sm">
+<span class="font-mono-sm text-mono-sm bg-surface-container px-2 py-1 rounded text-on-surface-variant">HIST210</span>
+<span class="font-label-md text-label-md uppercase bg-secondary-container text-on-secondary-container px-2 py-1 rounded-full text-[10px]">COMPLETED</span>
+</div>
+<h3 class="font-headline-md text-headline-md text-on-background mb-xs">World History</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant mb-md flex-1">3.0 • Lecture • Fall 2023</p>
+<div class="border-t border-outline-variant pt-sm mt-auto">
+<div class="flex justify-between items-center mb-xs">
+<span class="font-label-md text-label-md text-on-surface-variant">Department</span>
+<span class="font-body-sm text-body-sm text-on-background text-right">Arts &amp; Humanities</span>
+</div>
+<div class="flex justify-between items-center mb-sm">
+<span class="font-label-md text-label-md text-on-surface-variant">Instructor</span>
+<span class="font-body-sm text-body-sm text-on-background text-right">Prof. Atwood</span>
+</div>
+<div class="bg-surface-variant px-sm py-2 rounded-lg flex justify-between items-center">
+<span class="font-label-md text-label-md text-on-surface-variant uppercase">Final Grade</span>
+<span class="font-headline-sm text-headline-sm text-on-background">B+</span>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+<!-- BottomNavBar (Mobile Only) -->
+<nav class="md:hidden bg-surface-container dark:bg-surface-container-highest border-t border-outline-variant dark:border-outline shadow-sm fixed bottom-0 w-full z-50 flex justify-around items-center h-16 px-sm pb-safe">
+<a class="flex flex-col items-center justify-center text-on-surface-variant dark:text-on-surface-variant opacity-70 hover:text-secondary dark:hover:text-secondary-fixed transition-transform active:scale-95 w-16" href="#">
+<span class="material-symbols-outlined mb-1">dashboard</span>
+<span class="font-label-md text-label-md text-[10px]">Dashboard</span>
+</a>
+<a class="flex flex-col items-center justify-center bg-secondary-container text-on-secondary-container rounded-full px-lg py-xs transition-transform active:scale-95" href="#">
+<span class="material-symbols-outlined icon-fill mb-1">school</span>
+<span class="font-label-md text-label-md text-[10px]">Courses</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant dark:text-on-surface-variant opacity-70 hover:text-secondary dark:hover:text-secondary-fixed transition-transform active:scale-95 w-16" href="#">
+<span class="material-symbols-outlined mb-1">payments</span>
+<span class="font-label-md text-label-md text-[10px]">Finance</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant dark:text-on-surface-variant opacity-70 hover:text-secondary dark:hover:text-secondary-fixed transition-transform active:scale-95 w-16" href="#">
+<span class="material-symbols-outlined mb-1">settings</span>
+<span class="font-label-md text-label-md text-[10px]">Settings</span>
+</a>
+</nav>
+</body></html>

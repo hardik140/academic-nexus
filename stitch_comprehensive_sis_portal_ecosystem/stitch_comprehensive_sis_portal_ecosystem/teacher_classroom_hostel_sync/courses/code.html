@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Academic Nexus - My Courses</title>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Google Fonts: Inter -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS Config -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "error-container": "#ffdad6",
+                        "surface-container-highest": "#d3e4fe",
+                        "secondary": "#0051d5",
+                        "inverse-surface": "#213145",
+                        "surface-tint": "#565e74",
+                        "surface-variant": "#d3e4fe",
+                        "on-primary-container": "#7c839b",
+                        "surface-container-high": "#dce9ff",
+                        "inverse-primary": "#bec6e0",
+                        "on-tertiary": "#ffffff",
+                        "on-primary": "#ffffff",
+                        "outline-variant": "#c6c6cd",
+                        "outline": "#76777d",
+                        "primary-container": "#131b2e",
+                        "tertiary-fixed": "#e0e3e5",
+                        "on-secondary-fixed": "#00174b",
+                        "surface-bright": "#f8f9ff",
+                        "on-primary-fixed": "#131b2e",
+                        "primary-fixed": "#dae2fd",
+                        "on-tertiary-container": "#818486",
+                        "on-tertiary-fixed": "#191c1e",
+                        "tertiary-fixed-dim": "#c4c7c9",
+                        "surface-container-lowest": "#ffffff",
+                        "on-error": "#ffffff",
+                        "surface": "#f8f9ff",
+                        "secondary-fixed": "#dbe1ff",
+                        "primary-fixed-dim": "#bec6e0",
+                        "on-background": "#0b1c30",
+                        "tertiary-container": "#191c1e",
+                        "surface-dim": "#cbdbf5",
+                        "primary": "#000000",
+                        "on-tertiary-fixed-variant": "#444749",
+                        "secondary-container": "#316bf3",
+                        "secondary-fixed-dim": "#b4c5ff",
+                        "inverse-on-surface": "#eaf1ff",
+                        "on-secondary-container": "#fefcff",
+                        "surface-container": "#e5eeff",
+                        "on-error-container": "#93000a",
+                        "tertiary": "#000000",
+                        "surface-container-low": "#eff4ff",
+                        "on-secondary": "#ffffff",
+                        "on-surface-variant": "#45464d",
+                        "on-surface": "#0b1c30",
+                        "background": "#f8f9ff",
+                        "on-secondary-fixed-variant": "#003ea8",
+                        "on-primary-fixed-variant": "#3f465c",
+                        "error": "#ba1a1a"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "xs": "4px",
+                        "md": "16px",
+                        "grid_columns": "12",
+                        "xl": "32px",
+                        "margin": "32px",
+                        "base": "4px",
+                        "sm": "8px",
+                        "lg": "24px",
+                        "gutter": "24px"
+                    },
+                    "fontFamily": {
+                        "label-md": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "mono-sm": ["monospace"],
+                        "headline-sm": ["Inter"],
+                        "body-sm": ["Inter"],
+                        "body-md": ["Inter"],
+                        "headline-md": ["Inter"],
+                        "display-lg": ["Inter"],
+                        "body-lg": ["Inter"]
+                    },
+                    "fontSize": {
+                        "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "headline-lg": ["28px", { "lineHeight": "36px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "mono-sm": ["12px", { "lineHeight": "16px", "fontWeight": "400" }],
+                        "headline-sm": ["16px", { "lineHeight": "24px", "fontWeight": "600" }],
+                        "body-sm": ["13px", { "lineHeight": "18px", "fontWeight": "400" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "headline-md": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "display-lg": ["36px", { "lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        
+        /* Subtle transition for cards */
+        .course-card {
+            transition: all 0.2s ease-in-out;
+        }
+        .course-card:hover {
+            transform: translateY(-2px);
+            border-color: #2563EB; /* Blue ring focus hint */
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background font-body-md min-h-screen flex flex-col md:flex-row antialiased">
+<!-- Navigation Drawer (Desktop) -->
+<nav class="hidden md:flex flex-col h-full w-[280px] rounded-r-xl bg-surface shadow-xl fixed left-0 top-0 py-lg z-40 transition-all ease-in-out duration-300 border-r border-outline-variant">
+<!-- Header Profile -->
+<div class="px-md mb-lg">
+<div class="flex items-center gap-md left_align">
+<img class="w-10 h-10 rounded-full object-cover border border-outline-variant" data-alt="A professional headshot of a faculty member, wearing business casual attire, well-lit in an office setting, representing the academic user avatar for the SIS portal." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAVtorQ_NIr4wkCruXP3m7vcJzwhDaPJ6lR_bWiVKfwXAUhArpj7FPQiaG3GUirBDnZ4QDUEf1F6bY4-7sFK1rejq-Ey6-ihPdQjfEd5WN0Qa87Dj0AWWM6lHLn24IRREMZuLVVu1iIKCJw4mpQ_7maTM-jpQuW1CEyqgYCNm7ImwLNLyRVzhu8BywkpItGkoIy2HJc-lBzJLxTz_drgw87whUtg4GyB5V6-hLqAQviOArNx9FsLKHThuLRlm6ur_Pav98cbhWNO9g"/>
+<div>
+<h2 class="font-headline-sm text-headline-sm font-bold text-secondary">Academic System</h2>
+<p class="font-label-md text-label-md text-on-surface-variant cursor-pointer hover:text-primary transition-colors">Switch Role</p>
+</div>
+</div>
+<div class="mt-xs">
+<span class="font-mono-sm text-mono-sm text-outline">v2.4.0</span>
+</div>
+</div>
+<!-- Navigation Links -->
+<div class="flex-1 flex flex-col gap-xs px-xs overflow-y-auto">
+<!-- Active: Teacher Portal (maps to My Courses conceptually in this nav structure) -->
+<a class="bg-secondary-fixed text-on-secondary-fixed rounded-full mx-2 flex items-center px-md py-sm group" href="#">
+<span class="material-symbols-outlined mr-md" style="font-variation-settings: 'FILL' 1;">school</span>
+<span class="font-body-md text-body-md font-medium">Teacher Portal</span>
+</a>
+<a class="text-on-surface-variant hover:bg-surface-container-highest rounded-full mx-2 flex items-center px-md py-sm group transition-colors" href="#">
+<span class="material-symbols-outlined mr-md">psychology</span>
+<span class="font-body-md text-body-md">HOD Dashboard</span>
+</a>
+<a class="text-on-surface-variant hover:bg-surface-container-highest rounded-full mx-2 flex items-center px-md py-sm group transition-colors" href="#">
+<span class="material-symbols-outlined mr-md">account_balance</span>
+<span class="font-body-md text-body-md">Finance Ledger</span>
+</a>
+<a class="text-on-surface-variant hover:bg-surface-container-highest rounded-full mx-2 flex items-center px-md py-sm group transition-colors" href="#">
+<span class="material-symbols-outlined mr-md">leaderboard</span>
+<span class="font-body-md text-body-md">Director Insights</span>
+</a>
+<a class="text-on-surface-variant hover:bg-surface-container-highest rounded-full mx-2 flex items-center px-md py-sm group transition-colors" href="#">
+<span class="material-symbols-outlined mr-md">admin_panel_settings</span>
+<span class="font-body-md text-body-md">Admin Console</span>
+</a>
+<a class="text-on-surface-variant hover:bg-surface-container-highest rounded-full mx-2 flex items-center px-md py-sm group transition-colors" href="#">
+<span class="material-symbols-outlined mr-md">family_restroom</span>
+<span class="font-body-md text-body-md">Student/Guardian</span>
+</a>
+</div>
+</nav>
+<!-- Main Canvas -->
+<main class="flex-1 md:ml-[280px] w-full pb-[80px] md:pb-0">
+<!-- TopAppBar (Desktop) -->
+<header class="hidden md:flex justify-between items-center w-full px-lg py-md max-w-full bg-surface text-primary border-b border-outline-variant docked full-width top-0 sticky z-30">
+<div class="flex items-center gap-md">
+<h1 class="font-headline-lg text-headline-lg font-bold text-secondary">SIS Portal</h1>
+</div>
+<div class="flex items-center gap-md">
+<!-- Breadcrumbs -->
+<nav class="hidden lg:flex items-center space-x-sm text-on-surface-variant mr-lg font-body-sm text-body-sm">
+<a class="hover:text-primary transition-colors" href="#">Teacher Portal</a>
+<span class="material-symbols-outlined text-[16px]">chevron_right</span>
+<span class="text-primary font-medium">My Courses</span>
+</nav>
+<button class="p-2 rounded-full text-on-surface-variant hover:bg-surface-container-low transition-colors hover:scale-95 duration-100">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<div class="w-8 h-8 rounded-full bg-secondary-container flex items-center justify-center text-on-secondary-container font-headline-sm text-headline-sm border border-outline-variant">
+                    UP
+                </div>
+</div>
+</header>
+<!-- TopAppBar (Mobile Fallback for Canvas Header) -->
+<div class="md:hidden flex justify-between items-center w-full px-md py-sm bg-surface border-b border-outline-variant sticky top-0 z-30">
+<h1 class="font-headline-md text-headline-md font-bold text-secondary">My Courses</h1>
+<button class="p-2 rounded-full text-on-surface-variant hover:bg-surface-container-low transition-colors">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+</div>
+<!-- Content Area -->
+<div class="p-md md:p-margin max-w-[1440px] mx-auto">
+<!-- Page Header / Controls -->
+<div class="flex flex-col md:flex-row md:items-center justify-between mb-xl gap-md">
+<div>
+<h2 class="font-display-lg text-display-lg text-on-background mb-xs">Active Roster</h2>
+<p class="font-body-md text-body-md text-on-surface-variant">Manage and view your assigned courses for Fall 2024.</p>
+</div>
+<div class="flex items-center gap-sm">
+<!-- Term Selector -->
+<div class="relative inline-block">
+<select class="appearance-none bg-surface border border-outline-variant rounded-md pl-md pr-xl py-sm font-label-md text-label-md text-primary focus:outline-none focus:ring-2 focus:ring-secondary-container focus:border-transparent cursor-pointer">
+<option>Fall 2024</option>
+<option>Spring 2024</option>
+<option>Archived</option>
+</select>
+<div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-on-surface-variant">
+<span class="material-symbols-outlined text-[16px]">expand_more</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Bento Grid of Courses -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-md">
+<!-- Course Card 1 -->
+<div class="course-card bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col h-full shadow-[0_2px_4px_-1px_rgba(0,0,0,0.02)]">
+<div class="flex justify-between items-start mb-sm">
+<span class="font-mono-sm text-mono-sm bg-surface-container px-2 py-1 rounded text-on-surface-variant border border-outline-variant/50">AP Physics C</span>
+<span class="font-label-md text-label-md bg-[#e6f4ea] text-[#137333] px-2 py-1 rounded-full flex items-center gap-xs">
+<span class="w-2 h-2 rounded-full bg-[#137333]"></span> Active
+                        </span>
+</div>
+<div class="mb-md">
+<h3 class="font-headline-md text-headline-md text-primary mb-xs">Advanced Mechanics</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Science Department</p>
+</div>
+<div class="font-body-sm text-body-sm text-on-surface-variant mb-lg pb-md border-b border-outline-variant/30 flex flex-wrap gap-x-2">
+<span>4.0 Credits</span> •
+                        <span>Fall 2024</span> •
+                        <span>Lecture/Lab</span>
+</div>
+<div class="mt-auto flex justify-between items-center pt-xs">
+<div class="flex items-center gap-xs text-on-surface-variant">
+<span class="material-symbols-outlined text-[18px]">group</span>
+<span class="font-label-md text-label-md">28 Enrolled</span>
+</div>
+<button class="font-label-md text-label-md text-secondary hover:text-secondary-fixed-dim transition-colors flex items-center gap-xs">
+                            View Roster <span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+</button>
+</div>
+</div>
+<!-- Course Card 2 -->
+<div class="course-card bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col h-full shadow-[0_2px_4px_-1px_rgba(0,0,0,0.02)]">
+<div class="flex justify-between items-start mb-sm">
+<span class="font-mono-sm text-mono-sm bg-surface-container px-2 py-1 rounded text-on-surface-variant border border-outline-variant/50">CS 101</span>
+<span class="font-label-md text-label-md bg-[#e6f4ea] text-[#137333] px-2 py-1 rounded-full flex items-center gap-xs">
+<span class="w-2 h-2 rounded-full bg-[#137333]"></span> Active
+                        </span>
+</div>
+<div class="mb-md">
+<h3 class="font-headline-md text-headline-md text-primary mb-xs">Intro to Computer Science</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Technology Department</p>
+</div>
+<div class="font-body-sm text-body-sm text-on-surface-variant mb-lg pb-md border-b border-outline-variant/30 flex flex-wrap gap-x-2">
+<span>3.0 Credits</span> •
+                        <span>Fall 2024</span> •
+                        <span>Lecture</span>
+</div>
+<div class="mt-auto flex justify-between items-center pt-xs">
+<div class="flex items-center gap-xs text-on-surface-variant">
+<span class="material-symbols-outlined text-[18px]">group</span>
+<span class="font-label-md text-label-md">32 Enrolled</span>
+</div>
+<button class="font-label-md text-label-md text-secondary hover:text-secondary-fixed-dim transition-colors flex items-center gap-xs">
+                            View Roster <span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+</button>
+</div>
+</div>
+<!-- Course Card 3 -->
+<div class="course-card bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col h-full shadow-[0_2px_4px_-1px_rgba(0,0,0,0.02)]">
+<div class="flex justify-between items-start mb-sm">
+<span class="font-mono-sm text-mono-sm bg-surface-container px-2 py-1 rounded text-on-surface-variant border border-outline-variant/50">MAT 302</span>
+<span class="font-label-md text-label-md bg-[#fce8e6] text-[#c5221f] px-2 py-1 rounded-full flex items-center gap-xs">
+<span class="w-2 h-2 rounded-full bg-[#c5221f]"></span> Inactive
+                        </span>
+</div>
+<div class="mb-md opacity-75">
+<h3 class="font-headline-md text-headline-md text-primary mb-xs">Linear Algebra</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Mathematics Department</p>
+</div>
+<div class="font-body-sm text-body-sm text-on-surface-variant mb-lg pb-md border-b border-outline-variant/30 flex flex-wrap gap-x-2 opacity-75">
+<span>3.0 Credits</span> •
+                        <span>Spring 2025</span> •
+                        <span>Seminar</span>
+</div>
+<div class="mt-auto flex justify-between items-center pt-xs opacity-75">
+<div class="flex items-center gap-xs text-on-surface-variant">
+<span class="material-symbols-outlined text-[18px]">group</span>
+<span class="font-label-md text-label-md">0 Enrolled</span>
+</div>
+<button class="font-label-md text-label-md text-outline hover:text-primary transition-colors flex items-center gap-xs">
+                            Setup Course <span class="material-symbols-outlined text-[16px]">settings</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- BottomNavBar (Mobile Only) -->
+<nav class="md:hidden fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-md pb-sm pt-xs bg-surface-container-lowest border-t border-outline-variant shadow-lg rounded-t-xl transition-transform">
+<!-- Active Tab: Rosters (closest semantic match to My Courses) -->
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-variant/50 p-2 rounded-lg group" href="#">
+<span class="material-symbols-outlined group-hover:scale-110 transition-transform">dashboard</span>
+<span class="font-label-md text-[10px] mt-1">Dashboard</span>
+</a>
+<a class="flex flex-col items-center justify-center bg-secondary-container text-on-secondary-container rounded-full px-4 py-1 translate-y-[-2px] transition-transform" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">group</span>
+<span class="font-label-md text-[10px] mt-1">Rosters</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-variant/50 p-2 rounded-lg group" href="#">
+<span class="material-symbols-outlined group-hover:scale-110 transition-transform">payments</span>
+<span class="font-label-md text-[10px] mt-1">Finance</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-variant/50 p-2 rounded-lg group" href="#">
+<span class="material-symbols-outlined group-hover:scale-110 transition-transform">settings</span>
+<span class="font-label-md text-[10px] mt-1">Settings</span>
+</a>
+</nav>
+</body></html>

@@ -1,26 +1,115 @@
-import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
-import { formatDate } from "@/lib/utils";
+"use client";
 
-export default async function DirectorPlacements() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+import { useState, useEffect } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { DataTable } from "@/components/ui/data-table";
+import { Modal, Button, FormField, StatusBadge } from "@/components/ui/modal";
+import { DEFAULT_QUERY_LIMIT } from "@/lib/constants";
+import { createPlacement } from "./actions";
+import type { Database } from "@/types/database";
 
-  const [summaryRes, placementsRes] = await Promise.all([
-    supabase.from("mv_placement_summary").select("*").maybeSingle(),
-    supabase.from("placements").select("*, students:student_id(enrollment_number, profiles:user_id(full_name), departments(name))").order("placement_date", { ascending: false }),
-  ]);
+type OfferType = NonNullable<Database["public"]["Tables"]["placements"]["Row"]["offer_type"]>;
+type PlacementStatus = Database["public"]["Tables"]["placements"]["Row"]["status"];
 
-  const summary = summaryRes.data;
-  const placements = placementsRes.data || [];
+const OFFER_TYPES: { value: OfferType; label: string }[] = [
+  { value: "full_time", label: "Full-time" },
+  { value: "internship", label: "Internship" },
+  { value: "ppo", label: "PPO" },
+];
+
+const STATUSES: { value: PlacementStatus; label: string }[] = [
+  { value: "placed", label: "Placed" },
+  { value: "joined", label: "Joined" },
+  { value: "declined", label: "Declined" },
+  { value: "offer_revoked", label: "Offer Revoked" },
+];
+
+export default function DirectorPlacements() {
+  const supabase = createClient();
+  const [summary, setSummary] = useState<any>(null);
+  const [placements, setPlacements] = useState<any[]>([]);
+  const [students, setStudents] = useState<any[]>([]);
+  const [showCreate, setShowCreate] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [form, setForm] = useState<{
+    student_id: string;
+    company_name: string;
+    role_title: string;
+    package_lpa: string;
+    placement_date: string;
+    offer_type: OfferType;
+    status: PlacementStatus;
+  }>({
+    student_id: "",
+    company_name: "",
+    role_title: "",
+    package_lpa: "",
+    placement_date: "",
+    offer_type: "full_time",
+    status: "placed",
+  });
+
+  useEffect(() => { loadData(); loadStudents(); }, []);
+
+  const loadData = async () => {
+    const [summaryRes, placementsRes] = await Promise.all([
+      supabase.from("mv_placement_summary").select("*").maybeSingle(),
+      supabase.from("placements").select("*, students:student_id(enrollment_number, profiles:user_id(full_name), departments(name))").order("placement_date", { ascending: false }).limit(DEFAULT_QUERY_LIMIT),
+    ]);
+    setSummary(summaryRes.data);
+    setPlacements(placementsRes.data || []);
+  };
+
+  const loadStudents = async () => {
+    const { data } = await supabase
+      .from("students")
+      .select("id, enrollment_number, profiles:user_id(full_name)")
+      .order("enrollment_number");
+    setStudents(data || []);
+  };
+
+  const handleCreate = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      await createPlacement(
+        form.student_id,
+        form.company_name,
+        form.role_title,
+        form.package_lpa ? Number(form.package_lpa) : null,
+        form.placement_date,
+        form.offer_type,
+        form.status
+      );
+      setForm({ student_id: "", company_name: "", role_title: "", package_lpa: "", placement_date: "", offer_type: "full_time", status: "placed" });
+      setShowCreate(false);
+      await loadData();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to add placement record.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const studentOptions = students.map((s: any) => ({
+    value: s.id,
+    label: `${s.enrollment_number} — ${(s.profiles as any)?.full_name || ""}`,
+  }));
 
   return (
     <div className="space-y-lg animate-[fade-in_0.3s_ease-out]">
-      <div>
-        <h1 className="text-2xl font-extrabold text-on-surface tracking-tight">Placements</h1>
-        <p className="text-sm text-on-surface-variant mt-xs">Institution-wide placement outcomes</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-extrabold text-on-surface tracking-tight">Placements</h1>
+          <p className="text-sm text-on-surface-variant mt-xs">Institution-wide placement outcomes</p>
+        </div>
+        <Button onClick={() => setShowCreate(true)}>+ Add Placement Record</Button>
       </div>
+
+      {error && !showCreate && (
+        <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium">{error}</div>
+      )}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-md">
         <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-lg shadow-sm">
@@ -41,45 +130,47 @@ export default async function DirectorPlacements() {
         </div>
       </div>
 
-      <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-sm overflow-hidden">
-        <div className="px-lg py-md border-b border-outline-variant">
-          <h2 className="text-sm font-bold text-on-surface">Placement Records</h2>
+      <DataTable
+        title="Placement Records"
+        columns={[
+          { key: "student", header: "Student", render: (row: any) => <span className="font-medium text-on-surface">{(row.students as any)?.profiles?.full_name || "—"}</span> },
+          { key: "department", header: "Department", render: (row: any) => (row.students as any)?.departments?.name || "—" },
+          { key: "company_name", header: "Company", sortable: true },
+          { key: "role_title", header: "Role", render: (row: any) => <span className="text-on-surface-variant">{row.role_title}</span> },
+          { key: "package_lpa", header: "Package", sortable: true, render: (row: any) => row.package_lpa ? <span className="text-success font-semibold">₹{row.package_lpa}L</span> : "—" },
+          { key: "status", header: "Status", render: (row: any) => <StatusBadge status={row.status} /> },
+        ]}
+        data={placements}
+        keyExtractor={(row) => row.id}
+        searchKey="company_name"
+        searchPlaceholder="Search by company..."
+        emptyMessage="No placement records yet."
+      />
+
+      <Modal
+        open={showCreate}
+        onClose={() => setShowCreate(false)}
+        title="Add Placement Record"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
+            <Button onClick={handleCreate} disabled={loading || !form.student_id || !form.company_name || !form.role_title}>{loading ? "Saving..." : "Add Record"}</Button>
+          </>
+        }
+      >
+        {error && (
+          <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium mb-md">{error}</div>
+        )}
+        <div className="space-y-md">
+          <FormField label="Student" id="student" type="select" value={form.student_id} onChange={(v) => setForm({ ...form, student_id: v })} options={studentOptions} required />
+          <FormField label="Company" id="company_name" value={form.company_name} onChange={(v) => setForm({ ...form, company_name: v })} placeholder="e.g. Acme Corp" required />
+          <FormField label="Role" id="role_title" value={form.role_title} onChange={(v) => setForm({ ...form, role_title: v })} placeholder="e.g. Software Engineer" required />
+          <FormField label="Package (LPA)" id="package_lpa" type="number" value={form.package_lpa} onChange={(v) => setForm({ ...form, package_lpa: v })} placeholder="0.00" />
+          <FormField label="Placement Date" id="placement_date" type="date" value={form.placement_date} onChange={(v) => setForm({ ...form, placement_date: v })} required />
+          <FormField label="Offer Type" id="offer_type" type="select" value={form.offer_type} onChange={(v) => setForm({ ...form, offer_type: v as OfferType })} options={OFFER_TYPES} />
+          <FormField label="Status" id="status" type="select" value={form.status} onChange={(v) => setForm({ ...form, status: v as PlacementStatus })} options={STATUSES} />
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-surface-container-low text-on-surface-variant">
-                <th className="text-left px-lg py-sm font-semibold text-xs uppercase tracking-wider">Student</th>
-                <th className="text-left px-lg py-sm font-semibold text-xs uppercase tracking-wider">Department</th>
-                <th className="text-left px-lg py-sm font-semibold text-xs uppercase tracking-wider">Company</th>
-                <th className="text-left px-lg py-sm font-semibold text-xs uppercase tracking-wider">Role</th>
-                <th className="text-left px-lg py-sm font-semibold text-xs uppercase tracking-wider">Package</th>
-                <th className="text-left px-lg py-sm font-semibold text-xs uppercase tracking-wider">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-outline-variant">
-              {placements.map((p: any) => (
-                <tr key={p.id} className="hover:bg-surface-container-low transition-colors">
-                  <td className="px-lg py-md font-medium text-on-surface">{(p.students as any)?.profiles?.full_name || "—"}</td>
-                  <td className="px-lg py-md text-on-surface-variant">{(p.students as any)?.departments?.name || "—"}</td>
-                  <td className="px-lg py-md text-on-surface">{p.company_name}</td>
-                  <td className="px-lg py-md text-on-surface-variant">{p.role_title}</td>
-                  <td className="px-lg py-md text-success font-semibold">{p.package_lpa ? `₹${p.package_lpa}L` : "—"}</td>
-                  <td className="px-lg py-md">
-                    <span className={`text-xs font-semibold px-sm py-xs rounded-full capitalize ${
-                      p.status === "placed" || p.status === "joined" ? "bg-success/10 text-success" :
-                      p.status === "declined" ? "bg-warning/10 text-warning" : "bg-error/10 text-error"
-                    }`}>{p.status}</span>
-                  </td>
-                </tr>
-              ))}
-              {placements.length === 0 && (
-                <tr><td colSpan={6} className="px-lg py-xl text-center text-outline">No placement records yet.</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      </Modal>
     </div>
   );
 }

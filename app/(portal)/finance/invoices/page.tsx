@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { DataTable } from "@/components/ui/data-table";
 import { Modal, Button, FormField, StatusBadge } from "@/components/ui/modal";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { createInvoice } from "./actions";
 
 export default function FinanceInvoices() {
   const supabase = createClient();
@@ -12,6 +13,7 @@ export default function FinanceInvoices() {
   const [students, setStudents] = useState<any[]>([]);
   const [showCreate, setShowCreate] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({ student_id: "", type: "", amount: "", due_date: "", academic_year: "" });
 
   useEffect(() => { loadFees(); loadStudents(); }, []);
@@ -32,26 +34,19 @@ export default function FinanceInvoices() {
     setStudents(data || []);
   };
 
-  const createInvoice = async () => {
+  const handleCreate = async () => {
     setLoading(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    const { data: profile } = await supabase.from("profiles").select("college_id").eq("id", user.id).single();
-    if (!profile) return;
-
-    await supabase.from("fees").insert({
-      college_id: profile.college_id,
-      student_id: form.student_id,
-      type: form.type,
-      amount: Number(form.amount),
-      due_date: form.due_date,
-      academic_year: form.academic_year,
-    });
-
-    setForm({ student_id: "", type: "", amount: "", due_date: "", academic_year: "" });
-    setShowCreate(false);
-    setLoading(false);
-    loadFees();
+    setError(null);
+    try {
+      await createInvoice(form.student_id, form.type, Number(form.amount), form.due_date, form.academic_year || undefined);
+      setForm({ student_id: "", type: "", amount: "", due_date: "", academic_year: "" });
+      setShowCreate(false);
+      await loadFees();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to raise invoice.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const studentOptions = students.map((s) => ({
@@ -69,6 +64,10 @@ export default function FinanceInvoices() {
         <Button onClick={() => setShowCreate(true)}>+ Raise Invoice</Button>
       </div>
 
+      {error && !showCreate && (
+        <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium">{error}</div>
+      )}
+
       <DataTable
         columns={[
           { key: "student", header: "Student", render: (row: any) => <span className="font-medium text-on-surface">{(row.students as any)?.profiles?.full_name || "—"}</span> },
@@ -80,7 +79,8 @@ export default function FinanceInvoices() {
         ]}
         data={fees}
         keyExtractor={(row) => row.id}
-        searchPlaceholder="Search invoices..."
+        searchKey="type"
+        searchPlaceholder="Search by fee type..."
         emptyMessage="No invoices raised yet."
       />
 
@@ -91,10 +91,13 @@ export default function FinanceInvoices() {
         footer={
           <>
             <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
-            <Button onClick={createInvoice} disabled={loading || !form.student_id}>{loading ? "Creating..." : "Raise Invoice"}</Button>
+            <Button onClick={handleCreate} disabled={loading || !form.student_id}>{loading ? "Creating..." : "Raise Invoice"}</Button>
           </>
         }
       >
+        {error && (
+          <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium mb-md">{error}</div>
+        )}
         <div className="space-y-md">
           <FormField label="Student" id="student" type="select" value={form.student_id} onChange={(v) => setForm({ ...form, student_id: v })} options={studentOptions} required />
           <FormField label="Fee Type" id="type" value={form.type} onChange={(v) => setForm({ ...form, type: v })} placeholder="e.g. Tuition, Hostel, Exam" required />

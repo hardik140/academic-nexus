@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { getCached } from "@/lib/cache";
 
 export default async function HodDashboard() {
   const supabase = await createClient();
@@ -15,18 +16,17 @@ export default async function HodDashboard() {
     .eq("hod_id", user.id)
     .single();
 
-  // Faculty in department
-  const { data: faculty } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("role", "teacher")
-    .eq("department_id", department?.id || "");
-
-  // Courses in department
-  const { data: courses } = await supabase
-    .from("courses")
-    .select("*")
-    .eq("department_id", department?.id || "");
+  const { faculty, courses } = await getCached(
+    `dashboard:hod:${department?.id}:faculty-courses`,
+    60,
+    async () => {
+      const [facultyRes, coursesRes] = await Promise.all([
+        supabase.from("profiles").select("*").eq("role", "teacher").eq("department_id", department?.id || ""),
+        supabase.from("courses").select("*").eq("department_id", department?.id || ""),
+      ]);
+      return { faculty: facultyRes.data, courses: coursesRes.data };
+    }
+  );
 
   return (
     <div className="space-y-lg animate-[fade-in_0.3s_ease-out]">

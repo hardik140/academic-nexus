@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Academic Nexus - Grade Entry</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "inverse-primary": "#bec6e0",
+                        "tertiary-container": "#191c1e",
+                        "on-secondary-fixed-variant": "#003ea8",
+                        "secondary-container": "#316bf3",
+                        "on-tertiary-fixed-variant": "#444749",
+                        "surface-tint": "#565e74",
+                        "surface-container-high": "#dce9ff",
+                        "tertiary-fixed": "#e0e3e5",
+                        "on-tertiary-fixed": "#191c1e",
+                        "on-background": "#0b1c30",
+                        "background": "#f8f9ff",
+                        "inverse-surface": "#213145",
+                        "surface-container": "#e5eeff",
+                        "secondary-fixed-dim": "#b4c5ff",
+                        "surface-container-highest": "#d3e4fe",
+                        "on-error-container": "#93000a",
+                        "error-container": "#ffdad6",
+                        "on-tertiary-container": "#818486",
+                        "secondary-fixed": "#dbe1ff",
+                        "on-secondary-container": "#fefcff",
+                        "on-secondary": "#ffffff",
+                        "surface-container-lowest": "#ffffff",
+                        "surface-bright": "#f8f9ff",
+                        "secondary": "#0051d5",
+                        "on-tertiary": "#ffffff",
+                        "surface-variant": "#d3e4fe",
+                        "on-secondary-fixed": "#00174b",
+                        "outline-variant": "#c6c6cd",
+                        "inverse-on-surface": "#eaf1ff",
+                        "primary": "#000000",
+                        "on-error": "#ffffff",
+                        "on-primary": "#ffffff",
+                        "tertiary": "#000000",
+                        "primary-fixed-dim": "#bec6e0",
+                        "on-primary-fixed": "#131b2e",
+                        "on-primary-container": "#7c839b",
+                        "primary-fixed": "#dae2fd",
+                        "outline": "#76777d",
+                        "surface-dim": "#cbdbf5",
+                        "tertiary-fixed-dim": "#c4c7c9",
+                        "error": "#ba1a1a",
+                        "primary-container": "#131b2e",
+                        "surface": "#f8f9ff",
+                        "on-primary-fixed-variant": "#3f465c",
+                        "on-surface-variant": "#45464d",
+                        "on-surface": "#0b1c30",
+                        "surface-container-low": "#eff4ff",
+                        "success": "#16a34a",
+                        "warning": "#d97706",
+                        "danger": "#dc2626"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "md": "16px",
+                        "base": "4px",
+                        "margin": "32px",
+                        "xs": "4px",
+                        "xl": "32px",
+                        "gutter": "24px",
+                        "grid_columns": "12",
+                        "lg": "24px",
+                        "sm": "8px",
+                        "bottom-nav": "72px",
+                        "top-nav": "64px"
+                    },
+                    "fontFamily": {
+                        "display-lg": ["Inter"],
+                        "body-sm": ["Inter"],
+                        "body-md": ["Inter"],
+                        "headline-md": ["Inter"],
+                        "headline-sm": ["Inter"],
+                        "mono-sm": ["monospace"],
+                        "label-md": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "headline-lg": ["Inter"]
+                    },
+                    "fontSize": {
+                        "display-lg": ["36px", { "lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "body-sm": ["13px", { "lineHeight": "18px", "fontWeight": "400" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "headline-md": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "headline-sm": ["16px", { "lineHeight": "24px", "fontWeight": "600" }],
+                        "mono-sm": ["12px", { "lineHeight": "16px", "fontWeight": "400" }],
+                        "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "headline-lg": ["28px", { "lineHeight": "36px", "letterSpacing": "-0.01em", "fontWeight": "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background min-h-screen flex flex-col pt-top-nav pb-bottom-nav selection:bg-secondary selection:text-on-secondary antialiased">
+<!-- TopAppBar -->
+<header class="bg-surface dark:bg-surface-container-high text-primary dark:text-inverse-primary border-b border-outline-variant dark:border-outline flat no shadows flex justify-between items-center w-full px-lg py-md max-w-full docked full-width top-0 fixed z-40">
+<div class="flex items-center gap-sm">
+<span class="material-symbols-outlined text-secondary" style="font-variation-settings: 'FILL' 1;">menu</span>
+<h1 class="font-headline-md text-headline-md font-bold text-secondary dark:text-secondary-fixed">Grade Entry</h1>
+</div>
+<div class="flex items-center gap-sm">
+<img class="w-8 h-8 rounded-full object-cover border border-outline-variant" data-alt="A small, professional portrait avatar of a high school teacher in a light mode corporate educational software setting. The teacher is smiling subtly, wearing professional attire against a clean, plain white background. Soft, even lighting highlights the subject, emphasizing trust and authority in a modern SaaS interface context." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDp3LoZAPTOgds73tIv3jVe5vskpMt5oVIndKf2L7Q_2lihZDdlfoiWkK1qYHt5PaCaFKVJTXjKg7RwKSggDBCv6LhoMMxX-9-wnTJojBpa7e9P_jTzcQZRRQuLOkZnc4H8dxBlLwnGPcmIJ6X7xuKE8lzRtARfeaYTr-28P2bXkmT6AzsoLd6LHxWL6KJi6ENMmYQI5GNGZxIZ05A5nhERcUQorJRHDrGIkR9QSzAx0zxE4h-GA1gzNQ8oF4jrAy2p5dI6kzA0-1s"/>
+</div>
+</header>
+<!-- Main Canvas -->
+<main class="flex-grow flex flex-col p-md gap-md md:max-w-2xl mx-auto w-full mt-2">
+<!-- Controls Surface -->
+<section class="bg-surface-container-lowest rounded-xl border border-outline-variant p-md flex flex-col gap-sm shadow-sm relative overflow-hidden">
+<div class="absolute top-0 right-0 w-32 h-32 bg-primary-fixed rounded-bl-full opacity-20 -z-10 pointer-events-none"></div>
+<div class="flex flex-col gap-xs w-full">
+<label class="font-label-md text-label-md text-on-surface-variant" for="course-select">COURSE</label>
+<div class="relative w-full">
+<select class="w-full appearance-none bg-surface border border-outline-variant text-on-surface font-body-md text-body-md rounded-md pl-sm pr-lg py-2 focus:outline-none focus:ring-2 focus:ring-secondary focus:border-secondary transition-colors" id="course-select">
+<option value="ap_physics">AP Physics C - Sec 01</option>
+<option value="ap_calc">AP Calculus BC - Sec 02</option>
+<option value="cs_101">Intro to Comp Sci - Sec 01</option>
+</select>
+<span class="material-symbols-outlined absolute right-sm top-1/2 -translate-y-1/2 text-outline pointer-events-none">arrow_drop_down</span>
+</div>
+</div>
+<div class="flex gap-md w-full">
+<div class="flex flex-col gap-xs w-2/3">
+<label class="font-label-md text-label-md text-on-surface-variant" for="exam-type">EXAM TYPE</label>
+<div class="relative w-full">
+<select class="w-full appearance-none bg-surface border border-outline-variant text-on-surface font-body-md text-body-md rounded-md pl-sm pr-lg py-2 focus:outline-none focus:ring-2 focus:ring-secondary focus:border-secondary transition-colors" id="exam-type">
+<option value="internal">Internal</option>
+<option value="midterm">Midterm</option>
+<option value="final">Final</option>
+<option value="assignment">Assignment</option>
+<option value="lab">Lab</option>
+<option value="project">Project</option>
+<option value="viva">Viva</option>
+</select>
+<span class="material-symbols-outlined absolute right-sm top-1/2 -translate-y-1/2 text-outline pointer-events-none">arrow_drop_down</span>
+</div>
+</div>
+<div class="flex flex-col gap-xs w-1/3">
+<label class="font-label-md text-label-md text-on-surface-variant" for="max-marks">MAX MARKS</label>
+<input class="w-full bg-surface border border-outline-variant text-on-surface font-mono-sm text-mono-sm rounded-md px-sm py-2 focus:outline-none focus:ring-2 focus:ring-secondary focus:border-secondary transition-colors text-right" id="max-marks" type="number" value="100"/>
+</div>
+</div>
+<div class="mt-sm pt-sm border-t border-outline-variant flex justify-end">
+<button class="bg-secondary text-on-secondary font-headline-sm text-headline-sm px-lg py-2 rounded-lg flex items-center justify-center gap-xs hover:bg-on-secondary-fixed-variant transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-secondary focus:ring-offset-2">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">save</span>
+                    Save Grades
+                </button>
+</div>
+</section>
+<!-- Student List Container -->
+<section class="flex flex-col gap-base pb-xl">
+<div class="flex justify-between items-center px-sm py-xs border-b border-outline-variant mb-xs">
+<span class="font-label-md text-label-md text-on-surface-variant">STUDENT DETAILS</span>
+<div class="flex gap-lg pr-md">
+<span class="font-label-md text-label-md text-on-surface-variant w-16 text-right">MARKS</span>
+<span class="font-label-md text-label-md text-on-surface-variant w-12 text-right">PCT%</span>
+</div>
+</div>
+<!-- Student Row 1 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-lg p-sm flex items-center justify-between shadow-sm hover:border-secondary transition-colors focus-within:ring-2 focus-within:ring-secondary focus-within:border-secondary">
+<div class="flex items-center gap-sm flex-1 min-w-0">
+<span class="font-mono-sm text-mono-sm text-outline w-5 text-right">1.</span>
+<img class="w-8 h-8 rounded-full object-cover hidden sm:block" data-alt="A small, circular avatar portrait of a high school student in a light mode educational software setting. The student has a neutral expression, photographed against a bright white background. Soft lighting, corporate SaaS aesthetic, high quality, professional." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBzBwknh-1fpBkxPgwg2pXFTg1u_ESIYNgOY6c-Lejhr_NZx5hpZgPRjkc8e8aR8ZZ3hsA132LtzXzTp7I30zdWG7VVcXxHGmOk-abR7rg-MvSuyRmBaXhBtM-bz1QBIl1EwyZaXaFUVBI4RD7V9yrhy27477yQTk6wwuid3yf8KqL4uAWZZ8UjEDhxSXQ1-2ladNHj0QYn3FsXoBb5fVAtSBpZf5Oaiv8P1lDBzwyyVS5ZMtDpPDPoMvwryEqcJO2qDuQlUto0ZWw"/>
+<div class="flex flex-col min-w-0">
+<span class="font-headline-sm text-headline-sm text-on-surface truncate">Alice Freeman</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant truncate">a.freeman@student.nexus.edu</span>
+</div>
+</div>
+<div class="flex items-center gap-md">
+<input class="w-16 bg-surface border border-outline-variant text-on-surface font-mono-sm text-mono-sm rounded px-sm py-1 focus:outline-none focus:ring-2 focus:ring-secondary transition-colors text-right" type="number" value="92"/>
+<span class="font-mono-sm text-mono-sm text-success font-bold w-12 text-right">92%</span>
+</div>
+</div>
+<!-- Student Row 2 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-lg p-sm flex items-center justify-between shadow-sm hover:border-secondary transition-colors focus-within:ring-2 focus-within:ring-secondary focus-within:border-secondary">
+<div class="flex items-center gap-sm flex-1 min-w-0">
+<span class="font-mono-sm text-mono-sm text-outline w-5 text-right">2.</span>
+<div class="flex flex-col min-w-0">
+<span class="font-headline-sm text-headline-sm text-on-surface truncate">Bob Harrison</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant truncate">b.harrison@student.nexus.edu</span>
+</div>
+</div>
+<div class="flex items-center gap-md">
+<input class="w-16 bg-surface border border-outline-variant text-on-surface font-mono-sm text-mono-sm rounded px-sm py-1 focus:outline-none focus:ring-2 focus:ring-secondary transition-colors text-right" type="number" value="74"/>
+<span class="font-mono-sm text-mono-sm text-warning font-bold w-12 text-right">74%</span>
+</div>
+</div>
+<!-- Student Row 3 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-lg p-sm flex items-center justify-between shadow-sm hover:border-secondary transition-colors focus-within:ring-2 focus-within:ring-secondary focus-within:border-secondary">
+<div class="flex items-center gap-sm flex-1 min-w-0">
+<span class="font-mono-sm text-mono-sm text-outline w-5 text-right">3.</span>
+<div class="flex flex-col min-w-0">
+<span class="font-headline-sm text-headline-sm text-on-surface truncate">Charlie Davis</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant truncate">c.davis@student.nexus.edu</span>
+</div>
+</div>
+<div class="flex items-center gap-md">
+<input class="w-16 bg-surface border border-outline-variant text-on-surface font-mono-sm text-mono-sm rounded px-sm py-1 focus:outline-none focus:ring-2 focus:ring-secondary transition-colors text-right" type="number" value="45"/>
+<span class="font-mono-sm text-mono-sm text-danger font-bold w-12 text-right">45%</span>
+</div>
+</div>
+<!-- Student Row 4 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-lg p-sm flex items-center justify-between shadow-sm hover:border-secondary transition-colors focus-within:ring-2 focus-within:ring-secondary focus-within:border-secondary">
+<div class="flex items-center gap-sm flex-1 min-w-0">
+<span class="font-mono-sm text-mono-sm text-outline w-5 text-right">4.</span>
+<div class="flex flex-col min-w-0">
+<span class="font-headline-sm text-headline-sm text-on-surface truncate">Diana Prince</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant truncate">d.prince@student.nexus.edu</span>
+</div>
+</div>
+<div class="flex items-center gap-md">
+<input class="w-16 bg-surface border border-outline-variant text-on-surface font-mono-sm text-mono-sm rounded px-sm py-1 focus:outline-none focus:ring-2 focus:ring-secondary transition-colors text-right placeholder:text-outline-variant" placeholder="--" type="number" value=""/>
+<span class="font-mono-sm text-mono-sm text-outline-variant font-bold w-12 text-right">--%</span>
+</div>
+</div>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="bg-surface-container-lowest dark:bg-tertiary-container border-t border-outline-variant dark:border-outline shadow-lg dark:shadow-none fixed bottom-0 w-full z-50 rounded-t-xl flex justify-around items-center px-md pb-sm pt-xs md:hidden">
+<a class="flex flex-col items-center justify-center text-on-surface-variant dark:text-outline-variant hover:bg-surface-variant/50 dark:hover:bg-surface-container-high px-4 py-1 rounded-full transition-colors group" href="#">
+<span class="material-symbols-outlined text-outline group-hover:text-secondary transition-colors">dashboard</span>
+<span class="font-label-md text-label-md mt-1 group-hover:text-secondary transition-colors">Dashboard</span>
+</a>
+<a class="flex flex-col items-center justify-center bg-secondary-container dark:bg-secondary text-on-secondary-container dark:text-on-secondary rounded-full px-4 py-1 translate-y-[-2px] transition-transform" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">group</span>
+<span class="font-label-md text-label-md mt-1">Rosters</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant dark:text-outline-variant hover:bg-surface-variant/50 dark:hover:bg-surface-container-high px-4 py-1 rounded-full transition-colors group" href="#">
+<span class="material-symbols-outlined text-outline group-hover:text-secondary transition-colors">payments</span>
+<span class="font-label-md text-label-md mt-1 group-hover:text-secondary transition-colors">Finance</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant dark:text-outline-variant hover:bg-surface-variant/50 dark:hover:bg-surface-container-high px-4 py-1 rounded-full transition-colors group" href="#">
+<span class="material-symbols-outlined text-outline group-hover:text-secondary transition-colors">settings</span>
+<span class="font-label-md text-label-md mt-1 group-hover:text-secondary transition-colors">Settings</span>
+</a>
+</nav>
+<script>
+        // Simple script to update percentage colors dynamically (for presentation)
+        document.querySelectorAll('input[type="number"]').forEach(input => {
+            input.addEventListener('input', function() {
+                const val = parseInt(this.value);
+                const pctSpan = this.nextElementSibling;
+                
+                if (isNaN(val)) {
+                    pctSpan.textContent = '--%';
+                    pctSpan.className = 'font-mono-sm text-mono-sm text-outline-variant font-bold w-12 text-right';
+                    return;
+                }
+
+                pctSpan.textContent = val + '%';
+                if (val >= 80) {
+                    pctSpan.className = 'font-mono-sm text-mono-sm text-success font-bold w-12 text-right';
+                } else if (val >= 50) {
+                    pctSpan.className = 'font-mono-sm text-mono-sm text-warning font-bold w-12 text-right';
+                } else {
+                    pctSpan.className = 'font-mono-sm text-mono-sm text-danger font-bold w-12 text-right';
+                }
+            });
+        });
+    </script>
+</body></html>

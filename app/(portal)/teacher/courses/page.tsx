@@ -43,7 +43,12 @@ export default async function TeacherCourses() {
             <div className="space-y-xs text-xs text-outline">
               <div>🏢 {(c.departments as any)?.name || "—"}</div>
               <div>📚 {c.credits} credits • Semester {c.semester} • {c.type}</div>
-              <div>👥 {enrollCounts[c.id] || 0} students enrolled</div>
+            </div>
+            <div className="flex items-center justify-between mt-md pt-sm border-t border-outline-variant">
+              <span className="text-xs text-outline">👥 {enrollCounts[c.id] || 0} enrolled</span>
+              <a href={`/teacher/attendance?course=${c.id}`} className="text-xs font-semibold text-secondary hover:underline">
+                View Roster →
+              </a>
             </div>
           </div>
         ))}

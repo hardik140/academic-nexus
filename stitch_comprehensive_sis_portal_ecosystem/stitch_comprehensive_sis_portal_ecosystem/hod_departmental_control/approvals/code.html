@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>HOD Portal - Approvals</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "primary-fixed-dim": "#bec6e0",
+                        "surface-variant": "#d3e4fe",
+                        "primary-fixed": "#dae2fd",
+                        "on-secondary-fixed": "#00174b",
+                        "outline": "#76777d",
+                        "on-background": "#0b1c30",
+                        "error": "#ba1a1a",
+                        "on-error-container": "#93000a",
+                        "inverse-primary": "#bec6e0",
+                        "on-error": "#ffffff",
+                        "tertiary": "#000000",
+                        "on-secondary-fixed-variant": "#003ea8",
+                        "on-primary-fixed-variant": "#3f465c",
+                        "surface-container-lowest": "#ffffff",
+                        "on-tertiary-fixed": "#191c1e",
+                        "on-primary": "#ffffff",
+                        "outline-variant": "#c6c6cd",
+                        "surface-dim": "#cbdbf5",
+                        "surface-container": "#e5eeff",
+                        "surface-bright": "#f8f9ff",
+                        "on-tertiary-fixed-variant": "#444749",
+                        "tertiary-fixed": "#e0e3e5",
+                        "secondary-fixed-dim": "#b4c5ff",
+                        "on-primary-fixed": "#131b2e",
+                        "on-tertiary": "#ffffff",
+                        "inverse-on-surface": "#eaf1ff",
+                        "on-primary-container": "#7c839b",
+                        "secondary-container": "#316bf3",
+                        "primary": "#000000",
+                        "tertiary-fixed-dim": "#c4c7c9",
+                        "surface": "#f8f9ff",
+                        "on-secondary-container": "#fefcff",
+                        "on-surface": "#0b1c30",
+                        "on-tertiary-container": "#818486",
+                        "tertiary-container": "#191c1e",
+                        "secondary": "#0051d5",
+                        "primary-container": "#131b2e",
+                        "surface-container-high": "#dce9ff",
+                        "surface-container-highest": "#d3e4fe",
+                        "surface-tint": "#565e74",
+                        "inverse-surface": "#213145",
+                        "surface-container-low": "#eff4ff",
+                        "secondary-fixed": "#dbe1ff",
+                        "on-surface-variant": "#45464d",
+                        "on-secondary": "#ffffff",
+                        "background": "#f8f9ff",
+                        "error-container": "#ffdad6"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "xl": "32px",
+                        "lg": "24px",
+                        "margin": "32px",
+                        "md": "16px",
+                        "base": "4px",
+                        "xs": "4px",
+                        "gutter": "24px",
+                        "sm": "8px",
+                        "grid_columns": "12"
+                    },
+                    "fontFamily": {
+                        "body-sm": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "headline-sm": ["Inter"],
+                        "display-lg": ["Inter"],
+                        "mono-sm": ["monospace"],
+                        "headline-lg": ["Inter"],
+                        "headline-md": ["Inter"],
+                        "body-md": ["Inter"],
+                        "label-md": ["Inter"]
+                    },
+                    "fontSize": {
+                        "body-sm": ["13px", { "lineHeight": "18px", "fontWeight": "400" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "headline-sm": ["16px", { "lineHeight": "24px", "fontWeight": "600" }],
+                        "display-lg": ["36px", { "lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "mono-sm": ["12px", { "lineHeight": "16px", "fontWeight": "400" }],
+                        "headline-lg": ["28px", { "lineHeight": "36px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "headline-md": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface text-on-surface min-h-screen flex flex-col font-body-lg">
+<!-- TopAppBar -->
+<header class="w-full sticky top-0 z-50 bg-surface-bright border-b border-outline-variant flex justify-between items-center px-lg py-md w-full">
+<div class="flex items-center gap-md">
+<button class="text-primary hover:bg-surface-container-low p-sm rounded-full transition-colors duration-200">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">menu</span>
+</button>
+<h1 class="font-headline-lg text-headline-lg font-bold text-secondary">HOD Portal</h1>
+</div>
+<div class="flex items-center gap-sm">
+<div class="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center text-primary font-headline-sm overflow-hidden border border-outline-variant shadow-sm">
+<img class="w-full h-full object-cover" data-alt="A professional headshot of a department head in a modern academic office setting. The lighting is bright and clean, typical of a high-end corporate or academic environment. The subject is smiling subtly, wearing smart-casual business attire. The background is slightly blurred showing bookshelves or a modern glass office." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA_RA9OysRLKHHhxgSr8kZy1oXjoKvk_OOx1M2zhHXUhVevV9OyfUvp9nRfo2V9yuV0i4ckf5zEyQxhNqerSWmCF-JYjU9oLgWCQUgnRYPAikpu0mdhqLuN5tzKFhEUXRVsikbK2ZNqVFRsLhcdR_NLKYpheoiTAvkV-xPm3dTfwIf-WchovyYTapcT98u0fobxk_CggeXjX5xIG1i24d1Y9wkDPhcuku3heOndY3ckX2PXTMVVTVT4tBiznTuXFNj1Q9JTCNcGd-o"/>
+</div>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="flex-grow w-full max-w-7xl mx-auto px-margin py-xl pb-24 md:pb-xl flex flex-col lg:flex-row gap-xl">
+<!-- Persistent Side Nav (Desktop only) -->
+<aside class="hidden lg:flex w-[240px] flex-col gap-sm shrink-0">
+<div class="mb-lg p-md bg-surface-container-lowest border border-outline-variant rounded-lg shadow-sm">
+<p class="font-label-md text-label-md text-on-surface-variant uppercase mb-sm">Portal View</p>
+<div class="flex items-center justify-between cursor-pointer">
+<span class="font-headline-sm text-headline-sm text-on-surface">Administration</span>
+<span class="material-symbols-outlined text-on-surface-variant">arrow_drop_down</span>
+</div>
+</div>
+<nav class="flex flex-col gap-xs">
+<a class="flex items-center gap-md px-md py-sm rounded-md text-on-surface-variant hover:bg-surface-container-low transition-colors duration-200 group" href="#">
+<span class="material-symbols-outlined group-hover:text-primary transition-colors">dashboard</span>
+<span class="font-headline-sm text-headline-sm">Dashboard</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-md bg-secondary-container text-on-secondary-container transition-colors duration-200 font-headline-sm text-headline-sm" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">fact_check</span>
+<span>Approvals</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-md text-on-surface-variant hover:bg-surface-container-low transition-colors duration-200 group" href="#">
+<span class="material-symbols-outlined group-hover:text-primary transition-colors">groups</span>
+<span class="font-headline-sm text-headline-sm">Staff</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-md text-on-surface-variant hover:bg-surface-container-low transition-colors duration-200 group" href="#">
+<span class="material-symbols-outlined group-hover:text-primary transition-colors">analytics</span>
+<span class="font-headline-sm text-headline-sm">Reports</span>
+</a>
+</nav>
+</aside>
+<!-- Main Content Area -->
+<div class="flex-grow flex flex-col gap-xl min-w-0">
+<!-- Breadcrumbs & Page Header -->
+<div>
+<nav aria-label="Breadcrumb" class="flex text-on-surface-variant font-body-sm text-body-sm mb-sm">
+<ol class="inline-flex items-center space-x-1 md:space-x-2">
+<li class="inline-flex items-center">
+<a class="inline-flex items-center hover:text-primary" href="#">
+                        Administration
+                      </a>
+</li>
+<li>
+<div class="flex items-center">
+<span class="material-symbols-outlined text-sm mx-1">chevron_right</span>
+<span class="text-primary font-medium">Staff Approvals</span>
+</div>
+</li>
+</ol>
+</nav>
+<div class="flex justify-between items-end">
+<h2 class="font-display-lg text-display-lg text-on-surface">Staff Approvals</h2>
+<div class="hidden sm:flex gap-sm">
+<button class="bg-surface-container-lowest border border-outline-variant text-on-surface font-headline-sm text-headline-sm px-md py-sm rounded flex items-center gap-xs hover:bg-surface-container-low transition-colors shadow-sm">
+<span class="material-symbols-outlined text-sm">filter_list</span>
+                            Filter
+                        </button>
+</div>
+</div>
+</div>
+<!-- Section 1: Pending Requests (Bento/Card Layout) -->
+<section class="flex flex-col gap-md">
+<h3 class="font-headline-md text-headline-md text-on-surface flex items-center gap-sm">
+                    Pending Requests
+                    <span class="bg-error text-on-error font-label-md text-label-md px-2 py-0.5 rounded-full">3</span>
+</h3>
+<div class="grid grid-cols-1 xl:grid-cols-2 gap-lg">
+<!-- Request Card 1 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-lg p-md shadow-sm hover:border-outline transition-colors flex flex-col justify-between group">
+<div class="flex gap-md mb-md">
+<div class="w-12 h-12 rounded-full bg-surface-container-high flex items-center justify-center text-primary font-headline-md shrink-0">
+                                JS
+                            </div>
+<div class="flex-grow min-w-0">
+<div class="flex justify-between items-start">
+<h4 class="font-headline-sm text-headline-sm text-on-surface truncate">John Smith</h4>
+<span class="font-mono-sm text-mono-sm text-on-surface-variant bg-surface-container-low px-2 py-1 rounded">Oct 25 - Oct 27</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant truncate mb-xs">Assistant Professor • jsmith@nexus.edu</p>
+<div class="inline-flex items-center gap-xs text-secondary bg-secondary-fixed px-2 py-0.5 rounded text-label-md font-label-md">
+<span class="material-symbols-outlined text-[14px]">medical_services</span>
+                                    Sick Leave
+                                </div>
+</div>
+</div>
+<div class="bg-surface-container-low p-sm rounded-md mb-md border border-outline-variant/30 group-hover:border-outline-variant/60 transition-colors">
+<p class="font-body-sm text-body-sm text-on-surface italic">"Feeling unwell since yesterday morning. Will need a few days to recover."</p>
+</div>
+<div class="flex gap-sm justify-end border-t border-outline-variant/50 pt-md mt-auto">
+<button class="px-md py-sm rounded border border-outline-variant text-on-surface hover:bg-surface-container-high transition-colors font-headline-sm text-headline-sm">Reject</button>
+<button class="px-md py-sm rounded bg-secondary text-on-secondary hover:bg-on-secondary-fixed-variant transition-colors font-headline-sm text-headline-sm shadow-sm">Approve</button>
+</div>
+</div>
+<!-- Request Card 2 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-lg p-md shadow-sm hover:border-outline transition-colors flex flex-col justify-between group">
+<div class="flex gap-md mb-md">
+<div class="w-12 h-12 rounded-full bg-surface-container-high flex items-center justify-center text-primary font-headline-md shrink-0">
+                                AL
+                            </div>
+<div class="flex-grow min-w-0">
+<div class="flex justify-between items-start">
+<h4 class="font-headline-sm text-headline-sm text-on-surface truncate">Alice Lee</h4>
+<span class="font-mono-sm text-mono-sm text-on-surface-variant bg-surface-container-low px-2 py-1 rounded">Nov 02 - Nov 05</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant truncate mb-xs">Senior Lecturer • a.lee@nexus.edu</p>
+<div class="inline-flex items-center gap-xs text-primary bg-primary-fixed px-2 py-0.5 rounded text-label-md font-label-md">
+<span class="material-symbols-outlined text-[14px]">flight_takeoff</span>
+                                    Annual Leave
+                                </div>
+</div>
+</div>
+<div class="bg-surface-container-low p-sm rounded-md mb-md border border-outline-variant/30 group-hover:border-outline-variant/60 transition-colors">
+<p class="font-body-sm text-body-sm text-on-surface italic">"Taking accrued annual leave for a pre-planned family vacation."</p>
+</div>
+<div class="flex gap-sm justify-end border-t border-outline-variant/50 pt-md mt-auto">
+<button class="px-md py-sm rounded border border-outline-variant text-on-surface hover:bg-surface-container-high transition-colors font-headline-sm text-headline-sm">Reject</button>
+<button class="px-md py-sm rounded bg-secondary text-on-secondary hover:bg-on-secondary-fixed-variant transition-colors font-headline-sm text-headline-sm shadow-sm">Approve</button>
+</div>
+</div>
+</div>
+</section>
+<!-- Section 2: Processed History (High Density Table) -->
+<section class="flex flex-col gap-md mt-lg">
+<h3 class="font-headline-md text-headline-md text-on-surface">Processed History</h3>
+<div class="bg-surface-container-lowest border border-outline-variant rounded-lg shadow-sm overflow-hidden">
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-container-low border-b border-outline-variant font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">
+<th class="px-md py-sm font-semibold">Staff Name</th>
+<th class="px-md py-sm font-semibold">Leave Type</th>
+<th class="px-md py-sm font-semibold">Dates</th>
+<th class="px-md py-sm font-semibold text-right">Status</th>
+</tr>
+</thead>
+<tbody class="font-body-md text-body-md text-on-surface divide-y divide-outline-variant/50">
+<!-- Row 1 -->
+<tr class="hover:bg-surface-container-lowest/50 transition-colors">
+<td class="px-md py-sm font-medium">Robert Chen</td>
+<td class="px-md py-sm text-on-surface-variant">Conference Leave</td>
+<td class="px-md py-sm font-mono-sm text-mono-sm">Oct 10 - Oct 12</td>
+<td class="px-md py-sm text-right">
+<span class="inline-flex items-center px-2 py-0.5 rounded text-label-md font-label-md bg-[#dcfce7] text-[#166534] border border-[#bbf7d0]">
+                                             Approved
+                                         </span>
+</td>
+</tr>
+<!-- Row 2 (Zebra) -->
+<tr class="bg-surface-bright/50 hover:bg-surface-container-lowest/50 transition-colors">
+<td class="px-md py-sm font-medium">Sarah Jenkins</td>
+<td class="px-md py-sm text-on-surface-variant">Personal Leave</td>
+<td class="px-md py-sm font-mono-sm text-mono-sm">Oct 05 - Oct 05</td>
+<td class="px-md py-sm text-right">
+<span class="inline-flex items-center px-2 py-0.5 rounded text-label-md font-label-md bg-error-container text-on-error-container border border-[#fecaca]">
+                                             Rejected
+                                         </span>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="hover:bg-surface-container-lowest/50 transition-colors">
+<td class="px-md py-sm font-medium">David Miller</td>
+<td class="px-md py-sm text-on-surface-variant">Sick Leave</td>
+<td class="px-md py-sm font-mono-sm text-mono-sm">Sep 28 - Sep 30</td>
+<td class="px-md py-sm text-right">
+<span class="inline-flex items-center px-2 py-0.5 rounded text-label-md font-label-md bg-[#dcfce7] text-[#166534] border border-[#bbf7d0]">
+                                             Approved
+                                         </span>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="px-md py-sm border-t border-outline-variant bg-surface-container-lowest flex justify-end">
+<button class="text-secondary hover:text-on-secondary-fixed-variant font-headline-sm text-headline-sm transition-colors text-sm">View Full History</button>
+</div>
+</div>
+</section>
+</div>
+</main>
+<!-- BottomNavBar (Mobile Only) -->
+<nav class="md:hidden fixed bottom-0 w-full z-50 bg-surface-container flex justify-around items-center h-16 shadow-sm border-t border-outline-variant">
+<!-- Inactive -->
+<a class="flex flex-col items-center justify-center text-on-surface-variant px-md py-xs hover:text-primary scale-95 active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">dashboard</span>
+<span class="font-label-md text-label-md mt-1">Dashboard</span>
+</a>
+<!-- Active -->
+<a class="flex flex-col items-center justify-center bg-secondary-container text-on-secondary-container rounded-full px-md py-xs scale-95 active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">fact_check</span>
+<span class="font-label-md text-label-md mt-1">Approvals</span>
+</a>
+<!-- Inactive -->
+<a class="flex flex-col items-center justify-center text-on-surface-variant px-md py-xs hover:text-primary scale-95 active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">groups</span>
+<span class="font-label-md text-label-md mt-1">Staff</span>
+</a>
+<!-- Inactive -->
+<a class="flex flex-col items-center justify-center text-on-surface-variant px-md py-xs hover:text-primary scale-95 active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">analytics</span>
+<span class="font-label-md text-label-md mt-1">Reports</span>
+</a>
+</nav>
+</body></html>

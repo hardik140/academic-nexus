@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Gate Passes - Academic Nexus</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "surface-container": "#e5eeff",
+                      "on-primary-container": "#7c839b",
+                      "inverse-primary": "#bec6e0",
+                      "on-tertiary-fixed": "#191c1e",
+                      "on-secondary-container": "#fefcff",
+                      "on-primary-fixed": "#131b2e",
+                      "on-secondary-fixed": "#00174b",
+                      "tertiary-fixed-dim": "#c4c7c9",
+                      "surface-container-highest": "#d3e4fe",
+                      "primary-fixed-dim": "#bec6e0",
+                      "on-error": "#ffffff",
+                      "primary-fixed": "#dae2fd",
+                      "outline": "#76777d",
+                      "on-tertiary-fixed-variant": "#444749",
+                      "surface-container-high": "#dce9ff",
+                      "secondary-fixed": "#dbe1ff",
+                      "on-tertiary-container": "#818486",
+                      "tertiary-fixed": "#e0e3e5",
+                      "surface-bright": "#f8f9ff",
+                      "on-primary": "#ffffff",
+                      "on-tertiary": "#ffffff",
+                      "inverse-surface": "#213145",
+                      "tertiary-container": "#191c1e",
+                      "surface": "#f8f9ff",
+                      "secondary-container": "#316bf3",
+                      "error": "#ba1a1a",
+                      "on-secondary": "#ffffff",
+                      "surface-container-lowest": "#ffffff",
+                      "secondary": "#0051d5",
+                      "tertiary": "#000000",
+                      "on-surface": "#0b1c30",
+                      "primary-container": "#131b2e",
+                      "inverse-on-surface": "#eaf1ff",
+                      "outline-variant": "#c6c6cd",
+                      "surface-variant": "#d3e4fe",
+                      "primary": "#000000",
+                      "surface-container-low": "#eff4ff",
+                      "on-secondary-fixed-variant": "#003ea8",
+                      "background": "#f8f9ff",
+                      "surface-tint": "#565e74",
+                      "surface-dim": "#cbdbf5",
+                      "secondary-fixed-dim": "#b4c5ff",
+                      "on-primary-fixed-variant": "#3f465c",
+                      "on-background": "#0b1c30",
+                      "on-error-container": "#93000a",
+                      "error-container": "#ffdad6",
+                      "on-surface-variant": "#45464d"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.125rem",
+                      "lg": "0.25rem",
+                      "xl": "0.5rem",
+                      "full": "0.75rem"
+              },
+              "spacing": {
+                      "lg": "24px",
+                      "md": "16px",
+                      "margin": "32px",
+                      "xs": "4px",
+                      "base": "4px",
+                      "grid_columns": "12",
+                      "xl": "32px",
+                      "sm": "8px",
+                      "gutter": "24px",
+                      "safe": "env(safe-area-inset-bottom)"
+              },
+              "fontFamily": {
+                      "body-sm": ["Inter"],
+                      "body-lg": ["Inter"],
+                      "body-md": ["Inter"],
+                      "label-md": ["Inter"],
+                      "mono-sm": ["monospace"],
+                      "headline-md": ["Inter"],
+                      "headline-lg": ["Inter"],
+                      "headline-sm": ["Inter"],
+                      "display-lg": ["Inter"]
+              },
+              "fontSize": {
+                      "body-sm": ["13px", {"lineHeight": "18px", "fontWeight": "400"}],
+                      "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                      "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                      "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                      "mono-sm": ["12px", {"lineHeight": "16px", "fontWeight": "400"}],
+                      "headline-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                      "headline-lg": ["28px", {"lineHeight": "36px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                      "headline-sm": ["16px", {"lineHeight": "24px", "fontWeight": "600"}],
+                      "display-lg": ["36px", {"lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700"}]
+              }
+            }
+          }
+        }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background min-h-screen flex flex-col md:flex-row font-body-md overflow-x-hidden pt-16 md:pt-0">
+<!-- Navigation Drawer (Desktop) -->
+<nav class="hidden md:flex flex-col h-full fixed left-0 top-0 w-60 border-r border-outline-variant bg-surface-container-low dark:bg-surface-container z-40 transition-all duration-200 ease-in-out">
+<div class="p-4 border-b border-outline-variant flex items-center gap-3">
+<img alt="Student Portrait" class="w-10 h-10 rounded-full object-cover" data-alt="A professional headshot of a hostel warden, clean background, corporate SaaS style, well-lit, showing authority and approachability." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDfvZuSCPLw6I72Pw9rkbzwlNwXc2yK56mTFhY6aZpL7xXAjim6nj7WDbs7c8tUctawLWKnNUyTaUSrGOBXV70OWlIDveLOYnwhexenXuviGuCLIqe_uKW_pQTvqyvv6E14FqzBSumH1bBY0e0Bsio974L6e1ifBRcjw0MEvPbAXklNsFdWxpYfTtHhHNNOmBWTsy6QXOw_JmfagAY7UjGZjn6e1SDlRVDAR9ylEnIv0KVnfXvxsJpOHZhr0ICrm5lXz9QZixhu7zk"/>
+<div>
+<div class="font-headline-sm text-headline-sm font-black text-on-surface">Alex Rivers</div>
+<div class="font-body-sm text-body-sm text-on-surface-variant">Student ID: 20240912</div>
+</div>
+</div>
+<div class="flex-1 py-4 flex flex-col gap-1 overflow-y-auto">
+<a class="flex items-center gap-3 text-on-surface-variant hover:text-on-surface mx-2 my-1 px-4 py-2 rounded-lg hover:bg-surface-container-high dark:hover:bg-surface-container-highest transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span class="font-label-md text-label-md">Dashboard</span>
+</a>
+<a class="flex items-center gap-3 bg-secondary-container text-on-secondary-container rounded-lg mx-2 my-1 px-4 py-2 hover:bg-surface-container-high dark:hover:bg-surface-container-highest transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="gate">gate</span>
+<span class="font-label-md text-label-md">Gate Passes</span>
+</a>
+<a class="flex items-center gap-3 text-on-surface-variant hover:text-on-surface mx-2 my-1 px-4 py-2 rounded-lg hover:bg-surface-container-high dark:hover:bg-surface-container-highest transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="history_edu">history_edu</span>
+<span class="font-label-md text-label-md">Academic Log</span>
+</a>
+<a class="flex items-center gap-3 text-on-surface-variant hover:text-on-surface mx-2 my-1 px-4 py-2 rounded-lg hover:bg-surface-container-high dark:hover:bg-surface-container-highest transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="account_balance_wallet">account_balance_wallet</span>
+<span class="font-label-md text-label-md">Financials</span>
+</a>
+<a class="flex items-center gap-3 text-on-surface-variant hover:text-on-surface mx-2 my-1 px-4 py-2 rounded-lg hover:bg-surface-container-high dark:hover:bg-surface-container-highest transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+<span class="font-label-md text-label-md">Profile</span>
+</a>
+</div>
+</nav>
+<!-- Main Content Area -->
+<main class="flex-1 md:ml-60 flex flex-col h-screen overflow-hidden bg-background">
+<!-- TopAppBar (Mobile & Desktop Header) -->
+<header class="fixed top-0 w-full md:w-[calc(100%-15rem)] z-50 flex justify-between items-center px-margin h-16 bg-surface dark:bg-on-background border-b border-outline-variant dark:border-outline flat no shadows">
+<div class="flex items-center gap-4">
+<button class="md:hidden text-primary dark:text-primary-fixed hover:bg-surface-container-low dark:hover:bg-surface-container-highest transition-colors p-2 rounded-full active:scale-95 duration-100">
+<span class="material-symbols-outlined" data-icon="menu">menu</span>
+</button>
+<h1 class="font-headline-md text-headline-md font-bold text-primary dark:text-primary-fixed">Gate Pass Management</h1>
+</div>
+<button class="font-label-md text-label-md text-secondary dark:text-secondary-fixed font-bold hover:bg-surface-container-low dark:hover:bg-surface-container-highest transition-colors px-4 py-2 rounded-full active:scale-95 duration-100 hidden md:block">
+                + New Request
+            </button>
+<div class="md:hidden w-8 h-8 rounded-full bg-surface-container overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="Small avatar of Alex Rivers for mobile header, professional corporate style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAiVoudSIxUOv0Y9iZ0pM8m_Ss8Qcc-zjPDLmuMjTSPlcNQZTtWli5mHlz4AwykRmbjP3rs1E_tOl8vpd1lzfRhcz0s5M2lthcj3cm6dVX376mD0B-2s-dicq3sU7Ne0uSQjwCXr91seK970uuv8xj5cfgTPa8Hit94qFdsVnvmBKgFYGl3UDpcQe-P8SxMvj2EPOFpMVIU3JqnkXOcB02FTBnrM-kh4QCrLz71YRiir3ca6iHEq-P20IMKBPxdmrw_DlGHvIZvyRk"/>
+</div>
+</header>
+<!-- Content Canvas -->
+<div class="flex-1 overflow-y-auto p-md md:p-margin pb-24 md:pb-margin mt-16 md:mt-0">
+<div class="max-w-6xl mx-auto space-y-lg">
+<!-- Pending Requests Section -->
+<section>
+<div class="flex justify-between items-end mb-4">
+<h2 class="font-headline-lg text-headline-lg text-on-surface">Pending Requests</h2>
+<span class="font-label-md text-label-md text-on-surface-variant bg-surface-variant px-2 py-1 rounded-full">3 Require Action</span>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-md">
+<!-- Request Card 1 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col gap-4 shadow-[0_2px_4px_rgba(0,0,0,0.02)] hover:border-secondary transition-colors group">
+<div class="flex justify-between items-start">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-surface-variant flex items-center justify-center text-primary-fixed-dim font-headline-sm">AR</div>
+<div>
+<div class="font-headline-sm text-headline-sm text-on-surface">Alex Rivers</div>
+<div class="font-mono-sm text-mono-sm text-on-surface-variant">ID: 20240912</div>
+</div>
+</div>
+<span class="bg-surface-container-high text-on-surface-variant px-2 py-1 rounded font-label-md text-label-md">Pending</span>
+</div>
+<div class="bg-surface p-3 rounded-lg border border-outline-variant/50 space-y-2">
+<div class="flex justify-between">
+<span class="font-label-md text-label-md text-on-surface-variant">DESTINATION</span>
+<span class="font-body-md text-body-md font-medium text-on-surface">Home</span>
+</div>
+<div class="flex justify-between">
+<span class="font-label-md text-label-md text-on-surface-variant">REASON</span>
+<span class="font-body-md text-body-md text-on-surface truncate ml-4">Family Event</span>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-2 text-center bg-surface-container-low p-2 rounded-lg">
+<div>
+<div class="font-label-md text-label-md text-on-surface-variant mb-1">EXIT</div>
+<div class="font-body-sm text-body-sm text-on-surface">Oct 25, 04:00 PM</div>
+</div>
+<div class="border-l border-outline-variant">
+<div class="font-label-md text-label-md text-on-surface-variant mb-1">RETURN</div>
+<div class="font-body-sm text-body-sm text-on-surface">Oct 27, 08:00 PM</div>
+</div>
+</div>
+<div class="flex gap-2 mt-auto pt-2">
+<button class="flex-1 bg-surface border border-error text-error font-label-md text-label-md py-2 rounded-lg hover:bg-error-container transition-colors">Reject</button>
+<button class="flex-1 bg-secondary text-on-secondary font-label-md text-label-md py-2 rounded-lg hover:bg-on-secondary-fixed-variant transition-colors shadow-sm">Approve</button>
+</div>
+</div>
+<!-- Request Card 2 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col gap-4 shadow-[0_2px_4px_rgba(0,0,0,0.02)] hover:border-secondary transition-colors group">
+<div class="flex justify-between items-start">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-surface-variant flex items-center justify-center text-primary-fixed-dim font-headline-sm">SJ</div>
+<div>
+<div class="font-headline-sm text-headline-sm text-on-surface">Sarah Jenkins</div>
+<div class="font-mono-sm text-mono-sm text-on-surface-variant">ID: 20240845</div>
+</div>
+</div>
+<span class="bg-surface-container-high text-on-surface-variant px-2 py-1 rounded font-label-md text-label-md">Pending</span>
+</div>
+<div class="bg-surface p-3 rounded-lg border border-outline-variant/50 space-y-2">
+<div class="flex justify-between">
+<span class="font-label-md text-label-md text-on-surface-variant">DESTINATION</span>
+<span class="font-body-md text-body-md font-medium text-on-surface">Local Market</span>
+</div>
+<div class="flex justify-between">
+<span class="font-label-md text-label-md text-on-surface-variant">REASON</span>
+<span class="font-body-md text-body-md text-on-surface truncate ml-4">Supplies</span>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-2 text-center bg-surface-container-low p-2 rounded-lg">
+<div>
+<div class="font-label-md text-label-md text-on-surface-variant mb-1">EXIT</div>
+<div class="font-body-sm text-body-sm text-on-surface">Oct 25, 05:30 PM</div>
+</div>
+<div class="border-l border-outline-variant">
+<div class="font-label-md text-label-md text-on-surface-variant mb-1">RETURN</div>
+<div class="font-body-sm text-body-sm text-on-surface">Oct 25, 09:00 PM</div>
+</div>
+</div>
+<div class="flex gap-2 mt-auto pt-2">
+<button class="flex-1 bg-surface border border-error text-error font-label-md text-label-md py-2 rounded-lg hover:bg-error-container transition-colors">Reject</button>
+<button class="flex-1 bg-secondary text-on-secondary font-label-md text-label-md py-2 rounded-lg hover:bg-on-secondary-fixed-variant transition-colors shadow-sm">Approve</button>
+</div>
+</div>
+</div>
+</section>
+<!-- Processed History Section -->
+<section class="mt-xl">
+<h2 class="font-headline-sm text-headline-sm text-on-surface mb-4">Processed History</h2>
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden shadow-[0_2px_4px_rgba(0,0,0,0.02)]">
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-variant border-b border-outline-variant">
+<th class="p-3 font-label-md text-label-md text-on-surface-variant">STUDENT</th>
+<th class="p-3 font-label-md text-label-md text-on-surface-variant">DATE</th>
+<th class="p-3 font-label-md text-label-md text-on-surface-variant">DESTINATION</th>
+<th class="p-3 font-label-md text-label-md text-on-surface-variant text-right">STATUS</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant/50">
+<tr class="hover:bg-surface-container-low transition-colors group cursor-pointer">
+<td class="p-3">
+<div class="font-body-md text-body-md text-on-surface font-medium">Michael Chang</div>
+<div class="font-mono-sm text-mono-sm text-on-surface-variant">ID: 20240112</div>
+</td>
+<td class="p-3 font-body-sm text-body-sm text-on-surface">Oct 24, 2023</td>
+<td class="p-3 font-body-sm text-body-sm text-on-surface">Hospital</td>
+<td class="p-3 text-right">
+<span class="inline-flex items-center gap-1 bg-surface-container-highest text-secondary-container px-2 py-1 rounded-full font-label-md text-label-md border border-secondary/20">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+                                                Approved
+                                            </span>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-low transition-colors group cursor-pointer bg-surface/50">
+<td class="p-3">
+<div class="font-body-md text-body-md text-on-surface font-medium">Emma Stone</div>
+<div class="font-mono-sm text-mono-sm text-on-surface-variant">ID: 20240299</div>
+</td>
+<td class="p-3 font-body-sm text-body-sm text-on-surface">Oct 23, 2023</td>
+<td class="p-3 font-body-sm text-body-sm text-on-surface">City Center</td>
+<td class="p-3 text-right">
+<span class="inline-flex items-center gap-1 bg-error-container/30 text-error px-2 py-1 rounded-full font-label-md text-label-md border border-error/20">
+<span class="w-1.5 h-1.5 rounded-full bg-error"></span>
+                                                Rejected
+                                            </span>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-low transition-colors group cursor-pointer">
+<td class="p-3">
+<div class="font-body-md text-body-md text-on-surface font-medium">David Kim</div>
+<div class="font-mono-sm text-mono-sm text-on-surface-variant">ID: 20240501</div>
+</td>
+<td class="p-3 font-body-sm text-body-sm text-on-surface">Oct 22, 2023</td>
+<td class="p-3 font-body-sm text-body-sm text-on-surface">Internship</td>
+<td class="p-3 text-right">
+<span class="inline-flex items-center gap-1 bg-surface-container-highest text-secondary-container px-2 py-1 rounded-full font-label-md text-label-md border border-secondary/20">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+                                                Approved
+                                            </span>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</section>
+</div>
+</div>
+</main>
+<!-- BottomNavBar (Mobile) -->
+<nav class="md:hidden flex justify-around items-center h-16 w-full px-4 pb-safe bg-surface dark:bg-surface-container-lowest border-t border-outline-variant shadow-md fixed bottom-0 z-50">
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-container-highest active:scale-90 duration-150 p-2 rounded-lg" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="home">home</span>
+<span class="font-label-md text-label-md">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center bg-secondary-container text-on-secondary-container rounded-full px-4 py-1 active:scale-90 duration-150" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="fact_check">fact_check</span>
+<span class="font-label-md text-label-md">Passes</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-container-highest active:scale-90 duration-150 p-2 rounded-lg" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="payments">payments</span>
+<span class="font-label-md text-label-md">Wallet</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-container-highest active:scale-90 duration-150 p-2 rounded-lg" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="person">person</span>
+<span class="font-label-md text-label-md">Profile</span>
+</a>
+</nav>
+</body></html>

@@ -1,24 +1,29 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { routePrefixFor, dashboardPathFor } from "@/lib/auth/role-routes";
+import { checkRateLimit, RateLimitError } from "@/lib/rate-limit";
 
 /**
- * Role-to-route prefix mapping.
- * Each role can only access pages under its prefix.
- * Admin can access everything.
+ * Routes that don't require authentication. `/api` covers machine-to-machine
+ * endpoints (e.g. the QStash-triggered cron route) that have their own
+ * independent auth (a signed request), not a browser session cookie — the
+ * portal login-redirect/RBAC logic below must never intercept them.
  */
-const ROLE_ROUTES: Record<string, string> = {
-  student: "/student",
-  teacher: "/teacher",
-  hod: "/hod",
-  finance: "/finance",
-  director: "/director",
-  admin: "/admin",
-};
-
-/** Routes that don't require authentication */
-const PUBLIC_ROUTES = ["/login", "/auth/callback", "/auth/confirm"];
+const PUBLIC_ROUTES = ["/login", "/auth/callback", "/auth/confirm", "/api"];
 
 export async function updateSession(request: NextRequest) {
+  // Coarse, global first line of defense — checked before any Supabase call
+  // so a flood doesn't even cost an auth lookup. Fails open (see
+  // lib/rate-limit.ts) if Redis isn't configured or unreachable.
+  const ip = request.headers.get("x-forwarded-for")?.split(",")[0].trim() || "unknown";
+  try {
+    await checkRateLimit(`ip:${ip}`, 100, 60);
+  } catch (err) {
+    if (err instanceof RateLimitError) {
+      return new NextResponse("Too many requests. Please try again shortly.", { status: 429 });
+    }
+  }
+
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
@@ -30,7 +35,7 @@ export async function updateSession(request: NextRequest) {
           return request.cookies.getAll();
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) =>
+          cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value)
           );
           supabaseResponse = NextResponse.next({ request });
@@ -85,8 +90,7 @@ export async function updateSession(request: NextRequest) {
   // Root path → redirect to role dashboard
   if (pathname === "/") {
     const url = request.nextUrl.clone();
-    const rolePrefix = ROLE_ROUTES[profile.role] || "/student";
-    url.pathname = `${rolePrefix}/dashboard`;
+    url.pathname = dashboardPathFor(profile.role);
     return NextResponse.redirect(url);
   }
 
@@ -96,7 +100,7 @@ export async function updateSession(request: NextRequest) {
   }
 
   // Enforce role-based route access
-  const allowedPrefix = ROLE_ROUTES[profile.role];
+  const allowedPrefix = routePrefixFor(profile.role);
   if (allowedPrefix && !pathname.startsWith(allowedPrefix)) {
     const url = request.nextUrl.clone();
     url.pathname = `${allowedPrefix}/dashboard`;

@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Academic Nexus - Mark Attendance</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "tertiary-fixed": "#e0e3e5",
+                    "on-primary-container": "#7c839b",
+                    "inverse-on-surface": "#eaf1ff",
+                    "on-background": "#0b1c30",
+                    "primary-container": "#131b2e",
+                    "surface": "#f8f9ff",
+                    "secondary-fixed": "#dbe1ff",
+                    "outline": "#76777d",
+                    "on-secondary-fixed": "#00174b",
+                    "error-container": "#ffdad6",
+                    "primary-fixed-dim": "#bec6e0",
+                    "on-secondary": "#ffffff",
+                    "on-primary-fixed": "#131b2e",
+                    "tertiary": "#000000",
+                    "surface-dim": "#cbdbf5",
+                    "surface-container-lowest": "#ffffff",
+                    "background": "#f8f9ff",
+                    "tertiary-fixed-dim": "#c4c7c9",
+                    "surface-tint": "#565e74",
+                    "on-error": "#ffffff",
+                    "primary": "#000000",
+                    "inverse-primary": "#bec6e0",
+                    "on-surface-variant": "#45464d",
+                    "surface-bright": "#f8f9ff",
+                    "on-tertiary": "#ffffff",
+                    "inverse-surface": "#213145",
+                    "surface-container-low": "#eff4ff",
+                    "secondary": "#0051d5",
+                    "on-surface": "#0b1c30",
+                    "surface-container-high": "#dce9ff",
+                    "secondary-fixed-dim": "#b4c5ff",
+                    "tertiary-container": "#191c1e",
+                    "on-primary-fixed-variant": "#3f465c",
+                    "on-tertiary-fixed-variant": "#444749",
+                    "surface-container": "#e5eeff",
+                    "outline-variant": "#c6c6cd",
+                    "on-primary": "#ffffff",
+                    "on-error-container": "#93000a",
+                    "surface-variant": "#d3e4fe",
+                    "on-secondary-fixed-variant": "#003ea8",
+                    "secondary-container": "#316bf3",
+                    "on-tertiary-fixed": "#191c1e",
+                    "on-secondary-container": "#fefcff",
+                    "error": "#ba1a1a",
+                    "on-tertiary-container": "#818486",
+                    "surface-container-highest": "#d3e4fe",
+                    "primary-fixed": "#dae2fd"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "spacing": {
+                    "grid_columns": "12",
+                    "base": "4px",
+                    "md": "16px",
+                    "lg": "24px",
+                    "sm": "8px",
+                    "gutter": "24px",
+                    "xs": "4px",
+                    "xl": "32px",
+                    "margin": "32px"
+            },
+            "fontFamily": {
+                    "headline-lg": [
+                            "Inter"
+                    ],
+                    "headline-md": [
+                            "Inter"
+                    ],
+                    "body-sm": [
+                            "Inter"
+                    ],
+                    "label-md": [
+                            "Inter"
+                    ],
+                    "headline-sm": [
+                            "Inter"
+                    ],
+                    "body-md": [
+                            "Inter"
+                    ],
+                    "mono-sm": [
+                            "monospace"
+                    ],
+                    "display-lg": [
+                            "Inter"
+                    ],
+                    "body-lg": [
+                            "Inter"
+                    ]
+            },
+            "fontSize": {
+                    "headline-lg": [
+                            "28px",
+                            {
+                                    "lineHeight": "36px",
+                                    "letterSpacing": "-0.01em",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "headline-md": [
+                            "20px",
+                            {
+                                    "lineHeight": "28px",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "body-sm": [
+                            "13px",
+                            {
+                                    "lineHeight": "18px",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "label-md": [
+                            "12px",
+                            {
+                                    "lineHeight": "16px",
+                                    "letterSpacing": "0.05em",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "headline-sm": [
+                            "16px",
+                            {
+                                    "lineHeight": "24px",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "body-md": [
+                            "14px",
+                            {
+                                    "lineHeight": "20px",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "mono-sm": [
+                            "12px",
+                            {
+                                    "lineHeight": "16px",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "display-lg": [
+                            "36px",
+                            {
+                                    "lineHeight": "44px",
+                                    "letterSpacing": "-0.02em",
+                                    "fontWeight": "700"
+                            }
+                    ],
+                    "body-lg": [
+                            "16px",
+                            {
+                                    "lineHeight": "24px",
+                                    "fontWeight": "400"
+                            }
+                    ]
+            }
+    },
+        },
+      }
+    </script>
+<style>
+        .status-present { background-color: #d1fae5; color: #065f46; border-color: #34d399; }
+        .status-absent { background-color: #fee2e2; color: #991b1b; border-color: #f87171; }
+        .status-late { background-color: #fef3c7; color: #92400e; border-color: #fbbf24; }
+        .status-excused { background-color: #f3f4f6; color: #374151; border-color: #9ca3af; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background font-body-md min-h-screen pb-24 md:pb-0 md:pl-[280px]">
+<!-- Navigation Drawer (Desktop) -->
+<nav class="hidden md:flex flex-col h-full py-lg fixed top-0 left-0 bg-surface h-full w-[280px] rounded-r-xl shadow-xl z-50">
+<div class="px-md pb-md border-b border-surface-container bg-surface flex flex-col items-start w-full left_align">
+<div class="font-headline-sm text-headline-sm font-bold text-secondary mb-md">Academic System</div>
+<div class="flex items-center gap-sm">
+<div class="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center text-primary font-bold">U</div>
+<div>
+<div class="font-label-md text-label-md text-primary">Teacher Portal</div>
+<div class="font-body-sm text-body-sm text-on-surface-variant">Switch Role</div>
+</div>
+</div>
+<div class="text-xs text-outline-variant mt-sm">v2.4.0</div>
+</div>
+<ul class="flex flex-col gap-xs mt-md px-sm">
+<li><a class="flex items-center gap-md px-md py-sm bg-secondary-fixed text-on-secondary-fixed rounded-full mx-2 font-body-md text-body-md transition-colors ease-in-out duration-300" href="#"><span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">school</span> Teacher Portal</a></li>
+<li><a class="flex items-center gap-md px-md py-sm text-on-surface-variant hover:bg-surface-container-high mx-2 rounded-full font-body-md text-body-md transition-colors ease-in-out duration-300" href="#"><span class="material-symbols-outlined">psychology</span> HOD Dashboard</a></li>
+<li><a class="flex items-center gap-md px-md py-sm text-on-surface-variant hover:bg-surface-container-high mx-2 rounded-full font-body-md text-body-md transition-colors ease-in-out duration-300" href="#"><span class="material-symbols-outlined">account_balance</span> Finance Ledger</a></li>
+<li><a class="flex items-center gap-md px-md py-sm text-on-surface-variant hover:bg-surface-container-high mx-2 rounded-full font-body-md text-body-md transition-colors ease-in-out duration-300" href="#"><span class="material-symbols-outlined">leaderboard</span> Director Insights</a></li>
+<li><a class="flex items-center gap-md px-md py-sm text-on-surface-variant hover:bg-surface-container-high mx-2 rounded-full font-body-md text-body-md transition-colors ease-in-out duration-300" href="#"><span class="material-symbols-outlined">admin_panel_settings</span> Admin Console</a></li>
+<li><a class="flex items-center gap-md px-md py-sm text-on-surface-variant hover:bg-surface-container-high mx-2 rounded-full font-body-md text-body-md transition-colors ease-in-out duration-300" href="#"><span class="material-symbols-outlined">family_restroom</span> Student/Guardian</a></li>
+</ul>
+</nav>
+<!-- Top App Bar (Mobile & Desktop Header area) -->
+<header class="docked full-width top-0 border-b border-outline-variant bg-surface text-primary flex justify-between items-center w-full px-lg py-md max-w-full flat no shadows z-40 relative md:hidden">
+<div class="flex items-center gap-md">
+<div class="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center text-primary font-bold">U</div>
+<div class="font-headline-lg text-headline-lg font-bold text-secondary">SIS Portal</div>
+</div>
+<button class="hover:bg-surface-container-low transition-colors p-2 rounded-full"><span class="material-symbols-outlined">notifications</span></button>
+</header>
+<main class="w-full max-w-screen-xl mx-auto p-md md:p-xl">
+<!-- Page Header & Summary -->
+<div class="flex flex-col md:flex-row justify-between items-start md:items-end mb-lg gap-md">
+<div>
+<nav aria-label="Breadcrumb" class="flex text-body-sm text-on-surface-variant mb-xs">
+<ol class="inline-flex items-center space-x-1 md:space-x-2">
+<li class="inline-flex items-center">
+<a class="hover:text-primary transition-colors" href="#">Dashboard</a>
+</li>
+<li>
+<div class="flex items-center">
+<span class="material-symbols-outlined text-sm mx-1">chevron_right</span>
+<a class="hover:text-primary transition-colors" href="#">Courses</a>
+</div>
+</li>
+<li>
+<div class="flex items-center">
+<span class="material-symbols-outlined text-sm mx-1">chevron_right</span>
+<span class="text-primary font-medium">Mark Attendance</span>
+</div>
+</li>
+</ol>
+</nav>
+<h1 class="font-headline-lg text-headline-lg text-on-surface">Mark Attendance</h1>
+</div>
+<div class="flex gap-md bg-surface-container-lowest p-sm rounded-lg border border-outline-variant shadow-sm w-full md:w-auto">
+<div class="flex flex-col items-center px-sm">
+<span class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Present</span>
+<span class="font-headline-md text-headline-md text-emerald-600">24</span>
+</div>
+<div class="w-px bg-outline-variant"></div>
+<div class="flex flex-col items-center px-sm">
+<span class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Absent</span>
+<span class="font-headline-md text-headline-md text-red-600">2</span>
+</div>
+<div class="w-px bg-outline-variant"></div>
+<div class="flex flex-col items-center px-sm">
+<span class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Late</span>
+<span class="font-headline-md text-headline-md text-amber-600">1</span>
+</div>
+</div>
+</div>
+<!-- Controls Row -->
+<div class="bg-surface-container-lowest p-md rounded-xl border border-outline-variant shadow-sm mb-lg flex flex-col md:flex-row gap-md items-end justify-between">
+<div class="flex flex-col md:flex-row gap-md w-full md:w-auto">
+<div class="w-full md:w-64">
+<label class="block font-label-md text-label-md text-on-surface-variant mb-xs" for="course-select">Course</label>
+<select class="w-full bg-surface border border-outline-variant text-on-surface text-body-md rounded-lg focus:ring-secondary focus:border-secondary block p-2.5" id="course-select">
+<option>AP Physics C - Sec 01</option>
+<option>AP Calculus BC - Sec 03</option>
+<option>Intro to CS - Sec 02</option>
+</select>
+</div>
+<div class="w-full md:w-48">
+<label class="block font-label-md text-label-md text-on-surface-variant mb-xs" for="date-picker">Date</label>
+<input class="w-full bg-surface border border-outline-variant text-on-surface text-body-md rounded-lg focus:ring-secondary focus:border-secondary block p-2.5" id="date-picker" type="date" value="2024-10-24"/>
+</div>
+</div>
+<button class="w-full md:w-auto bg-secondary hover:bg-secondary-container text-on-secondary font-label-md text-label-md py-2.5 px-6 rounded-lg transition-colors shadow-sm flex items-center justify-center gap-xs">
+<span class="material-symbols-outlined text-sm">save</span>
+                Save Attendance
+            </button>
+</div>
+<!-- Status Legend -->
+<div class="mb-md flex items-center gap-sm overflow-x-auto pb-2">
+<span class="font-label-md text-label-md text-on-surface-variant mr-sm whitespace-nowrap">Tap to cycle:</span>
+<div class="flex gap-2">
+<span class="status-present px-3 py-1 rounded-full border text-xs font-semibold whitespace-nowrap flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">check_circle</span> Present</span>
+<span class="status-absent px-3 py-1 rounded-full border text-xs font-semibold whitespace-nowrap flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">cancel</span> Absent</span>
+<span class="status-late px-3 py-1 rounded-full border text-xs font-semibold whitespace-nowrap flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">schedule</span> Late</span>
+<span class="status-excused px-3 py-1 rounded-full border text-xs font-semibold whitespace-nowrap flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">info</span> Excused</span>
+</div>
+</div>
+<!-- Student Roster List (High Density) -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden shadow-sm">
+<div class="grid grid-cols-[auto_1fr_auto] gap-md p-sm bg-surface-container-low border-b border-outline-variant sticky top-0 md:top-0 z-10 font-label-md text-label-md text-on-surface-variant uppercase">
+<div class="w-10">#</div>
+<div>Student Name &amp; Email</div>
+<div class="w-32 text-center">Status</div>
+</div>
+<div class="flex flex-col">
+<!-- Row 1 -->
+<div class="grid grid-cols-[auto_1fr_auto] gap-md p-sm items-center border-b border-outline-variant hover:bg-surface-variant/20 transition-colors">
+<div class="w-10 flex justify-center">
+<div class="w-8 h-8 rounded-full bg-surface-tint text-on-tertiary flex items-center justify-center font-bold text-xs">AJ</div>
+</div>
+<div class="flex flex-col">
+<span class="font-headline-sm text-headline-sm text-on-surface">Alex Johnson</span>
+<span class="font-mono-sm text-mono-sm text-on-surface-variant">alex.j@nexus.edu</span>
+</div>
+<button class="w-32 status-present border rounded-lg py-2 font-label-md text-label-md flex justify-center items-center gap-1 cursor-pointer transition-transform hover:scale-105 active:scale-95" onclick="cycleStatus(this)">
+<span class="material-symbols-outlined text-sm">check_circle</span> Present
+                    </button>
+</div>
+<!-- Row 2 -->
+<div class="grid grid-cols-[auto_1fr_auto] gap-md p-sm items-center border-b border-outline-variant hover:bg-surface-variant/20 transition-colors bg-surface/50">
+<div class="w-10 flex justify-center">
+<div class="w-8 h-8 rounded-full bg-surface-tint text-on-tertiary flex items-center justify-center font-bold text-xs">BK</div>
+</div>
+<div class="flex flex-col">
+<span class="font-headline-sm text-headline-sm text-on-surface">Brianna Kim</span>
+<span class="font-mono-sm text-mono-sm text-on-surface-variant">brianna.k@nexus.edu</span>
+</div>
+<button class="w-32 status-absent border rounded-lg py-2 font-label-md text-label-md flex justify-center items-center gap-1 cursor-pointer transition-transform hover:scale-105 active:scale-95" onclick="cycleStatus(this)">
+<span class="material-symbols-outlined text-sm">cancel</span> Absent
+                    </button>
+</div>
+<!-- Row 3 -->
+<div class="grid grid-cols-[auto_1fr_auto] gap-md p-sm items-center border-b border-outline-variant hover:bg-surface-variant/20 transition-colors">
+<div class="w-10 flex justify-center">
+<div class="w-8 h-8 rounded-full bg-surface-tint text-on-tertiary flex items-center justify-center font-bold text-xs">CM</div>
+</div>
+<div class="flex flex-col">
+<span class="font-headline-sm text-headline-sm text-on-surface">Charlie Martinez</span>
+<span class="font-mono-sm text-mono-sm text-on-surface-variant">charlie.m@nexus.edu</span>
+</div>
+<button class="w-32 status-late border rounded-lg py-2 font-label-md text-label-md flex justify-center items-center gap-1 cursor-pointer transition-transform hover:scale-105 active:scale-95" onclick="cycleStatus(this)">
+<span class="material-symbols-outlined text-sm">schedule</span> Late
+                    </button>
+</div>
+<!-- Row 4 -->
+<div class="grid grid-cols-[auto_1fr_auto] gap-md p-sm items-center hover:bg-surface-variant/20 transition-colors bg-surface/50">
+<div class="w-10 flex justify-center">
+<div class="w-8 h-8 rounded-full bg-surface-tint text-on-tertiary flex items-center justify-center font-bold text-xs">DP</div>
+</div>
+<div class="flex flex-col">
+<span class="font-headline-sm text-headline-sm text-on-surface">Diana Patel</span>
+<span class="font-mono-sm text-mono-sm text-on-surface-variant">diana.p@nexus.edu</span>
+</div>
+<button class="w-32 status-present border rounded-lg py-2 font-label-md text-label-md flex justify-center items-center gap-1 cursor-pointer transition-transform hover:scale-105 active:scale-95" onclick="cycleStatus(this)">
+<span class="material-symbols-outlined text-sm">check_circle</span> Present
+                    </button>
+</div>
+</div>
+</div>
+</main>
+<!-- Bottom Nav Bar (Mobile) -->
+<nav class="md:hidden fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-md pb-sm pt-xs bg-surface-container-lowest border-t border-outline-variant rounded-t-xl shadow-lg">
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-variant/50 rounded-full px-4 py-1 transition-transform" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="font-label-md text-label-md mt-1">Dashboard</span>
+</a>
+<a class="flex flex-col items-center justify-center bg-secondary-container text-on-secondary-container rounded-full px-4 py-1 translate-y-[-2px] transition-transform" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">group</span>
+<span class="font-label-md text-label-md mt-1">Rosters</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-variant/50 rounded-full px-4 py-1 transition-transform" href="#">
+<span class="material-symbols-outlined">payments</span>
+<span class="font-label-md text-label-md mt-1">Finance</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-variant/50 rounded-full px-4 py-1 transition-transform" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-label-md text-label-md mt-1">Settings</span>
+</a>
+</nav>
+<script>
+        // Simple client-side status cycling logic for demonstration
+        const states = [
+            { class: 'status-present', icon: 'check_circle', text: 'Present' },
+            { class: 'status-absent', icon: 'cancel', text: 'Absent' },
+            { class: 'status-late', icon: 'schedule', text: 'Late' },
+            { class: 'status-excused', icon: 'info', text: 'Excused' }
+        ];
+
+        function cycleStatus(btn) {
+            let currentStateIndex = -1;
+            for (let i = 0; i < states.length; i++) {
+                if (btn.classList.contains(states[i].class)) {
+                    currentStateIndex = i;
+                    break;
+                }
+            }
+            
+            if (currentStateIndex !== -1) {
+                // Remove old state
+                btn.classList.remove(states[currentStateIndex].class);
+                
+                // Calculate next state
+                let nextStateIndex = (currentStateIndex + 1) % states.length;
+                let nextState = states[nextStateIndex];
+                
+                // Add new state
+                btn.classList.add(nextState.class);
+                btn.innerHTML = `<span class="material-symbols-outlined text-sm">${nextState.icon}</span> ${nextState.text}`;
+            }
+        }
+    </script>
+</body></html>

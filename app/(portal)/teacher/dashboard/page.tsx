@@ -29,14 +29,6 @@ export default async function TeacherDashboard() {
     .eq("marked_by", user.id)
     .eq("date", today);
 
-  // Fetch pending leave requests (if HOD)
-  const { data: leaveRequests } = await supabase
-    .from("complaints")
-    .select("*")
-    .eq("category", "leave_request")
-    .eq("status", "open")
-    .limit(5);
-
   return (
     <div className="space-y-lg animate-[fade-in_0.3s_ease-out]">
       <div>

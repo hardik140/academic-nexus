@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Department Reports - HOD Portal</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-dim": "#cbdbf5",
+                        "on-primary-container": "#7c839b",
+                        "tertiary-fixed-dim": "#c4c7c9",
+                        "secondary-container": "#316bf3",
+                        "background": "#f8f9ff",
+                        "secondary": "#0051d5",
+                        "primary-fixed": "#dae2fd",
+                        "tertiary-fixed": "#e0e3e5",
+                        "on-secondary": "#ffffff",
+                        "outline": "#76777d",
+                        "surface-container": "#e5eeff",
+                        "surface-tint": "#565e74",
+                        "error-container": "#ffdad6",
+                        "on-error-container": "#93000a",
+                        "secondary-fixed-dim": "#b4c5ff",
+                        "on-tertiary-fixed-variant": "#444749",
+                        "tertiary-container": "#191c1e",
+                        "primary-fixed-dim": "#bec6e0",
+                        "surface-variant": "#d3e4fe",
+                        "primary": "#000000",
+                        "surface-container-lowest": "#ffffff",
+                        "on-primary": "#ffffff",
+                        "surface-container-low": "#eff4ff",
+                        "inverse-on-surface": "#eaf1ff",
+                        "on-primary-fixed": "#131b2e",
+                        "surface-container-highest": "#d3e4fe",
+                        "surface": "#f8f9ff",
+                        "on-tertiary-fixed": "#191c1e",
+                        "surface-container-high": "#dce9ff",
+                        "on-secondary-container": "#fefcff",
+                        "on-primary-fixed-variant": "#3f465c",
+                        "on-secondary-fixed-variant": "#003ea8",
+                        "outline-variant": "#c6c6cd",
+                        "surface-bright": "#f8f9ff",
+                        "on-tertiary-container": "#818486",
+                        "on-error": "#ffffff",
+                        "error": "#ba1a1a",
+                        "primary-container": "#131b2e",
+                        "on-surface-variant": "#45464d",
+                        "on-secondary-fixed": "#00174b",
+                        "inverse-surface": "#213145",
+                        "on-background": "#0b1c30",
+                        "on-tertiary": "#ffffff",
+                        "on-surface": "#0b1c30",
+                        "secondary-fixed": "#dbe1ff",
+                        "inverse-primary": "#bec6e0",
+                        "tertiary": "#000000"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "lg": "24px",
+                        "base": "4px",
+                        "grid_columns": "12",
+                        "md": "16px",
+                        "margin": "32px",
+                        "gutter": "24px",
+                        "xs": "4px",
+                        "sm": "8px",
+                        "xl": "32px"
+                    },
+                    "fontFamily": {
+                        "display-lg": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "headline-sm": ["Inter"],
+                        "mono-sm": ["monospace"],
+                        "label-md": ["Inter"],
+                        "headline-md": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "body-md": ["Inter"],
+                        "body-sm": ["Inter"]
+                    },
+                    "fontSize": {
+                        "display-lg": ["36px", { "lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "headline-lg": ["28px", { "lineHeight": "36px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "headline-sm": ["16px", { "lineHeight": "24px", "fontWeight": "600" }],
+                        "mono-sm": ["12px", { "lineHeight": "16px", "fontWeight": "400" }],
+                        "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "headline-md": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "body-sm": ["13px", { "lineHeight": "18px", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface text-on-surface font-body-md antialiased min-h-screen">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 flex justify-between items-center px-md h-16 w-full border-b border-outline-variant bg-surface">
+<div class="flex items-center gap-sm">
+<div class="w-8 h-8 rounded-full overflow-hidden bg-surface-variant flex items-center justify-center">
+<img class="w-full h-full object-cover" data-alt="A professional headshot of a university department head, wearing formal academic attire in a well-lit office setting. High-quality corporate portrait photography style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC2TotzUZlbZFpJoNz96IaLWZYqsQdcyjTPjnnrnWcHiengsRhqj7NcpLHwow0bWDY0maQCeyuqbUuRBi_m00SoT8W32Noa4O5g0tH6cUrq24NrJANhzanD4boICXR_FjWIklPAK7p2OrSxDwOI8pPVkt8s8xrFXyDuXlD6IWJTAjniiYSDLkvNYmr3yAa6XpGZCB8mE-UCRNoSAoZj7yQFYyIZVBZJEMR0VjpkDX4vgla0mlZczyrCx2OZxHH_HY5li9UkAFlhc_0"/>
+</div>
+<span class="font-headline-md text-headline-md font-bold text-secondary">Academic Nexus</span>
+</div>
+<button class="p-2 text-primary hover:bg-surface-container-high transition-colors rounded-full active:opacity-80 transition-opacity">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+</header>
+<!-- Main Canvas -->
+<main class="pt-20 pb-24 px-md flex flex-col gap-md max-w-lg mx-auto">
+<!-- Header -->
+<div class="mb-sm">
+<h1 class="font-headline-lg text-headline-lg text-primary">Department Reports</h1>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-1">Overview of department metrics and academic standing.</p>
+</div>
+<!-- Top Section: Stat Cards -->
+<section class="grid grid-cols-2 gap-sm">
+<!-- Card 1 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-lg p-sm shadow-[0_2px_4px_rgba(0,0,0,0.02)] flex flex-col gap-1">
+<span class="font-label-md text-label-md text-on-surface-variant uppercase">Total Students</span>
+<span class="font-headline-md text-headline-md text-primary">420</span>
+</div>
+<!-- Card 2 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-lg p-sm shadow-[0_2px_4px_rgba(0,0,0,0.02)] flex flex-col gap-1">
+<span class="font-label-md text-label-md text-on-surface-variant uppercase">Active Students</span>
+<span class="font-headline-md text-headline-md text-primary">395</span>
+</div>
+<!-- Card 3 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-lg p-sm shadow-[0_2px_4px_rgba(0,0,0,0.02)] flex flex-col gap-1">
+<span class="font-label-md text-label-md text-on-surface-variant uppercase">Avg CGPA</span>
+<span class="font-headline-md text-headline-md text-secondary">3.42</span>
+</div>
+<!-- Card 4 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-lg p-sm shadow-[0_2px_4px_rgba(0,0,0,0.02)] flex flex-col gap-1">
+<span class="font-label-md text-label-md text-on-surface-variant uppercase">Backlogs</span>
+<span class="font-headline-md text-headline-md text-error">28</span>
+</div>
+</section>
+<!-- Middle Section: Attendance Audit -->
+<section class="mt-sm">
+<h2 class="font-headline-sm text-headline-sm text-primary mb-sm">Attendance Audit</h2>
+<div class="flex flex-col gap-sm">
+<!-- Row 1 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-lg shadow-[0_2px_4px_rgba(0,0,0,0.02)] p-sm flex flex-col gap-2">
+<div class="flex justify-between items-start">
+<div class="flex flex-col">
+<span class="font-label-md text-label-md text-secondary">CS101</span>
+<span class="font-body-md text-body-md text-primary font-semibold">Intro to Programming</span>
+</div>
+<span class="font-headline-md text-headline-md text-secondary">94%</span>
+</div>
+<div class="flex gap-md border-t border-surface-variant pt-2 mt-1">
+<div class="flex flex-col">
+<span class="font-label-md text-label-md text-on-surface-variant uppercase">Present</span>
+<span class="font-mono-sm text-mono-sm text-primary">312</span>
+</div>
+<div class="flex flex-col">
+<span class="font-label-md text-label-md text-on-surface-variant uppercase">Absent</span>
+<span class="font-mono-sm text-mono-sm text-primary">18</span>
+</div>
+</div>
+</div>
+<!-- Row 2 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-lg shadow-[0_2px_4px_rgba(0,0,0,0.02)] p-sm flex flex-col gap-2">
+<div class="flex justify-between items-start">
+<div class="flex flex-col">
+<span class="font-label-md text-label-md text-on-surface-variant">MTH205</span>
+<span class="font-body-md text-body-md text-primary font-semibold">Linear Algebra</span>
+</div>
+<span class="font-headline-md text-headline-md text-outline">86%</span>
+</div>
+<div class="flex gap-md border-t border-surface-variant pt-2 mt-1">
+<div class="flex flex-col">
+<span class="font-label-md text-label-md text-on-surface-variant uppercase">Present</span>
+<span class="font-mono-sm text-mono-sm text-primary">280</span>
+</div>
+<div class="flex flex-col">
+<span class="font-label-md text-label-md text-on-surface-variant uppercase">Absent</span>
+<span class="font-mono-sm text-mono-sm text-primary">45</span>
+</div>
+</div>
+</div>
+<!-- Row 3 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-lg shadow-[0_2px_4px_rgba(0,0,0,0.02)] p-sm flex flex-col gap-2">
+<div class="flex justify-between items-start">
+<div class="flex flex-col">
+<span class="font-label-md text-label-md text-error">PHY102</span>
+<span class="font-body-md text-body-md text-primary font-semibold">Physics II</span>
+</div>
+<span class="font-headline-md text-headline-md text-error">79%</span>
+</div>
+<div class="flex gap-md border-t border-surface-variant pt-2 mt-1">
+<div class="flex flex-col">
+<span class="font-label-md text-label-md text-on-surface-variant uppercase">Present</span>
+<span class="font-mono-sm text-mono-sm text-primary">240</span>
+</div>
+<div class="flex flex-col">
+<span class="font-label-md text-label-md text-on-surface-variant uppercase">Absent</span>
+<span class="font-mono-sm text-mono-sm text-primary">62</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Bottom Section: Backlog Students -->
+<section class="mt-sm">
+<h2 class="font-headline-sm text-headline-sm text-primary mb-sm">Backlog Students</h2>
+<div class="flex flex-col gap-xs">
+<!-- Item 1 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-lg p-sm flex justify-between items-center shadow-[0_2px_4px_rgba(0,0,0,0.02)]">
+<div class="flex flex-col">
+<span class="font-body-md text-body-md text-primary font-semibold">Alex Mercer</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Advanced Mechanics</span>
+</div>
+<span class="bg-error-container text-on-error-container px-2 py-1 rounded-full font-label-md text-label-md uppercase">Failed</span>
+</div>
+<!-- Item 2 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-lg p-sm flex justify-between items-center shadow-[0_2px_4px_rgba(0,0,0,0.02)]">
+<div class="flex flex-col">
+<span class="font-body-md text-body-md text-primary font-semibold">Sarah Jenkins</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Quantum Physics</span>
+</div>
+<span class="bg-error-container text-on-error-container px-2 py-1 rounded-full font-label-md text-label-md uppercase">Failed</span>
+</div>
+<!-- Item 3 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-lg p-sm flex justify-between items-center shadow-[0_2px_4px_rgba(0,0,0,0.02)]">
+<div class="flex flex-col">
+<span class="font-body-md text-body-md text-primary font-semibold">Marcus Thorne</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Data Structures</span>
+</div>
+<span class="bg-error-container text-on-error-container px-2 py-1 rounded-full font-label-md text-label-md uppercase">Failed</span>
+</div>
+</div>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-sm pb-2 pt-2 bg-surface-container shadow-[0_-1px_0_0_rgba(0,0,0,0.1)]">
+<button class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-variant/50 rounded-lg p-1 scale-95 active:scale-90 transition-transform duration-200">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="font-label-md text-label-md mt-1">Dashboard</span>
+</button>
+<button class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-variant/50 rounded-lg p-1 scale-95 active:scale-90 transition-transform duration-200">
+<span class="material-symbols-outlined">fact_check</span>
+<span class="font-label-md text-label-md mt-1">Approvals</span>
+</button>
+<button class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-variant/50 rounded-lg p-1 scale-95 active:scale-90 transition-transform duration-200">
+<span class="material-symbols-outlined">groups</span>
+<span class="font-label-md text-label-md mt-1">Staff</span>
+</button>
+<button class="flex flex-col items-center justify-center bg-secondary-container text-on-secondary-container rounded-full px-4 py-1 hover:bg-surface-variant/50 scale-95 active:scale-90 transition-transform duration-200">
+<span class="material-symbols-outlined">analytics</span>
+<span class="font-label-md text-label-md mt-1">Reports</span>
+</button>
+</nav>
+</body></html>

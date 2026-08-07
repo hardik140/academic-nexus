@@ -21,8 +21,7 @@ export type UserRole =
   | "finance"
   | "director"
   | "admin"
-  | "warden"
-  | "parent";
+  | "warden";
 
 export type UserStatus = "active" | "suspended" | "pending" | "graduated" | "alumni";
 
@@ -42,6 +41,17 @@ type Widen<T> = {
         ? string
         : T[K];
 };
+
+/**
+ * An Insert type's required fields should match what Postgres actually
+ * requires: any nullable column, or any column with a DB DEFAULT, may be
+ * omitted on insert. This hand-maintained file previously required every
+ * Row field on every Insert, which doesn't reflect that — fixed here for
+ * every table (marking each table's nullable/defaulted columns optional)
+ * rather than proper `supabase gen types` generation, which infers this
+ * automatically from the live schema and remains the real long-term fix.
+ */
+type OptionalKeys<Row, K extends keyof Row> = Omit<Row, K> & Partial<Pick<Row, K>>;
 
 export interface Database {
   public: {
@@ -65,7 +75,10 @@ export interface Database {
           created_at: string;
           updated_at: string;
         };
-        Insert: Omit<Database["public"]["Tables"]["colleges"]["Row"], "id" | "created_at" | "updated_at">;
+        Insert: OptionalKeys<
+          Database["public"]["Tables"]["colleges"]["Row"],
+          "id" | "created_at" | "updated_at" | "domain" | "logo_url" | "address" | "city" | "state" | "country" | "phone" | "email" | "website" | "accreditation" | "established_year"
+        >;
         Update: Partial<Database["public"]["Tables"]["colleges"]["Insert"]>;
         Relationships: [];
       };
@@ -92,7 +105,10 @@ export interface Database {
           created_at: string;
           updated_at: string;
         };
-        Insert: Omit<Database["public"]["Tables"]["profiles"]["Row"], "created_at" | "updated_at">;
+        Insert: OptionalKeys<
+          Database["public"]["Tables"]["profiles"]["Row"],
+          "created_at" | "updated_at" | "avatar_url" | "phone" | "role" | "department_id" | "status" | "date_of_birth" | "gender" | "address" | "city" | "state" | "pincode" | "emergency_contact_name" | "emergency_contact_phone"
+        >;
         Update: Partial<Database["public"]["Tables"]["profiles"]["Insert"]>;
         Relationships: [];
       };
@@ -104,7 +120,7 @@ export interface Database {
           description: string | null;
           module: string;
         };
-        Insert: Omit<Database["public"]["Tables"]["permissions"]["Row"], "id">;
+        Insert: OptionalKeys<Database["public"]["Tables"]["permissions"]["Row"], "id" | "description" | "module">;
         Update: Partial<Database["public"]["Tables"]["permissions"]["Insert"]>;
         Relationships: [];
       };
@@ -118,7 +134,7 @@ export interface Database {
           granted_by: string | null;
           created_at: string;
         };
-        Insert: Omit<Database["public"]["Tables"]["role_permissions"]["Row"], "id" | "created_at">;
+        Insert: OptionalKeys<Database["public"]["Tables"]["role_permissions"]["Row"], "id" | "created_at" | "granted_by">;
         Update: Partial<Database["public"]["Tables"]["role_permissions"]["Insert"]>;
         Relationships: [];
       };
@@ -136,7 +152,10 @@ export interface Database {
           created_at: string;
           updated_at: string;
         };
-        Insert: Omit<Database["public"]["Tables"]["departments"]["Row"], "id" | "created_at" | "updated_at">;
+        Insert: OptionalKeys<
+          Database["public"]["Tables"]["departments"]["Row"],
+          "id" | "created_at" | "updated_at" | "hod_id" | "description" | "established_year" | "status"
+        >;
         Update: Partial<Database["public"]["Tables"]["departments"]["Insert"]>;
         Relationships: [];
       };
@@ -160,7 +179,10 @@ export interface Database {
           created_at: string;
           updated_at: string;
         };
-        Insert: Omit<Database["public"]["Tables"]["courses"]["Row"], "id" | "created_at" | "updated_at">;
+        Insert: OptionalKeys<
+          Database["public"]["Tables"]["courses"]["Row"],
+          "id" | "created_at" | "updated_at" | "semester" | "year" | "type" | "instructor_id" | "max_students" | "description" | "syllabus_url" | "status"
+        >;
         Update: Partial<Database["public"]["Tables"]["courses"]["Insert"]>;
         Relationships: [];
       };
@@ -176,7 +198,7 @@ export interface Database {
           academic_year: string;
           created_at: string;
         };
-        Insert: Omit<Database["public"]["Tables"]["semesters"]["Row"], "id" | "created_at">;
+        Insert: OptionalKeys<Database["public"]["Tables"]["semesters"]["Row"], "id" | "created_at" | "is_current">;
         Update: Partial<Database["public"]["Tables"]["semesters"]["Insert"]>;
         Relationships: [];
       };
@@ -193,7 +215,7 @@ export interface Database {
           grade_points: number | null;
           created_at: string;
         };
-        Insert: Omit<Database["public"]["Tables"]["course_enrollments"]["Row"], "id" | "created_at">;
+        Insert: OptionalKeys<Database["public"]["Tables"]["course_enrollments"]["Row"], "id" | "created_at" | "semester_id" | "status" | "grade" | "grade_points">;
         Update: Partial<Database["public"]["Tables"]["course_enrollments"]["Insert"]>;
         Relationships: [];
       };
@@ -211,7 +233,7 @@ export interface Database {
           semester_id: string | null;
           created_at: string;
         };
-        Insert: Omit<Database["public"]["Tables"]["timetable_slots"]["Row"], "id" | "created_at">;
+        Insert: OptionalKeys<Database["public"]["Tables"]["timetable_slots"]["Row"], "id" | "created_at" | "room" | "instructor_id" | "semester_id">;
         Update: Partial<Database["public"]["Tables"]["timetable_slots"]["Insert"]>;
         Relationships: [];
       };
@@ -237,7 +259,10 @@ export interface Database {
           created_at: string;
           updated_at: string;
         };
-        Insert: Omit<Database["public"]["Tables"]["students"]["Row"], "id" | "created_at" | "updated_at">;
+        Insert: OptionalKeys<
+          Database["public"]["Tables"]["students"]["Row"],
+          "id" | "created_at" | "updated_at" | "semester" | "cgpa" | "credits_completed" | "credits_required" | "status" | "admission_date" | "parent_name" | "parent_phone" | "parent_email" | "blood_group"
+        >;
         Update: Partial<Database["public"]["Tables"]["students"]["Insert"]>;
         Relationships: [];
       };
@@ -254,7 +279,7 @@ export interface Database {
           remarks: string | null;
           created_at: string;
         };
-        Insert: Omit<Database["public"]["Tables"]["attendance"]["Row"], "id" | "created_at">;
+        Insert: OptionalKeys<Database["public"]["Tables"]["attendance"]["Row"], "id" | "created_at" | "status" | "remarks">;
         Update: Partial<Database["public"]["Tables"]["attendance"]["Insert"]>;
         Relationships: [];
       };
@@ -273,7 +298,7 @@ export interface Database {
           entered_by: string | null;
           created_at: string;
         };
-        Insert: Omit<Database["public"]["Tables"]["marks"]["Row"], "id" | "created_at">;
+        Insert: OptionalKeys<Database["public"]["Tables"]["marks"]["Row"], "id" | "created_at" | "semester" | "remarks" | "entered_by">;
         Update: Partial<Database["public"]["Tables"]["marks"]["Insert"]>;
         Relationships: [];
       };
@@ -295,7 +320,10 @@ export interface Database {
           created_at: string;
           updated_at: string;
         };
-        Insert: Omit<Database["public"]["Tables"]["fees"]["Row"], "id" | "created_at" | "updated_at">;
+        Insert: OptionalKeys<
+          Database["public"]["Tables"]["fees"]["Row"],
+          "id" | "created_at" | "updated_at" | "description" | "status" | "paid_amount" | "paid_at" | "semester" | "academic_year"
+        >;
         Update: Partial<Database["public"]["Tables"]["fees"]["Insert"]>;
         Relationships: [];
       };
@@ -315,7 +343,10 @@ export interface Database {
           notes: string | null;
           created_at: string;
         };
-        Insert: Omit<Database["public"]["Tables"]["payments"]["Row"], "id" | "created_at">;
+        Insert: OptionalKeys<
+          Database["public"]["Tables"]["payments"]["Row"],
+          "id" | "created_at" | "transaction_ref" | "receipt_number" | "status" | "processed_by" | "notes"
+        >;
         Update: Partial<Database["public"]["Tables"]["payments"]["Insert"]>;
         Relationships: [];
       };
@@ -334,7 +365,10 @@ export interface Database {
           expiry_date: string | null;
           created_at: string;
         };
-        Insert: Omit<Database["public"]["Tables"]["scholarships"]["Row"], "id" | "created_at">;
+        Insert: OptionalKeys<
+          Database["public"]["Tables"]["scholarships"]["Row"],
+          "id" | "created_at" | "academic_year" | "status" | "awarded_date" | "expiry_date"
+        >;
         Update: Partial<Database["public"]["Tables"]["scholarships"]["Insert"]>;
         Relationships: [];
       };
@@ -351,7 +385,10 @@ export interface Database {
           status: "active" | "maintenance" | "closed";
           created_at: string;
         };
-        Insert: Omit<Database["public"]["Tables"]["hostel_blocks"]["Row"], "id" | "created_at">;
+        Insert: OptionalKeys<
+          Database["public"]["Tables"]["hostel_blocks"]["Row"],
+          "id" | "created_at" | "warden_id" | "total_rooms" | "floors" | "status"
+        >;
         Update: Partial<Database["public"]["Tables"]["hostel_blocks"]["Insert"]>;
         Relationships: [];
       };
@@ -371,7 +408,10 @@ export interface Database {
           status: "available" | "full" | "maintenance";
           monthly_rent: number | null;
         };
-        Insert: Omit<Database["public"]["Tables"]["hostel_rooms"]["Row"], "id">;
+        Insert: OptionalKeys<
+          Database["public"]["Tables"]["hostel_rooms"]["Row"],
+          "id" | "floor" | "capacity" | "occupancy" | "type" | "ac" | "status" | "monthly_rent"
+        >;
         Update: Partial<Database["public"]["Tables"]["hostel_rooms"]["Insert"]>;
         Relationships: [];
       };
@@ -387,7 +427,10 @@ export interface Database {
           status: "active" | "vacated" | "transferred";
           created_at: string;
         };
-        Insert: Omit<Database["public"]["Tables"]["hostel_allocations"]["Row"], "id" | "created_at">;
+        Insert: OptionalKeys<
+          Database["public"]["Tables"]["hostel_allocations"]["Row"],
+          "id" | "created_at" | "allocated_date" | "vacated_date" | "status"
+        >;
         Update: Partial<Database["public"]["Tables"]["hostel_allocations"]["Insert"]>;
         Relationships: [];
       };
@@ -409,7 +452,10 @@ export interface Database {
           parent_notified: boolean;
           created_at: string;
         };
-        Insert: Omit<Database["public"]["Tables"]["gate_passes"]["Row"], "id" | "created_at">;
+        Insert: OptionalKeys<
+          Database["public"]["Tables"]["gate_passes"]["Row"],
+          "id" | "created_at" | "reason" | "actual_exit" | "actual_return" | "status" | "approved_by" | "approved_at" | "parent_notified"
+        >;
         Update: Partial<Database["public"]["Tables"]["gate_passes"]["Insert"]>;
         Relationships: [];
       };
@@ -426,7 +472,10 @@ export interface Database {
           effective_from: string | null;
           created_at: string;
         };
-        Insert: Omit<Database["public"]["Tables"]["mess_menu"]["Row"], "id" | "created_at">;
+        Insert: OptionalKeys<
+          Database["public"]["Tables"]["mess_menu"]["Row"],
+          "id" | "created_at" | "calories" | "is_vegetarian" | "effective_from"
+        >;
         Update: Partial<Database["public"]["Tables"]["mess_menu"]["Insert"]>;
         Relationships: [];
       };
@@ -449,7 +498,10 @@ export interface Database {
           created_at: string;
           updated_at: string;
         };
-        Insert: Omit<Database["public"]["Tables"]["complaints"]["Row"], "id" | "created_at" | "updated_at">;
+        Insert: OptionalKeys<
+          Database["public"]["Tables"]["complaints"]["Row"],
+          "id" | "created_at" | "updated_at" | "location" | "priority" | "status" | "assigned_to" | "resolution_notes" | "resolved_at" | "attachment_urls"
+        >;
         Update: Partial<Database["public"]["Tables"]["complaints"]["Insert"]>;
         Relationships: [];
       };
@@ -472,7 +524,10 @@ export interface Database {
           banner_url: string | null;
           created_at: string;
         };
-        Insert: Omit<Database["public"]["Tables"]["events"]["Row"], "id" | "created_at">;
+        Insert: OptionalKeys<
+          Database["public"]["Tables"]["events"]["Row"],
+          "id" | "created_at" | "description" | "end_date" | "venue" | "organizer_id" | "department_id" | "max_participants" | "registration_open" | "status" | "banner_url"
+        >;
         Update: Partial<Database["public"]["Tables"]["events"]["Insert"]>;
         Relationships: [];
       };
@@ -490,7 +545,10 @@ export interface Database {
           link: string | null;
           created_at: string;
         };
-        Insert: Omit<Database["public"]["Tables"]["notifications"]["Row"], "id" | "created_at">;
+        Insert: OptionalKeys<
+          Database["public"]["Tables"]["notifications"]["Row"],
+          "id" | "created_at" | "sender_id" | "read" | "type" | "link"
+        >;
         Update: Partial<Database["public"]["Tables"]["notifications"]["Insert"]>;
         Relationships: [];
       };
@@ -509,7 +567,10 @@ export interface Database {
           user_agent: string | null;
           created_at: string;
         };
-        Insert: Omit<Database["public"]["Tables"]["audit_logs"]["Row"], "id" | "created_at">;
+        Insert: OptionalKeys<
+          Database["public"]["Tables"]["audit_logs"]["Row"],
+          "id" | "created_at" | "record_id" | "old_value" | "new_value" | "ip_address" | "user_agent"
+        >;
         Update: Partial<Database["public"]["Tables"]["audit_logs"]["Insert"]>;
         Relationships: [];
       };
@@ -528,7 +589,10 @@ export interface Database {
           status: "active" | "archived" | "deleted";
           created_at: string;
         };
-        Insert: Omit<Database["public"]["Tables"]["documents"]["Row"], "id" | "created_at">;
+        Insert: OptionalKeys<
+          Database["public"]["Tables"]["documents"]["Row"],
+          "id" | "created_at" | "file_size" | "mime_type" | "related_to" | "status"
+        >;
         Update: Partial<Database["public"]["Tables"]["documents"]["Insert"]>;
         Relationships: [];
       };
@@ -547,7 +611,10 @@ export interface Database {
           approved_at: string | null;
           created_at: string;
         };
-        Insert: Omit<Database["public"]["Tables"]["leave_requests"]["Row"], "id" | "created_at">;
+        Insert: OptionalKeys<
+          Database["public"]["Tables"]["leave_requests"]["Row"],
+          "id" | "created_at" | "status" | "approved_by" | "approved_at"
+        >;
         Update: Partial<Database["public"]["Tables"]["leave_requests"]["Insert"]>;
         Relationships: [];
       };
@@ -568,7 +635,10 @@ export interface Database {
           cover_url: string | null;
           created_at: string;
         };
-        Insert: Omit<Database["public"]["Tables"]["library_books"]["Row"], "id" | "created_at">;
+        Insert: OptionalKeys<
+          Database["public"]["Tables"]["library_books"]["Row"],
+          "id" | "created_at" | "isbn" | "publisher" | "edition" | "category" | "total_copies" | "available_copies" | "shelf_location" | "cover_url"
+        >;
         Update: Partial<Database["public"]["Tables"]["library_books"]["Insert"]>;
         Relationships: [];
       };
@@ -586,7 +656,10 @@ export interface Database {
           status: "issued" | "returned" | "overdue" | "lost";
           created_at: string;
         };
-        Insert: Omit<Database["public"]["Tables"]["library_issued"]["Row"], "id" | "created_at">;
+        Insert: OptionalKeys<
+          Database["public"]["Tables"]["library_issued"]["Row"],
+          "id" | "created_at" | "issued_date" | "returned_date" | "fine_amount" | "status"
+        >;
         Update: Partial<Database["public"]["Tables"]["library_issued"]["Insert"]>;
         Relationships: [];
       };
@@ -607,7 +680,10 @@ export interface Database {
           status: "active" | "inactive";
           created_at: string;
         };
-        Insert: Omit<Database["public"]["Tables"]["transport_routes"]["Row"], "id" | "created_at">;
+        Insert: OptionalKeys<
+          Database["public"]["Tables"]["transport_routes"]["Row"],
+          "id" | "created_at" | "route_number" | "departure_time" | "arrival_time" | "vehicle_number" | "driver_name" | "driver_phone" | "capacity" | "status"
+        >;
         Update: Partial<Database["public"]["Tables"]["transport_routes"]["Insert"]>;
         Relationships: [];
       };
@@ -625,7 +701,10 @@ export interface Database {
           status: "placed" | "joined" | "declined" | "offer_revoked";
           created_at: string;
         };
-        Insert: Omit<Database["public"]["Tables"]["placements"]["Row"], "id" | "created_at">;
+        Insert: OptionalKeys<
+          Database["public"]["Tables"]["placements"]["Row"],
+          "id" | "created_at" | "package_lpa" | "placement_date" | "offer_type" | "status"
+        >;
         Update: Partial<Database["public"]["Tables"]["placements"]["Insert"]>;
         Relationships: [];
       };

@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import Link from "next/link";
 
 export default async function StudentHostel() {
   const supabase = await createClient();
@@ -9,13 +10,16 @@ export default async function StudentHostel() {
   const { data: student } = await supabase.from("students").select("id").eq("user_id", user.id).single();
   const { data: profile } = await supabase.from("profiles").select("college_id").eq("id", user.id).single();
 
-  // Current allocation
-  const { data: allocation } = await supabase
+  // Current allocation (cast to any: this hand-maintained types file doesn't
+  // declare table Relationships, so embedded joins like hostel_rooms(...)
+  // can't be inferred — same pattern used throughout the rest of the app)
+  const { data: allocationData } = await supabase
     .from("hostel_allocations")
     .select("*, hostel_rooms(block_name, room_number, type, ac, capacity, occupancy)")
     .eq("student_id", student?.id || "")
     .eq("status", "active")
     .single();
+  const allocation = allocationData as any;
 
   // Mess menu for today
   const todayDay = new Date().getDay();
@@ -43,8 +47,16 @@ export default async function StudentHostel() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-md">
         {/* Room Info */}
         <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-sm">
-          <div className="px-lg py-md border-b border-outline-variant">
-            <h2 className="text-sm font-bold text-on-surface">🏠 My Room</h2>
+          <div className="px-lg py-md border-b border-outline-variant flex items-center justify-between">
+            <h2 className="text-sm font-bold text-on-surface flex items-center gap-sm">🏠 My Room</h2>
+            {allocation && (
+              <Link
+                href={`/student/complaints?category=hostel`}
+                className="text-xs font-semibold text-secondary hover:underline"
+              >
+                Report an Issue
+              </Link>
+            )}
           </div>
           {allocation ? (
             <div className="p-lg space-y-md">
@@ -87,7 +99,7 @@ export default async function StudentHostel() {
         {/* Today's Menu */}
         <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-sm">
           <div className="px-lg py-md border-b border-outline-variant">
-            <h2 className="text-sm font-bold text-on-surface">🍽️ Today&apos;s Menu — {dayNames[todayDay]}</h2>
+            <h2 className="text-sm font-bold text-on-surface flex items-center gap-sm">🍽️ Today&apos;s Menu — {dayNames[todayDay]}</h2>
           </div>
           <div className="divide-y divide-outline-variant">
             {sortedMenu.length > 0 ? sortedMenu.map((meal: any) => (
@@ -105,6 +117,29 @@ export default async function StudentHostel() {
               <div className="p-xl text-center text-sm text-outline">No menu available for today.</div>
             )}
           </div>
+        </div>
+      </div>
+
+      {/* Quick Links */}
+      <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-sm p-lg">
+        <h2 className="text-sm font-bold text-on-surface mb-md">Quick Links</h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-md">
+          <Link href="/student/gatepass" className="flex flex-col items-center gap-sm p-md rounded-xl border border-outline-variant hover:bg-surface-container-low transition-colors text-center">
+            <span className="text-2xl">🚪</span>
+            <span className="text-xs font-semibold text-on-surface">Gate Pass</span>
+          </Link>
+          <Link href="/student/complaints?category=hostel" className="flex flex-col items-center gap-sm p-md rounded-xl border border-outline-variant hover:bg-surface-container-low transition-colors text-center">
+            <span className="text-2xl">🛠️</span>
+            <span className="text-xs font-semibold text-on-surface">Maintenance Request</span>
+          </Link>
+          <Link href="/student/complaints?category=mess" className="flex flex-col items-center gap-sm p-md rounded-xl border border-outline-variant hover:bg-surface-container-low transition-colors text-center">
+            <span className="text-2xl">🍽️</span>
+            <span className="text-xs font-semibold text-on-surface">Mess Feedback</span>
+          </Link>
+          <Link href="/student/complaints" className="flex flex-col items-center gap-sm p-md rounded-xl border border-outline-variant hover:bg-surface-container-low transition-colors text-center">
+            <span className="text-2xl">📋</span>
+            <span className="text-xs font-semibold text-on-surface">All Complaints</span>
+          </Link>
         </div>
       </div>
     </div>

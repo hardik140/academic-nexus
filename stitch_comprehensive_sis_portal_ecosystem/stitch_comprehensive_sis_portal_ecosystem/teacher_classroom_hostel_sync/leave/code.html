@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Academic Nexus - Leave Management</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-tertiary": "#ffffff",
+                        "outline": "#76777d",
+                        "background": "#f8f9ff",
+                        "tertiary-fixed-dim": "#c4c7c9",
+                        "secondary-fixed": "#dbe1ff",
+                        "on-primary": "#ffffff",
+                        "outline-variant": "#c6c6cd",
+                        "on-secondary-container": "#fefcff",
+                        "tertiary-container": "#191c1e",
+                        "error": "#ba1a1a",
+                        "on-error": "#ffffff",
+                        "surface-container-low": "#eff4ff",
+                        "on-tertiary-container": "#818486",
+                        "on-secondary": "#ffffff",
+                        "surface-bright": "#f8f9ff",
+                        "secondary-fixed-dim": "#b4c5ff",
+                        "primary-container": "#131b2e",
+                        "surface-container": "#e5eeff",
+                        "surface-tint": "#565e74",
+                        "surface": "#f8f9ff",
+                        "on-tertiary-fixed": "#191c1e",
+                        "primary-fixed": "#dae2fd",
+                        "on-surface-variant": "#45464d",
+                        "on-primary-fixed": "#131b2e",
+                        "surface-container-highest": "#d3e4fe",
+                        "surface-dim": "#cbdbf5",
+                        "tertiary-fixed": "#e0e3e5",
+                        "on-secondary-fixed": "#00174b",
+                        "inverse-on-surface": "#eaf1ff",
+                        "on-error-container": "#93000a",
+                        "primary": "#000000",
+                        "on-secondary-fixed-variant": "#003ea8",
+                        "on-primary-container": "#7c839b",
+                        "error-container": "#ffdad6",
+                        "surface-container-high": "#dce9ff",
+                        "tertiary": "#000000",
+                        "primary-fixed-dim": "#bec6e0",
+                        "surface-variant": "#d3e4fe",
+                        "on-surface": "#0b1c30",
+                        "on-background": "#0b1c30",
+                        "surface-container-lowest": "#ffffff",
+                        "secondary": "#0051d5",
+                        "inverse-surface": "#213145",
+                        "secondary-container": "#316bf3",
+                        "on-tertiary-fixed-variant": "#444749",
+                        "on-primary-fixed-variant": "#3f465c",
+                        "inverse-primary": "#bec6e0",
+                        "status-green": "#16a34a",
+                        "status-yellow": "#d97706",
+                        "status-red": "#dc2626"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "gutter": "24px",
+                        "lg": "24px",
+                        "xs": "4px",
+                        "grid_columns": "12",
+                        "md": "16px",
+                        "margin": "32px",
+                        "xl": "32px",
+                        "sm": "8px",
+                        "base": "4px"
+                    },
+                    "fontFamily": {
+                        "headline-md": ["Inter"],
+                        "headline-sm": ["Inter"],
+                        "label-md": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "mono-sm": ["monospace"],
+                        "display-lg": ["Inter"],
+                        "body-md": ["Inter"],
+                        "body-sm": ["Inter"]
+                    },
+                    "fontSize": {
+                        "headline-md": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "headline-sm": ["16px", { "lineHeight": "24px", "fontWeight": "600" }],
+                        "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "headline-lg": ["28px", { "lineHeight": "36px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "mono-sm": ["12px", { "lineHeight": "16px", "fontWeight": "400" }],
+                        "display-lg": ["36px", { "lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "body-sm": ["13px", { "lineHeight": "18px", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .custom-shadow { box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+        .modal-shadow { box-shadow: 0 12px 24px rgba(0,0,0,0.08); }
+        .focus-ring:focus-within { box-shadow: 0 0 0 2px #2563EB; border-color: transparent; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background font-body-md min-h-screen flex flex-col md:flex-row">
+<!-- TopAppBar (Mobile & Desktop) -->
+<header class="bg-surface-container-lowest dark:bg-surface-container-low text-secondary dark:text-secondary-fixed flex justify-between items-center w-full px-md h-16 docked full-width top-0 border-b border-outline-variant dark:border-outline flat no shadows md:hidden fixed z-40">
+<div class="flex items-center gap-sm">
+<span class="material-symbols-outlined cursor-pointer active:opacity-80" data-icon="menu">menu</span>
+<span class="text-headline-sm font-headline-sm font-bold text-secondary dark:text-secondary-fixed">Academic Nexus</span>
+</div>
+<div>
+<img class="w-8 h-8 rounded-full object-cover border border-outline-variant" data-alt="A small circular avatar placeholder image for a teacher profile picture in a light mode SaaS web application interface. Professional, corporate aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBlp7CqReKweu0DT3NP8wlJHWmiVzH9Jr6dyweamuJJAYM02RxkpoidqrnzBkmEmNs0MXQjH4eZdi_CoQuMYCUsz1lTiQEsQy49B0OH-fh7lpKNBdOkjw2xgtaJlztdHLU74a1PzBxi6YzP2flgXUQVW_gLa2r7hjZkHRbeCWIXYtJZY0gL9p4v-dKE0TvSy9XF1fP5zTlCCF7wa6yDyW478kO24RNcSlod1ITpg7f28zw5NMPWRkF4hKp-vHE4QrAyAqZtzL2iiY4"/>
+</div>
+</header>
+<!-- NavigationDrawer (Desktop) -->
+<nav class="hidden lg:flex flex-col p-md gap-sm bg-surface-container-lowest dark:bg-surface-container-low text-secondary dark:text-secondary-fixed h-full w-[240px] fixed left-0 top-0 border-r border-outline-variant dark:border-outline flat no shadows z-50">
+<div class="flex items-center gap-md mb-lg">
+<img class="w-12 h-12 rounded-full object-cover border border-outline-variant" data-alt="A circular avatar profile picture for Dr. Sarah Jenkins, Faculty of Science, in a modern, light-themed SaaS educational portal. Professional corporate style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAXmn1zRiB_vDM98XUWIwNgfR4mFfEFMjtqGpI-P-3KhvyoZaoi8NunGS8H3FPvWEkmalirFIRdEdKNWVXGXnpc-5IYitHg8FjhesW-Z5P86msQqicmtpBTgBJ0Lw6hIJ4dWNDwnMKBW-3Xq4xOxWVaQOehRD4HNn1xK7EtJxzZoZrt8ggYX9KkkMJxFmwTkr6Kv3KjEO2j2g2PicPtDCEVpdoQwT79DmvXkQGbeAt59y5btZV4M1UQOx2Jd_fiWDmxAWnKuQzZqH4"/>
+<div>
+<div class="text-label-md font-label-md font-bold text-secondary">Dr. Sarah Jenkins</div>
+<div class="text-body-sm font-body-sm text-on-surface-variant">Faculty of Science</div>
+<div class="text-mono-sm font-mono-sm text-outline">Nexus ID: 8821</div>
+</div>
+</div>
+<a class="flex items-center gap-sm px-sm py-xs text-on-surface-variant hover:bg-surface-container hover:bg-surface-container-high transition-all cursor-pointer duration-200 rounded-lg" href="#">
+<span class="material-symbols-outlined text-sm" data-icon="dashboard">dashboard</span>
+<span class="text-label-md font-label-md">Dashboard</span>
+</a>
+<a class="flex items-center gap-sm px-sm py-xs text-on-surface-variant hover:bg-surface-container hover:bg-surface-container-high transition-all cursor-pointer duration-200 rounded-lg" href="#">
+<span class="material-symbols-outlined text-sm" data-icon="menu_book">menu_book</span>
+<span class="text-label-md font-label-md">Courses</span>
+</a>
+<a class="flex items-center gap-sm px-sm py-xs text-on-surface-variant hover:bg-surface-container hover:bg-surface-container-high transition-all cursor-pointer duration-200 rounded-lg" href="#">
+<span class="material-symbols-outlined text-sm" data-icon="how_to_reg">how_to_reg</span>
+<span class="text-label-md font-label-md">Attendance</span>
+</a>
+<a class="flex items-center gap-sm px-sm py-xs text-on-surface-variant hover:bg-surface-container hover:bg-surface-container-high transition-all cursor-pointer duration-200 rounded-lg" href="#">
+<span class="material-symbols-outlined text-sm" data-icon="grade">grade</span>
+<span class="text-label-md font-label-md">Grading</span>
+</a>
+<a class="flex items-center gap-sm px-sm py-xs bg-secondary-container text-on-secondary-container font-semibold rounded-lg hover:bg-surface-container-high transition-all cursor-pointer duration-200" href="#">
+<span class="material-symbols-outlined text-sm" data-icon="event_busy">event_busy</span>
+<span class="text-label-md font-label-md">Leave Requests</span>
+</a>
+<div class="mt-auto">
+<a class="flex items-center gap-sm px-sm py-xs text-on-surface-variant hover:bg-surface-container hover:bg-surface-container-high transition-all cursor-pointer duration-200 rounded-lg" href="#">
+<span class="material-symbols-outlined text-sm" data-icon="settings">settings</span>
+<span class="text-label-md font-label-md">Settings</span>
+</a>
+</div>
+</nav>
+<!-- Main Content Canvas -->
+<main class="flex-1 w-full lg:ml-[240px] pt-16 lg:pt-0 pb-20 lg:pb-0 px-md md:px-lg py-lg max-w-[1440px] mx-auto">
+<!-- Breadcrumbs & Header -->
+<div class="mb-lg">
+<div class="flex items-center gap-xs text-body-sm font-body-sm text-outline mb-xs">
+<a class="hover:text-secondary transition-colors" href="#">Portal</a>
+<span class="material-symbols-outlined text-[14px]">chevron_right</span>
+<span class="text-on-surface-variant font-medium">Leave Management</span>
+</div>
+<div class="flex flex-col md:flex-row md:items-center justify-between gap-md mt-sm">
+<h1 class="text-headline-lg font-headline-lg text-primary">Leave Management</h1>
+<button class="bg-secondary text-on-secondary px-md py-sm rounded flex items-center justify-center gap-sm hover:opacity-90 transition-opacity whitespace-nowrap text-label-md font-label-md font-bold">
+<span class="material-symbols-outlined text-sm" data-icon="add">add</span>
+                    Apply Leave
+                </button>
+</div>
+</div>
+<!-- KPI Summary Cards (Bento style grid) -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-md mb-xl">
+<!-- Card 1 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-lg p-md custom-shadow hover:border-secondary-fixed transition-colors cursor-pointer group">
+<div class="flex items-center justify-between mb-sm">
+<span class="text-label-md font-label-md text-on-surface-variant uppercase">Approved</span>
+<span class="material-symbols-outlined text-status-green opacity-80" data-icon="check_circle">check_circle</span>
+</div>
+<div class="text-display-lg font-display-lg text-primary">8</div>
+<div class="text-body-sm font-body-sm text-outline mt-xs">Leaves taken this year</div>
+</div>
+<!-- Card 2 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-lg p-md custom-shadow hover:border-secondary-fixed transition-colors cursor-pointer group">
+<div class="flex items-center justify-between mb-sm">
+<span class="text-label-md font-label-md text-on-surface-variant uppercase">Pending</span>
+<span class="material-symbols-outlined text-status-yellow opacity-80" data-icon="pending">pending</span>
+</div>
+<div class="text-display-lg font-display-lg text-primary">2</div>
+<div class="text-body-sm font-body-sm text-outline mt-xs">Awaiting administrator approval</div>
+</div>
+<!-- Card 3 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-lg p-md custom-shadow hover:border-secondary-fixed transition-colors cursor-pointer group">
+<div class="flex items-center justify-between mb-sm">
+<span class="text-label-md font-label-md text-on-surface-variant uppercase">Remaining</span>
+<span class="material-symbols-outlined text-secondary opacity-80" data-icon="event_available">event_available</span>
+</div>
+<div class="text-display-lg font-display-lg text-primary">12</div>
+<div class="text-body-sm font-body-sm text-outline mt-xs">Total allowable leaves left</div>
+</div>
+</div>
+<!-- Main Workspace: Split Layout -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-xl">
+<!-- Left Column: Leave History -->
+<div class="lg:col-span-8 flex flex-col gap-md">
+<div class="flex items-center justify-between">
+<h2 class="text-headline-md font-headline-md text-primary">Leave History</h2>
+<button class="text-secondary text-label-md font-label-md flex items-center gap-xs hover:underline">
+                        Filter <span class="material-symbols-outlined text-[16px]">filter_list</span>
+</button>
+</div>
+<!-- Data Table / List -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-lg custom-shadow overflow-hidden">
+<div class="hidden md:grid grid-cols-12 gap-sm p-sm bg-surface-container-low text-label-md font-label-md text-on-surface-variant uppercase border-b border-outline-variant">
+<div class="col-span-3">Type</div>
+<div class="col-span-4">Date Range</div>
+<div class="col-span-3">Reason</div>
+<div class="col-span-2 text-right">Status</div>
+</div>
+<!-- Row 1 -->
+<div class="grid grid-cols-1 md:grid-cols-12 gap-sm p-sm border-b border-outline-variant hover:bg-surface-bright transition-colors items-center text-body-md font-body-md">
+<div class="col-span-3 flex items-center gap-sm">
+<div class="w-8 h-8 rounded bg-surface-container flex items-center justify-center text-on-surface-variant shrink-0">
+<span class="material-symbols-outlined text-[18px]" data-icon="medical_services">medical_services</span>
+</div>
+<span class="font-medium">Medical Leave</span>
+</div>
+<div class="col-span-4 text-on-surface-variant md:text-on-background flex flex-col md:block mt-xs md:mt-0">
+<span class="md:hidden text-label-md text-outline uppercase">Dates</span>
+                            Oct 12 - Oct 14, 2024
+                        </div>
+<div class="col-span-3 text-on-surface-variant truncate text-sm mt-xs md:mt-0">
+<span class="md:hidden text-label-md text-outline uppercase block">Reason</span>
+                            Severe flu and fever
+                        </div>
+<div class="col-span-2 flex justify-start md:justify-end mt-sm md:mt-0">
+<span class="inline-flex items-center px-2 py-1 rounded text-label-md font-label-md bg-green-50 text-status-green border border-green-200">
+                                Approved
+                            </span>
+</div>
+</div>
+<!-- Row 2 -->
+<div class="grid grid-cols-1 md:grid-cols-12 gap-sm p-sm border-b border-outline-variant hover:bg-surface-bright transition-colors items-center text-body-md font-body-md bg-surface-bright">
+<div class="col-span-3 flex items-center gap-sm">
+<div class="w-8 h-8 rounded bg-surface-container flex items-center justify-center text-on-surface-variant shrink-0">
+<span class="material-symbols-outlined text-[18px]" data-icon="person">person</span>
+</div>
+<span class="font-medium">Casual Leave</span>
+</div>
+<div class="col-span-4 text-on-surface-variant md:text-on-background flex flex-col md:block mt-xs md:mt-0">
+<span class="md:hidden text-label-md text-outline uppercase">Dates</span>
+                            Nov 20, 2024
+                        </div>
+<div class="col-span-3 text-on-surface-variant truncate text-sm mt-xs md:mt-0">
+<span class="md:hidden text-label-md text-outline uppercase block">Reason</span>
+                            Family event out of town
+                        </div>
+<div class="col-span-2 flex justify-start md:justify-end mt-sm md:mt-0">
+<span class="inline-flex items-center px-2 py-1 rounded text-label-md font-label-md bg-yellow-50 text-status-yellow border border-yellow-200">
+                                Pending
+                            </span>
+</div>
+</div>
+<!-- Row 3 -->
+<div class="grid grid-cols-1 md:grid-cols-12 gap-sm p-sm hover:bg-surface-bright transition-colors items-center text-body-md font-body-md">
+<div class="col-span-3 flex items-center gap-sm">
+<div class="w-8 h-8 rounded bg-surface-container flex items-center justify-center text-on-surface-variant shrink-0">
+<span class="material-symbols-outlined text-[18px]" data-icon="workspace_premium">workspace_premium</span>
+</div>
+<span class="font-medium">Earned Leave</span>
+</div>
+<div class="col-span-4 text-on-surface-variant md:text-on-background flex flex-col md:block mt-xs md:mt-0">
+<span class="md:hidden text-label-md text-outline uppercase">Dates</span>
+                            Dec 15 - Dec 20, 2024
+                        </div>
+<div class="col-span-3 text-on-surface-variant truncate text-sm mt-xs md:mt-0">
+<span class="md:hidden text-label-md text-outline uppercase block">Reason</span>
+                            Holiday travel
+                        </div>
+<div class="col-span-2 flex justify-start md:justify-end mt-sm md:mt-0">
+<span class="inline-flex items-center px-2 py-1 rounded text-label-md font-label-md bg-yellow-50 text-status-yellow border border-yellow-200">
+                                Pending
+                            </span>
+</div>
+</div>
+</div>
+</div>
+<!-- Right Column: Application Form Container -->
+<div class="lg:col-span-4">
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl modal-shadow p-lg sticky top-24">
+<div class="flex items-center justify-between mb-md border-b border-outline-variant pb-sm">
+<h3 class="text-headline-sm font-headline-sm text-primary">Apply for Leave</h3>
+<span class="material-symbols-outlined text-outline cursor-pointer hover:text-primary transition-colors" data-icon="close">close</span>
+</div>
+<form class="flex flex-col gap-md">
+<!-- Leave Type -->
+<div class="flex flex-col gap-xs focus-ring">
+<label class="text-label-md font-label-md text-on-surface-variant uppercase">Leave Type</label>
+<div class="relative">
+<select class="w-full bg-surface-bright border border-outline-variant rounded p-sm text-body-md font-body-md text-on-background appearance-none focus:outline-none focus:border-transparent">
+<option>Select Type...</option>
+<option>Casual Leave</option>
+<option>Medical Leave</option>
+<option>Earned Leave</option>
+</select>
+<span class="material-symbols-outlined absolute right-2 top-2 pointer-events-none text-outline" data-icon="expand_more">expand_more</span>
+</div>
+</div>
+<!-- Date Range -->
+<div class="grid grid-cols-2 gap-sm">
+<div class="flex flex-col gap-xs focus-ring">
+<label class="text-label-md font-label-md text-on-surface-variant uppercase">Start Date</label>
+<input class="w-full bg-surface-bright border border-outline-variant rounded p-sm text-body-md font-body-md text-on-background focus:outline-none focus:border-transparent" type="date"/>
+</div>
+<div class="flex flex-col gap-xs focus-ring">
+<label class="text-label-md font-label-md text-on-surface-variant uppercase">End Date</label>
+<input class="w-full bg-surface-bright border border-outline-variant rounded p-sm text-body-md font-body-md text-on-background focus:outline-none focus:border-transparent" type="date"/>
+</div>
+</div>
+<!-- Reason -->
+<div class="flex flex-col gap-xs focus-ring">
+<label class="text-label-md font-label-md text-on-surface-variant uppercase">Reason</label>
+<textarea class="w-full bg-surface-bright border border-outline-variant rounded p-sm text-body-md font-body-md text-on-background focus:outline-none focus:border-transparent resize-none" placeholder="Provide a brief explanation..." rows="3"></textarea>
+<span class="text-body-sm font-body-sm text-outline text-right">0/150</span>
+</div>
+<!-- Actions -->
+<div class="flex items-center justify-end gap-sm mt-sm pt-sm border-t border-outline-variant">
+<button class="px-md py-sm rounded border border-outline-variant text-on-surface-variant text-label-md font-label-md hover:bg-surface-container transition-colors" type="button">Cancel</button>
+<button class="px-md py-sm rounded bg-secondary text-on-secondary text-label-md font-label-md font-bold hover:opacity-90 transition-opacity" type="submit">Submit Request</button>
+</div>
+</form>
+</div>
+</div>
+</div>
+</main>
+<!-- BottomNavBar (Mobile Only) -->
+<nav class="lg:hidden flex justify-around items-center w-full h-16 pb-safe px-sm bg-surface-container-lowest dark:bg-surface-container-low text-secondary dark:text-secondary-fixed fixed bottom-0 z-50 shadow-sm">
+<a class="flex flex-col items-center justify-center text-on-surface-variant active:bg-surface-container-high transition-transform active:scale-95 w-16" href="#">
+<span class="material-symbols-outlined" data-icon="home">home</span>
+<span class="text-[10px] font-label-md mt-1">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant active:bg-surface-container-high transition-transform active:scale-95 w-16" href="#">
+<span class="material-symbols-outlined" data-icon="menu_book">menu_book</span>
+<span class="text-[10px] font-label-md mt-1">Courses</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant active:bg-surface-container-high transition-transform active:scale-95 w-16" href="#">
+<span class="material-symbols-outlined" data-icon="how_to_reg">how_to_reg</span>
+<span class="text-[10px] font-label-md mt-1">Attend</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant active:bg-surface-container-high transition-transform active:scale-95 w-16" href="#">
+<span class="material-symbols-outlined" data-icon="grade">grade</span>
+<span class="text-[10px] font-label-md mt-1">Grades</span>
+</a>
+<a class="flex flex-col items-center justify-center text-secondary font-bold active:bg-surface-container-high transition-transform active:scale-95 w-16" href="#">
+<span class="material-symbols-outlined" data-icon="more_horiz">more_horiz</span>
+<span class="text-[10px] font-label-md mt-1">More</span>
+</a>
+</nav>
+</body></html>

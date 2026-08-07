@@ -1,6 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { formatDate, formatPct } from "@/lib/utils";
+import { StatusBadge } from "@/components/ui/modal";
+import { DEFAULT_QUERY_LIMIT } from "@/lib/constants";
 
 export default async function StudentAttendance() {
   const supabase = await createClient();
@@ -14,7 +16,7 @@ export default async function StudentAttendance() {
     .select("*, courses(name, code)")
     .eq("student_id", student?.id || "")
     .order("date", { ascending: false })
-    .limit(100);
+    .limit(DEFAULT_QUERY_LIMIT);
 
   // Group by course for summary
   const courseSummary: Record<string, { name: string; code: string; present: number; total: number }> = {};
@@ -47,6 +49,11 @@ export default async function StudentAttendance() {
               {formatPct(overallPct, 0)}
             </div>
             <div className="text-xs text-outline mt-xs">{overall.present} present out of {overall.total} classes</div>
+            {overallPct < 75 && overall.total > 0 && (
+              <div className="text-xs font-semibold text-error mt-sm bg-error/10 inline-block px-sm py-xs rounded-md">
+                ⚠️ Below the 75% requirement
+              </div>
+            )}
           </div>
           <div className="w-24 h-24 relative">
             <svg viewBox="0 0 36 36" className="w-full h-full -rotate-90">
@@ -58,6 +65,11 @@ export default async function StudentAttendance() {
                 strokeDasharray={`${(overallPct / 100) * 100.53} 100.53`}
               />
             </svg>
+            <div className="absolute inset-0 flex items-center justify-center">
+              <span className={`text-sm font-bold ${overallPct >= 75 ? "text-success" : "text-error"}`}>
+                {formatPct(overallPct, 0)}
+              </span>
+            </div>
           </div>
         </div>
       </div>
@@ -65,7 +77,7 @@ export default async function StudentAttendance() {
       {/* Per-Course Breakdown */}
       <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-sm overflow-hidden">
         <div className="px-lg py-md border-b border-outline-variant">
-          <h2 className="text-sm font-bold text-on-surface">Course-wise Attendance</h2>
+          <h2 className="text-sm font-bold text-on-surface flex items-center gap-sm">📊 Course-wise Attendance</h2>
         </div>
         <div className="divide-y divide-outline-variant">
           {summaries.length > 0 ? summaries.map((s) => {
@@ -99,7 +111,7 @@ export default async function StudentAttendance() {
       {/* Recent Records */}
       <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-sm overflow-hidden">
         <div className="px-lg py-md border-b border-outline-variant">
-          <h2 className="text-sm font-bold text-on-surface">Recent Records</h2>
+          <h2 className="text-sm font-bold text-on-surface flex items-center gap-sm">🗓️ Recent Records</h2>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -115,15 +127,12 @@ export default async function StudentAttendance() {
                 <tr key={r.id} className="hover:bg-surface-container-low transition-colors">
                   <td className="px-lg py-md text-on-surface-variant">{formatDate(r.date)}</td>
                   <td className="px-lg py-md font-medium text-on-surface">{r.courses?.code} — {r.courses?.name}</td>
-                  <td className="px-lg py-md">
-                    <span className={`text-xs font-semibold px-sm py-xs rounded-full capitalize ${
-                      r.status === "present" ? "bg-success/10 text-success" :
-                      r.status === "late" ? "bg-warning/10 text-warning" :
-                      r.status === "excused" ? "bg-info/10 text-info" : "bg-error/10 text-error"
-                    }`}>{r.status}</span>
-                  </td>
+                  <td className="px-lg py-md"><StatusBadge status={r.status} /></td>
                 </tr>
               ))}
+              {(!records || records.length === 0) && (
+                <tr><td colSpan={3} className="px-lg py-xl text-center text-outline">No records yet.</td></tr>
+              )}
             </tbody>
           </table>
         </div>

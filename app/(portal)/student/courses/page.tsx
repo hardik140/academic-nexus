@@ -1,22 +1,63 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import Link from "next/link";
+import type { Database } from "@/types/database";
 
-export default async function StudentCourses() {
+type EnrollmentStatus = Database["public"]["Tables"]["course_enrollments"]["Row"]["status"];
+
+const FILTERS: { value: "all" | EnrollmentStatus; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "enrolled", label: "Enrolled" },
+  { value: "completed", label: "Completed" },
+  { value: "dropped", label: "Dropped" },
+];
+
+export default async function StudentCourses({
+  searchParams,
+}: {
+  searchParams: Promise<{ status?: string }>;
+}) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: enrollments } = await supabase
+  const { status } = await searchParams;
+  const activeFilter: "all" | EnrollmentStatus = FILTERS.find((f) => f.value === status)?.value ?? "all";
+
+  let query = supabase
     .from("course_enrollments")
     .select("*, courses(id, name, code, credits, semester, type, department_id, departments:department_id(name), profiles:instructor_id(full_name))")
     .eq("student_id", user.id)
     .order("status");
+
+  if (activeFilter !== "all") {
+    query = query.eq("status", activeFilter);
+  }
+
+  const { data: enrollments } = await query;
 
   return (
     <div className="space-y-lg animate-[fade-in_0.3s_ease-out]">
       <div>
         <h1 className="text-2xl font-extrabold text-on-surface tracking-tight">My Courses</h1>
         <p className="text-sm text-on-surface-variant mt-xs">All enrolled, completed, and dropped courses</p>
+      </div>
+
+      {/* Filter Tabs */}
+      <div className="flex gap-xs border-b border-outline-variant">
+        {FILTERS.map((f) => (
+          <Link
+            key={f.value}
+            href={f.value === "all" ? "/student/courses" : `/student/courses?status=${f.value}`}
+            className={`px-md py-sm text-sm font-semibold capitalize transition-all border-b-2 -mb-[1px] ${
+              activeFilter === f.value
+                ? "text-secondary border-secondary"
+                : "text-outline border-transparent hover:text-on-surface-variant"
+            }`}
+          >
+            {f.label}
+          </Link>
+        ))}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-md">
@@ -40,7 +81,7 @@ export default async function StudentCourses() {
               </div>
               {e.grade && (
                 <div className="mt-md pt-sm border-t border-outline-variant flex items-center justify-between">
-                  <span className="text-xs text-outline">Grade</span>
+                  <span className="text-xs text-outline">Final Grade</span>
                   <span className="text-sm font-bold text-secondary">{e.grade}</span>
                 </div>
               )}
@@ -49,7 +90,7 @@ export default async function StudentCourses() {
         })}
         {(!enrollments || enrollments.length === 0) && (
           <div className="col-span-full bg-surface-container-lowest border border-outline-variant rounded-2xl p-xl text-center text-sm text-outline">
-            No course enrollments found. Contact your department admin.
+            {activeFilter === "all" ? "No course enrollments found. Contact your department admin." : `No ${activeFilter} courses.`}
           </div>
         )}
       </div>

@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+
+<html class="h-full" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Attendance Report</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-primary-container": "#7c839b",
+                        "on-secondary-fixed-variant": "#003ea8",
+                        "inverse-surface": "#213145",
+                        "inverse-on-surface": "#eaf1ff",
+                        "primary-container": "#131b2e",
+                        "error-container": "#ffdad6",
+                        "surface": "#f8f9ff",
+                        "surface-container-high": "#dce9ff",
+                        "on-secondary-container": "#fefcff",
+                        "on-surface-variant": "#45464d",
+                        "tertiary-fixed-dim": "#c4c7c9",
+                        "primary-fixed": "#dae2fd",
+                        "surface-container": "#e5eeff",
+                        "on-tertiary-container": "#818486",
+                        "secondary": "#0051d5",
+                        "on-tertiary-fixed-variant": "#444749",
+                        "on-tertiary-fixed": "#191c1e",
+                        "primary": "#000000",
+                        "secondary-fixed": "#dbe1ff",
+                        "surface-container-lowest": "#ffffff",
+                        "on-tertiary": "#ffffff",
+                        "on-surface": "#0b1c30",
+                        "surface-bright": "#f8f9ff",
+                        "surface-container-low": "#eff4ff",
+                        "on-primary-fixed": "#131b2e",
+                        "surface-dim": "#cbdbf5",
+                        "tertiary-container": "#191c1e",
+                        "background": "#f8f9ff",
+                        "secondary-container": "#316bf3",
+                        "inverse-primary": "#bec6e0",
+                        "tertiary": "#000000",
+                        "on-error": "#ffffff",
+                        "surface-tint": "#565e74",
+                        "primary-fixed-dim": "#bec6e0",
+                        "outline-variant": "#c6c6cd",
+                        "surface-variant": "#d3e4fe",
+                        "on-background": "#0b1c30",
+                        "tertiary-fixed": "#e0e3e5",
+                        "on-primary": "#ffffff",
+                        "secondary-fixed-dim": "#b4c5ff",
+                        "on-secondary": "#ffffff",
+                        "surface-container-highest": "#d3e4fe",
+                        "outline": "#76777d",
+                        "on-error-container": "#93000a",
+                        "error": "#ba1a1a",
+                        "on-secondary-fixed": "#00174b",
+                        "on-primary-fixed-variant": "#3f465c",
+                        
+                        /* Semantic status colors outside of config but needed for specific UI requirements based on prompt */
+                        "status-success": "#10b981", /* Tailwind emerald-500 */
+                        "status-warning": "#f59e0b", /* Tailwind amber-500 */
+                        "status-info": "#3b82f6"     /* Tailwind blue-500 */
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "xs": "4px",
+                        "xl": "32px",
+                        "md": "16px",
+                        "base": "4px",
+                        "gutter": "24px",
+                        "margin": "32px",
+                        "lg": "24px",
+                        "sm": "8px",
+                        "grid_columns": "12"
+                    },
+                    "fontFamily": {
+                        "headline-sm": ["Inter"],
+                        "body-md": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "mono-sm": ["monospace"],
+                        "headline-md": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "display-lg": ["Inter"],
+                        "label-md": ["Inter"],
+                        "body-sm": ["Inter"]
+                    },
+                    "fontSize": {
+                        "headline-sm": ["16px", { "lineHeight": "24px", "fontWeight": "600" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "headline-lg": ["28px", { "lineHeight": "36px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "mono-sm": ["12px", { "lineHeight": "16px", "fontWeight": "400" }],
+                        "headline-md": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "display-lg": ["36px", { "lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "body-sm": ["13px", { "lineHeight": "18px", "fontWeight": "400" }]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background h-full font-body-md text-body-md antialiased pb-20 md:pb-0">
+<!-- TopAppBar -->
+<header class="w-full sticky top-0 z-50 border-b border-outline-variant bg-surface">
+<div class="flex items-center justify-between px-md py-sm max-w-full">
+<div class="flex items-center gap-sm">
+<span class="font-headline-md text-headline-md font-bold text-secondary">Academic Nexus</span>
+</div>
+<!-- Desktop Nav (Hidden on Mobile) -->
+<nav class="hidden md:flex items-center gap-lg">
+<a class="text-on-surface-variant font-label-md text-label-md hover:bg-surface-container-low transition-colors px-md py-xs rounded-lg" href="#">Dashboard</a>
+<a class="text-on-surface-variant font-label-md text-label-md hover:bg-surface-container-low transition-colors px-md py-xs rounded-lg" href="#">Courses</a>
+<a class="text-on-surface-variant font-label-md text-label-md hover:bg-surface-container-low transition-colors px-md py-xs rounded-lg" href="#">Finance</a>
+<a class="text-on-surface-variant font-label-md text-label-md hover:bg-surface-container-low transition-colors px-md py-xs rounded-lg" href="#">Settings</a>
+</nav>
+<div class="flex items-center gap-sm">
+<button class="p-xs text-on-surface-variant hover:bg-surface-container-low transition-colors rounded-full cursor-pointer active:opacity-80">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<img alt="Alex Mercer profile photo" class="w-8 h-8 rounded-full object-cover border border-outline-variant ml-sm" data-alt="A professional headshot of a young male student, Alex Mercer, wearing a neat casual shirt against a neutral studio background. Soft, high-key lighting creates a bright, modern light-mode aesthetic suitable for a corporate SaaS student portal profile picture." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDLPjBUlrn57r-hEOmRw71jzNN0xcM_ph5vRoQZSsUByGIplNrfDAmuc05_4yg1f4G005udluKqO3YBfLhMHPFHTyfcUAF605H06FsjGojmEftDFNR_bVUQ9Vay8EfusI6PRQnF4FpPzGSNMtqHxDv5MoLV2aIzMJnbJvnQRyv2FHN0SUf1HG6QCs2O7R8wo3XU2BdaUOAN1bxm2-xyNfOf7ybGi9EB9HICN2tJCnZ5T-4AoU8eHy9zeqDdMNsRsdTzzFJ-Uemn1vI"/>
+</div>
+</div>
+</header>
+<div class="flex h-[calc(100vh-64px)] w-full">
+<!-- Desktop SideNav (Visible only md+) -->
+<aside class="hidden md:flex flex-col w-[240px] border-r border-outline-variant bg-surface-container h-full overflow-y-auto">
+<div class="p-md">
+<div class="relative w-full">
+<select class="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-sm py-xs text-body-sm font-body-sm text-on-surface appearance-none focus:outline-none focus:ring-2 focus:ring-secondary focus:border-secondary transition-shadow cursor-pointer shadow-[0_2px_4px_-1px_rgba(0,0,0,0.02)]">
+<option>Student Portal</option>
+</select>
+<div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-on-surface-variant">
+<span class="material-symbols-outlined text-[16px]">arrow_drop_down</span>
+</div>
+</div>
+</div>
+<nav class="flex-1 px-sm py-md flex flex-col gap-xs">
+<a class="flex items-center gap-sm px-md py-sm rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-secondary transition-colors cursor-pointer active:opacity-80" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="font-label-md text-label-md">Dashboard</span>
+</a>
+<a class="flex items-center gap-sm px-md py-sm rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-secondary transition-colors cursor-pointer active:opacity-80" href="#">
+<span class="material-symbols-outlined">school</span>
+<span class="font-label-md text-label-md">Courses</span>
+</a>
+<!-- Attendance is likely a sub-item of Courses or Dashboard, highlighting Dashboard as active intent -->
+<a class="flex items-center gap-sm px-md py-sm rounded-lg bg-secondary-container text-on-secondary-container font-bold cursor-pointer active:opacity-80 shadow-[0_2px_4px_-1px_rgba(0,0,0,0.02)]" href="#">
+<span class="material-symbols-outlined">calendar_month</span>
+<span class="font-label-md text-label-md">Attendance</span>
+</a>
+<a class="flex items-center gap-sm px-md py-sm rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-secondary transition-colors cursor-pointer active:opacity-80" href="#">
+<span class="material-symbols-outlined">payments</span>
+<span class="font-label-md text-label-md">Finance</span>
+</a>
+<div class="mt-auto pt-md border-t border-outline-variant mt-xl">
+<a class="flex items-center gap-sm px-md py-sm rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-secondary transition-colors cursor-pointer active:opacity-80" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-label-md text-label-md">Settings</span>
+</a>
+</div>
+</nav>
+</aside>
+<!-- Main Content Canvas -->
+<main class="flex-1 w-full max-w-7xl mx-auto p-md md:p-margin overflow-y-auto bg-background">
+<!-- Breadcrumbs -->
+<nav aria-label="Breadcrumb" class="flex items-center text-body-sm font-body-sm text-on-surface-variant mb-lg">
+<ol class="flex items-center space-x-2">
+<li><a class="hover:text-secondary transition-colors" href="#">Student Portal</a></li>
+<li><span class="material-symbols-outlined text-[16px]">chevron_right</span></li>
+<li aria-current="page" class="text-on-surface">Attendance Report</li>
+</ol>
+</nav>
+<header class="mb-xl flex flex-col md:flex-row md:items-end justify-between gap-md">
+<div>
+<h1 class="font-display-lg text-display-lg text-on-surface mb-xs">Attendance Report</h1>
+<p class="font-body-md text-body-md text-on-surface-variant">Track your academic presence and status.</p>
+</div>
+<div class="flex gap-sm">
+<button class="bg-surface-container-lowest border border-outline-variant text-on-surface px-md py-sm rounded-lg font-label-md text-label-md hover:bg-surface-container-low transition-colors shadow-[0_2px_4px_-1px_rgba(0,0,0,0.02)] flex items-center gap-xs">
+<span class="material-symbols-outlined text-[18px]">download</span>
+                        Export Report
+                    </button>
+</div>
+</header>
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-gutter">
+<!-- Top Section: Overall Attendance Stat Card -->
+<section class="lg:col-span-4 bg-surface-container-lowest border border-outline-variant rounded-xl p-lg shadow-[0_2px_4px_-1px_rgba(0,0,0,0.02)] flex flex-col justify-center items-center relative overflow-hidden">
+<h2 class="font-headline-sm text-headline-sm text-on-surface mb-xl w-full text-left">Overall Attendance</h2>
+<div class="relative w-48 h-48 flex items-center justify-center mb-md">
+<!-- SVG Ring -->
+<svg class="transform -rotate-90 w-full h-full" viewbox="0 0 100 100">
+<!-- Background Ring -->
+<circle class="text-surface-container-high" cx="50" cy="50" fill="transparent" r="40" stroke="currentColor" stroke-width="8"></circle>
+<!-- Progress Ring (88%) - circumference = 2 * pi * r = 2 * 3.14 * 40 = 251.2 -->
+<!-- 88% of 251.2 = ~221 -->
+<circle class="text-status-success" cx="50" cy="50" fill="transparent" r="40" stroke="currentColor" stroke-dasharray="251.2" stroke-dashoffset="30.2" stroke-linecap="round" stroke-width="8"></circle>
+</svg>
+<div class="absolute flex flex-col items-center justify-center text-center">
+<span class="font-display-lg text-display-lg text-status-success leading-none">88%</span>
+<span class="font-label-md text-label-md text-on-surface-variant mt-xs uppercase">Overall</span>
+</div>
+</div>
+<div class="text-center w-full bg-surface-container-low rounded-lg p-sm">
+<p class="font-body-sm text-body-sm text-on-surface"><span class="font-semibold">176</span> present out of <span class="font-semibold">200</span> classes</p>
+</div>
+</section>
+<!-- Middle Section: Course-wise Attendance List -->
+<section class="lg:col-span-8 bg-surface-container-lowest border border-outline-variant rounded-xl p-lg shadow-[0_2px_4px_-1px_rgba(0,0,0,0.02)] flex flex-col">
+<div class="flex items-center justify-between mb-md">
+<h2 class="font-headline-sm text-headline-sm text-on-surface">Course-wise Attendance</h2>
+<a class="text-secondary font-label-md text-label-md hover:underline" href="#">View All</a>
+</div>
+<div class="flex-1 flex flex-col gap-md">
+<!-- Course Row 1 -->
+<div class="flex items-center justify-between p-sm hover:bg-surface-container-low transition-colors rounded-lg group cursor-pointer">
+<div class="flex items-center gap-md w-1/3">
+<div class="w-10 h-10 rounded bg-primary-fixed-dim text-on-primary-fixed flex items-center justify-center font-headline-sm text-headline-sm shadow-sm">
+                                    CS
+                                </div>
+<div>
+<h3 class="font-headline-sm text-headline-sm text-on-surface group-hover:text-secondary transition-colors">Intro to Programming</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant">CS101</p>
+</div>
+</div>
+<div class="flex-1 px-md flex items-center gap-md">
+<div class="w-full bg-surface-container-high rounded-full h-2">
+<div class="bg-status-success h-2 rounded-full" style="width: 92%"></div>
+</div>
+</div>
+<div class="w-16 text-right">
+<span class="font-mono-sm text-mono-sm font-semibold text-status-success">92%</span>
+</div>
+</div>
+<!-- Course Row 2 -->
+<div class="flex items-center justify-between p-sm hover:bg-surface-container-low transition-colors rounded-lg group cursor-pointer">
+<div class="flex items-center gap-md w-1/3">
+<div class="w-10 h-10 rounded bg-tertiary-fixed-dim text-on-tertiary-fixed flex items-center justify-center font-headline-sm text-headline-sm shadow-sm">
+                                    MA
+                                </div>
+<div>
+<h3 class="font-headline-sm text-headline-sm text-on-surface group-hover:text-secondary transition-colors">Linear Algebra</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant">MATH201</p>
+</div>
+</div>
+<div class="flex-1 px-md flex items-center gap-md">
+<div class="w-full bg-surface-container-high rounded-full h-2">
+<div class="bg-status-success h-2 rounded-full" style="width: 78%"></div>
+</div>
+</div>
+<div class="w-16 text-right">
+<span class="font-mono-sm text-mono-sm font-semibold text-status-success">78%</span>
+</div>
+</div>
+<!-- Course Row 3 -->
+<div class="flex items-center justify-between p-sm hover:bg-surface-container-low transition-colors rounded-lg group cursor-pointer">
+<div class="flex items-center gap-md w-1/3">
+<div class="w-10 h-10 rounded bg-surface-variant text-on-surface flex items-center justify-center font-headline-sm text-headline-sm shadow-sm">
+                                    PH
+                                </div>
+<div>
+<h3 class="font-headline-sm text-headline-sm text-on-surface group-hover:text-secondary transition-colors">University Physics I</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant">PHYS105</p>
+</div>
+</div>
+<div class="flex-1 px-md flex items-center gap-md">
+<div class="w-full bg-surface-container-high rounded-full h-2">
+<div class="bg-status-warning h-2 rounded-full" style="width: 65%"></div>
+</div>
+</div>
+<div class="w-16 text-right">
+<span class="font-mono-sm text-mono-sm font-semibold text-status-warning">65%</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Bottom Section: Recent Records Table -->
+<section class="lg:col-span-12 bg-surface-container-lowest border border-outline-variant rounded-xl shadow-[0_2px_4px_-1px_rgba(0,0,0,0.02)] overflow-hidden flex flex-col">
+<div class="p-lg border-b border-outline-variant flex items-center justify-between bg-surface-bright">
+<h2 class="font-headline-sm text-headline-sm text-on-surface">Recent Records</h2>
+<div class="flex gap-sm">
+<button class="text-on-surface-variant hover:text-secondary transition-colors cursor-pointer">
+<span class="material-symbols-outlined text-[20px]">filter_list</span>
+</button>
+</div>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-container-low text-on-surface-variant font-label-md text-label-md uppercase sticky top-0 border-b border-outline-variant">
+<th class="px-md py-sm font-semibold w-1/4">Date</th>
+<th class="px-md py-sm font-semibold w-1/2">Course</th>
+<th class="px-md py-sm font-semibold w-1/4 text-right">Status</th>
+</tr>
+</thead>
+<tbody class="font-body-sm text-body-sm text-on-surface">
+<!-- Table Row 1 -->
+<tr class="border-b border-outline-variant hover:bg-surface-container-low transition-colors bg-surface-container-lowest">
+<td class="px-md py-sm font-mono-sm text-mono-sm text-on-surface-variant">Oct 24</td>
+<td class="px-md py-sm">
+<span class="font-semibold block">Intro to Programming</span>
+<span class="text-on-surface-variant text-[11px]">CS101</span>
+</td>
+<td class="px-md py-sm text-right">
+<span class="inline-flex items-center justify-center px-2 py-1 rounded-full bg-[#d1fae5] text-[#065f46] font-label-md text-[10px] uppercase border border-[#a7f3d0]">
+                                            Present
+                                        </span>
+</td>
+</tr>
+<!-- Table Row 2 -->
+<tr class="border-b border-outline-variant hover:bg-surface-container-low transition-colors bg-surface-bright">
+<td class="px-md py-sm font-mono-sm text-mono-sm text-on-surface-variant">Oct 24</td>
+<td class="px-md py-sm">
+<span class="font-semibold block">Linear Algebra</span>
+<span class="text-on-surface-variant text-[11px]">MATH201</span>
+</td>
+<td class="px-md py-sm text-right">
+<span class="inline-flex items-center justify-center px-2 py-1 rounded-full bg-[#fef3c7] text-[#92400e] font-label-md text-[10px] uppercase border border-[#fde68a]">
+                                            Late
+                                        </span>
+</td>
+</tr>
+<!-- Table Row 3 -->
+<tr class="border-b border-outline-variant hover:bg-surface-container-low transition-colors bg-surface-container-lowest">
+<td class="px-md py-sm font-mono-sm text-mono-sm text-on-surface-variant">Oct 23</td>
+<td class="px-md py-sm">
+<span class="font-semibold block">University Physics I</span>
+<span class="text-on-surface-variant text-[11px]">PHYS105</span>
+</td>
+<td class="px-md py-sm text-right">
+<span class="inline-flex items-center justify-center px-2 py-1 rounded-full bg-[#fee2e2] text-[#991b1b] font-label-md text-[10px] uppercase border border-[#fecaca]">
+                                            Absent
+                                        </span>
+</td>
+</tr>
+<!-- Table Row 4 -->
+<tr class="border-b border-outline-variant hover:bg-surface-container-low transition-colors bg-surface-bright">
+<td class="px-md py-sm font-mono-sm text-mono-sm text-on-surface-variant">Oct 22</td>
+<td class="px-md py-sm">
+<span class="font-semibold block">Data Structures</span>
+<span class="text-on-surface-variant text-[11px]">CS201</span>
+</td>
+<td class="px-md py-sm text-right">
+<span class="inline-flex items-center justify-center px-2 py-1 rounded-full bg-[#e0f2fe] text-[#075985] font-label-md text-[10px] uppercase border border-[#bae6fd]">
+                                            Excused
+                                        </span>
+</td>
+</tr>
+<!-- Table Row 5 -->
+<tr class="border-b border-outline-variant hover:bg-surface-container-low transition-colors bg-surface-container-lowest">
+<td class="px-md py-sm font-mono-sm text-mono-sm text-on-surface-variant">Oct 22</td>
+<td class="px-md py-sm">
+<span class="font-semibold block">Intro to Programming</span>
+<span class="text-on-surface-variant text-[11px]">CS101</span>
+</td>
+<td class="px-md py-sm text-right">
+<span class="inline-flex items-center justify-center px-2 py-1 rounded-full bg-[#d1fae5] text-[#065f46] font-label-md text-[10px] uppercase border border-[#a7f3d0]">
+                                            Present
+                                        </span>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="p-sm bg-surface-container-lowest flex justify-center">
+<button class="text-secondary font-label-md text-label-md hover:underline px-md py-xs rounded-lg hover:bg-surface-container-low transition-colors">Load More Records</button>
+</div>
+</section>
+</div>
+</main>
+</div>
+<!-- BottomNavBar (Mobile Only) -->
+<nav class="md:hidden fixed bottom-0 w-full z-50 bg-surface-container flex justify-around items-center h-16 px-sm pb-safe shadow-sm border-t-0">
+<a class="flex flex-col items-center justify-center text-on-surface-variant opacity-70 hover:text-secondary transition-transform active:scale-95" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="font-label-md text-label-md">Dashboard</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant opacity-70 hover:text-secondary transition-transform active:scale-95" href="#">
+<span class="material-symbols-outlined">school</span>
+<span class="font-label-md text-label-md">Courses</span>
+</a>
+<!-- Mapping Attendance intent to Dashboard or Courses, but preserving the JSON's labels. If prompt dictates a specific screen intent, map closest. Here JSON labels are Dashboard, Courses, Finance, Settings. Attendance fits best under Dashboard or Courses. I'll highlight Dashboard as active. -->
+<a class="flex flex-col items-center justify-center bg-secondary-container text-on-secondary-container rounded-full px-lg py-xs transition-transform active:scale-95" href="#">
+<span class="material-symbols-outlined">calendar_month</span>
+<span class="font-label-md text-label-md">Attendance</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant opacity-70 hover:text-secondary transition-transform active:scale-95" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-label-md text-label-md">Settings</span>
+</a>
+</nav>
+</body></html>

@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Institution Settings - Academic Nexus</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "on-secondary-fixed-variant": "#003ea8",
+                      "surface-container-highest": "#d3e4fe",
+                      "surface-tint": "#565e74",
+                      "surface-bright": "#f8f9ff",
+                      "on-primary": "#ffffff",
+                      "surface-dim": "#cbdbf5",
+                      "surface": "#f8f9ff",
+                      "on-surface-variant": "#45464d",
+                      "on-tertiary-fixed": "#191c1e",
+                      "on-tertiary-container": "#818486",
+                      "on-tertiary-fixed-variant": "#444749",
+                      "on-secondary-container": "#fefcff",
+                      "on-surface": "#0b1c30",
+                      "surface-container-low": "#eff4ff",
+                      "on-primary-container": "#7c839b",
+                      "tertiary-container": "#191c1e",
+                      "secondary-fixed-dim": "#b4c5ff",
+                      "primary": "#000000",
+                      "on-secondary-fixed": "#00174b",
+                      "on-secondary": "#ffffff",
+                      "error-container": "#ffdad6",
+                      "on-error-container": "#93000a",
+                      "background": "#f8f9ff",
+                      "primary-container": "#131b2e",
+                      "outline-variant": "#c6c6cd",
+                      "tertiary-fixed-dim": "#c4c7c9",
+                      "secondary-fixed": "#dbe1ff",
+                      "on-primary-fixed-variant": "#3f465c",
+                      "surface-variant": "#d3e4fe",
+                      "secondary-container": "#316bf3",
+                      "surface-container": "#e5eeff",
+                      "on-background": "#0b1c30",
+                      "surface-container-lowest": "#ffffff",
+                      "inverse-surface": "#213145",
+                      "surface-container-high": "#dce9ff",
+                      "error": "#ba1a1a",
+                      "tertiary": "#000000",
+                      "inverse-primary": "#bec6e0",
+                      "outline": "#76777d",
+                      "secondary": "#0051d5",
+                      "on-primary-fixed": "#131b2e",
+                      "on-error": "#ffffff",
+                      "inverse-on-surface": "#eaf1ff",
+                      "tertiary-fixed": "#e0e3e5",
+                      "primary-fixed-dim": "#bec6e0",
+                      "primary-fixed": "#dae2fd",
+                      "on-tertiary": "#ffffff"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.125rem",
+                      "lg": "0.25rem",
+                      "xl": "0.5rem",
+                      "full": "0.75rem"
+              },
+              "spacing": {
+                      "sm": "8px",
+                      "xl": "32px",
+                      "base": "4px",
+                      "grid_columns": "12",
+                      "md": "16px",
+                      "gutter": "24px",
+                      "margin": "32px",
+                      "lg": "24px",
+                      "xs": "4px"
+              },
+              "fontFamily": {
+                      "label-md": [
+                              "Inter"
+                      ],
+                      "body-sm": [
+                              "Inter"
+                      ],
+                      "headline-lg": [
+                              "Inter"
+                      ],
+                      "body-lg": [
+                              "Inter"
+                      ],
+                      "headline-sm": [
+                              "Inter"
+                      ],
+                      "body-md": [
+                              "Inter"
+                      ],
+                      "mono-sm": [
+                              "monospace"
+                      ],
+                      "headline-md": [
+                              "Inter"
+                      ],
+                      "display-lg": [
+                              "Inter"
+                      ]
+              },
+              "fontSize": {
+                      "label-md": [
+                              "12px",
+                              {
+                                      "lineHeight": "16px",
+                                      "letterSpacing": "0.05em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "body-sm": [
+                              "13px",
+                              {
+                                      "lineHeight": "18px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "headline-lg": [
+                              "28px",
+                              {
+                                      "lineHeight": "36px",
+                                      "letterSpacing": "-0.01em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "body-lg": [
+                              "16px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "headline-sm": [
+                              "16px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "body-md": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "mono-sm": [
+                              "12px",
+                              {
+                                      "lineHeight": "16px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "headline-md": [
+                              "20px",
+                              {
+                                      "lineHeight": "28px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "display-lg": [
+                              "36px",
+                              {
+                                      "lineHeight": "44px",
+                                      "letterSpacing": "-0.02em",
+                                      "fontWeight": "700"
+                              }
+                      ]
+              }
+            },
+          }
+        }
+    </script>
+<style>
+        .elevation-0 { background-color: var(--color-surface); }
+        .elevation-1 { background-color: #ffffff; border: 1px solid #E2E8F0; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+        .focus-ring:focus-within { border-color: #2563EB; ring: 2px #2563EB; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background min-h-screen flex flex-col md:flex-row font-body-md">
+<!-- TopAppBar (Web) -->
+<header class="w-full sticky top-0 z-50 bg-surface-container-lowest border-b border-outline-variant flex items-center justify-between px-margin py-md hidden md:flex h-[72px]">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-secondary cursor-pointer hover:bg-surface-container-high transition-colors p-2 rounded-full" data-icon="apps">apps</span>
+<span class="font-display-lg text-display-lg font-bold text-primary">Academic Nexus</span>
+</div>
+<div class="flex items-center gap-6">
+<nav class="flex gap-6">
+<a class="text-on-surface-variant font-headline-sm text-headline-sm hover:bg-surface-container-high transition-colors px-3 py-1 rounded" href="#">Dashboard</a>
+<a class="text-on-surface-variant font-headline-sm text-headline-sm hover:bg-surface-container-high transition-colors px-3 py-1 rounded" href="#">Academics</a>
+<a class="text-on-surface-variant font-headline-sm text-headline-sm hover:bg-surface-container-high transition-colors px-3 py-1 rounded" href="#">Finance</a>
+<a class="text-on-surface-variant font-headline-sm text-headline-sm hover:bg-surface-container-high transition-colors px-3 py-1 rounded" href="#">Schedule</a>
+<a class="text-secondary font-bold font-headline-sm text-headline-sm hover:bg-surface-container-high transition-colors px-3 py-1 rounded" href="#">More</a>
+</nav>
+<div class="w-10 h-10 rounded-full bg-surface-container-highest flex items-center justify-center cursor-pointer hover:bg-surface-container-high transition-colors border border-outline-variant">
+<span class="material-symbols-outlined text-on-surface" data-icon="person">person</span>
+</div>
+</div>
+</header>
+<!-- TopAppBar (Mobile) -->
+<header class="w-full sticky top-0 z-50 bg-surface-container-lowest border-b border-outline-variant flex items-center justify-between px-md py-sm md:hidden h-[64px]">
+<span class="material-symbols-outlined text-secondary cursor-pointer active:opacity-80" data-icon="apps">apps</span>
+<span class="font-headline-lg text-headline-lg font-bold text-primary">Academic Nexus</span>
+<div class="w-8 h-8 rounded-full bg-surface-container-highest flex items-center justify-center border border-outline-variant">
+<span class="material-symbols-outlined text-on-surface text-sm" data-icon="person">person</span>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="flex-1 px-md md:px-margin py-md md:py-margin max-w-7xl mx-auto w-full pb-[100px] md:pb-margin">
+<!-- Header -->
+<div class="mb-lg">
+<h1 class="font-headline-lg text-headline-lg text-on-background mb-1">Institution Settings</h1>
+<p class="font-body-md text-body-md text-on-surface-variant">Manage global institutional profile and identity details.</p>
+</div>
+<form class="space-y-gutter">
+<!-- General Information Group -->
+<div class="elevation-1 rounded-lg p-lg">
+<h2 class="font-headline-md text-headline-md text-on-background mb-md border-b border-outline-variant pb-2">General Information</h2>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-lg">
+<div class="flex flex-col gap-xs">
+<label class="font-label-md text-label-md text-on-surface-variant" for="instName">Institution Name</label>
+<input class="border border-outline-variant rounded p-sm font-body-md text-body-md text-on-surface bg-surface-container-lowest focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary" id="instName" type="text" value="Nexus Institute of Technology"/>
+</div>
+<div class="flex flex-col gap-xs">
+<label class="font-label-md text-label-md text-on-surface-variant" for="instCode">Institution Code</label>
+<input class="border border-outline-variant rounded p-sm font-body-md text-body-md text-on-surface bg-surface-container-lowest focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary" id="instCode" type="text" value="NIT-2024"/>
+</div>
+<div class="flex flex-col gap-xs">
+<label class="font-label-md text-label-md text-on-surface-variant" for="domain">Domain</label>
+<input class="border border-outline-variant rounded p-sm font-body-md text-body-md text-on-surface bg-surface-container-lowest focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary" id="domain" type="text" value="nexus.edu"/>
+</div>
+<div class="flex flex-col gap-xs">
+<label class="font-label-md text-label-md text-on-surface-variant" for="accreditation">Accreditation</label>
+<input class="border border-outline-variant rounded p-sm font-body-md text-body-md text-on-surface bg-surface-container-lowest focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary" id="accreditation" type="text" value="NAAC A++"/>
+</div>
+<div class="flex flex-col gap-xs">
+<label class="font-label-md text-label-md text-on-surface-variant" for="establishedYear">Established Year</label>
+<input class="border border-outline-variant rounded p-sm font-body-md text-body-md text-on-surface bg-surface-container-lowest focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary" id="establishedYear" type="number" value="1998"/>
+</div>
+</div>
+</div>
+<!-- Contact Details Group -->
+<div class="elevation-1 rounded-lg p-lg">
+<h2 class="font-headline-md text-headline-md text-on-background mb-md border-b border-outline-variant pb-2">Contact Details</h2>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-lg">
+<div class="flex flex-col gap-xs">
+<label class="font-label-md text-label-md text-on-surface-variant" for="primaryEmail">Primary Email</label>
+<input class="border border-outline-variant rounded p-sm font-body-md text-body-md text-on-surface bg-surface-container-lowest focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary" id="primaryEmail" type="email" value="admin@nexus.edu"/>
+</div>
+<div class="flex flex-col gap-xs">
+<label class="font-label-md text-label-md text-on-surface-variant" for="phoneNumber">Phone Number</label>
+<input class="border border-outline-variant rounded p-sm font-body-md text-body-md text-on-surface bg-surface-container-lowest focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary" id="phoneNumber" type="tel" value="+1 (555) 123-4567"/>
+</div>
+<div class="flex flex-col gap-xs md:col-span-2">
+<label class="font-label-md text-label-md text-on-surface-variant" for="website">Official Website</label>
+<input class="border border-outline-variant rounded p-sm font-body-md text-body-md text-on-surface bg-surface-container-lowest focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary" id="website" type="url" value="https://www.nexus.edu"/>
+</div>
+</div>
+</div>
+<!-- Location Group -->
+<div class="elevation-1 rounded-lg p-lg mb-xl">
+<h2 class="font-headline-md text-headline-md text-on-background mb-md border-b border-outline-variant pb-2">Location</h2>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-lg">
+<div class="flex flex-col gap-xs md:col-span-2">
+<label class="font-label-md text-label-md text-on-surface-variant" for="street">Street Address</label>
+<input class="border border-outline-variant rounded p-sm font-body-md text-body-md text-on-surface bg-surface-container-lowest focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary" id="street" type="text" value="100 University Pkwy"/>
+</div>
+<div class="flex flex-col gap-xs">
+<label class="font-label-md text-label-md text-on-surface-variant" for="city">City</label>
+<input class="border border-outline-variant rounded p-sm font-body-md text-body-md text-on-surface bg-surface-container-lowest focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary" id="city" type="text" value="Metropolis"/>
+</div>
+<div class="flex flex-col gap-xs">
+<label class="font-label-md text-label-md text-on-surface-variant" for="state">State / Province</label>
+<input class="border border-outline-variant rounded p-sm font-body-md text-body-md text-on-surface bg-surface-container-lowest focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary" id="state" type="text" value="NY"/>
+</div>
+<div class="flex flex-col gap-xs">
+<label class="font-label-md text-label-md text-on-surface-variant" for="zip">ZIP / Postal Code</label>
+<input class="border border-outline-variant rounded p-sm font-body-md text-body-md text-on-surface bg-surface-container-lowest focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary" id="zip" type="text" value="10001"/>
+</div>
+<div class="flex flex-col gap-xs">
+<label class="font-label-md text-label-md text-on-surface-variant" for="country">Country</label>
+<select class="border border-outline-variant rounded p-sm font-body-md text-body-md text-on-surface bg-surface-container-lowest focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary appearance-none" id="country">
+<option selected="" value="US">United States</option>
+<option value="CA">Canada</option>
+<option value="UK">United Kingdom</option>
+</select>
+</div>
+</div>
+</div>
+<!-- Actions -->
+<div class="flex justify-end gap-md border-t border-outline-variant pt-lg">
+<button class="px-md py-sm rounded border border-outline text-on-surface font-label-md text-label-md hover:bg-surface-container-low transition-colors bg-transparent" type="button">Cancel</button>
+<button class="px-md py-sm rounded bg-secondary text-on-primary font-label-md text-label-md hover:opacity-90 transition-opacity border-none" type="submit">Save Changes</button>
+</div>
+</form>
+</main>
+<!-- BottomNavBar (Mobile) -->
+<nav class="fixed bottom-0 w-full z-50 bg-surface-container-lowest border-t border-outline-variant flex justify-around items-center h-16 pb-safe px-md md:hidden">
+<a class="flex flex-col items-center justify-center text-on-surface-variant px-4 py-1 hover:bg-surface-container-low active:scale-95 transition-transform rounded-full" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span class="font-label-md text-label-md mt-1">Dashboard</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant px-4 py-1 hover:bg-surface-container-low active:scale-95 transition-transform rounded-full" href="#">
+<span class="material-symbols-outlined" data-icon="school">school</span>
+<span class="font-label-md text-label-md mt-1">Academics</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant px-4 py-1 hover:bg-surface-container-low active:scale-95 transition-transform rounded-full" href="#">
+<span class="material-symbols-outlined" data-icon="account_balance_wallet">account_balance_wallet</span>
+<span class="font-label-md text-label-md mt-1">Finance</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant px-4 py-1 hover:bg-surface-container-low active:scale-95 transition-transform rounded-full" href="#">
+<span class="material-symbols-outlined" data-icon="calendar_today">calendar_today</span>
+<span class="font-label-md text-label-md mt-1">Schedule</span>
+</a>
+<a class="flex flex-col items-center justify-center text-secondary bg-surface-container-high rounded-full px-4 py-1 active:scale-95 transition-transform" href="#">
+<span class="material-symbols-outlined" data-icon="menu" style="font-variation-settings: 'FILL' 1;">menu</span>
+<span class="font-label-md text-label-md mt-1">More</span>
+</a>
+</nav>
+</body></html>

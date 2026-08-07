@@ -30,12 +30,13 @@ export default function WardenRooms() {
       <DataTable
         columns={[
           { key: "block_name", header: "Block", sortable: true },
-          { key: "room_number", header: "Room", sortable: true },
-          { key: "type", header: "Type", render: (row: any) => <span className="capitalize">{row.type}</span> },
+          { key: "room_number", header: "Room #", sortable: true },
+          { key: "type", header: "Category", sortable: true, render: (row: any) => <span className="capitalize">{row.type}</span> },
           { key: "ac", header: "AC", render: (row: any) => (row.ac ? "❄️ Yes" : "No") },
           {
             key: "occupancy",
             header: "Occupancy",
+            sortable: true,
             render: (row: any) => (
               <span className={row.occupancy >= row.capacity ? "text-error font-semibold" : "text-on-surface"}>
                 {row.occupancy}/{row.capacity}
@@ -56,7 +57,7 @@ export default function WardenRooms() {
         data={rooms}
         keyExtractor={(row) => row.id}
         searchKey="room_number"
-        searchPlaceholder="Search rooms..."
+        searchPlaceholder="Search by block or room #..."
         emptyMessage="No rooms found for your managed blocks."
       />
     </div>

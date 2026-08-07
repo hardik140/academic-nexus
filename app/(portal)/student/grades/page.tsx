@@ -25,23 +25,30 @@ export default async function StudentGrades() {
 
   return (
     <div className="space-y-lg animate-[fade-in_0.3s_ease-out]">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-md">
         <div>
           <h1 className="text-2xl font-extrabold text-on-surface tracking-tight">Grades & Marks</h1>
           <p className="text-sm text-on-surface-variant mt-xs">Your exam scores and academic performance</p>
         </div>
         <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl px-xl py-md shadow-sm text-center">
-          <div className="text-xs font-semibold text-outline uppercase tracking-wider mb-xs">CGPA</div>
+          <div className="text-xs font-semibold text-outline uppercase tracking-wider mb-xs">Current CGPA</div>
           <div className="text-3xl font-extrabold text-secondary">{student?.cgpa?.toFixed(2) || "0.00"}</div>
+          <div className="h-1.5 w-24 bg-surface-container-high rounded-full overflow-hidden mt-xs">
+            <div className="h-full bg-secondary rounded-full" style={{ width: `${((student?.cgpa || 0) / 10) * 100}%` }} />
+          </div>
+          <div className="text-[10px] text-outline mt-xs">out of 10.00</div>
         </div>
       </div>
 
       {Object.values(courseMarks).length > 0 ? Object.values(courseMarks).map(({ course, exams }) => (
         <div key={course?.code} className="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-sm overflow-hidden">
           <div className="px-lg py-md border-b border-outline-variant flex items-center justify-between">
-            <div>
-              <span className="text-sm font-bold text-on-surface">{course?.code}</span>
-              <span className="text-xs text-outline ml-sm">{course?.name} • {course?.credits} credits</span>
+            <div className="flex items-center gap-sm">
+              <span className="text-lg">📖</span>
+              <div>
+                <span className="text-sm font-bold text-on-surface">{course?.code}</span>
+                <span className="text-xs text-outline ml-sm">{course?.name} • {course?.credits} credits</span>
+              </div>
             </div>
           </div>
           <div className="overflow-x-auto">
@@ -63,9 +70,17 @@ export default async function StudentGrades() {
                       <td className="px-lg py-md text-on-surface">{exam.obtained_marks}</td>
                       <td className="px-lg py-md text-on-surface-variant">{exam.max_marks}</td>
                       <td className="px-lg py-md">
-                        <span className={`text-sm font-bold ${pct >= 60 ? "text-success" : pct >= 40 ? "text-warning" : "text-error"}`}>
-                          {pct.toFixed(1)}%
-                        </span>
+                        <div className="flex items-center gap-sm">
+                          <div className="w-16 h-1.5 bg-surface-container-high rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full ${pct >= 60 ? "bg-success" : pct >= 40 ? "bg-warning" : "bg-error"}`}
+                              style={{ width: `${Math.min(pct, 100)}%` }}
+                            />
+                          </div>
+                          <span className={`text-sm font-bold ${pct >= 60 ? "text-success" : pct >= 40 ? "text-warning" : "text-error"}`}>
+                            {pct.toFixed(1)}%
+                          </span>
+                        </div>
                       </td>
                     </tr>
                   );

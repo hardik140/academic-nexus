@@ -5,8 +5,12 @@ import { createClient } from "@/lib/supabase/client";
 import { DataTable } from "@/components/ui/data-table";
 import { Modal, Button, FormField, StatusBadge } from "@/components/ui/modal";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { createScholarship } from "./actions";
+import type { Database } from "@/types/database";
 
-const SCHOLARSHIP_TYPES = [
+type ScholarshipType = Database["public"]["Tables"]["scholarships"]["Row"]["type"];
+
+const SCHOLARSHIP_TYPES: { value: ScholarshipType; label: string }[] = [
   { value: "merit", label: "Merit" },
   { value: "need", label: "Need-based" },
   { value: "sports", label: "Sports" },
@@ -21,7 +25,14 @@ export default function FinanceScholarships() {
   const [students, setStudents] = useState<any[]>([]);
   const [showCreate, setShowCreate] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState({ student_id: "", name: "", amount: "", type: "merit", academic_year: "" });
+  const [error, setError] = useState<string | null>(null);
+  const [form, setForm] = useState<{ student_id: string; name: string; amount: string; type: ScholarshipType; academic_year: string }>({
+    student_id: "",
+    name: "",
+    amount: "",
+    type: "merit",
+    academic_year: "",
+  });
 
   useEffect(() => { loadScholarships(); loadStudents(); }, []);
 
@@ -41,27 +52,19 @@ export default function FinanceScholarships() {
     setStudents(data || []);
   };
 
-  const createScholarship = async () => {
+  const handleCreate = async () => {
     setLoading(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    const { data: profile } = await supabase.from("profiles").select("college_id").eq("id", user.id).single();
-    if (!profile) return;
-
-    await supabase.from("scholarships").insert({
-      college_id: profile.college_id,
-      student_id: form.student_id,
-      name: form.name,
-      amount: Number(form.amount),
-      type: form.type,
-      academic_year: form.academic_year,
-      awarded_date: new Date().toISOString().slice(0, 10),
-    });
-
-    setForm({ student_id: "", name: "", amount: "", type: "merit", academic_year: "" });
-    setShowCreate(false);
-    setLoading(false);
-    loadScholarships();
+    setError(null);
+    try {
+      await createScholarship(form.student_id, form.name, form.type, Number(form.amount), form.academic_year || undefined);
+      setForm({ student_id: "", name: "", amount: "", type: "merit", academic_year: "" });
+      setShowCreate(false);
+      await loadScholarships();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to award scholarship.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const studentOptions = students.map((s) => ({
@@ -79,6 +82,10 @@ export default function FinanceScholarships() {
         <Button onClick={() => setShowCreate(true)}>+ Award Scholarship</Button>
       </div>
 
+      {error && !showCreate && (
+        <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium">{error}</div>
+      )}
+
       <DataTable
         columns={[
           { key: "student", header: "Student", render: (row: any) => <span className="font-medium text-on-surface">{(row.students as any)?.profiles?.full_name || "—"}</span> },
@@ -90,6 +97,7 @@ export default function FinanceScholarships() {
         ]}
         data={scholarships}
         keyExtractor={(row) => row.id}
+        searchKey="name"
         searchPlaceholder="Search scholarships..."
         emptyMessage="No scholarships awarded yet."
       />
@@ -101,14 +109,17 @@ export default function FinanceScholarships() {
         footer={
           <>
             <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
-            <Button onClick={createScholarship} disabled={loading || !form.student_id}>{loading ? "Saving..." : "Award Scholarship"}</Button>
+            <Button onClick={handleCreate} disabled={loading || !form.student_id}>{loading ? "Saving..." : "Award Scholarship"}</Button>
           </>
         }
       >
+        {error && (
+          <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium mb-md">{error}</div>
+        )}
         <div className="space-y-md">
           <FormField label="Student" id="student" type="select" value={form.student_id} onChange={(v) => setForm({ ...form, student_id: v })} options={studentOptions} required />
           <FormField label="Scholarship Name" id="name" value={form.name} onChange={(v) => setForm({ ...form, name: v })} placeholder="e.g. Dean's Merit Award" required />
-          <FormField label="Type" id="type" type="select" value={form.type} onChange={(v) => setForm({ ...form, type: v })} options={SCHOLARSHIP_TYPES} required />
+          <FormField label="Type" id="type" type="select" value={form.type} onChange={(v) => setForm({ ...form, type: v as ScholarshipType })} options={SCHOLARSHIP_TYPES} required />
           <FormField label="Amount" id="amount" type="number" value={form.amount} onChange={(v) => setForm({ ...form, amount: v })} placeholder="0.00" required />
           <FormField label="Academic Year" id="academic_year" value={form.academic_year} onChange={(v) => setForm({ ...form, academic_year: v })} placeholder="e.g. 2025-26" />
         </div>

@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+
+<html class="h-full" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Hostel Complaints - Warden Portal</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "on-surface": "#0b1c30",
+                      "tertiary-fixed": "#e0e3e5",
+                      "inverse-surface": "#213145",
+                      "surface-container-lowest": "#ffffff",
+                      "surface-container-low": "#eff4ff",
+                      "surface": "#f8f9ff",
+                      "secondary": "#0051d5",
+                      "secondary-fixed-dim": "#b4c5ff",
+                      "background": "#f8f9ff",
+                      "secondary-fixed": "#dbe1ff",
+                      "tertiary-fixed-dim": "#c4c7c9",
+                      "tertiary": "#000000",
+                      "on-tertiary-fixed": "#191c1e",
+                      "on-error": "#ffffff",
+                      "on-background": "#0b1c30",
+                      "surface-container": "#e5eeff",
+                      "on-tertiary": "#ffffff",
+                      "surface-bright": "#f8f9ff",
+                      "primary-fixed": "#dae2fd",
+                      "on-secondary-fixed": "#00174b",
+                      "on-secondary-container": "#fefcff",
+                      "on-error-container": "#93000a",
+                      "error": "#ba1a1a",
+                      "surface-container-high": "#dce9ff",
+                      "on-primary-fixed": "#131b2e",
+                      "on-primary-container": "#7c839b",
+                      "surface-container-highest": "#d3e4fe",
+                      "tertiary-container": "#191c1e",
+                      "on-primary": "#ffffff",
+                      "primary-fixed-dim": "#bec6e0",
+                      "primary": "#000000",
+                      "outline": "#76777d",
+                      "on-secondary": "#ffffff",
+                      "inverse-primary": "#bec6e0",
+                      "on-primary-fixed-variant": "#3f465c",
+                      "inverse-on-surface": "#eaf1ff",
+                      "surface-variant": "#d3e4fe",
+                      "on-secondary-fixed-variant": "#003ea8",
+                      "secondary-container": "#316bf3",
+                      "primary-container": "#131b2e",
+                      "on-surface-variant": "#45464d",
+                      "error-container": "#ffdad6",
+                      "outline-variant": "#c6c6cd",
+                      "on-tertiary-fixed-variant": "#444749",
+                      "surface-dim": "#cbdbf5",
+                      "on-tertiary-container": "#818486",
+                      "surface-tint": "#565e74"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.125rem",
+                      "lg": "0.25rem",
+                      "xl": "0.5rem",
+                      "full": "0.75rem"
+              },
+              "spacing": {
+                      "margin": "32px",
+                      "gutter": "24px",
+                      "md": "16px",
+                      "lg": "24px",
+                      "grid_columns": "12",
+                      "xl": "32px",
+                      "xs": "4px",
+                      "base": "4px",
+                      "sm": "8px"
+              },
+              "fontFamily": {
+                      "mono-sm": [
+                              "monospace"
+                      ],
+                      "display-lg": [
+                              "Inter"
+                      ],
+                      "body-lg": [
+                              "Inter"
+                      ],
+                      "label-md": [
+                              "Inter"
+                      ],
+                      "headline-md": [
+                              "Inter"
+                      ],
+                      "body-md": [
+                              "Inter"
+                      ],
+                      "headline-sm": [
+                              "Inter"
+                      ],
+                      "headline-lg": [
+                              "Inter"
+                      ],
+                      "body-sm": [
+                              "Inter"
+                      ]
+              },
+              "fontSize": {
+                      "mono-sm": [
+                              "12px",
+                              {
+                                      "lineHeight": "16px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "display-lg": [
+                              "36px",
+                              {
+                                      "lineHeight": "44px",
+                                      "letterSpacing": "-0.02em",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "body-lg": [
+                              "16px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "label-md": [
+                              "12px",
+                              {
+                                      "lineHeight": "16px",
+                                      "letterSpacing": "0.05em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "headline-md": [
+                              "20px",
+                              {
+                                      "lineHeight": "28px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "body-md": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "headline-sm": [
+                              "16px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "headline-lg": [
+                              "28px",
+                              {
+                                      "lineHeight": "36px",
+                                      "letterSpacing": "-0.01em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "body-sm": [
+                              "13px",
+                              {
+                                      "lineHeight": "18px",
+                                      "fontWeight": "400"
+                              }
+                      ]
+              }
+      },
+          },
+        }
+      </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background font-body-md h-full flex flex-col md:flex-row">
+<!-- NavigationDrawer (Desktop) -->
+<nav class="hidden md:flex flex-col h-full bg-surface-container-low border-r border-outline-variant fixed left-0 top-0 w-60 z-40 transition-all duration-200 ease-in-out">
+<div class="p-4 border-b border-outline-variant flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center text-on-primary-container font-headline-sm font-bold">W</div>
+<div>
+<h2 class="font-headline-sm text-headline-sm font-black text-on-surface">Alex Rivers</h2>
+<p class="font-label-md text-label-md text-on-surface-variant">Student ID: 20240912</p>
+</div>
+</div>
+<div class="flex-1 overflow-y-auto py-4">
+<a class="flex items-center gap-3 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high mx-2 my-1 px-4 py-2 rounded-lg font-label-md text-label-md transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+                Dashboard
+            </a>
+<a class="flex items-center gap-3 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high mx-2 my-1 px-4 py-2 rounded-lg font-label-md text-label-md transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="gate">gate</span>
+                Gate Passes
+            </a>
+<a class="flex items-center gap-3 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high mx-2 my-1 px-4 py-2 rounded-lg font-label-md text-label-md transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="history_edu">history_edu</span>
+                Academic Log
+            </a>
+<a class="flex items-center gap-3 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high mx-2 my-1 px-4 py-2 rounded-lg font-label-md text-label-md transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="account_balance_wallet">account_balance_wallet</span>
+                Financials
+            </a>
+<a class="flex items-center gap-3 bg-secondary-container text-on-secondary-container rounded-lg mx-2 my-1 px-4 py-2 font-label-md text-label-md hover:bg-surface-container-high transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="person" data-weight="fill" style="font-variation-settings: 'FILL' 1;">person</span>
+                Profile
+            </a>
+</div>
+</nav>
+<!-- Main Content Area -->
+<main class="flex-1 flex flex-col md:ml-60 min-h-screen">
+<!-- TopAppBar -->
+<header class="bg-surface flex justify-between items-center px-4 md:px-margin h-16 w-full sticky top-0 z-30 shadow-sm md:shadow-none md:border-b border-outline-variant">
+<div class="flex items-center gap-4">
+<button class="md:hidden text-on-surface-variant p-2 rounded-full hover:bg-surface-container-high transition-colors active:scale-95 duration-100">
+<span class="material-symbols-outlined" data-icon="menu">menu</span>
+</button>
+<h1 class="font-headline-md text-headline-md font-bold text-primary">Gate Pass Management</h1>
+</div>
+<button class="text-primary font-label-md text-label-md font-bold hover:bg-surface-container-low transition-colors px-4 py-2 rounded-lg active:scale-95 duration-100 border border-outline-variant md:border-none md:bg-primary md:text-on-primary">
+                + New Request
+            </button>
+</header>
+<!-- Canvas -->
+<div class="flex-1 p-4 md:p-margin bg-background">
+<!-- Header & Search -->
+<div class="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+<h2 class="font-headline-lg text-headline-lg font-bold text-on-surface">Hostel Complaints</h2>
+<div class="relative w-full md:w-96">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant">search</span>
+<input class="w-full pl-10 pr-4 py-2 bg-surface-container-lowest border border-outline-variant rounded-lg font-body-md text-body-md text-on-surface focus:outline-none focus:ring-2 focus:ring-secondary focus:border-secondary transition-all shadow-sm" placeholder="Filter by title or student..." type="text"/>
+</div>
+</div>
+<!-- Data Table Card -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm overflow-hidden">
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-container-high border-b border-outline-variant">
+<th class="py-3 px-4 font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Title</th>
+<th class="py-3 px-4 font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Category</th>
+<th class="py-3 px-4 font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Reported By</th>
+<th class="py-3 px-4 font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Priority</th>
+<th class="py-3 px-4 font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Status</th>
+<th class="py-3 px-4 font-label-md text-label-md text-on-surface-variant uppercase tracking-wider text-right">Actions</th>
+</tr>
+</thead>
+<tbody class="font-body-sm text-body-sm text-on-surface divide-y divide-outline-variant">
+<!-- Row 1 -->
+<tr class="hover:bg-surface-container-low transition-colors group">
+<td class="py-3 px-4 font-medium">Broken Fan in Room 302</td>
+<td class="py-3 px-4 text-on-surface-variant">Electrical</td>
+<td class="py-3 px-4">John Doe</td>
+<td class="py-3 px-4">
+<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-error-container text-on-error-container">High</span>
+</td>
+<td class="py-3 px-4">
+<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border border-outline-variant text-on-surface-variant">Open</span>
+</td>
+<td class="py-3 px-4 text-right">
+<div class="flex justify-end gap-2">
+<button class="px-3 py-1 text-xs font-semibold text-secondary border border-outline-variant rounded-md hover:bg-surface-container-high transition-colors">Start</button>
+<button class="px-3 py-1 text-xs font-semibold text-on-primary bg-primary rounded-md hover:opacity-90 transition-opacity">Resolve</button>
+</div>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="hover:bg-surface-container-low transition-colors group">
+<td class="py-3 px-4 font-medium">Water Leakage in Bathroom B</td>
+<td class="py-3 px-4 text-on-surface-variant">Plumbing</td>
+<td class="py-3 px-4">Jane Smith</td>
+<td class="py-3 px-4">
+<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-error-container text-on-error-container">High</span>
+</td>
+<td class="py-3 px-4">
+<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-secondary-fixed text-on-secondary-fixed">In Progress</span>
+</td>
+<td class="py-3 px-4 text-right">
+<div class="flex justify-end gap-2">
+<button class="px-3 py-1 text-xs font-semibold text-on-primary bg-primary rounded-md hover:opacity-90 transition-opacity">Resolve</button>
+</div>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="hover:bg-surface-container-low transition-colors group">
+<td class="py-3 px-4 font-medium">Chair leg broken</td>
+<td class="py-3 px-4 text-on-surface-variant">Furniture</td>
+<td class="py-3 px-4">Alice Johnson</td>
+<td class="py-3 px-4">
+<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-surface-dim text-on-surface-variant border border-outline-variant">Low</span>
+</td>
+<td class="py-3 px-4">
+<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border border-outline-variant text-on-surface-variant">Open</span>
+</td>
+<td class="py-3 px-4 text-right">
+<div class="flex justify-end gap-2">
+<button class="px-3 py-1 text-xs font-semibold text-secondary border border-outline-variant rounded-md hover:bg-surface-container-high transition-colors">Start</button>
+<button class="px-3 py-1 text-xs font-semibold text-on-primary bg-primary rounded-md hover:opacity-90 transition-opacity">Resolve</button>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Pagination / Footer -->
+<div class="border-t border-outline-variant p-4 bg-surface-container-lowest flex items-center justify-between text-body-sm text-on-surface-variant">
+<span>Showing 1 to 3 of 12 entries</span>
+<div class="flex gap-1">
+<button class="p-1 rounded hover:bg-surface-container-high transition-colors"><span class="material-symbols-outlined text-sm">chevron_left</span></button>
+<button class="w-6 h-6 rounded flex items-center justify-center bg-secondary-container text-on-secondary-container font-medium text-xs">1</button>
+<button class="w-6 h-6 rounded flex items-center justify-center hover:bg-surface-container-high font-medium text-xs">2</button>
+<button class="w-6 h-6 rounded flex items-center justify-center hover:bg-surface-container-high font-medium text-xs">3</button>
+<button class="p-1 rounded hover:bg-surface-container-high transition-colors"><span class="material-symbols-outlined text-sm">chevron_right</span></button>
+</div>
+</div>
+</div>
+</div>
+<!-- Bottom Padding for Mobile Nav -->
+<div class="h-16 md:hidden"></div>
+</main>
+<!-- BottomNavBar (Mobile) -->
+<nav class="md:hidden flex justify-around items-center h-16 w-full px-4 pb-safe bg-surface fixed bottom-0 z-50 border-t border-outline-variant shadow-lg transition-transform duration-300 translate-y-0">
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-container-highest transition-colors active:scale-90 duration-150 p-2 rounded-lg" href="#">
+<span class="material-symbols-outlined" data-icon="home">home</span>
+<span class="font-label-md text-label-md mt-1">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-container-highest transition-colors active:scale-90 duration-150 p-2 rounded-lg" href="#">
+<span class="material-symbols-outlined" data-icon="fact_check">fact_check</span>
+<span class="font-label-md text-label-md mt-1">Passes</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-container-highest transition-colors active:scale-90 duration-150 p-2 rounded-lg" href="#">
+<span class="material-symbols-outlined" data-icon="payments">payments</span>
+<span class="font-label-md text-label-md mt-1">Wallet</span>
+</a>
+<a class="flex flex-col items-center justify-center bg-secondary-container text-on-secondary-container rounded-full px-4 py-1 hover:bg-surface-container-highest transition-colors active:scale-90 duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="person" data-weight="fill" style="font-variation-settings: 'FILL' 1;">person</span>
+<span class="font-label-md text-label-md mt-1">Profile</span>
+</a>
+</nav>
+</body></html>

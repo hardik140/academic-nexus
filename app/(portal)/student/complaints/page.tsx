@@ -1,17 +1,31 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button, FormField, StatusBadge } from "@/components/ui/modal";
+import { submitComplaint } from "./actions";
+import type { Database } from "@/types/database";
+
+type ComplaintCategory = Database["public"]["Tables"]["complaints"]["Row"]["category"];
+type ComplaintPriority = Database["public"]["Tables"]["complaints"]["Row"]["priority"];
+
+const VALID_CATEGORIES = [
+  "plumbing", "electrical", "ac_hvac", "carpentry", "cleaning",
+  "internet", "safety", "academic", "hostel", "mess", "other",
+];
 
 export default function StudentComplaints() {
   const supabase = createClient();
+  const searchParams = useSearchParams();
+  const prefillCategory = searchParams.get("category");
   const [complaints, setComplaints] = useState<any[]>([]);
-  const [showForm, setShowForm] = useState(false);
+  const [showForm, setShowForm] = useState(!!prefillCategory);
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({
-    category: "",
+    category: prefillCategory && VALID_CATEGORIES.includes(prefillCategory) ? prefillCategory : "",
     title: "",
     description: "",
     location: "",
@@ -34,28 +48,25 @@ export default function StudentComplaints() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    const { data: profile } = await supabase.from("profiles").select("college_id").eq("id", user.id).single();
-    if (!profile) return;
-
-    await supabase.from("complaints").insert({
-      college_id: profile.college_id,
-      submitted_by: user.id,
-      category: form.category,
-      title: form.title,
-      description: form.description,
-      location: form.location,
-      priority: form.priority,
-      status: "open",
-    });
-
-    setForm({ category: "", title: "", description: "", location: "", priority: "medium" });
-    setShowForm(false);
-    setSubmitted(true);
-    setLoading(false);
-    loadComplaints();
-    setTimeout(() => setSubmitted(false), 3000);
+    setError(null);
+    try {
+      await submitComplaint({
+        category: form.category as ComplaintCategory,
+        title: form.title,
+        description: form.description,
+        location: form.location,
+        priority: form.priority as ComplaintPriority,
+      });
+      setForm({ category: "", title: "", description: "", location: "", priority: "medium" });
+      setShowForm(false);
+      setSubmitted(true);
+      await loadComplaints();
+      setTimeout(() => setSubmitted(false), 3000);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to submit complaint.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const categories = [
@@ -97,9 +108,13 @@ export default function StudentComplaints() {
         </div>
       )}
 
+      {error && (
+        <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium">{error}</div>
+      )}
+
       {showForm && (
         <form onSubmit={handleSubmit} className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-xl shadow-sm space-y-md">
-          <h2 className="text-sm font-bold text-on-surface">New Complaint</h2>
+          <h2 className="text-sm font-bold text-on-surface">📝 New Complaint</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-md">
             <FormField label="Category" id="category" type="select" value={form.category} onChange={(v) => setForm({ ...form, category: v })} options={categories} required />
             <FormField label="Priority" id="priority" type="select" value={form.priority} onChange={(v) => setForm({ ...form, priority: v })} options={priorities} />
@@ -121,7 +136,7 @@ export default function StudentComplaints() {
       {/* Complaints List */}
       <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-sm">
         <div className="px-lg py-md border-b border-outline-variant">
-          <h2 className="text-sm font-bold text-on-surface">My Complaints</h2>
+          <h2 className="text-sm font-bold text-on-surface flex items-center gap-sm">🛠️ My Complaints</h2>
         </div>
         <div className="divide-y divide-outline-variant">
           {complaints.length > 0 ? complaints.map((c: any) => (

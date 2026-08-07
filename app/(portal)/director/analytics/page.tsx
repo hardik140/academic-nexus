@@ -1,23 +1,38 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { getCached } from "@/lib/cache";
 
 export default async function DirectorAnalytics() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  // Fetch materialized views
-  const [attRes, feeRes, enrollRes, placeRes] = await Promise.all([
-    supabase.from("mv_attendance_summary").select("*"),
-    supabase.from("mv_fee_summary").select("*").single(),
-    supabase.from("mv_department_enrollment").select("*").order("total_students", { ascending: false }),
-    supabase.from("mv_placement_summary").select("*").single(),
-  ]);
+  const { data: viewerProfile } = await supabase
+    .from("profiles")
+    .select("college_id")
+    .eq("id", user.id)
+    .single();
 
-  const attendance = attRes.data || [];
-  const fees = feeRes.data;
-  const enrollment = enrollRes.data || [];
-  const placement = placeRes.data;
+  // The views themselves now refresh every 15 min (scheduled via QStash),
+  // so this is a second, finer cache layer on top of that.
+  const { attendance, fees, enrollment, placement } = await getCached(
+    `analytics:director:${viewerProfile?.college_id}:mv`,
+    60,
+    async () => {
+      const [attRes, feeRes, enrollRes, placeRes] = await Promise.all([
+        supabase.from("mv_attendance_summary").select("*"),
+        supabase.from("mv_fee_summary").select("*").single(),
+        supabase.from("mv_department_enrollment").select("*").order("total_students", { ascending: false }),
+        supabase.from("mv_placement_summary").select("*").single(),
+      ]);
+      return {
+        attendance: attRes.data || [],
+        fees: feeRes.data,
+        enrollment: enrollRes.data || [],
+        placement: placeRes.data,
+      };
+    }
+  );
 
   return (
     <div className="space-y-lg animate-[fade-in_0.3s_ease-out]">

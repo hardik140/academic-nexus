@@ -2,7 +2,11 @@
 
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { Button, StatusBadge } from "@/components/ui/modal";
+import { Button } from "@/components/ui/modal";
+import { saveAttendance } from "./actions";
+import type { Database } from "@/types/database";
+
+type AttendanceStatus = Database["public"]["Tables"]["attendance"]["Row"]["status"];
 
 export default function TeacherAttendance() {
   const supabase = createClient();
@@ -12,6 +16,7 @@ export default function TeacherAttendance() {
   const [attendance, setAttendance] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
 
   useEffect(() => {
@@ -65,39 +70,30 @@ export default function TeacherAttendance() {
     setAttendance({ ...attendance, [studentId]: next });
   };
 
-  const saveAttendance = async () => {
+  const handleSaveAttendance = async () => {
     setLoading(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    const { data: profile } = await supabase.from("profiles").select("college_id").eq("id", user.id).single();
-    if (!profile) return;
+    setError(null);
+    try {
+      // Get student records (need student.id, not user_id)
+      const studentIds = Object.keys(attendance);
+      const { data: studentRecords } = await supabase
+        .from("students")
+        .select("id, user_id")
+        .in("user_id", studentIds);
 
-    // Get student records (need student.id, not user_id)
-    const studentIds = Object.keys(attendance);
-    const { data: studentRecords } = await supabase
-      .from("students")
-      .select("id, user_id")
-      .in("user_id", studentIds);
+      const entries = (studentRecords || []).map((s: any) => ({
+        studentDbId: s.id,
+        status: (attendance[s.user_id] || "present") as AttendanceStatus,
+      }));
 
-    const records = (studentRecords || []).map((s: any) => ({
-      college_id: profile.college_id,
-      student_id: s.id,
-      course_id: selectedCourse,
-      date,
-      status: attendance[s.user_id] || "present",
-      marked_by: user.id,
-    }));
-
-    // Upsert attendance
-    for (const record of records) {
-      await supabase.from("attendance").upsert(record, {
-        onConflict: "student_id,course_id,date",
-      });
+      await saveAttendance({ courseId: selectedCourse, date, entries });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to save attendance.");
+    } finally {
+      setLoading(false);
     }
-
-    setSaved(true);
-    setLoading(false);
-    setTimeout(() => setSaved(false), 3000);
   };
 
   const statusColors: Record<string, string> = {
@@ -117,6 +113,28 @@ export default function TeacherAttendance() {
       {saved && (
         <div className="bg-success/10 border border-success/20 text-success rounded-xl p-md text-sm font-medium">
           ✅ Attendance saved successfully for {date}!
+        </div>
+      )}
+
+      {error && (
+        <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium">{error}</div>
+      )}
+
+      {/* Live Counts */}
+      {selectedCourse && students.length > 0 && (
+        <div className="grid grid-cols-3 gap-md">
+          <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-lg shadow-sm text-center">
+            <div className="text-2xl font-extrabold text-success">{Object.values(attendance).filter(v => v === "present").length}</div>
+            <div className="text-xs text-outline uppercase tracking-wider mt-xs">Present</div>
+          </div>
+          <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-lg shadow-sm text-center">
+            <div className="text-2xl font-extrabold text-error">{Object.values(attendance).filter(v => v === "absent").length}</div>
+            <div className="text-xs text-outline uppercase tracking-wider mt-xs">Absent</div>
+          </div>
+          <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-lg shadow-sm text-center">
+            <div className="text-2xl font-extrabold text-warning">{Object.values(attendance).filter(v => v === "late").length}</div>
+            <div className="text-xs text-outline uppercase tracking-wider mt-xs">Late</div>
+          </div>
         </div>
       )}
 
@@ -145,7 +163,7 @@ export default function TeacherAttendance() {
           />
         </div>
         {selectedCourse && students.length > 0 && (
-          <Button onClick={saveAttendance} disabled={loading}>
+          <Button onClick={handleSaveAttendance} disabled={loading}>
             {loading ? "Saving..." : "Save Attendance"}
           </Button>
         )}
@@ -165,8 +183,8 @@ export default function TeacherAttendance() {
       {selectedCourse && (
         <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-sm overflow-hidden">
           <div className="px-lg py-md border-b border-outline-variant flex items-center justify-between">
-            <h2 className="text-sm font-bold text-on-surface">
-              Students ({students.length})
+            <h2 className="text-sm font-bold text-on-surface flex items-center gap-sm">
+              👥 Students ({students.length})
             </h2>
             <div className="flex gap-sm text-xs text-outline">
               <span className="text-success font-semibold">{Object.values(attendance).filter(v => v === "present").length}P</span>

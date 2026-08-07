@@ -4,12 +4,19 @@ import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { DataTable } from "@/components/ui/data-table";
 import { StatusBadge } from "@/components/ui/modal";
+import { DEFAULT_QUERY_LIMIT } from "@/lib/constants";
+import { updateComplaintStatus } from "./actions";
+import type { Database } from "@/types/database";
 
-const HOSTEL_CATEGORIES = ["hostel", "mess", "plumbing", "electrical", "ac_hvac", "carpentry", "cleaning", "safety"];
+type ComplaintCategory = Database["public"]["Tables"]["complaints"]["Row"]["category"];
+
+const HOSTEL_CATEGORIES: ComplaintCategory[] = ["hostel", "mess", "plumbing", "electrical", "ac_hvac", "carpentry", "cleaning", "safety"];
 
 export default function WardenComplaints() {
   const supabase = createClient();
   const [complaints, setComplaints] = useState<any[]>([]);
+  const [loading, setLoading] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => { loadComplaints(); }, []);
 
@@ -18,13 +25,22 @@ export default function WardenComplaints() {
       .from("complaints")
       .select("*, profiles:submitted_by(full_name)")
       .in("category", HOSTEL_CATEGORIES)
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .limit(DEFAULT_QUERY_LIMIT);
     setComplaints(data || []);
   };
 
-  const updateStatus = async (id: string, status: string) => {
-    await supabase.from("complaints").update({ status, resolved_at: status === "resolved" ? new Date().toISOString() : null }).eq("id", id);
-    loadComplaints();
+  const updateStatus = async (id: string, status: "in_progress" | "resolved") => {
+    setLoading(id);
+    setError(null);
+    try {
+      await updateComplaintStatus(id, status);
+      await loadComplaints();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to update complaint.");
+    } finally {
+      setLoading(null);
+    }
   };
 
   return (
@@ -33,6 +49,10 @@ export default function WardenComplaints() {
         <h1 className="text-2xl font-extrabold text-on-surface tracking-tight">Hostel Complaints</h1>
         <p className="text-sm text-on-surface-variant mt-xs">Maintenance and hostel-related complaints</p>
       </div>
+
+      {error && (
+        <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium">{error}</div>
+      )}
 
       <DataTable
         columns={[
@@ -54,15 +74,19 @@ export default function WardenComplaints() {
         data={complaints}
         keyExtractor={(row) => row.id}
         searchKey="title"
-        searchPlaceholder="Search complaints..."
+        searchPlaceholder="Filter by title or student..."
         emptyMessage="No hostel complaints found."
         actions={(row: any) => (
           <div className="flex gap-xs justify-end">
             {row.status === "open" && (
-              <button onClick={() => updateStatus(row.id, "in_progress")} className="text-xs text-secondary hover:underline font-medium">Start</button>
+              <button onClick={() => updateStatus(row.id, "in_progress")} disabled={loading === row.id} className="text-xs text-secondary hover:underline font-medium disabled:opacity-40">
+                {loading === row.id ? "..." : "Start"}
+              </button>
             )}
             {row.status === "in_progress" && (
-              <button onClick={() => updateStatus(row.id, "resolved")} className="text-xs text-success hover:underline font-medium">Resolve</button>
+              <button onClick={() => updateStatus(row.id, "resolved")} disabled={loading === row.id} className="text-xs text-success hover:underline font-medium disabled:opacity-40">
+                {loading === row.id ? "..." : "Resolve"}
+              </button>
             )}
           </div>
         )}

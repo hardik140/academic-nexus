@@ -3,11 +3,15 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Button, StatusBadge } from "@/components/ui/modal";
+import { DataTable } from "@/components/ui/data-table";
+import { DEFAULT_QUERY_LIMIT } from "@/lib/constants";
+import { actOnGatePass } from "./actions";
 
 export default function WardenGatePasses() {
   const supabase = createClient();
   const [passes, setPasses] = useState<any[]>([]);
   const [loading, setLoading] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => { loadPasses(); }, []);
 
@@ -15,20 +19,22 @@ export default function WardenGatePasses() {
     const { data } = await supabase
       .from("gate_passes")
       .select("*, students:student_id(enrollment_number, profiles:user_id(full_name))")
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .limit(DEFAULT_QUERY_LIMIT);
     setPasses(data || []);
   };
 
   const handleAction = async (id: string, action: "approved" | "rejected") => {
     setLoading(id);
-    const { data: { user } } = await supabase.auth.getUser();
-    await supabase.from("gate_passes").update({
-      status: action,
-      approved_by: user?.id,
-      approved_at: new Date().toISOString(),
-    }).eq("id", id);
-    setLoading(null);
-    loadPasses();
+    setError(null);
+    try {
+      await actOnGatePass(id, action);
+      await loadPasses();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to update gate pass.");
+    } finally {
+      setLoading(null);
+    }
   };
 
   const pending = passes.filter((p) => p.status === "pending");
@@ -36,10 +42,21 @@ export default function WardenGatePasses() {
 
   return (
     <div className="space-y-lg animate-[fade-in_0.3s_ease-out]">
-      <div>
-        <h1 className="text-2xl font-extrabold text-on-surface tracking-tight">Gate Passes</h1>
-        <p className="text-sm text-on-surface-variant mt-xs">Review and approve student out-of-campus requests</p>
+      <div className="flex items-center justify-between gap-md flex-wrap">
+        <div>
+          <h1 className="text-2xl font-extrabold text-on-surface tracking-tight">Gate Passes</h1>
+          <p className="text-sm text-on-surface-variant mt-xs">Review and approve student out-of-campus requests</p>
+        </div>
+        {pending.length > 0 && (
+          <span className="text-xs font-semibold px-md py-xs rounded-full bg-warning/10 text-warning shrink-0">
+            {pending.length} Require Action
+          </span>
+        )}
       </div>
+
+      {error && (
+        <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium">{error}</div>
+      )}
 
       <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-sm">
         <div className="px-lg py-md border-b border-outline-variant">
@@ -75,25 +92,18 @@ export default function WardenGatePasses() {
         </div>
       </div>
 
-      <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-sm">
-        <div className="px-lg py-md border-b border-outline-variant">
-          <h2 className="text-sm font-bold text-on-surface">Processed ({processed.length})</h2>
-        </div>
-        <div className="divide-y divide-outline-variant">
-          {processed.slice(0, 20).map((pass: any) => (
-            <div key={pass.id} className="flex items-center justify-between px-lg py-md hover:bg-surface-container-low transition-colors">
-              <div>
-                <div className="text-sm text-on-surface">{(pass.students as any)?.profiles?.full_name} — {pass.destination}</div>
-                <div className="text-xs text-outline">{new Date(pass.exit_time).toLocaleDateString()}</div>
-              </div>
-              <StatusBadge status={pass.status} />
-            </div>
-          ))}
-          {processed.length === 0 && (
-            <div className="p-xl text-center text-sm text-outline">No processed requests yet.</div>
-          )}
-        </div>
-      </div>
+      <DataTable
+        title={`Processed History (${processed.length})`}
+        columns={[
+          { key: "student", header: "Student", render: (row: any) => (row.students as any)?.profiles?.full_name || "—" },
+          { key: "exit_time", header: "Date", sortable: true, render: (row: any) => new Date(row.exit_time).toLocaleDateString() },
+          { key: "destination", header: "Destination", sortable: true },
+          { key: "status", header: "Status", render: (row: any) => <StatusBadge status={row.status} /> },
+        ]}
+        data={processed}
+        keyExtractor={(row) => row.id}
+        emptyMessage="No processed requests yet."
+      />
     </div>
   );
 }

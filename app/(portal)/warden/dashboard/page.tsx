@@ -1,27 +1,36 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { getCached } from "@/lib/cache";
 
 export default async function WardenDashboard() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: blocks } = await supabase.from("hostel_blocks").select("*").eq("warden_id", user.id);
-  const blockIds = (blocks || []).map((b) => b.id);
+  const { blocks, rooms, pendingGatePasses, openComplaints } = await getCached(
+    `dashboard:warden:${user.id}:overview`,
+    60,
+    async () => {
+      const { data: blocks } = await supabase.from("hostel_blocks").select("*").eq("warden_id", user.id);
+      const blockIds = (blocks || []).map((b) => b.id);
 
-  const [roomsRes, gatePassesRes, complaintsRes] = await Promise.all([
-    blockIds.length ? supabase.from("hostel_rooms").select("*").in("block_id", blockIds) : Promise.resolve({ data: [] }),
-    supabase.from("gate_passes").select("*, students:student_id(profiles:user_id(full_name))").eq("status", "pending").order("created_at", { ascending: false }).limit(5),
-    supabase.from("complaints").select("*").eq("status", "open").in("category", ["hostel", "mess", "plumbing", "electrical", "cleaning"]).order("created_at", { ascending: false }).limit(5),
-  ]);
+      const [roomsRes, gatePassesRes, complaintsRes] = await Promise.all([
+        blockIds.length ? supabase.from("hostel_rooms").select("*").in("block_id", blockIds) : Promise.resolve({ data: [] }),
+        supabase.from("gate_passes").select("*, students:student_id(profiles:user_id(full_name))").eq("status", "pending").order("created_at", { ascending: false }).limit(5),
+        supabase.from("complaints").select("*").eq("status", "open").in("category", ["hostel", "mess", "plumbing", "electrical", "cleaning"]).order("created_at", { ascending: false }).limit(5),
+      ]);
 
-  const rooms = roomsRes.data || [];
+      return {
+        blocks: blocks || [],
+        rooms: roomsRes.data || [],
+        pendingGatePasses: gatePassesRes.data || [],
+        openComplaints: complaintsRes.data || [],
+      };
+    }
+  );
   const totalCapacity = rooms.reduce((s, r: any) => s + r.capacity, 0);
   const totalOccupancy = rooms.reduce((s, r: any) => s + r.occupancy, 0);
   const occupancyPct = totalCapacity > 0 ? (totalOccupancy / totalCapacity) * 100 : 0;
-
-  const pendingGatePasses = gatePassesRes.data || [];
-  const openComplaints = complaintsRes.data || [];
 
   return (
     <div className="space-y-lg animate-[fade-in_0.3s_ease-out]">

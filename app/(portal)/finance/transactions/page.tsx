@@ -3,8 +3,24 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { DataTable } from "@/components/ui/data-table";
-import { StatusBadge, Button } from "@/components/ui/modal";
+import { Modal, Button, FormField, StatusBadge } from "@/components/ui/modal";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { DEFAULT_QUERY_LIMIT } from "@/lib/constants";
+import { recordPayment } from "./actions";
+import type { Database } from "@/types/database";
+
+type PaymentMethod = Database["public"]["Tables"]["payments"]["Row"]["method"];
+
+const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
+  { value: "cash", label: "Cash" },
+  { value: "card", label: "Card" },
+  { value: "upi", label: "UPI" },
+  { value: "netbanking", label: "Net Banking" },
+  { value: "cheque", label: "Cheque" },
+  { value: "dd", label: "Demand Draft" },
+  { value: "scholarship", label: "Scholarship Adjustment" },
+  { value: "other", label: "Other" },
+];
 
 export default function FinanceTransactions() {
   const supabase = createClient();
@@ -12,15 +28,24 @@ export default function FinanceTransactions() {
   const [payments, setPayments] = useState<any[]>([]);
   const [tab, setTab] = useState<"invoices" | "payments">("invoices");
   const [stats, setStats] = useState({ total: 0, collected: 0, pending: 0, overdue: 0 });
+  const [payFee, setPayFee] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [form, setForm] = useState({ amount: "", method: "cash" as PaymentMethod, transaction_ref: "", notes: "" });
 
   useEffect(() => { loadData(); }, []);
 
   const loadData = async () => {
     const [feesRes, paymentsRes] = await Promise.all([
+      // NOTE: intentionally unbounded — the KPI cards below sum over the full
+      // `fees` result set. A naive .limit() here would silently understate
+      // totals once a college outgrows the cap. Needs the same fix as
+      // finance/reports.tsx: push the aggregation into Postgres (extend
+      // mv_fee_summary or add a grouped view) instead of bounding this query.
       supabase.from("fees").select("*, students(enrollment_number, profiles:user_id(full_name))").order("due_date", { ascending: false }),
-      supabase.from("payments").select("*, students(enrollment_number, profiles:user_id(full_name))").order("created_at", { ascending: false }),
+      supabase.from("payments").select("*, students(enrollment_number, profiles:user_id(full_name))").order("created_at", { ascending: false }).limit(DEFAULT_QUERY_LIMIT),
     ]);
-    const f = feesRes.data || [];
+    const f = (feesRes.data as any[]) || [];
     setFees(f);
     setPayments(paymentsRes.data || []);
     setStats({
@@ -31,12 +56,37 @@ export default function FinanceTransactions() {
     });
   };
 
+  const openRecordPayment = (fee: any) => {
+    setPayFee(fee);
+    setForm({ amount: (fee.amount - fee.paid_amount).toFixed(2), method: "cash", transaction_ref: "", notes: "" });
+    setError(null);
+  };
+
+  const handleRecordPayment = async () => {
+    if (!payFee) return;
+    setLoading(true);
+    setError(null);
+    try {
+      await recordPayment(payFee.id, Number(form.amount), form.method, form.transaction_ref || undefined, form.notes || undefined);
+      setPayFee(null);
+      await loadData();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to record payment.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-lg animate-[fade-in_0.3s_ease-out]">
       <div>
         <h1 className="text-2xl font-extrabold text-on-surface tracking-tight">Finance Transactions</h1>
         <p className="text-sm text-on-surface-variant mt-xs">Track fee invoices and payment records</p>
       </div>
+
+      {error && !payFee && (
+        <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium">{error}</div>
+      )}
 
       {/* KPI Row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-md">
@@ -78,6 +128,13 @@ export default function FinanceTransactions() {
           keyExtractor={(row) => row.id}
           searchKey="type"
           searchPlaceholder="Search invoices..."
+          actions={(row: any) => (
+            row.status !== "paid" && row.status !== "waived" && row.status !== "refunded" ? (
+              <button onClick={() => openRecordPayment(row)} className="text-xs text-secondary hover:underline font-medium">
+                Record Payment
+              </button>
+            ) : null
+          )}
         />
       ) : (
         <DataTable
@@ -96,6 +153,29 @@ export default function FinanceTransactions() {
           searchPlaceholder="Search payments..."
         />
       )}
+
+      <Modal
+        open={!!payFee}
+        onClose={() => setPayFee(null)}
+        title={`Record Payment — ${(payFee?.students?.profiles as any)?.full_name || ""}`}
+        description={payFee ? `Outstanding balance: ${formatCurrency(payFee.amount - payFee.paid_amount)}` : undefined}
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setPayFee(null)}>Cancel</Button>
+            <Button onClick={handleRecordPayment} disabled={loading || !form.amount}>{loading ? "Recording..." : "Record Payment"}</Button>
+          </>
+        }
+      >
+        {error && (
+          <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium mb-md">{error}</div>
+        )}
+        <div className="space-y-md">
+          <FormField label="Amount" id="pay_amount" type="number" value={form.amount} onChange={(v) => setForm({ ...form, amount: v })} placeholder="0.00" required />
+          <FormField label="Method" id="pay_method" type="select" value={form.method} onChange={(v) => setForm({ ...form, method: v as PaymentMethod })} options={PAYMENT_METHODS} required />
+          <FormField label="Transaction Reference" id="pay_ref" value={form.transaction_ref} onChange={(v) => setForm({ ...form, transaction_ref: v })} placeholder="Optional" />
+          <FormField label="Notes" id="pay_notes" value={form.notes} onChange={(v) => setForm({ ...form, notes: v })} placeholder="Optional" />
+        </div>
+      </Modal>
     </div>
   );
 }

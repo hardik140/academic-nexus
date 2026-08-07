@@ -3,32 +3,63 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Button, StatusBadge } from "@/components/ui/modal";
+import { DEFAULT_QUERY_LIMIT } from "@/lib/constants";
+import { actOnLeaveRequest } from "./actions";
 
 export default function HodApprovals() {
   const supabase = createClient();
   const [leaveRequests, setLeaveRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => { loadRequests(); }, []);
 
   const loadRequests = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    // Scope to staff in the department this HOD leads — leave_requests_read
+    // (RLS) is college-wide for hod, so this is what actually restricts the
+    // visible queue, not just the approve/reject action. Resolved via
+    // departments.hod_id, same as hod/dashboard and hod/reports — NOT via
+    // this HOD's own profiles.department_id, which assigning someone as HOD
+    // doesn't set (see the comment in hod/faculty/page.tsx).
+    const { data: department } = await supabase.from("departments").select("id").eq("hod_id", user.id).single();
+    if (!department) {
+      setLeaveRequests([]);
+      return;
+    }
+
+    const { data: deptStaff } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("department_id", department.id);
+    const staffIds = (deptStaff || []).map((s) => s.id);
+    if (staffIds.length === 0) {
+      setLeaveRequests([]);
+      return;
+    }
+
     const { data } = await supabase
       .from("leave_requests")
       .select("*, profiles:requested_by(full_name, email, role)")
-      .order("created_at", { ascending: false });
+      .in("requested_by", staffIds)
+      .order("created_at", { ascending: false })
+      .limit(DEFAULT_QUERY_LIMIT);
     setLeaveRequests(data || []);
   };
 
   const handleAction = async (id: string, action: "approved" | "rejected") => {
     setLoading(id);
-    const { data: { user } } = await supabase.auth.getUser();
-    await supabase.from("leave_requests").update({
-      status: action,
-      approved_by: user?.id,
-      approved_at: new Date().toISOString(),
-    }).eq("id", id);
-    setLoading(null);
-    loadRequests();
+    setError(null);
+    try {
+      await actOnLeaveRequest(id, action);
+      await loadRequests();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to update request.");
+    } finally {
+      setLoading(null);
+    }
   };
 
   const pending = leaveRequests.filter(r => r.status === "pending");
@@ -37,14 +68,18 @@ export default function HodApprovals() {
   return (
     <div className="space-y-lg animate-[fade-in_0.3s_ease-out]">
       <div>
-        <h1 className="text-2xl font-extrabold text-on-surface tracking-tight">Approvals</h1>
-        <p className="text-sm text-on-surface-variant mt-xs">Pending leave requests and approvals</p>
+        <h1 className="text-2xl font-extrabold text-on-surface tracking-tight">Staff Approvals</h1>
+        <p className="text-sm text-on-surface-variant mt-xs">Leave requests from staff in your department</p>
       </div>
+
+      {error && (
+        <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium">{error}</div>
+      )}
 
       {/* Pending Queue */}
       <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-sm">
         <div className="px-lg py-md border-b border-outline-variant flex items-center justify-between">
-          <h2 className="text-sm font-bold text-on-surface">Pending Requests ({pending.length})</h2>
+          <h2 className="text-sm font-bold text-on-surface flex items-center gap-sm">🔔 Pending Requests ({pending.length})</h2>
         </div>
         <div className="divide-y divide-outline-variant">
           {pending.length > 0 ? pending.map((req: any) => (
@@ -66,7 +101,7 @@ export default function HodApprovals() {
                       <span className="text-outline mx-sm">•</span>
                       <span className="text-outline">{new Date(req.start_date).toLocaleDateString()} → {new Date(req.end_date).toLocaleDateString()}</span>
                     </div>
-                    <div className="text-sm text-on-surface-variant">{req.reason}</div>
+                    <div className="text-sm text-on-surface-variant italic">&ldquo;{req.reason}&rdquo;</div>
                   </div>
                 </div>
                 <div className="flex gap-xs shrink-0">
@@ -88,7 +123,7 @@ export default function HodApprovals() {
       {/* Processed */}
       <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-sm">
         <div className="px-lg py-md border-b border-outline-variant">
-          <h2 className="text-sm font-bold text-on-surface">Processed ({processed.length})</h2>
+          <h2 className="text-sm font-bold text-on-surface flex items-center gap-sm">🗂️ Processed History ({processed.length})</h2>
         </div>
         <div className="divide-y divide-outline-variant">
           {processed.slice(0, 20).map((req: any) => (

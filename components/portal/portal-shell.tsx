@@ -62,6 +62,7 @@ const NAV_MAP: Record<
     { label: "Users", href: "/admin/users", icon: "👥" },
     { label: "Roles", href: "/admin/roles", icon: "🔐" },
     { label: "Departments", href: "/admin/departments", icon: "🏢" },
+    { label: "Hostel", href: "/admin/hostel", icon: "🏠" },
     { label: "Courses", href: "/admin/courses", icon: "📚" },
     { label: "Web Forms", href: "/admin/forms", icon: "📋" },
     { label: "Audit Log", href: "/admin/audit", icon: "📜" },
@@ -72,12 +73,6 @@ const NAV_MAP: Record<
     { label: "Rooms", href: "/warden/rooms", icon: "🏠" },
     { label: "Gate Passes", href: "/warden/gatepasses", icon: "🚪" },
     { label: "Complaints", href: "/warden/complaints", icon: "🛠️" },
-  ],
-  parent: [
-    { label: "Dashboard", href: "/parent/dashboard", icon: "📊" },
-    { label: "Attendance", href: "/parent/attendance", icon: "✅" },
-    { label: "Fees", href: "/parent/fees", icon: "💰" },
-    { label: "Grades", href: "/parent/grades", icon: "📝" },
   ],
 };
 
@@ -103,7 +98,6 @@ export function PortalShell({ profile, children }: PortalShellProps) {
     director: "Director Portal",
     admin: "System Admin",
     warden: "Warden Portal",
-    parent: "Parent Portal",
   };
 
   return (

@@ -1,18 +1,41 @@
-import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
+"use client";
 
-export default async function HodCourses() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+import { useState, useEffect } from "react";
+import { createClient } from "@/lib/supabase/client";
 
-  const { data: profile } = await supabase.from("profiles").select("college_id, department_id").eq("id", user.id).single();
+export default function HodCourses() {
+  const supabase = createClient();
+  const [courses, setCourses] = useState<any[]>([]);
+  const [search, setSearch] = useState("");
 
-  const { data: courses } = await supabase
-    .from("courses")
-    .select("*, profiles:instructor_id(full_name)")
-    .eq("department_id", profile?.department_id || "")
-    .order("code");
+  useEffect(() => { loadCourses(); }, []);
+
+  const loadCourses = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    // Resolve department via departments.hod_id, same as hod/dashboard,
+    // hod/reports, and hod/faculty — see the comment in hod/faculty/page.tsx
+    // for why profiles.department_id isn't the right field here.
+    const { data: department } = await supabase.from("departments").select("id").eq("hod_id", user.id).single();
+    if (!department) {
+      setCourses([]);
+      return;
+    }
+
+    const { data } = await supabase
+      .from("courses")
+      .select("*, profiles:instructor_id(full_name)")
+      .eq("department_id", department.id)
+      .order("code");
+    setCourses(data || []);
+  };
+
+  const filtered = courses.filter((c: any) =>
+    !search ||
+    c.code?.toLowerCase().includes(search.toLowerCase()) ||
+    c.name?.toLowerCase().includes(search.toLowerCase()) ||
+    (c.profiles as any)?.full_name?.toLowerCase().includes(search.toLowerCase())
+  );
 
   return (
     <div className="space-y-lg animate-[fade-in_0.3s_ease-out]">
@@ -20,6 +43,18 @@ export default async function HodCourses() {
         <h1 className="text-2xl font-extrabold text-on-surface tracking-tight">Department Courses</h1>
         <p className="text-sm text-on-surface-variant mt-xs">All courses under your department</p>
       </div>
+
+      <div className="relative">
+        <span className="absolute left-md top-1/2 -translate-y-1/2 text-outline text-sm">🔍</span>
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search by code, name, or instructor..."
+          className="w-full bg-surface-container-lowest border border-outline-variant rounded-xl pl-xl pr-md py-sm text-sm text-on-surface focus:ring-2 focus:ring-secondary outline-none"
+        />
+      </div>
+
       <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -35,7 +70,7 @@ export default async function HodCourses() {
               </tr>
             </thead>
             <tbody className="divide-y divide-outline-variant">
-              {(courses || []).map((c: any) => (
+              {filtered.map((c: any) => (
                 <tr key={c.id} className="hover:bg-surface-container-low transition-colors">
                   <td className="px-lg py-md font-mono text-secondary font-semibold">{c.code}</td>
                   <td className="px-lg py-md font-medium text-on-surface">{c.name}</td>
@@ -50,8 +85,8 @@ export default async function HodCourses() {
                   </td>
                 </tr>
               ))}
-              {(!courses || courses.length === 0) && (
-                <tr><td colSpan={7} className="px-lg py-xl text-center text-outline">No courses found.</td></tr>
+              {filtered.length === 0 && (
+                <tr><td colSpan={7} className="px-lg py-xl text-center text-outline">{courses.length === 0 ? "No courses found." : "No courses match your search."}</td></tr>
               )}
             </tbody>
           </table>

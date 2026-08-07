@@ -1,19 +1,33 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { getCached } from "@/lib/cache";
 
 export default async function FinanceDashboard() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single();
+  const { data: viewerProfile } = await supabase
+    .from("profiles")
+    .select("college_id")
+    .eq("id", user.id)
+    .single();
 
-  // Fee stats
-  const { data: allFees } = await supabase.from("fees").select("amount, paid_amount, status");
-  const totalBilled = allFees?.reduce((s, f) => s + f.amount, 0) || 0;
-  const totalCollected = allFees?.reduce((s, f) => s + f.paid_amount, 0) || 0;
-  const totalOverdue = allFees?.filter(f => f.status === "overdue").reduce((s, f) => s + (f.amount - f.paid_amount), 0) || 0;
-  const collectionRate = totalBilled > 0 ? (totalCollected / totalBilled) * 100 : 0;
+  // Fee stats — pulls every fee row to aggregate client-side (a known,
+  // already-flagged cost; see Implementation Status.md), so caching this
+  // college-scoped result matters more here than almost anywhere else.
+  const { totalBilled, totalCollected, totalOverdue, collectionRate } = await getCached(
+    `dashboard:finance:${viewerProfile?.college_id}:fee-stats`,
+    60,
+    async () => {
+      const { data: allFees } = await supabase.from("fees").select("amount, paid_amount, status");
+      const totalBilled = allFees?.reduce((s, f) => s + f.amount, 0) || 0;
+      const totalCollected = allFees?.reduce((s, f) => s + f.paid_amount, 0) || 0;
+      const totalOverdue = allFees?.filter(f => f.status === "overdue").reduce((s, f) => s + (f.amount - f.paid_amount), 0) || 0;
+      const collectionRate = totalBilled > 0 ? (totalCollected / totalBilled) * 100 : 0;
+      return { totalBilled, totalCollected, totalOverdue, collectionRate };
+    }
+  );
 
   // Recent payments
   const { data: recentPayments } = await supabase
@@ -29,6 +43,31 @@ export default async function FinanceDashboard() {
       <div>
         <h1 className="text-2xl font-extrabold text-on-surface tracking-tight">Finance Dashboard</h1>
         <p className="text-sm text-on-surface-variant mt-xs">Revenue, collections, and transaction management</p>
+      </div>
+
+      {/* Quick Actions */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-md">
+        <a href="/finance/invoices" className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-lg shadow-sm hover:border-secondary transition-colors flex items-center gap-md">
+          <span className="text-2xl">🧾</span>
+          <div>
+            <div className="text-sm font-bold text-on-surface">Generate Invoice</div>
+            <div className="text-xs text-on-surface-variant">Raise a new fee invoice</div>
+          </div>
+        </a>
+        <a href="/finance/transactions" className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-lg shadow-sm hover:border-secondary transition-colors flex items-center gap-md">
+          <span className="text-2xl">💳</span>
+          <div>
+            <div className="text-sm font-bold text-on-surface">Record Payment</div>
+            <div className="text-xs text-on-surface-variant">Manual receipt entry</div>
+          </div>
+        </a>
+        <a href="/finance/scholarships" className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-lg shadow-sm hover:border-secondary transition-colors flex items-center gap-md">
+          <span className="text-2xl">🎓</span>
+          <div>
+            <div className="text-sm font-bold text-on-surface">Manage Scholarships</div>
+            <div className="text-xs text-on-surface-variant">Review disbursements</div>
+          </div>
+        </a>
       </div>
 
       {/* KPI Cards */}

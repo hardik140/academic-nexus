@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Fee Invoices - Finance Portal</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "primary-fixed": "#dae2fd",
+                      "tertiary-fixed": "#e0e3e5",
+                      "outline-variant": "#c6c6cd",
+                      "on-secondary-fixed": "#00174b",
+                      "primary": "#000000",
+                      "inverse-surface": "#213145",
+                      "surface-tint": "#565e74",
+                      "on-tertiary-fixed": "#191c1e",
+                      "on-secondary": "#ffffff",
+                      "on-primary-fixed-variant": "#3f465c",
+                      "on-surface-variant": "#45464d",
+                      "on-error-container": "#93000a",
+                      "inverse-primary": "#bec6e0",
+                      "on-tertiary-container": "#818486",
+                      "inverse-on-surface": "#eaf1ff",
+                      "surface-container-high": "#dce9ff",
+                      "error": "#ba1a1a",
+                      "surface-container": "#e5eeff",
+                      "on-primary-container": "#7c839b",
+                      "on-tertiary": "#ffffff",
+                      "on-surface": "#0b1c30",
+                      "tertiary": "#000000",
+                      "primary-fixed-dim": "#bec6e0",
+                      "on-secondary-container": "#fefcff",
+                      "outline": "#76777d",
+                      "surface-container-lowest": "#ffffff",
+                      "surface-container-low": "#eff4ff",
+                      "secondary": "#0051d5",
+                      "on-error": "#ffffff",
+                      "secondary-fixed-dim": "#b4c5ff",
+                      "on-primary-fixed": "#131b2e",
+                      "secondary-fixed": "#dbe1ff",
+                      "error-container": "#ffdad6",
+                      "surface": "#f8f9ff",
+                      "tertiary-fixed-dim": "#c4c7c9",
+                      "surface-bright": "#f8f9ff",
+                      "on-secondary-fixed-variant": "#003ea8",
+                      "surface-dim": "#cbdbf5",
+                      "surface-variant": "#d3e4fe",
+                      "surface-container-highest": "#d3e4fe",
+                      "tertiary-container": "#191c1e",
+                      "background": "#f8f9ff",
+                      "primary-container": "#131b2e",
+                      "on-tertiary-fixed-variant": "#444749",
+                      "secondary-container": "#316bf3",
+                      "on-background": "#0b1c30",
+                      "on-primary": "#ffffff"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.125rem",
+                      "lg": "0.25rem",
+                      "xl": "0.5rem",
+                      "full": "0.75rem"
+              },
+              "spacing": {
+                      "xl": "32px",
+                      "lg": "24px",
+                      "gutter": "24px",
+                      "grid_columns": "12",
+                      "base": "4px",
+                      "sm": "8px",
+                      "xs": "4px",
+                      "md": "16px",
+                      "margin": "32px"
+              },
+              "fontFamily": {
+                      "mono-sm": [
+                              "monospace"
+                      ],
+                      "headline-lg": [
+                              "Inter"
+                      ],
+                      "headline-sm": [
+                              "Inter"
+                      ],
+                      "headline-md": [
+                              "Inter"
+                      ],
+                      "label-md": [
+                              "Inter"
+                      ],
+                      "body-md": [
+                              "Inter"
+                      ],
+                      "display-lg": [
+                              "Inter"
+                      ],
+                      "body-sm": [
+                              "Inter"
+                      ],
+                      "body-lg": [
+                              "Inter"
+                      ]
+              },
+              "fontSize": {
+                      "mono-sm": [
+                              "12px",
+                              {
+                                      "lineHeight": "16px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "headline-lg": [
+                              "28px",
+                              {
+                                      "lineHeight": "36px",
+                                      "letterSpacing": "-0.01em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "headline-sm": [
+                              "16px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "headline-md": [
+                              "20px",
+                              {
+                                      "lineHeight": "28px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "label-md": [
+                              "12px",
+                              {
+                                      "lineHeight": "16px",
+                                      "letterSpacing": "0.05em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "body-md": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "display-lg": [
+                              "36px",
+                              {
+                                      "lineHeight": "44px",
+                                      "letterSpacing": "-0.02em",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "body-sm": [
+                              "13px",
+                              {
+                                      "lineHeight": "18px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "body-lg": [
+                              "16px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "400"
+                              }
+                      ]
+              }
+      },
+          },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings:
+            'FILL' 1,
+            'wght' 400,
+            'GRAD' 0,
+            'opsz' 24;
+        }
+        body {
+            background-color: #f8f9ff;
+        }
+        /* Custom scrollbar for data tables */
+        .table-container::-webkit-scrollbar {
+            height: 8px;
+        }
+        .table-container::-webkit-scrollbar-track {
+            background: #eff4ff; 
+        }
+        .table-container::-webkit-scrollbar-thumb {
+            background: #c6c6cd; 
+            border-radius: 4px;
+        }
+        .table-container::-webkit-scrollbar-thumb:hover {
+            background: #76777d; 
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background font-body-md min-h-screen flex flex-col md:flex-row pb-[80px] md:pb-0">
+<!-- Navigation Drawer (Desktop) -->
+<aside class="hidden md:flex flex-col h-full w-[240px] fixed left-0 top-0 bg-surface-container-low border-r border-outline-variant py-md z-40">
+<!-- Header -->
+<div class="px-gutter mb-xl">
+<div class="flex items-center gap-sm">
+<div class="w-10 h-10 rounded-full overflow-hidden bg-primary-fixed flex items-center justify-center shrink-0">
+<img class="w-full h-full object-cover" data-alt="A clean, modern geometric logo for a fictional university named Academic Nexus. The logo features abstract interlocking shapes in deep blues and bright whites, symbolizing structure and connectivity. The style is flat, corporate, and high-tech, suitable for a SaaS student information system." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA0h39j-ya7C_6ln2OvVLywNNSJLpPqTgHZzQQqRgMDiX3mq0ME9DTIUqcSQ1g1dx1AZk5AWFb7t1Jcrss7iA_wxoGgId5qr53Hky3um11ne2mXpbUKST_GumoFMeQu6acTu13sl34XTau2yiSXW_IoVKh5h-wYPbbk2HC41uXaYJi2AYFcnIzEeKxbm6Qt5gpTMbqTleUDstDyHxzet6VEpYQSquNimpH-ZlZTVUmn0sugE4CfqTqeCXoZjcFgSC6zf_RqdAuo9rM"/>
+</div>
+<div>
+<div class="font-headline-sm text-headline-sm font-bold text-primary truncate">Academic Nexus</div>
+<div class="font-label-md text-label-md text-on-surface-variant truncate">Finance Administrator</div>
+</div>
+</div>
+<div class="mt-sm font-mono-sm text-mono-sm text-outline px-1">v2.4.0</div>
+</div>
+<!-- Navigation Links -->
+<nav class="flex-1 flex flex-col gap-xs pr-4">
+<a class="flex items-center gap-sm px-gutter py-sm text-on-surface-variant hover:bg-surface-container-highest transition-all cursor-pointer rounded-r-full group" href="#">
+<span class="material-symbols-outlined text-outline group-hover:text-primary transition-colors">dashboard</span>
+<span class="font-label-md text-label-md group-hover:text-primary transition-colors">Dashboard</span>
+</a>
+<a class="flex items-center gap-sm px-gutter py-sm text-on-surface-variant hover:bg-surface-container-highest transition-all cursor-pointer rounded-r-full group" href="#">
+<span class="material-symbols-outlined text-outline group-hover:text-primary transition-colors">group</span>
+<span class="font-label-md text-label-md group-hover:text-primary transition-colors">Rosters</span>
+</a>
+<!-- Active Navigation -->
+<a class="flex items-center gap-sm px-gutter py-sm bg-secondary-container text-on-secondary-container font-semibold rounded-r-full cursor-pointer transition-colors" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">payments</span>
+<span class="font-label-md text-label-md">Finance</span>
+</a>
+<a class="flex items-center gap-sm px-gutter py-sm text-on-surface-variant hover:bg-surface-container-highest transition-all cursor-pointer rounded-r-full group" href="#">
+<span class="material-symbols-outlined text-outline group-hover:text-primary transition-colors">settings</span>
+<span class="font-label-md text-label-md group-hover:text-primary transition-colors">Settings</span>
+</a>
+</nav>
+</aside>
+<!-- Main Content Area -->
+<main class="flex-1 flex flex-col md:ml-[240px] w-full min-h-screen">
+<!-- TopAppBar -->
+<header class="bg-surface w-full top-0 sticky z-30 border-b border-outline-variant transition-colors duration-200">
+<div class="flex justify-between items-center px-gutter py-md w-full">
+<!-- Leading -->
+<div class="flex items-center gap-sm">
+<span class="material-symbols-outlined text-primary font-headline-md text-headline-md">account_balance</span>
+<h1 class="font-headline-md text-headline-md font-bold text-primary">Finance Portal</h1>
+</div>
+<!-- Trailing -->
+<div class="flex items-center">
+<div class="w-8 h-8 rounded-full overflow-hidden border border-outline-variant bg-surface-container">
+<img class="w-full h-full object-cover" data-alt="A small circular avatar placeholder image. It features a generic, professional silhouette of a person on a subtle light blue gradient background. The style is clean, corporate, and minimalist, typical of default SaaS user profiles." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCA_vyGZo8kaM6H3xxALn3Ht6fS0Jxo5lkWggm0nBn5JYN-7QRRMsXFBYRFkUPeBrsJUedNCIwYlNesr1LuqVPxuHkkChQc_w1NBw_9t_driqnXFZm44DAkqClBb_Wf2G0gXs5IsJLN86tjqpLgtZvQKGysq4zeZH3Mp_gdaCDGT6LEr4eBky8ynDrrgkc_kmaMWFoDo8KeAMGc4vzgd75UBRNe4wHuTFzZ9MtrF2lRv190W4pGdtGSXVFCgzhFOxGSZNCnU_JGJQM"/>
+</div>
+</div>
+</div>
+</header>
+<!-- Page Content -->
+<div class="px-md md:px-margin py-md md:py-lg flex-1 flex flex-col gap-lg max-w-[1440px] mx-auto w-full">
+<!-- Breadcrumbs & Header -->
+<div class="flex flex-col gap-sm md:flex-row md:items-end justify-between">
+<div class="flex flex-col gap-xs">
+<nav class="flex items-center gap-xs text-on-surface-variant font-label-md text-label-md">
+<a class="hover:text-primary transition-colors" href="#">Finance</a>
+<span class="material-symbols-outlined text-[16px]">chevron_right</span>
+<span class="text-primary font-semibold">Fee Invoices</span>
+</nav>
+<h2 class="font-headline-lg text-headline-lg text-primary">Fee Invoices</h2>
+</div>
+<button class="bg-secondary text-on-secondary px-md py-sm rounded flex items-center justify-center gap-xs font-label-md text-label-md hover:bg-secondary-fixed-variant transition-colors whitespace-nowrap shadow-sm hover:shadow active:scale-95 w-full md:w-auto">
+<span class="material-symbols-outlined text-[18px]">add</span>
+                    Raise Invoice
+                </button>
+</div>
+<!-- Search & Filters Bar -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-lg p-sm shadow-[0_2px_4px_rgba(0,0,0,0.02)] flex flex-col md:flex-row gap-sm items-center z-20 relative">
+<!-- Search Input -->
+<div class="relative w-full md:flex-1">
+<div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+<span class="material-symbols-outlined text-outline text-[20px]">search</span>
+</div>
+<input class="w-full pl-10 pr-3 py-2 bg-surface border border-outline-variant rounded font-body-md text-body-md text-on-surface placeholder:text-on-surface-variant focus:outline-none focus:ring-2 focus:ring-secondary focus:border-transparent transition-all" placeholder="Search by student name or invoice ID..." type="text"/>
+</div>
+<!-- Filters -->
+<div class="flex gap-sm w-full md:w-auto overflow-x-auto pb-1 md:pb-0 hide-scrollbar shrink-0">
+<button class="flex items-center gap-xs px-sm py-[6px] border border-outline-variant rounded bg-surface hover:bg-surface-container-low transition-colors font-label-md text-label-md text-on-surface whitespace-nowrap">
+<span class="material-symbols-outlined text-[16px] text-outline">filter_list</span>
+                        Status
+                        <span class="material-symbols-outlined text-[16px] text-outline">arrow_drop_down</span>
+</button>
+<button class="flex items-center gap-xs px-sm py-[6px] border border-outline-variant rounded bg-surface hover:bg-surface-container-low transition-colors font-label-md text-label-md text-on-surface whitespace-nowrap">
+<span class="material-symbols-outlined text-[16px] text-outline">calendar_today</span>
+                        Date Range
+                        <span class="material-symbols-outlined text-[16px] text-outline">arrow_drop_down</span>
+</button>
+<button class="flex items-center gap-xs px-sm py-[6px] border border-outline-variant rounded bg-surface hover:bg-surface-container-low transition-colors font-label-md text-label-md text-on-surface whitespace-nowrap">
+<span class="material-symbols-outlined text-[16px] text-outline">category</span>
+                        Fee Type
+                        <span class="material-symbols-outlined text-[16px] text-outline">arrow_drop_down</span>
+</button>
+</div>
+</div>
+<!-- Data Table Container -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-lg shadow-[0_2px_4px_rgba(0,0,0,0.02)] flex-1 flex flex-col overflow-hidden relative z-10">
+<!-- Table View (Desktop) & Card List (Mobile) -->
+<div class="table-container w-full overflow-x-auto flex-1">
+<table class="w-full text-left border-collapse min-w-[800px]">
+<thead class="bg-surface-container text-on-surface-variant font-label-md text-label-md uppercase sticky top-0 z-20">
+<tr>
+<th class="px-md py-sm border-b border-outline-variant font-semibold">Invoice ID</th>
+<th class="px-md py-sm border-b border-outline-variant font-semibold">Student Name</th>
+<th class="px-md py-sm border-b border-outline-variant font-semibold">Fee Type</th>
+<th class="px-md py-sm border-b border-outline-variant font-semibold text-right">Amount</th>
+<th class="px-md py-sm border-b border-outline-variant font-semibold text-right">Paid</th>
+<th class="px-md py-sm border-b border-outline-variant font-semibold">Due Date</th>
+<th class="px-md py-sm border-b border-outline-variant font-semibold">Status</th>
+<th class="px-md py-sm border-b border-outline-variant font-semibold text-right">Actions</th>
+</tr>
+</thead>
+<tbody class="font-body-sm text-body-sm text-on-surface divide-y divide-outline-variant bg-surface-container-lowest">
+<!-- Row 1: Overdue -->
+<tr class="hover:bg-surface-container-low transition-colors group">
+<td class="px-md py-[10px] font-mono-sm text-mono-sm text-outline group-hover:text-secondary cursor-pointer transition-colors">INV-24-001</td>
+<td class="px-md py-[10px]">
+<div class="flex items-center gap-xs">
+<div class="w-6 h-6 rounded-full bg-surface-dim text-[10px] flex items-center justify-center font-bold text-on-surface border border-outline-variant">AM</div>
+<span class="font-semibold">Alex Mercer</span>
+</div>
+</td>
+<td class="px-md py-[10px] text-on-surface-variant">Tuition Fee</td>
+<td class="px-md py-[10px] font-mono-sm text-mono-sm text-right">$6,000.00</td>
+<td class="px-md py-[10px] font-mono-sm text-mono-sm text-right">$4,500.00</td>
+<td class="px-md py-[10px] text-error font-semibold flex items-center gap-[2px] mt-[2px]"><span class="material-symbols-outlined text-[14px]">warning</span>Oct 15, 2024</td>
+<td class="px-md py-[10px]">
+<span class="inline-flex items-center px-2 py-[2px] rounded-full text-[11px] font-bold tracking-wider bg-error-container text-on-error-container border border-error/20">OVERDUE</span>
+</td>
+<td class="px-md py-[10px] text-right">
+<button class="text-outline hover:text-primary p-1 rounded hover:bg-surface-variant transition-colors"><span class="material-symbols-outlined text-[18px]">more_vert</span></button>
+</td>
+</tr>
+<!-- Row 2: Pending -->
+<tr class="bg-surface hover:bg-surface-container-low transition-colors group">
+<td class="px-md py-[10px] font-mono-sm text-mono-sm text-outline group-hover:text-secondary cursor-pointer transition-colors">INV-24-042</td>
+<td class="px-md py-[10px]">
+<div class="flex items-center gap-xs">
+<div class="w-6 h-6 rounded-full bg-surface-dim text-[10px] flex items-center justify-center font-bold text-on-surface border border-outline-variant">SJ</div>
+<span class="font-semibold">Sarah Jenkins</span>
+</div>
+</td>
+<td class="px-md py-[10px] text-on-surface-variant">Hostel Fee</td>
+<td class="px-md py-[10px] font-mono-sm text-mono-sm text-right">$1,200.00</td>
+<td class="px-md py-[10px] font-mono-sm text-mono-sm text-right text-outline">$0.00</td>
+<td class="px-md py-[10px]">Nov 15, 2024</td>
+<td class="px-md py-[10px]">
+<span class="inline-flex items-center px-2 py-[2px] rounded-full text-[11px] font-bold tracking-wider bg-surface-variant text-on-surface border border-outline-variant/50">PENDING</span>
+</td>
+<td class="px-md py-[10px] text-right">
+<button class="text-outline hover:text-primary p-1 rounded hover:bg-surface-variant transition-colors"><span class="material-symbols-outlined text-[18px]">more_vert</span></button>
+</td>
+</tr>
+<!-- Row 3: Paid -->
+<tr class="hover:bg-surface-container-low transition-colors group">
+<td class="px-md py-[10px] font-mono-sm text-mono-sm text-outline group-hover:text-secondary cursor-pointer transition-colors">INV-24-089</td>
+<td class="px-md py-[10px]">
+<div class="flex items-center gap-xs">
+<div class="w-6 h-6 rounded-full bg-surface-dim text-[10px] flex items-center justify-center font-bold text-on-surface border border-outline-variant">MR</div>
+<span class="font-semibold">Marcus Reed</span>
+</div>
+</td>
+<td class="px-md py-[10px] text-on-surface-variant">Lab Fee</td>
+<td class="px-md py-[10px] font-mono-sm text-mono-sm text-right">$350.00</td>
+<td class="px-md py-[10px] font-mono-sm text-mono-sm text-right text-[#006847]">$350.00</td>
+<td class="px-md py-[10px] text-outline">Oct 01, 2024</td>
+<td class="px-md py-[10px]">
+<span class="inline-flex items-center px-2 py-[2px] rounded-full text-[11px] font-bold tracking-wider bg-[#d3f4e6] text-[#006847] border border-[#006847]/20">PAID</span>
+</td>
+<td class="px-md py-[10px] text-right">
+<button class="text-outline hover:text-primary p-1 rounded hover:bg-surface-variant transition-colors"><span class="material-symbols-outlined text-[18px]">more_vert</span></button>
+</td>
+</tr>
+<!-- Row 4: Partial -->
+<tr class="bg-surface hover:bg-surface-container-low transition-colors group">
+<td class="px-md py-[10px] font-mono-sm text-mono-sm text-outline group-hover:text-secondary cursor-pointer transition-colors">INV-24-102</td>
+<td class="px-md py-[10px]">
+<div class="flex items-center gap-xs">
+<div class="w-6 h-6 rounded-full bg-surface-dim text-[10px] flex items-center justify-center font-bold text-on-surface border border-outline-variant">EC</div>
+<span class="font-semibold">Elena Chavez</span>
+</div>
+</td>
+<td class="px-md py-[10px] text-on-surface-variant">Tuition Fee</td>
+<td class="px-md py-[10px] font-mono-sm text-mono-sm text-right">$6,000.00</td>
+<td class="px-md py-[10px] font-mono-sm text-mono-sm text-right">$2,000.00</td>
+<td class="px-md py-[10px]">Nov 30, 2024</td>
+<td class="px-md py-[10px]">
+<span class="inline-flex items-center px-2 py-[2px] rounded-full text-[11px] font-bold tracking-wider bg-surface-container-high text-secondary border border-secondary/20">PARTIAL</span>
+</td>
+<td class="px-md py-[10px] text-right">
+<button class="text-outline hover:text-primary p-1 rounded hover:bg-surface-variant transition-colors"><span class="material-symbols-outlined text-[18px]">more_vert</span></button>
+</td>
+</tr>
+<!-- Row 5: Waived -->
+<tr class="hover:bg-surface-container-low transition-colors group opacity-75">
+<td class="px-md py-[10px] font-mono-sm text-mono-sm text-outline group-hover:text-secondary cursor-pointer transition-colors">INV-24-005</td>
+<td class="px-md py-[10px]">
+<div class="flex items-center gap-xs">
+<div class="w-6 h-6 rounded-full bg-surface-dim text-[10px] flex items-center justify-center font-bold text-on-surface border border-outline-variant">DP</div>
+<span class="font-semibold">David Park</span>
+</div>
+</td>
+<td class="px-md py-[10px] text-on-surface-variant">Late Registration</td>
+<td class="px-md py-[10px] font-mono-sm text-mono-sm text-right line-through text-outline">$50.00</td>
+<td class="px-md py-[10px] font-mono-sm text-mono-sm text-right text-outline">$0.00</td>
+<td class="px-md py-[10px] text-outline">Sep 15, 2024</td>
+<td class="px-md py-[10px]">
+<span class="inline-flex items-center px-2 py-[2px] rounded-full text-[11px] font-bold tracking-wider bg-tertiary-fixed text-on-tertiary-fixed border border-outline-variant/50">WAIVED</span>
+</td>
+<td class="px-md py-[10px] text-right">
+<button class="text-outline hover:text-primary p-1 rounded hover:bg-surface-variant transition-colors"><span class="material-symbols-outlined text-[18px]">more_vert</span></button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Pagination Footer -->
+<div class="border-t border-outline-variant bg-surface px-md py-sm flex items-center justify-between font-label-md text-label-md text-on-surface-variant">
+<div>Showing 1 to 5 of 142 entries</div>
+<div class="flex items-center gap-xs">
+<button class="p-1 border border-outline-variant rounded hover:bg-surface-container disabled:opacity-50 disabled:cursor-not-allowed transition-colors"><span class="material-symbols-outlined text-[18px]">chevron_left</span></button>
+<span class="px-2">Page 1 of 29</span>
+<button class="p-1 border border-outline-variant rounded hover:bg-surface-container transition-colors"><span class="material-symbols-outlined text-[18px]">chevron_right</span></button>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- BottomNavBar (Mobile) -->
+<nav class="md:hidden bg-surface dark:bg-surface-dim border-t border-outline-variant dark:border-outline fixed bottom-0 left-0 w-full flex justify-around items-center px-sm py-xs shadow-sm z-50">
+<a class="flex flex-col items-center justify-center text-on-surface-variant dark:text-on-surface-variant hover:text-secondary dark:hover:text-secondary-fixed scale-95 active:scale-90 transition-transform w-[72px] h-[56px]" href="#">
+<span class="material-symbols-outlined text-[24px]">dashboard</span>
+<span class="font-label-md text-[10px] mt-1">Dashboard</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant dark:text-on-surface-variant hover:text-secondary dark:hover:text-secondary-fixed scale-95 active:scale-90 transition-transform w-[72px] h-[56px]" href="#">
+<span class="material-symbols-outlined text-[24px]">group</span>
+<span class="font-label-md text-[10px] mt-1">Rosters</span>
+</a>
+<a class="flex flex-col items-center justify-center bg-secondary-container text-on-secondary-container dark:bg-secondary dark:text-on-secondary rounded-full px-4 py-1 scale-95 active:scale-90 transition-transform w-[72px] h-[56px]" href="#">
+<span class="material-symbols-outlined text-[24px]" style="font-variation-settings: 'FILL' 1;">payments</span>
+<span class="font-label-md text-[10px] mt-1">Finance</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant dark:text-on-surface-variant hover:text-secondary dark:hover:text-secondary-fixed scale-95 active:scale-90 transition-transform w-[72px] h-[56px]" href="#">
+<span class="material-symbols-outlined text-[24px]">settings</span>
+<span class="font-label-md text-[10px] mt-1">Settings</span>
+</a>
+</nav>
+<style>
+        /* Utilities for hiding scrollbar visually but keeping functionality */
+        .hide-scrollbar {
+            -ms-overflow-style: none;  /* IE and Edge */
+            scrollbar-width: none;  /* Firefox */
+        }
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none; /* Chrome, Safari and Opera */
+        }
+    </style>
+</body></html>

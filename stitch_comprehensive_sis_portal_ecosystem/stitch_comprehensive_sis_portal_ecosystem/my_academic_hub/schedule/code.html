@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Class Schedule - Academic Nexus</title>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Tailwind Config injected from Style Guidance -->
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-bright": "#f8f9ff",
+                        "outline-variant": "#c6c6cd",
+                        "on-surface-variant": "#45464d",
+                        "on-error": "#ffffff",
+                        "tertiary": "#000000",
+                        "on-error-container": "#93000a",
+                        "surface-container-highest": "#d3e4fe",
+                        "on-primary": "#ffffff",
+                        "tertiary-fixed-dim": "#c4c7c9",
+                        "primary": "#000000",
+                        "surface-container": "#e5eeff",
+                        "on-tertiary": "#ffffff",
+                        "tertiary-container": "#191c1e",
+                        "surface": "#f8f9ff",
+                        "surface-container-lowest": "#ffffff",
+                        "secondary-fixed-dim": "#b4c5ff",
+                        "on-surface": "#0b1c30",
+                        "inverse-on-surface": "#eaf1ff",
+                        "surface-container-high": "#dce9ff",
+                        "on-tertiary-fixed-variant": "#444749",
+                        "surface-tint": "#565e74",
+                        "on-primary-fixed-variant": "#3f465c",
+                        "error": "#ba1a1a",
+                        "inverse-primary": "#bec6e0",
+                        "primary-fixed-dim": "#bec6e0",
+                        "surface-variant": "#d3e4fe",
+                        "primary-fixed": "#dae2fd",
+                        "on-tertiary-container": "#818486",
+                        "on-secondary-container": "#fefcff",
+                        "tertiary-fixed": "#e0e3e5",
+                        "primary-container": "#131b2e",
+                        "on-background": "#0b1c30",
+                        "on-secondary": "#ffffff",
+                        "on-tertiary-fixed": "#191c1e",
+                        "inverse-surface": "#213145",
+                        "on-secondary-fixed": "#00174b",
+                        "on-primary-container": "#7c839b",
+                        "secondary": "#0051d5",
+                        "secondary-fixed": "#dbe1ff",
+                        "surface-container-low": "#eff4ff",
+                        "outline": "#76777d",
+                        "on-secondary-fixed-variant": "#003ea8",
+                        "background": "#f8f9ff",
+                        "error-container": "#ffdad6",
+                        "secondary-container": "#316bf3",
+                        "on-primary-fixed": "#131b2e",
+                        "surface-dim": "#cbdbf5"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "md": "16px",
+                        "margin": "32px",
+                        "xl": "32px",
+                        "xs": "4px",
+                        "lg": "24px",
+                        "grid_columns": "12",
+                        "base": "4px",
+                        "sm": "8px",
+                        "gutter": "24px"
+                    },
+                    "fontFamily": {
+                        "mono-sm": ["monospace"],
+                        "body-md": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "headline-md": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "body-sm": ["Inter"],
+                        "headline-sm": ["Inter"],
+                        "display-lg": ["Inter"],
+                        "label-md": ["Inter"]
+                    },
+                    "fontSize": {
+                        "mono-sm": ["12px", { "lineHeight": "16px", "fontWeight": "400" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "headline-md": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "headline-lg": ["28px", { "lineHeight": "36px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "body-sm": ["13px", { "lineHeight": "18px", "fontWeight": "400" }],
+                        "headline-sm": ["16px", { "lineHeight": "24px", "fontWeight": "600" }],
+                        "display-lg": ["36px", { "lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface text-on-surface min-h-screen pb-24 md:pb-0">
+<!-- JSON Component: TopAppBar -->
+<header class="w-full top-0 sticky border-b border-outline-variant dark:border-outline bg-surface dark:bg-surface-container-highest flex items-center justify-between px-gutter w-full h-16 z-40">
+<div class="flex items-center gap-4">
+<span class="font-headline-lg text-headline-lg font-bold text-primary dark:text-primary-fixed-dim">Academic Nexus</span>
+</div>
+<div class="flex items-center gap-4">
+<div class="cursor-pointer active:opacity-80 hover:bg-surface-container-low dark:hover:bg-surface-container-high transition-colors p-2 rounded-full text-on-surface-variant dark:text-on-surface-variant flex items-center justify-center">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">notifications</span>
+</div>
+<div class="h-8 w-8 rounded-full bg-surface-variant flex items-center justify-center overflow-hidden border border-outline-variant cursor-pointer">
+<img alt="Student Profile Photo" class="w-full h-full object-cover" data-alt="A small, professional headshot photo of a young university student named Alex Mercer. The student is smiling warmly, dressed in smart-casual academic attire (a crisp button-down shirt). The background is a slightly blurred, bright, modern university campus setting with soft, natural daylight. The lighting is flattering and high-key, maintaining a clean, optimistic, and corporate educational aesthetic suitable for a SaaS student portal avatar." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDfflrMfZEYaPcO_5RJQL1YXWSjBu1qY9h1aHUD6PwFbYZFPMYGXWbpqP7Q01zZeVsQ8EWpk6EW8H5e4vJUxu7cJ0BUezWDCZ1gz7GquotyI9ysP8JK00mxG4gy_fGdin1IswNOg9F0RdN29lN7vaG5iHjnglMWOYrE0_WTYrsKkwrzGtM1AxCKGbj3Gm518lwuuUkn8llSaRao9KesPd9hLLorGoDdbkU8wJY67scQ9VLj_3PPZT6qXHOvQ5dxa5lRWl7NQgrGb1M"/>
+</div>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="max-w-7xl mx-auto px-4 md:px-margin py-margin">
+<!-- Breadcrumbs & Actions -->
+<div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-margin">
+<div>
+<nav class="flex text-body-sm font-body-sm text-on-surface-variant mb-2">
+<a class="hover:text-primary transition-colors" href="#">Home</a>
+<span class="mx-2 material-symbols-outlined text-body-sm">chevron_right</span>
+<a class="hover:text-primary transition-colors" href="#">Academics</a>
+<span class="mx-2 material-symbols-outlined text-body-sm">chevron_right</span>
+<span class="text-on-surface font-semibold">Class Schedule</span>
+</nav>
+<h1 class="font-display-lg text-display-lg text-on-surface">Class Schedule</h1>
+</div>
+<div class="flex items-center gap-sm">
+<button class="flex items-center gap-xs px-4 py-2 border border-outline rounded-DEFAULT text-body-md font-body-md text-on-surface hover:bg-surface-variant transition-colors bg-surface-container-lowest">
+<span class="material-symbols-outlined text-body-md">download</span>
+                    Export PDF
+                </button>
+<button class="flex items-center gap-xs px-4 py-2 bg-secondary text-on-secondary rounded-DEFAULT text-body-md font-body-md hover:bg-secondary-container transition-colors shadow-sm">
+<span class="material-symbols-outlined text-body-md">sync</span>
+                    Sync Calendar
+                </button>
+</div>
+</div>
+<!-- Weekly Timetable (Bento/Card Layout) -->
+<section class="mb-margin">
+<h2 class="font-headline-md text-headline-md text-on-surface mb-lg">Weekly Timetable</h2>
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-md">
+<!-- Monday -->
+<div class="bg-surface-container-lowest rounded-lg border border-outline-variant p-md shadow-sm hover:border-secondary transition-colors relative overflow-hidden group">
+<div class="absolute top-0 left-0 w-1 h-full bg-secondary"></div>
+<div class="flex justify-between items-center mb-sm border-b border-outline-variant pb-2">
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Monday</h3>
+<span class="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest">Oct 9</span>
+</div>
+<div class="space-y-sm">
+<!-- Class Item -->
+<div class="p-sm bg-surface-variant rounded-DEFAULT border border-surface-dim">
+<div class="flex justify-between items-start mb-1">
+<span class="font-mono-sm text-mono-sm text-primary-container bg-primary-fixed px-1 rounded">CS101</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">schedule</span> 09:00 - 10:30</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface font-medium truncate">Intro to Programming</p>
+<div class="flex items-center gap-1 mt-1 text-on-surface-variant font-body-sm text-body-sm">
+<span class="material-symbols-outlined text-[14px]">room</span> Room: Lab 202
+                            </div>
+</div>
+<!-- Class Item -->
+<div class="p-sm bg-surface-variant rounded-DEFAULT border border-surface-dim">
+<div class="flex justify-between items-start mb-1">
+<span class="font-mono-sm text-mono-sm text-primary-container bg-primary-fixed px-1 rounded">MTH205</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">schedule</span> 11:00 - 12:30</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface font-medium truncate">Linear Algebra</p>
+<div class="flex items-center gap-1 mt-1 text-on-surface-variant font-body-sm text-body-sm">
+<span class="material-symbols-outlined text-[14px]">room</span> Room: Hall A
+                            </div>
+</div>
+</div>
+</div>
+<!-- Tuesday -->
+<div class="bg-surface-container-lowest rounded-lg border border-outline-variant p-md shadow-sm hover:border-secondary transition-colors relative overflow-hidden group">
+<div class="absolute top-0 left-0 w-1 h-full bg-secondary"></div>
+<div class="flex justify-between items-center mb-sm border-b border-outline-variant pb-2">
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Tuesday</h3>
+<span class="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest">Oct 10</span>
+</div>
+<div class="space-y-sm">
+<!-- Class Item -->
+<div class="p-sm bg-surface-variant rounded-DEFAULT border border-surface-dim">
+<div class="flex justify-between items-start mb-1">
+<span class="font-mono-sm text-mono-sm text-primary-container bg-primary-fixed px-1 rounded">PHY102</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">schedule</span> 14:00 - 16:00</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface font-medium truncate">Physics I (Lab)</p>
+<div class="flex items-center gap-1 mt-1 text-on-surface-variant font-body-sm text-body-sm">
+<span class="material-symbols-outlined text-[14px]">room</span> Room: Sci-B 405
+                            </div>
+</div>
+</div>
+</div>
+<!-- Wednesday -->
+<div class="bg-surface-container-lowest rounded-lg border border-outline-variant p-md shadow-sm hover:border-secondary transition-colors relative overflow-hidden group">
+<div class="absolute top-0 left-0 w-1 h-full bg-secondary"></div>
+<div class="flex justify-between items-center mb-sm border-b border-outline-variant pb-2">
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Wednesday</h3>
+<span class="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest">Oct 11</span>
+</div>
+<div class="space-y-sm">
+<!-- Class Item -->
+<div class="p-sm bg-surface-variant rounded-DEFAULT border border-surface-dim">
+<div class="flex justify-between items-start mb-1">
+<span class="font-mono-sm text-mono-sm text-primary-container bg-primary-fixed px-1 rounded">CS101</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">schedule</span> 09:00 - 10:30</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface font-medium truncate">Intro to Programming</p>
+<div class="flex items-center gap-1 mt-1 text-on-surface-variant font-body-sm text-body-sm">
+<span class="material-symbols-outlined text-[14px]">room</span> Room: Lab 202
+                            </div>
+</div>
+</div>
+</div>
+<!-- Thursday -->
+<div class="bg-surface-container-lowest rounded-lg border border-outline-variant p-md shadow-sm hover:border-secondary transition-colors relative overflow-hidden group">
+<div class="absolute top-0 left-0 w-1 h-full bg-outline-variant group-hover:bg-secondary transition-colors"></div>
+<div class="flex justify-between items-center mb-sm border-b border-outline-variant pb-2">
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Thursday</h3>
+<span class="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest">Oct 12</span>
+</div>
+<div class="flex flex-col items-center justify-center py-lg text-on-surface-variant opacity-70">
+<span class="material-symbols-outlined text-[32px] mb-2">event_busy</span>
+<p class="font-body-sm text-body-sm">No classes scheduled</p>
+</div>
+</div>
+<!-- Friday -->
+<div class="bg-surface-container-lowest rounded-lg border border-outline-variant p-md shadow-sm hover:border-secondary transition-colors relative overflow-hidden group">
+<div class="absolute top-0 left-0 w-1 h-full bg-secondary"></div>
+<div class="flex justify-between items-center mb-sm border-b border-outline-variant pb-2">
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Friday</h3>
+<span class="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest">Oct 13</span>
+</div>
+<div class="space-y-sm">
+<!-- Class Item -->
+<div class="p-sm bg-surface-variant rounded-DEFAULT border border-surface-dim">
+<div class="flex justify-between items-start mb-1">
+<span class="font-mono-sm text-mono-sm text-primary-container bg-primary-fixed px-1 rounded">MTH205</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">schedule</span> 11:00 - 12:30</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface font-medium truncate">Linear Algebra</p>
+<div class="flex items-center gap-1 mt-1 text-on-surface-variant font-body-sm text-body-sm">
+<span class="material-symbols-outlined text-[14px]">room</span> Room: Hall A
+                            </div>
+</div>
+</div>
+</div>
+<!-- Saturday -->
+<div class="bg-surface-container-lowest rounded-lg border border-outline-variant p-md shadow-sm hover:border-secondary transition-colors relative overflow-hidden group">
+<div class="absolute top-0 left-0 w-1 h-full bg-outline-variant group-hover:bg-secondary transition-colors"></div>
+<div class="flex justify-between items-center mb-sm border-b border-outline-variant pb-2">
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Saturday</h3>
+<span class="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest">Oct 14</span>
+</div>
+<div class="flex flex-col items-center justify-center py-lg text-on-surface-variant opacity-70">
+<span class="material-symbols-outlined text-[32px] mb-2">event_busy</span>
+<p class="font-body-sm text-body-sm">No classes scheduled</p>
+</div>
+</div>
+</div>
+</section>
+<!-- Enrolled Courses Table -->
+<section>
+<h2 class="font-headline-md text-headline-md text-on-surface mb-lg">Enrolled Courses</h2>
+<div class="bg-surface-container-lowest rounded-lg border border-outline-variant shadow-sm overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-variant border-b border-outline-variant">
+<th class="font-label-md text-label-md text-on-surface-variant uppercase py-sm px-md sticky top-0">Code</th>
+<th class="font-label-md text-label-md text-on-surface-variant uppercase py-sm px-md sticky top-0">Course Name</th>
+<th class="font-label-md text-label-md text-on-surface-variant uppercase py-sm px-md sticky top-0">Credits</th>
+<th class="font-label-md text-label-md text-on-surface-variant uppercase py-sm px-md sticky top-0">Instructor</th>
+<th class="font-label-md text-label-md text-on-surface-variant uppercase py-sm px-md sticky top-0">Status</th>
+</tr>
+</thead>
+<tbody class="font-body-sm text-body-sm text-on-surface">
+<tr class="border-b border-surface-dim hover:bg-surface-container-low transition-colors">
+<td class="py-2 px-md font-mono-sm text-mono-sm">CS101</td>
+<td class="py-2 px-md font-medium">Intro to Programming</td>
+<td class="py-2 px-md">3.0</td>
+<td class="py-2 px-md flex items-center gap-2">
+<div class="w-6 h-6 rounded-full bg-primary-fixed flex items-center justify-center text-primary-container font-label-md text-label-md">JD</div>
+                                Dr. J. Doe
+                            </td>
+<td class="py-2 px-md">
+<span class="px-2 py-1 bg-secondary-container text-on-secondary-container rounded-full font-label-md text-label-md">Enrolled</span>
+</td>
+</tr>
+<tr class="border-b border-surface-dim bg-surface-bright hover:bg-surface-container-low transition-colors">
+<td class="py-2 px-md font-mono-sm text-mono-sm">MTH205</td>
+<td class="py-2 px-md font-medium">Linear Algebra</td>
+<td class="py-2 px-md">4.0</td>
+<td class="py-2 px-md flex items-center gap-2">
+<div class="w-6 h-6 rounded-full bg-primary-fixed flex items-center justify-center text-primary-container font-label-md text-label-md">AS</div>
+                                Prof. A. Smith
+                            </td>
+<td class="py-2 px-md">
+<span class="px-2 py-1 bg-secondary-container text-on-secondary-container rounded-full font-label-md text-label-md">Enrolled</span>
+</td>
+</tr>
+<tr class="border-b border-surface-dim hover:bg-surface-container-low transition-colors">
+<td class="py-2 px-md font-mono-sm text-mono-sm">PHY102</td>
+<td class="py-2 px-md font-medium">Physics I (Lab)</td>
+<td class="py-2 px-md">1.0</td>
+<td class="py-2 px-md flex items-center gap-2">
+<div class="w-6 h-6 rounded-full bg-primary-fixed flex items-center justify-center text-primary-container font-label-md text-label-md">MR</div>
+                                Dr. M. Ross
+                            </td>
+<td class="py-2 px-md">
+<span class="px-2 py-1 bg-secondary-container text-on-secondary-container rounded-full font-label-md text-label-md">Enrolled</span>
+</td>
+</tr>
+<tr class="border-b border-surface-dim bg-surface-bright hover:bg-surface-container-low transition-colors opacity-70">
+<td class="py-2 px-md font-mono-sm text-mono-sm">ENG101</td>
+<td class="py-2 px-md font-medium">Academic Writing</td>
+<td class="py-2 px-md">3.0</td>
+<td class="py-2 px-md flex items-center gap-2">
+<div class="w-6 h-6 rounded-full bg-primary-fixed flex items-center justify-center text-primary-container font-label-md text-label-md">LJ</div>
+                                L. Jenkins
+                            </td>
+<td class="py-2 px-md">
+<span class="px-2 py-1 bg-error-container text-on-error-container rounded-full font-label-md text-label-md">Dropped</span>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+</main>
+<!-- JSON Component: BottomNavBar (Visible on Mobile) -->
+<nav class="md:hidden fixed bottom-0 left-0 w-full z-50 flex justify-around items-center h-16 px-md bg-surface-container-lowest dark:bg-surface-container-low border-t border-outline-variant dark:border-outline shadow-sm">
+<a class="flex flex-col items-center justify-center text-on-surface-variant dark:text-on-surface-variant hover:text-secondary dark:hover:text-secondary-fixed transition-all active:scale-95 transition-transform flex-1" href="#">
+<span class="material-symbols-outlined mb-1">dashboard</span>
+<span class="font-label-md text-label-md">Dashboard</span>
+</a>
+<a class="flex flex-col items-center justify-center bg-secondary-container dark:bg-secondary text-on-secondary-container dark:text-on-secondary rounded-full px-4 py-1 hover:text-secondary dark:hover:text-secondary-fixed transition-all active:scale-95 transition-transform flex-1 mx-1" href="#">
+<span class="material-symbols-outlined mb-1">calendar_month</span>
+<span class="font-label-md text-label-md">Rosters</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant dark:text-on-surface-variant hover:text-secondary dark:hover:text-secondary-fixed transition-all active:scale-95 transition-transform flex-1" href="#">
+<span class="material-symbols-outlined mb-1">account_balance_wallet</span>
+<span class="font-label-md text-label-md">Finance</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant dark:text-on-surface-variant hover:text-secondary dark:hover:text-secondary-fixed transition-all active:scale-95 transition-transform flex-1" href="#">
+<span class="material-symbols-outlined mb-1">settings</span>
+<span class="font-label-md text-label-md">Settings</span>
+</a>
+</nav>
+</body></html>

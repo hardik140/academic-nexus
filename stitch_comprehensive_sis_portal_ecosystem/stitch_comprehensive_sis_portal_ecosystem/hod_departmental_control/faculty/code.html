@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>HOD Portal - Faculty Members</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "secondary": "#0051d5",
+                      "on-primary": "#ffffff",
+                      "on-background": "#0b1c30",
+                      "inverse-surface": "#213145",
+                      "on-secondary-fixed": "#00174b",
+                      "outline-variant": "#c6c6cd",
+                      "surface-container-low": "#eff4ff",
+                      "on-error-container": "#93000a",
+                      "on-surface-variant": "#45464d",
+                      "on-secondary-fixed-variant": "#003ea8",
+                      "on-primary-fixed-variant": "#3f465c",
+                      "surface": "#f8f9ff",
+                      "on-secondary": "#ffffff",
+                      "on-tertiary-container": "#818486",
+                      "inverse-primary": "#bec6e0",
+                      "secondary-fixed": "#dbe1ff",
+                      "surface-container-highest": "#d3e4fe",
+                      "error-container": "#ffdad6",
+                      "tertiary-container": "#191c1e",
+                      "on-primary-container": "#7c839b",
+                      "on-secondary-container": "#fefcff",
+                      "surface-bright": "#f8f9ff",
+                      "on-tertiary-fixed-variant": "#444749",
+                      "primary-fixed-dim": "#bec6e0",
+                      "on-primary-fixed": "#131b2e",
+                      "surface-container": "#e5eeff",
+                      "primary-fixed": "#dae2fd",
+                      "outline": "#76777d",
+                      "tertiary-fixed": "#e0e3e5",
+                      "primary": "#000000",
+                      "tertiary": "#000000",
+                      "secondary-container": "#316bf3",
+                      "on-surface": "#0b1c30",
+                      "on-error": "#ffffff",
+                      "on-tertiary-fixed": "#191c1e",
+                      "inverse-on-surface": "#eaf1ff",
+                      "on-tertiary": "#ffffff",
+                      "surface-variant": "#d3e4fe",
+                      "primary-container": "#131b2e",
+                      "background": "#f8f9ff",
+                      "surface-container-high": "#dce9ff",
+                      "secondary-fixed-dim": "#b4c5ff",
+                      "surface-tint": "#565e74",
+                      "tertiary-fixed-dim": "#c4c7c9",
+                      "surface-dim": "#cbdbf5",
+                      "error": "#ba1a1a",
+                      "surface-container-lowest": "#ffffff"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.125rem",
+                      "lg": "0.25rem",
+                      "xl": "0.5rem",
+                      "full": "0.75rem"
+              },
+              "spacing": {
+                      "md": "16px",
+                      "sm": "8px",
+                      "gutter": "24px",
+                      "base": "4px",
+                      "grid_columns": "12",
+                      "xl": "32px",
+                      "margin": "32px",
+                      "xs": "4px",
+                      "lg": "24px"
+              },
+              "fontFamily": {
+                      "body-md": [
+                              "Inter"
+                      ],
+                      "headline-lg": [
+                              "Inter"
+                      ],
+                      "headline-md": [
+                              "Inter"
+                      ],
+                      "display-lg": [
+                              "Inter"
+                      ],
+                      "body-lg": [
+                              "Inter"
+                      ],
+                      "mono-sm": [
+                              "monospace"
+                      ],
+                      "label-md": [
+                              "Inter"
+                      ],
+                      "headline-sm": [
+                              "Inter"
+                      ],
+                      "body-sm": [
+                              "Inter"
+                      ]
+              },
+              "fontSize": {
+                      "body-md": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "headline-lg": [
+                              "28px",
+                              {
+                                      "lineHeight": "36px",
+                                      "letterSpacing": "-0.01em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "headline-md": [
+                              "20px",
+                              {
+                                      "lineHeight": "28px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "display-lg": [
+                              "36px",
+                              {
+                                      "lineHeight": "44px",
+                                      "letterSpacing": "-0.02em",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "body-lg": [
+                              "16px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "mono-sm": [
+                              "12px",
+                              {
+                                      "lineHeight": "16px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "label-md": [
+                              "12px",
+                              {
+                                      "lineHeight": "16px",
+                                      "letterSpacing": "0.05em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "headline-sm": [
+                              "16px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "body-sm": [
+                              "13px",
+                              {
+                                      "lineHeight": "18px",
+                                      "fontWeight": "400"
+                              }
+                      ]
+              }
+      },
+          },
+        }
+    </script>
+<style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: theme('colors.background');
+            color: theme('colors.on-background');
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="flex flex-col min-h-screen bg-background text-on-background">
+<!-- TopAppBar -->
+<header class="bg-surface-bright dark:bg-surface-dim border-b border-outline-variant dark:border-outline w-full sticky top-0 z-50 transition-colors duration-200 flex justify-between items-center px-lg py-md w-full md:hidden">
+<div class="flex items-center gap-sm">
+<span class="material-symbols-outlined text-primary dark:text-primary-fixed-dim" data-icon="menu">menu</span>
+<span class="font-headline-md text-headline-md font-bold text-secondary dark:text-secondary-fixed">HOD Portal</span>
+</div>
+<div class="flex items-center gap-sm">
+<div class="w-8 h-8 rounded-full bg-surface-variant flex items-center justify-center overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="A small circular avatar placeholder image showing a generic user silhouette in a professional light mode academic setting. The colors are muted blues and grays to match the UI theme." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCjQQiIIxfHY_PIlDjYQl9ib3rfC9Em6yHoVHvvVP1Oa1Wb2HWh2wxbap68T-peT2cA5FzyA1O-mwwuz29k_UnbQeuAaLBC1SV8VcBlMxOg6iXEI06r3tdJalrB01lxcfpamOaW5Xp-TLsWLpqC1FfN0hnWH5IqPq-g902i1iaoCRx8qRkyfV7QPMQEA7haH28jEnDPZ7j7A1M4qIWmXAXeyaCGOKpB7TZcGaTx32yQnK1NlTwvTwgUjOYBkEFbQO62UQmKQo4FhKs"/>
+</div>
+</div>
+</header>
+<!-- Desktop TopAppBar (Nav Shell) -->
+<header class="hidden md:flex bg-surface-bright dark:bg-surface-dim border-b border-outline-variant dark:border-outline w-full sticky top-0 z-50 transition-colors duration-200 justify-between items-center px-lg py-md">
+<div class="flex items-center gap-xl">
+<span class="font-headline-lg text-headline-lg font-bold text-secondary dark:text-secondary-fixed">HOD Portal</span>
+<nav class="flex gap-lg">
+<a class="font-label-md text-label-md text-on-surface-variant dark:text-surface-variant hover:bg-surface-container-low dark:hover:bg-surface-container-high transition-colors duration-200 px-sm py-xs rounded flex items-center gap-xs" href="#"><span class="material-symbols-outlined text-[16px]">dashboard</span> Dashboard</a>
+<a class="font-label-md text-label-md text-on-surface-variant dark:text-surface-variant hover:bg-surface-container-low dark:hover:bg-surface-container-high transition-colors duration-200 px-sm py-xs rounded flex items-center gap-xs" href="#"><span class="material-symbols-outlined text-[16px]">fact_check</span> Approvals</a>
+<a class="font-label-md text-label-md text-primary dark:text-primary-fixed bg-surface-container-low dark:bg-surface-container-high px-sm py-xs rounded flex items-center gap-xs" href="#"><span class="material-symbols-outlined text-[16px]">groups</span> Staff</a>
+<a class="font-label-md text-label-md text-on-surface-variant dark:text-surface-variant hover:bg-surface-container-low dark:hover:bg-surface-container-high transition-colors duration-200 px-sm py-xs rounded flex items-center gap-xs" href="#"><span class="material-symbols-outlined text-[16px]">analytics</span> Reports</a>
+</nav>
+</div>
+<div class="flex items-center gap-md">
+<div class="w-10 h-10 rounded-full bg-surface-variant flex items-center justify-center overflow-hidden border border-outline-variant">
+<img class="w-full h-full object-cover" data-alt="A small circular avatar placeholder image showing a generic user silhouette in a professional light mode academic setting. The colors are muted blues and grays to match the UI theme." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCAL0YTSUUt0B3sS_CuDO_JtFwPOphufbJoMOvsgkiv_Iy1MBydiDSDdB2XgxQzkpjGDuDHFV0kp12hgsdPSZZhZHJg5frYaDKTqkDchabXWYDQExryAvc-aFLijI91xyDj8QCCJNS7NzSrCGVah2u5lgYhTcsKBT8v2eH2CKWG0HicMuGcmXJo02A9kGhTHClcmdWyKQlHdu5OE2QPJKeUOIryeyj-AYUx8Ux0K_B7Eqs06WJGvufawoOaovCGi0rME6_IEyhUZwI"/>
+</div>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="flex-grow p-md md:p-xl md:max-w-[1440px] md:mx-auto w-full mb-[80px] md:mb-0">
+<!-- Header & Actions -->
+<div class="mb-lg flex flex-col md:flex-row md:items-center justify-between gap-md">
+<h1 class="font-headline-lg text-headline-lg text-on-surface">Faculty Directory</h1>
+<div class="flex gap-sm">
+<div class="relative flex-grow md:w-64">
+<span class="material-symbols-outlined absolute left-sm top-1/2 -translate-y-1/2 text-on-surface-variant" data-icon="search">search</span>
+<input class="w-full pl-[36px] pr-sm py-sm border border-outline-variant rounded bg-surface-container-lowest focus:ring-2 focus:ring-secondary focus:border-secondary font-body-md text-body-md text-on-surface placeholder:text-on-surface-variant" placeholder="Search faculty..." type="text"/>
+</div>
+<button class="flex items-center justify-center px-md py-sm border border-outline-variant rounded bg-surface-container-lowest hover:bg-surface-container-low transition-colors text-on-surface">
+<span class="material-symbols-outlined" data-icon="filter_list">filter_list</span>
+</button>
+</div>
+</div>
+<!-- Faculty Cards Grid -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-md md:gap-lg">
+<!-- Card 1 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md shadow-sm hover:border-secondary transition-colors duration-200 group">
+<div class="flex justify-between items-start mb-md">
+<div class="flex gap-md items-center">
+<div class="w-12 h-12 rounded-full bg-surface-container flex items-center justify-center font-headline-sm text-headline-sm text-primary">
+                            SJ
+                        </div>
+<div>
+<h2 class="font-headline-sm text-headline-sm text-on-surface">Dr. Sarah Jenkins</h2>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Computer Science</p>
+</div>
+</div>
+<button class="text-on-surface-variant hover:text-primary transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100 md:block hidden">
+<span class="material-symbols-outlined" data-icon="more_vert">more_vert</span>
+</button>
+</div>
+<div class="space-y-xs mb-md font-body-sm text-body-sm text-on-surface-variant">
+<div class="flex items-center gap-sm">
+<span class="material-symbols-outlined text-[16px]" data-icon="mail">mail</span>
+<span>s.jenkins@university.edu</span>
+</div>
+<div class="flex items-center gap-sm">
+<span class="material-symbols-outlined text-[16px]" data-icon="phone">phone</span>
+<span class="font-mono-sm text-mono-sm">+1 (555) 019-2834</span>
+</div>
+</div>
+<div class="flex gap-sm">
+<span class="px-sm py-xs rounded bg-[#e6f4ea] text-[#137333] font-label-md text-label-md border border-[#ceead6]">Active</span>
+<span class="px-sm py-xs rounded bg-surface-container-high text-secondary font-label-md text-label-md border border-outline-variant">Teacher</span>
+</div>
+</div>
+<!-- Card 2 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md shadow-sm hover:border-secondary transition-colors duration-200 group">
+<div class="flex justify-between items-start mb-md">
+<div class="flex gap-md items-center">
+<div class="w-12 h-12 rounded-full bg-surface-container flex items-center justify-center font-headline-sm text-headline-sm text-primary">
+                            MR
+                        </div>
+<div>
+<h2 class="font-headline-sm text-headline-sm text-on-surface">Prof. Marcus Reed</h2>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Computer Science</p>
+</div>
+</div>
+<button class="text-on-surface-variant hover:text-primary transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100 md:block hidden">
+<span class="material-symbols-outlined" data-icon="more_vert">more_vert</span>
+</button>
+</div>
+<div class="space-y-xs mb-md font-body-sm text-body-sm text-on-surface-variant">
+<div class="flex items-center gap-sm">
+<span class="material-symbols-outlined text-[16px]" data-icon="mail">mail</span>
+<span>m.reed@university.edu</span>
+</div>
+<div class="flex items-center gap-sm">
+<span class="material-symbols-outlined text-[16px]" data-icon="phone">phone</span>
+<span class="font-mono-sm text-mono-sm">+1 (555) 019-8821</span>
+</div>
+</div>
+<div class="flex gap-sm">
+<span class="px-sm py-xs rounded bg-[#e6f4ea] text-[#137333] font-label-md text-label-md border border-[#ceead6]">Active</span>
+<span class="px-sm py-xs rounded bg-[#f3e8fd] text-[#681da8] font-label-md text-label-md border border-[#eaddf8]">HOD</span>
+</div>
+</div>
+<!-- Card 3 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md shadow-sm hover:border-secondary transition-colors duration-200 group">
+<div class="flex justify-between items-start mb-md">
+<div class="flex gap-md items-center">
+<div class="w-12 h-12 rounded-full bg-surface-container flex items-center justify-center font-headline-sm text-headline-sm text-primary">
+                            EC
+                        </div>
+<div>
+<h2 class="font-headline-sm text-headline-sm text-on-surface">Dr. Elena Chen</h2>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Computer Science</p>
+</div>
+</div>
+<button class="text-on-surface-variant hover:text-primary transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100 md:block hidden">
+<span class="material-symbols-outlined" data-icon="more_vert">more_vert</span>
+</button>
+</div>
+<div class="space-y-xs mb-md font-body-sm text-body-sm text-on-surface-variant">
+<div class="flex items-center gap-sm">
+<span class="material-symbols-outlined text-[16px]" data-icon="mail">mail</span>
+<span>e.chen@university.edu</span>
+</div>
+<div class="flex items-center gap-sm">
+<span class="material-symbols-outlined text-[16px]" data-icon="phone">phone</span>
+<span class="font-mono-sm text-mono-sm">+1 (555) 019-3349</span>
+</div>
+</div>
+<div class="flex gap-sm">
+<span class="px-sm py-xs rounded bg-[#f1f3f4] text-[#5f6368] font-label-md text-label-md border border-[#dadce0]">Inactive</span>
+<span class="px-sm py-xs rounded bg-surface-container-high text-secondary font-label-md text-label-md border border-outline-variant">Teacher</span>
+</div>
+</div>
+</div>
+</main>
+<!-- BottomNavBar (Mobile Only) -->
+<nav class="md:hidden flex justify-around items-center w-full h-16 bg-surface-container fixed bottom-0 w-full z-50 shadow-sm border-t border-outline-variant dark:border-outline">
+<a class="flex flex-col items-center justify-center text-on-surface-variant dark:text-surface-variant px-md py-xs hover:text-primary dark:hover:text-primary-fixed scale-95 active:scale-90 transition-transform font-label-md text-label-md" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span>Dashboard</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant dark:text-surface-variant px-md py-xs hover:text-primary dark:hover:text-primary-fixed scale-95 active:scale-90 transition-transform font-label-md text-label-md" href="#">
+<span class="material-symbols-outlined" data-icon="fact_check">fact_check</span>
+<span>Approvals</span>
+</a>
+<a class="flex flex-col items-center justify-center bg-secondary-container dark:bg-secondary text-on-secondary-container dark:text-on-secondary rounded-full px-md py-xs scale-95 active:scale-90 transition-transform font-label-md text-label-md" href="#">
+<span class="material-symbols-outlined" data-icon="groups" data-weight="fill" style="font-variation-settings: 'FILL' 1;">groups</span>
+<span>Staff</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant dark:text-surface-variant px-md py-xs hover:text-primary dark:hover:text-primary-fixed scale-95 active:scale-90 transition-transform font-label-md text-label-md" href="#">
+<span class="material-symbols-outlined" data-icon="analytics">analytics</span>
+<span>Reports</span>
+</a>
+</nav>
+</body></html>
