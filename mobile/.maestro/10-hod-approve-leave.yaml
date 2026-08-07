@@ -1,0 +1,21 @@
+# Run with: maestro test 10-hod-approve-leave.yaml -e STAFF_NAME="Jane Doe"
+# Assumes a seeded HOD account already logged in, with a pending leave
+# request in `leave_requests` from STAFF_NAME (a teacher in the HOD's own
+# department — RLS + the app-layer department-ownership check both require
+# this). Verification that the row actually flipped to `approved` in the DB
+# happens in the companion Node script (service-role client), same
+# discipline as every other Maestro flow in this session.
+appId: edu.academicnexus.app
+---
+- launchApp
+- assertVisible:
+    text: ".* HOD Dashboard"
+    timeout: 15000
+- tapOn: "Approvals"
+- assertVisible: "Pending Requests"
+- assertVisible: "${STAFF_NAME}"
+
+- tapOn: "Approve"
+- assertVisible:
+    text: "Processed History"
+    timeout: 10000

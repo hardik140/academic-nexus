@@ -2,15 +2,20 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { requireRole } from "@/lib/rbac";
+import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib/rbac";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/types/database";
 
-export async function updateComplaintStatus(
+/**
+ * Shared by the web Server Action below and app/api/mobile/complaints/status's
+ * Route Handler — same guarded logic either way, just a different transport.
+ */
+export async function updateComplaintStatusCore(
+  supabase: SupabaseClient<Database>,
+  actor: AuthorizedActor,
   complaintId: string,
   status: "in_progress" | "resolved"
 ) {
-  const actor = await requireRole(["warden", "admin"]);
-  const supabase = await createClient();
-
   const { error } = await supabase
     .from("complaints")
     .update({
@@ -23,6 +28,24 @@ export async function updateComplaintStatus(
   if (error) {
     throw new Error(error.message);
   }
+}
 
+export async function updateComplaintStatus(
+  complaintId: string,
+  status: "in_progress" | "resolved"
+) {
+  const actor = await requireRole(["warden", "admin"]);
+  const supabase = await createClient();
+  await updateComplaintStatusCore(supabase, actor, complaintId, status);
   revalidatePath("/warden/complaints");
+}
+
+/** Called by app/api/mobile/complaints/status/route.ts. */
+export async function updateComplaintStatusViaRequest(
+  request: Request,
+  complaintId: string,
+  status: "in_progress" | "resolved"
+) {
+  const { supabase, ...actor } = await requireRoleFromRequest(request, ["warden", "admin"]);
+  await updateComplaintStatusCore(supabase, actor, complaintId, status);
 }

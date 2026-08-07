@@ -1,0 +1,15 @@
+# Run with: maestro test 01-login.yaml -e MAGIC_LINK="$MAGIC_LINK"
+# MAGIC_LINK comes from the companion seed script's admin.generateLink()
+# call — the same "act like the user tapped the email link" trick every
+# Playwright script this session uses, just via Maestro's openLink instead
+# of page.goto().
+appId: edu.academicnexus.app
+---
+- launchApp
+- assertVisible: "Academic Nexus"
+- assertVisible: "Continue with Google"
+- assertVisible: "Send Magic Link"
+- openLink: ${MAGIC_LINK}
+- assertVisible:
+    text: "Welcome back,.*"
+    timeout: 15000

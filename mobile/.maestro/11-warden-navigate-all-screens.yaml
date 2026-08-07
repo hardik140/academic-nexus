@@ -1,0 +1,17 @@
+# Run after logging in as a seeded Warden account (see 01-login.yaml — same
+# MAGIC_LINK pattern, generated for a warden profile).
+appId: edu.academicnexus.app
+---
+- launchApp
+- assertVisible:
+    text: "Warden Dashboard"
+    timeout: 15000
+
+- tapOn: "Rooms"
+- assertVisible: "Search by block or room #..."
+
+- tapOn: "Gate Passes"
+- assertVisible: "Pending Requests"
+
+- tapOn: "Complaints"
+- assertVisible: "Hostel Complaints"

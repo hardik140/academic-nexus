@@ -1,0 +1,28 @@
+# Run with:
+#   maestro test 17-finance-award-scholarship.yaml \
+#     -e STUDENT_QUERY="jane" -e STUDENT_LABEL="ENR2026001 — Jane Doe"
+# Assumes a seeded finance account already logged in, with a real student
+# matching STUDENT_QUERY/STUDENT_LABEL. Verification against `scholarships`
+# happens in the companion Node script (service-role client).
+appId: edu.academicnexus.app
+---
+- launchApp
+- assertVisible:
+    text: "Finance Dashboard"
+    timeout: 15000
+- tapOn: "Scholarships"
+- tapOn: "+ Award Scholarship"
+
+- tapOn: "Search by name or enrollment number..."
+- inputText: "${STUDENT_QUERY}"
+- tapOn: "${STUDENT_LABEL}"
+
+- tapOn: "e.g. Dean's Merit Award"
+- inputText: "E2E Maestro Scholarship"
+- tapOn: "0.00"
+- inputText: "2000"
+
+- tapOn: "Award Scholarship"
+- assertVisible:
+    text: "Scholarship awarded successfully.*"
+    timeout: 10000

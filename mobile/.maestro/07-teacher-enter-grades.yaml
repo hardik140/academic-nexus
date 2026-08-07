@@ -1,0 +1,23 @@
+# Run with: maestro test 07-teacher-enter-grades.yaml -e COURSE_CODE="CS101"
+# Assumes a seeded teacher account already logged in, with COURSE_CODE among
+# their assigned courses and at least one enrolled student. Verification
+# that the row actually landed in `marks` happens in the companion Node
+# script (service-role client), same discipline as 03/04.
+appId: edu.academicnexus.app
+---
+- launchApp
+- assertVisible:
+    text: "Welcome,.*"
+    timeout: 15000
+- tapOn: "Grading"
+- tapOn: "${COURSE_CODE}"
+- tapOn: "Internal 1"
+
+- tapOn:
+    id: "marks-input"
+    index: 0
+- inputText: "88"
+- tapOn: "Save Marks"
+- assertVisible:
+    text: "Marks saved successfully.*"
+    timeout: 10000

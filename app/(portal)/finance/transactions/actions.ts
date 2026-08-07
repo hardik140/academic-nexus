@@ -2,20 +2,30 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { requireRole } from "@/lib/rbac";
+import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib/rbac";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 
 type PaymentMethod = Database["public"]["Tables"]["payments"]["Row"]["method"];
 
-export async function recordPayment(
-  feeId: string,
-  amount: number,
-  method: PaymentMethod,
-  transactionRef?: string,
-  notes?: string
+export interface RecordPaymentParams {
+  feeId: string;
+  amount: number;
+  method: PaymentMethod;
+  transactionRef?: string;
+  notes?: string;
+}
+
+/**
+ * Shared by the web Server Action below and app/api/mobile/finance/payment's
+ * Route Handler — same guarded logic either way, just a different transport.
+ */
+export async function recordPaymentCore(
+  supabase: SupabaseClient<Database>,
+  actor: AuthorizedActor,
+  params: RecordPaymentParams
 ) {
-  const actor = await requireRole(["finance", "admin"]);
-  const supabase = await createClient();
+  const { feeId, amount, method, transactionRef, notes } = params;
 
   const { data: fee, error: feeError } = await supabase
     .from("fees")
@@ -53,8 +63,25 @@ export async function recordPayment(
   if (error) {
     throw new Error(error.message);
   }
+}
 
+export async function recordPayment(
+  feeId: string,
+  amount: number,
+  method: PaymentMethod,
+  transactionRef?: string,
+  notes?: string
+) {
+  const actor = await requireRole(["finance", "admin"]);
+  const supabase = await createClient();
+  await recordPaymentCore(supabase, actor, { feeId, amount, method, transactionRef, notes });
   revalidatePath("/finance/transactions");
   revalidatePath("/finance/dashboard");
   revalidatePath("/finance/reports");
+}
+
+/** Called by app/api/mobile/finance/payment/route.ts. */
+export async function recordPaymentViaRequest(request: Request, params: RecordPaymentParams) {
+  const { supabase, ...actor } = await requireRoleFromRequest(request, ["finance", "admin"]);
+  await recordPaymentCore(supabase, actor, params);
 }

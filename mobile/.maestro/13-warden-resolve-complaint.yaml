@@ -1,0 +1,23 @@
+# Run with: maestro test 13-warden-resolve-complaint.yaml -e COMPLAINT_TITLE="Leaky tap"
+# Assumes a seeded warden account already logged in, with an "open"
+# complaints row titled COMPLAINT_TITLE in a hostel-related category.
+# Exercises the full open -> in_progress -> resolved transition. Verification
+# against the DB happens in the companion Node script.
+appId: edu.academicnexus.app
+---
+- launchApp
+- assertVisible:
+    text: "Warden Dashboard"
+    timeout: 15000
+- tapOn: "Complaints"
+- assertVisible: "${COMPLAINT_TITLE}"
+
+- tapOn: "Start"
+- assertVisible:
+    text: "in progress"
+    timeout: 10000
+
+- tapOn: "Resolve"
+- assertVisible:
+    text: "resolved"
+    timeout: 10000

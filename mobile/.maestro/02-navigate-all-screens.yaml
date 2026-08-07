@@ -1,0 +1,36 @@
+# Run after 01-login.yaml (same session — Maestro persists app state across
+# a `maestro test` invocation covering multiple flow files, or chain via a
+# single flow that includes login first).
+appId: edu.academicnexus.app
+---
+- launchApp
+- assertVisible:
+    text: "Welcome back,.*"
+    timeout: 15000
+
+- tapOn: "Courses"
+- assertVisible: "Courses"
+
+- tapOn: "Attendance"
+- assertVisible: "Overall Attendance"
+
+- tapOn: "Fees"
+- assertVisible: "Total Billed"
+
+- tapOn: "More"
+- assertVisible: "Schedule"
+- assertVisible: "Grades"
+- assertVisible: "Hostel"
+- assertVisible: "Gate Pass"
+- assertVisible: "Complaints"
+
+- tapOn: "Schedule"
+- assertVisible: "Weekly Timetable"
+- back
+
+- tapOn: "Grades"
+- assertVisible: "Current CGPA"
+- back
+
+- tapOn: "Hostel"
+- assertVisible: "My Room"

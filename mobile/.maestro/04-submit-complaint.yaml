@@ -1,0 +1,21 @@
+appId: edu.academicnexus.app
+---
+- launchApp
+- assertVisible:
+    text: "Welcome back,.*"
+    timeout: 15000
+- tapOn: "More"
+- tapOn: "Complaints"
+- assertVisible: "My Complaints"
+
+- tapOn: "+ New Complaint"
+- tapOn: "Plumbing"
+- tapOn: "Brief summary of the issue"
+- inputText: "E2E Maestro Test Complaint"
+- tapOn: "Detailed description of the issue..."
+- inputText: "Submitted by the Maestro E2E flow."
+- tapOn: "Submit Complaint"
+- assertVisible:
+    text: "Complaint submitted.*"
+    timeout: 10000
+- assertVisible: "E2E Maestro Test Complaint"

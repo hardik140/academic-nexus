@@ -1,0 +1,19 @@
+appId: edu.academicnexus.app
+---
+- launchApp
+- assertVisible:
+    text: "System Administration"
+    timeout: 15000
+- tapOn: "Departments"
+- tapOn: "+ Add Department"
+
+- tapOn: "e.g. Computer Science & Engineering"
+- inputText: "E2E Maestro Department"
+- tapOn: "e.g. CSE"
+- inputText: "EMD"
+
+- tapOn: "Create Department"
+- assertVisible:
+    text: "Department created successfully.*"
+    timeout: 10000
+- assertVisible: "EMD"

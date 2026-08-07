@@ -1,0 +1,16 @@
+# Maestro E2E config — Student portal pilot.
+#
+# NOT executable in the environment this app was built in: Maestro needs a
+# JVM (none installed) and a real iOS Simulator/Android Emulator/device
+# (none available — this is a Windows CLI environment with no Xcode, no
+# Android SDK, no ANDROID_HOME). These flows are written and ready to run,
+# not run — see the "Running these flows" section in the RN dev log for
+# what you need locally (Android Studio + an AVD, or a physical device with
+# the Expo Go / a dev build) to actually execute them.
+#
+# Every flow follows the same seed → drive the real UI → verify against the
+# DB → clean up discipline as every Playwright script this session — the
+# seeding/verification/cleanup side is a Node script using the
+# @supabase/supabase-js admin client (same pattern as e2e-admin, e2e-redis,
+# etc.), run before/after `maestro test` via the companion run.sh.
+appId: edu.academicnexus.app

@@ -1,0 +1,22 @@
+# Run with: maestro test 16-finance-record-payment.yaml -e STUDENT_NAME="Jane Doe"
+# Assumes a seeded finance account already logged in, with an unpaid `fees`
+# row for a student named STUDENT_NAME (from the invoice-raising flow, or
+# seeded directly). Verification that `payments` got a new row (and the
+# `fees.paid_amount` trigger fired) happens in the companion Node script.
+appId: edu.academicnexus.app
+---
+- launchApp
+- assertVisible:
+    text: "Finance Dashboard"
+    timeout: 15000
+- tapOn: "Transactions"
+- assertVisible: "${STUDENT_NAME}"
+
+- tapOn: "Record Payment"
+- assertVisible:
+    text: "Record Payment — ${STUDENT_NAME}"
+    timeout: 5000
+- tapOn: "Confirm Payment"
+- assertVisible:
+    text: "Payment recorded successfully.*"
+    timeout: 10000

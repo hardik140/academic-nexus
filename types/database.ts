@@ -708,6 +708,24 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["placements"]["Insert"]>;
         Relationships: [];
       };
+
+      device_tokens: {
+        Row: {
+          id: string;
+          college_id: string;
+          user_id: string;
+          expo_push_token: string;
+          platform: "ios" | "android";
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: OptionalKeys<
+          Database["public"]["Tables"]["device_tokens"]["Row"],
+          "id" | "created_at" | "updated_at"
+        >;
+        Update: Partial<Database["public"]["Tables"]["device_tokens"]["Insert"]>;
+        Relationships: [];
+      };
     };
 
     Views: {

@@ -1,0 +1,26 @@
+# Run with: maestro test 22-admin-create-user.yaml -e TEST_EMAIL="e2e-maestro-$(date +%s)@example.com"
+# A fresh, never-used email is required each run — createUserCore calls the
+# real Supabase Admin API (auth.admin.createUser), which rejects duplicates.
+# Verification that both the auth.users row and the trigger-created profiles
+# row exist happens in the companion Node script (service-role client), plus
+# cleanup (admin.auth.admin.deleteUser) — same discipline as every other
+# Maestro flow this session.
+appId: edu.academicnexus.app
+---
+- launchApp
+- assertVisible:
+    text: "System Administration"
+    timeout: 15000
+- tapOn: "Users"
+- tapOn: "+ Add User"
+
+- tapOn: "e.g. Jane Doe"
+- inputText: "E2E Maestro User"
+- tapOn: "jane@college.edu"
+- inputText: "${TEST_EMAIL}"
+
+- tapOn: "Create User"
+- assertVisible:
+    text: "User created successfully.*"
+    timeout: 10000
+- assertVisible: "E2E Maestro User"

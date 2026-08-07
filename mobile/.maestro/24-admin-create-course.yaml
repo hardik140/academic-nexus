@@ -1,0 +1,22 @@
+# Run with: maestro test 24-admin-create-course.yaml -e DEPT_CODE="CSE"
+# Assumes a seeded department with code DEPT_CODE already exists.
+appId: edu.academicnexus.app
+---
+- launchApp
+- assertVisible:
+    text: "System Administration"
+    timeout: 15000
+- tapOn: "Courses"
+- tapOn: "+ Add Course"
+
+- tapOn: "e.g. Data Structures"
+- inputText: "E2E Maestro Course"
+- tapOn: "e.g. CS201"
+- inputText: "E2E101"
+- tapOn: "${DEPT_CODE}"
+
+- tapOn: "Create Course"
+- assertVisible:
+    text: "Course created successfully.*"
+    timeout: 10000
+- assertVisible: "E2E101"

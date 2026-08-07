@@ -1,0 +1,17 @@
+appId: edu.academicnexus.app
+---
+- launchApp
+- assertVisible:
+    text: "Institutional Overview"
+    timeout: 15000
+- tapOn: "📢 Send Announcement"
+
+- tapOn: "e.g. Campus Update"
+- inputText: "E2E Maestro Announcement"
+- tapOn: "Write your announcement..."
+- inputText: "Sent by the Maestro E2E flow."
+
+- tapOn: "Send"
+- assertVisible:
+    text: "Announcement sent to.*"
+    timeout: 10000

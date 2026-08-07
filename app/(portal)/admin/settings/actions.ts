@@ -2,8 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { requireRole } from "@/lib/rbac";
+import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib/rbac";
 import { logAudit } from "@/lib/audit";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/types/database";
 
 export interface CollegeSettingsUpdate {
   name: string;
@@ -20,10 +22,15 @@ export interface CollegeSettingsUpdate {
   country?: string;
 }
 
-export async function updateCollege(fields: CollegeSettingsUpdate) {
-  const actor = await requireRole(["admin"]);
-  const supabase = await createClient();
-
+/**
+ * Shared by the web Server Action below and
+ * app/api/mobile/admin/update-college's Route Handler.
+ */
+export async function updateCollegeCore(
+  supabase: SupabaseClient<Database>,
+  actor: AuthorizedActor,
+  fields: CollegeSettingsUpdate
+) {
   if (!fields.name.trim() || !fields.code.trim()) {
     throw new Error("Institution name and code are required.");
   }
@@ -51,6 +58,17 @@ export async function updateCollege(fields: CollegeSettingsUpdate) {
   }
 
   await logAudit(supabase, actor, "Updated institution settings", "colleges", actor.collegeId);
+}
 
+export async function updateCollege(fields: CollegeSettingsUpdate) {
+  const actor = await requireRole(["admin"]);
+  const supabase = await createClient();
+  await updateCollegeCore(supabase, actor, fields);
   revalidatePath("/admin/settings");
+}
+
+/** Called by app/api/mobile/admin/update-college/route.ts. */
+export async function updateCollegeViaRequest(request: Request, fields: CollegeSettingsUpdate) {
+  const { supabase, ...actor } = await requireRoleFromRequest(request, ["admin"]);
+  await updateCollegeCore(supabase, actor, fields);
 }

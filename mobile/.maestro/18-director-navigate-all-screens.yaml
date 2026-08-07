@@ -1,0 +1,19 @@
+# Run after logging in as a seeded Director account (see 01-login.yaml —
+# same MAGIC_LINK pattern, generated for a director profile).
+appId: edu.academicnexus.app
+---
+- launchApp
+- assertVisible:
+    text: "Institutional Overview"
+    timeout: 15000
+
+- tapOn: "Analytics"
+- assertVisible: "Department-wise Enrollment"
+
+- tapOn: "Departments"
+
+- tapOn: "Faculty"
+- assertVisible: "Search by name, department, or role..."
+
+- tapOn: "Placements"
+- assertVisible: "Placement Records"

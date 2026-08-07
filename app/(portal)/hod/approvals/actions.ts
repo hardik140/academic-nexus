@@ -2,15 +2,20 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { requireRole } from "@/lib/rbac";
+import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib/rbac";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/types/database";
 
-export async function actOnLeaveRequest(
+/**
+ * Shared by the web Server Action below and app/api/mobile/leave/act's
+ * Route Handler — same guarded logic either way, just a different transport.
+ */
+export async function actOnLeaveRequestCore(
+  supabase: SupabaseClient<Database>,
+  actor: AuthorizedActor,
   requestId: string,
   action: "approved" | "rejected"
 ) {
-  const actor = await requireRole(["hod", "admin"]);
-  const supabase = await createClient();
-
   // A HOD may only act on leave requests from staff in their own
   // department; admin is unrestricted. leave_requests_read (RLS) is
   // college-wide for hod, not department-scoped, so this app-layer check
@@ -53,6 +58,24 @@ export async function actOnLeaveRequest(
   if (error) {
     throw new Error(error.message);
   }
+}
 
+export async function actOnLeaveRequest(
+  requestId: string,
+  action: "approved" | "rejected"
+) {
+  const actor = await requireRole(["hod", "admin"]);
+  const supabase = await createClient();
+  await actOnLeaveRequestCore(supabase, actor, requestId, action);
   revalidatePath("/hod/approvals");
+}
+
+/** Called by app/api/mobile/leave/act/route.ts. */
+export async function actOnLeaveRequestViaRequest(
+  request: Request,
+  requestId: string,
+  action: "approved" | "rejected"
+) {
+  const { supabase, ...actor } = await requireRoleFromRequest(request, ["hod", "admin"]);
+  await actOnLeaveRequestCore(supabase, actor, requestId, action);
 }

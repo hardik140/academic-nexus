@@ -1,0 +1,22 @@
+# Run after login. Verification that the row actually landed in `gate_passes`
+# happens in the companion Node script (service-role client), same
+# "verify against the DB, not just the UI" discipline as every Playwright
+# script this session.
+appId: edu.academicnexus.app
+---
+- launchApp
+- assertVisible:
+    text: "Welcome back,.*"
+    timeout: 15000
+- tapOn: "More"
+- tapOn: "Gate Pass"
+- assertVisible: "My Gate Passes"
+
+- tapOn: "+ New Request"
+- tapOn: "e.g. Home, Hospital"
+- inputText: "E2E Maestro Test Destination"
+- tapOn: "Submit Application"
+- assertVisible:
+    text: "Gate pass request submitted.*"
+    timeout: 10000
+- assertVisible: "E2E Maestro Test Destination"

@@ -1,0 +1,20 @@
+# Run after logging in as a seeded HOD account (see 01-login.yaml — same
+# MAGIC_LINK pattern, generated for an hod profile).
+appId: edu.academicnexus.app
+---
+- launchApp
+- assertVisible:
+    text: ".* HOD Dashboard"
+    timeout: 15000
+
+- tapOn: "Approvals"
+- assertVisible: "Pending Requests"
+
+- tapOn: "Faculty"
+- assertVisible: "Search faculty by name or email..."
+
+- tapOn: "Courses"
+- assertVisible: "Search by code, name, or instructor..."
+
+- tapOn: "Reports"
+- assertVisible: "Attendance Audit"

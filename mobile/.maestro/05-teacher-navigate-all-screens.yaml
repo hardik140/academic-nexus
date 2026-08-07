@@ -1,0 +1,23 @@
+# Run after logging in as a seeded teacher account (see 01-login.yaml —
+# same MAGIC_LINK pattern, just generated for a teacher profile).
+appId: edu.academicnexus.app
+---
+- launchApp
+- assertVisible:
+    text: "Welcome,.*"
+    timeout: 15000
+
+- tapOn: "Courses"
+- assertVisible: "My Courses"
+
+- tapOn: "Attendance"
+
+- tapOn: "Grading"
+
+- tapOn: "More"
+- assertVisible: "Timetable"
+- assertVisible: "Leave"
+
+- tapOn: "Timetable"
+- assertVisible: "My Timetable"
+- back

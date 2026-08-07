@@ -1,0 +1,28 @@
+# Run with:
+#   maestro test 20-director-add-placement.yaml \
+#     -e STUDENT_QUERY="jane" -e STUDENT_LABEL="ENR2026001 — Jane Doe"
+# Assumes a seeded director account already logged in, with a real student
+# matching STUDENT_QUERY/STUDENT_LABEL. Verification against `placements`
+# happens in the companion Node script (service-role client).
+appId: edu.academicnexus.app
+---
+- launchApp
+- assertVisible:
+    text: "Institutional Overview"
+    timeout: 15000
+- tapOn: "Placements"
+- tapOn: "+ Add Placement Record"
+
+- tapOn: "Search by name or enrollment number..."
+- inputText: "${STUDENT_QUERY}"
+- tapOn: "${STUDENT_LABEL}"
+
+- tapOn: "e.g. Acme Corp"
+- inputText: "E2E Maestro Corp"
+- tapOn: "e.g. Software Engineer"
+- inputText: "E2E Test Engineer"
+
+- tapOn: "Add Record"
+- assertVisible:
+    text: "Placement record added.*"
+    timeout: 10000

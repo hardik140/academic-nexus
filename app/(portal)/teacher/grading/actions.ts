@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { requireRole } from "@/lib/rbac";
+import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib/rbac";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 
 type ExamType = Database["public"]["Tables"]["marks"]["Row"]["exam_type"];
@@ -12,15 +13,23 @@ export interface MarkEntry {
   obtainedMarks: number;
 }
 
-export async function saveMarks(params: {
+export interface SaveMarksParams {
   courseId: string;
   examType: ExamType;
   maxMarks: number;
   entries: MarkEntry[];
-}) {
+}
+
+/**
+ * Shared by the web Server Action below and app/api/mobile/grading/save's
+ * Route Handler — same guarded logic either way, just a different transport.
+ */
+export async function saveMarksCore(
+  supabase: SupabaseClient<Database>,
+  actor: AuthorizedActor,
+  params: SaveMarksParams
+) {
   const { courseId, examType, maxMarks, entries } = params;
-  const actor = await requireRole(["teacher", "admin"]);
-  const supabase = await createClient();
 
   const { data: course } = await supabase
     .from("courses")
@@ -67,6 +76,19 @@ export async function saveMarks(params: {
     throw new Error(error.message);
   }
 
-  revalidatePath("/teacher/grading");
   return { saved: rows.length };
+}
+
+export async function saveMarks(params: SaveMarksParams) {
+  const actor = await requireRole(["teacher", "admin"]);
+  const supabase = await createClient();
+  const result = await saveMarksCore(supabase, actor, params);
+  revalidatePath("/teacher/grading");
+  return result;
+}
+
+/** Called by app/api/mobile/grading/save/route.ts. */
+export async function saveMarksViaRequest(request: Request, params: SaveMarksParams) {
+  const { supabase, ...actor } = await requireRoleFromRequest(request, ["teacher", "admin"]);
+  return saveMarksCore(supabase, actor, params);
 }

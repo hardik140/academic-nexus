@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { requireRole } from "@/lib/rbac";
+import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib/rbac";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 
 type AttendanceStatus = Database["public"]["Tables"]["attendance"]["Row"]["status"];
@@ -12,14 +13,22 @@ export interface AttendanceEntry {
   status: AttendanceStatus;
 }
 
-export async function saveAttendance(params: {
+export interface SaveAttendanceParams {
   courseId: string;
   date: string;
   entries: AttendanceEntry[];
-}) {
+}
+
+/**
+ * Shared by the web Server Action below and app/api/mobile/attendance/save's
+ * Route Handler — same guarded logic either way, just a different transport.
+ */
+export async function saveAttendanceCore(
+  supabase: SupabaseClient<Database>,
+  actor: AuthorizedActor,
+  params: SaveAttendanceParams
+) {
   const { courseId, date, entries } = params;
-  const actor = await requireRole(["teacher", "admin"]);
-  const supabase = await createClient();
 
   const { data: course } = await supabase
     .from("courses")
@@ -59,6 +68,19 @@ export async function saveAttendance(params: {
     throw new Error(error.message);
   }
 
-  revalidatePath("/teacher/attendance");
   return { saved: rows.length };
+}
+
+export async function saveAttendance(params: SaveAttendanceParams) {
+  const actor = await requireRole(["teacher", "admin"]);
+  const supabase = await createClient();
+  const result = await saveAttendanceCore(supabase, actor, params);
+  revalidatePath("/teacher/attendance");
+  return result;
+}
+
+/** Called by app/api/mobile/attendance/save/route.ts. */
+export async function saveAttendanceViaRequest(request: Request, params: SaveAttendanceParams) {
+  const { supabase, ...actor } = await requireRoleFromRequest(request, ["teacher", "admin"]);
+  return saveAttendanceCore(supabase, actor, params);
 }

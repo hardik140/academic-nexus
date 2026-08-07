@@ -2,12 +2,20 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { requireRole } from "@/lib/rbac";
+import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib/rbac";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/types/database";
 
-export async function assignWarden(blockId: string, wardenUserId: string | null) {
-  const actor = await requireRole(["admin"]);
-  const supabase = await createClient();
-
+/**
+ * Shared by the web Server Action below and
+ * app/api/mobile/admin/assign-warden's Route Handler.
+ */
+export async function assignWardenCore(
+  supabase: SupabaseClient<Database>,
+  actor: AuthorizedActor,
+  blockId: string,
+  wardenUserId: string | null
+) {
   // Verify the target profile is actually in this college and eligible
   // (warden role) before assigning — never trust the client-picked id
   // blindly, even though it came from a dropdown we populated ourselves.
@@ -35,6 +43,17 @@ export async function assignWarden(blockId: string, wardenUserId: string | null)
   if (error) {
     throw new Error(error.message);
   }
+}
 
+export async function assignWarden(blockId: string, wardenUserId: string | null) {
+  const actor = await requireRole(["admin"]);
+  const supabase = await createClient();
+  await assignWardenCore(supabase, actor, blockId, wardenUserId);
   revalidatePath("/admin/hostel");
+}
+
+/** Called by app/api/mobile/admin/assign-warden/route.ts. */
+export async function assignWardenViaRequest(request: Request, blockId: string, wardenUserId: string | null) {
+  const { supabase, ...actor } = await requireRoleFromRequest(request, ["admin"]);
+  await assignWardenCore(supabase, actor, blockId, wardenUserId);
 }

@@ -1,0 +1,20 @@
+# Run after logging in as a seeded Finance account (see 01-login.yaml — same
+# MAGIC_LINK pattern, generated for a finance profile).
+appId: edu.academicnexus.app
+---
+- launchApp
+- assertVisible:
+    text: "Finance Dashboard"
+    timeout: 15000
+
+- tapOn: "Transactions"
+- assertVisible: "Total"
+
+- tapOn: "Invoices"
+- assertVisible: "+ Raise Invoice"
+
+- tapOn: "Scholarships"
+- assertVisible: "+ Award Scholarship"
+
+- tapOn: "Reports"
+- assertVisible: "Collection by Department"

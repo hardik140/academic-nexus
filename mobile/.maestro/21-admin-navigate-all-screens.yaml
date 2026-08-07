@@ -1,0 +1,40 @@
+# Run after logging in as a seeded Admin account (see 01-login.yaml — same
+# MAGIC_LINK pattern, generated for an admin profile).
+appId: edu.academicnexus.app
+---
+- launchApp
+- assertVisible:
+    text: "System Administration"
+    timeout: 15000
+
+- tapOn: "Users"
+- assertVisible: "+ Add User"
+
+- tapOn: "Departments"
+- assertVisible: "+ Add Department"
+
+- tapOn: "Courses"
+- assertVisible: "+ Add Course"
+
+- tapOn: "More"
+- assertVisible: "Roles & Permissions"
+- assertVisible: "Hostel Blocks"
+- assertVisible: "Web Forms"
+- assertVisible: "Audit Log"
+- assertVisible: "Settings"
+
+- tapOn: "Roles & Permissions"
+- back
+
+- tapOn: "Hostel Blocks"
+- back
+
+- tapOn: "Web Forms"
+- assertVisible: "Coming Soon"
+- back
+
+- tapOn: "Audit Log"
+- back
+
+- tapOn: "Settings"
+- assertVisible: "Institution Profile"

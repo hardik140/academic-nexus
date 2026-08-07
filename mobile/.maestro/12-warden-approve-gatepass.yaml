@@ -1,0 +1,19 @@
+# Run with: maestro test 12-warden-approve-gatepass.yaml -e STUDENT_NAME="Jane Doe"
+# Assumes a seeded warden account already logged in, with a pending
+# gate_passes row from STUDENT_NAME. Verification that the row actually
+# flipped to `approved` happens in the companion Node script (service-role
+# client), same discipline as every other Maestro flow this session.
+appId: edu.academicnexus.app
+---
+- launchApp
+- assertVisible:
+    text: "Warden Dashboard"
+    timeout: 15000
+- tapOn: "Gate Passes"
+- assertVisible: "Pending Requests"
+- assertVisible: "${STUDENT_NAME}"
+
+- tapOn: "Approve"
+- assertVisible:
+    text: "Processed History"
+    timeout: 10000

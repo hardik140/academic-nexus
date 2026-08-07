@@ -1,0 +1,18 @@
+appId: edu.academicnexus.app
+---
+- launchApp
+- assertVisible:
+    text: "Welcome,.*"
+    timeout: 15000
+- tapOn: "More"
+- tapOn: "Leave"
+- assertVisible: "Leave History"
+
+- tapOn: "+ Apply Leave"
+- tapOn: "Explain the reason for your leave..."
+- inputText: "E2E Maestro Test Leave Request"
+- tapOn: "Submit Request"
+- assertVisible:
+    text: "Leave request submitted.*"
+    timeout: 10000
+- assertVisible: "E2E Maestro Test Leave Request"
