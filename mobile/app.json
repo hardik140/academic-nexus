@@ -34,7 +34,8 @@
           "icon": "./assets/icon.png",
           "color": "#0051D5"
         }
-      ]
+      ],
+      "@sentry/react-native"
     ]
   }
 }

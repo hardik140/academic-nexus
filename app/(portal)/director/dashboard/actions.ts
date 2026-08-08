@@ -1,5 +1,6 @@
 "use server";
 
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib/rbac";
 import { getCached } from "@/lib/cache";
@@ -28,6 +29,12 @@ export async function getDashboardStats() {
   });
 }
 
+const SendAnnouncementSchema = z.object({
+  title: z.string().trim().min(1, { message: "Title is required." }).max(200),
+  message: z.string().trim().min(1, { message: "Message is required." }).max(2000),
+  audience: z.enum(["all", "staff", "students"]),
+});
+
 export interface SendAnnouncementParams {
   title: string;
   message: string;
@@ -46,11 +53,7 @@ export async function sendAnnouncementCore(
   actor: AuthorizedActor,
   params: SendAnnouncementParams
 ) {
-  const { title, message, audience } = params;
-
-  if (!title.trim() || !message.trim()) {
-    throw new Error("Title and message are required.");
-  }
+  const { title, message, audience } = SendAnnouncementSchema.parse(params);
 
   let query = supabase.from("profiles").select("id").eq("college_id", actor.collegeId);
   if (audience === "staff") {

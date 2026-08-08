@@ -141,8 +141,9 @@ export default function TeacherAttendance() {
       {/* Controls */}
       <div className="flex flex-wrap gap-md items-end">
         <div className="space-y-xs">
-          <label className="text-xs font-semibold text-outline uppercase tracking-wider">Course</label>
+          <label htmlFor="attendance-course" className="text-xs font-semibold text-outline uppercase tracking-wider">Course</label>
           <select
+            id="attendance-course"
             value={selectedCourse}
             onChange={(e) => loadStudents(e.target.value)}
             className="bg-surface-container-low border border-outline-variant rounded-xl px-md py-sm text-sm text-on-surface focus:ring-2 focus:ring-secondary outline-none min-w-[200px]"
@@ -154,8 +155,9 @@ export default function TeacherAttendance() {
           </select>
         </div>
         <div className="space-y-xs">
-          <label className="text-xs font-semibold text-outline uppercase tracking-wider">Date</label>
+          <label htmlFor="attendance-date" className="text-xs font-semibold text-outline uppercase tracking-wider">Date</label>
           <input
+            id="attendance-date"
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
@@ -196,8 +198,7 @@ export default function TeacherAttendance() {
             {students.map((s: any, i: number) => (
               <div
                 key={s.id}
-                className="flex items-center justify-between px-lg py-md hover:bg-surface-container-low transition-colors cursor-pointer"
-                onClick={() => toggleStatus(s.id)}
+                className="flex items-center justify-between px-lg py-md hover:bg-surface-container-low transition-colors"
               >
                 <div className="flex items-center gap-sm">
                   <span className="text-xs text-outline w-6 text-right">{i + 1}.</span>
@@ -211,7 +212,7 @@ export default function TeacherAttendance() {
                 </div>
                 <button
                   className={`px-md py-xs rounded-full text-xs font-bold min-w-[80px] text-center capitalize transition-all ${statusColors[attendance[s.id] || "present"]}`}
-                  onClick={(e) => { e.stopPropagation(); toggleStatus(s.id); }}
+                  onClick={() => toggleStatus(s.id)}
                 >
                   {attendance[s.id] || "present"}
                 </button>

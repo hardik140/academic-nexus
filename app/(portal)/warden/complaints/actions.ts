@@ -1,10 +1,17 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib/rbac";
+import { checkRateLimit } from "@/lib/rate-limit";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
+
+const UpdateComplaintStatusSchema = z.object({
+  complaintId: z.string().uuid(),
+  status: z.enum(["in_progress", "resolved"]),
+});
 
 /**
  * Shared by the web Server Action below and app/api/mobile/complaints/status's
@@ -16,6 +23,9 @@ export async function updateComplaintStatusCore(
   complaintId: string,
   status: "in_progress" | "resolved"
 ) {
+  ({ complaintId, status } = UpdateComplaintStatusSchema.parse({ complaintId, status }));
+  await checkRateLimit(`updateComplaintStatus:${actor.userId}`, 30, 60);
+
   const { error } = await supabase
     .from("complaints")
     .update({

@@ -1,12 +1,29 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib/rbac";
+import { checkRateLimit } from "@/lib/rate-limit";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 
 type AttendanceStatus = Database["public"]["Tables"]["attendance"]["Row"]["status"];
+
+const ATTENDANCE_STATUSES = ["present", "absent", "late", "excused"] as const;
+
+const SaveAttendanceSchema = z.object({
+  courseId: z.string().uuid(),
+  date: z.string().min(1),
+  entries: z
+    .array(
+      z.object({
+        studentDbId: z.string().uuid(),
+        status: z.enum(ATTENDANCE_STATUSES),
+      })
+    )
+    .max(500),
+});
 
 export interface AttendanceEntry {
   studentDbId: string;
@@ -28,7 +45,8 @@ export async function saveAttendanceCore(
   actor: AuthorizedActor,
   params: SaveAttendanceParams
 ) {
-  const { courseId, date, entries } = params;
+  const { courseId, date, entries } = SaveAttendanceSchema.parse(params);
+  await checkRateLimit(`saveAttendance:${actor.userId}`, 30, 60);
 
   const { data: course } = await supabase
     .from("courses")

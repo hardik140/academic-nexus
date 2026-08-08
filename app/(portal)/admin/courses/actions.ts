@@ -1,13 +1,27 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib/rbac";
+import { checkRateLimit } from "@/lib/rate-limit";
 import { logAudit } from "@/lib/audit";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 
 type CourseType = Database["public"]["Tables"]["courses"]["Row"]["type"];
+
+const COURSE_TYPES = ["core", "elective", "lab", "project", "seminar"] as const;
+
+const CreateCourseSchema = z.object({
+  name: z.string().trim().min(1, { message: "Course name is required." }).max(200),
+  code: z.string().trim().min(1, { message: "Course code is required." }).max(50),
+  departmentId: z.string().uuid(),
+  credits: z.number().positive().max(20),
+  semester: z.number().int().positive().max(20),
+  type: z.enum(COURSE_TYPES),
+  description: z.string().trim().max(2000).optional(),
+});
 
 export interface CreateCourseParams {
   name: string;
@@ -28,11 +42,9 @@ export async function createCourseCore(
   actor: AuthorizedActor,
   params: CreateCourseParams
 ) {
-  const { name, code, departmentId, credits, semester, type, description } = params;
-
-  if (!name.trim() || !code.trim()) {
-    throw new Error("Course name and code are required.");
-  }
+  const { name, code, departmentId, credits, semester, type, description } =
+    CreateCourseSchema.parse(params);
+  await checkRateLimit(`createCourse:${actor.userId}`, 20, 60);
 
   const { data: dept } = await supabase
     .from("departments")

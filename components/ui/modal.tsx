@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { useEffect, useRef } from "react";
+import { useEffect, useId } from "react";
 
 interface ModalProps {
   open: boolean;
@@ -29,7 +29,7 @@ export function Modal({
   size = "md",
   footer,
 }: ModalProps) {
-  const overlayRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
 
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
@@ -48,18 +48,21 @@ export function Modal({
   if (!open) return null;
 
   return (
-    <div
-      ref={overlayRef}
-      className="fixed inset-0 z-[100] flex items-center justify-center p-md"
-      onClick={(e) => {
-        if (e.target === overlayRef.current) onClose();
-      }}
-    >
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm animate-[fade-in_0.15s_ease-out]" />
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-md">
+      {/* Backdrop — a real button so the click-to-dismiss target is
+          natively keyboard operable, instead of a div faking a click handler. */}
+      <button
+        type="button"
+        aria-label="Close dialog"
+        onClick={onClose}
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm animate-[fade-in_0.15s_ease-out] cursor-default"
+      />
 
       {/* Dialog */}
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
         className={cn(
           "relative w-full bg-surface-container-lowest rounded-2xl shadow-xl border border-outline-variant animate-[slide-up_0.2s_ease-out]",
           sizeMap[size]
@@ -68,7 +71,7 @@ export function Modal({
         {/* Header */}
         <div className="flex items-center justify-between px-xl py-lg border-b border-outline-variant">
           <div>
-            <h2 className="text-lg font-bold text-on-surface">{title}</h2>
+            <h2 id={titleId} className="text-lg font-bold text-on-surface">{title}</h2>
             {description && (
               <p className="text-sm text-on-surface-variant mt-xs">
                 {description}
@@ -76,10 +79,13 @@ export function Modal({
             )}
           </div>
           <button
+            type="button"
+            aria-label="Close"
             onClick={onClose}
             className="p-xs rounded-lg hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors"
           >
             <svg
+              aria-hidden="true"
               xmlns="http://www.w3.org/2000/svg"
               width="18"
               height="18"

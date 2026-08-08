@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { requireRoleFromRequest, RbacError } from "@/lib/rbac";
+import { requireRoleFromRequest } from "@/lib/rbac";
+import { errorResponse } from "@/lib/api-errors";
 
 const ALL_ROLES = ["student", "teacher", "hod", "finance", "director", "admin", "warden"] as const;
 
@@ -30,10 +31,6 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    if (err instanceof RbacError) {
-      const status = err.code === "UNAUTHENTICATED" ? 401 : 403;
-      return NextResponse.json({ error: err.message }, { status });
-    }
-    return NextResponse.json({ error: err instanceof Error ? err.message : "Request failed." }, { status: 400 });
+    return errorResponse(err);
   }
 }

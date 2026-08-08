@@ -127,23 +127,23 @@ export default function TeacherGrading() {
       {/* Controls */}
       <div className="flex flex-wrap gap-md items-end">
         <div className="space-y-xs">
-          <label className="text-xs font-semibold text-outline uppercase tracking-wider">Course</label>
-          <select value={selectedCourse} onChange={(e) => loadStudents(e.target.value)}
+          <label htmlFor="grading-course" className="text-xs font-semibold text-outline uppercase tracking-wider">Course</label>
+          <select id="grading-course" value={selectedCourse} onChange={(e) => loadStudents(e.target.value)}
             className="bg-surface-container-low border border-outline-variant rounded-xl px-md py-sm text-sm text-on-surface focus:ring-2 focus:ring-secondary outline-none min-w-[200px]">
             <option value="">Select course...</option>
             {courses.map((c) => (<option key={c.id} value={c.id}>{c.code} — {c.name}</option>))}
           </select>
         </div>
         <div className="space-y-xs">
-          <label className="text-xs font-semibold text-outline uppercase tracking-wider">Exam Type</label>
-          <select value={examType} onChange={(e) => setExamType(e.target.value as ExamType)}
+          <label htmlFor="grading-exam-type" className="text-xs font-semibold text-outline uppercase tracking-wider">Exam Type</label>
+          <select id="grading-exam-type" value={examType} onChange={(e) => setExamType(e.target.value as ExamType)}
             className="bg-surface-container-low border border-outline-variant rounded-xl px-md py-sm text-sm text-on-surface focus:ring-2 focus:ring-secondary outline-none">
             {examTypes.map((t) => (<option key={t.value} value={t.value}>{t.label}</option>))}
           </select>
         </div>
         <div className="space-y-xs">
-          <label className="text-xs font-semibold text-outline uppercase tracking-wider">Max Marks</label>
-          <input type="number" value={maxMarks} onChange={(e) => setMaxMarks(e.target.value)}
+          <label htmlFor="grading-max-marks" className="text-xs font-semibold text-outline uppercase tracking-wider">Max Marks</label>
+          <input id="grading-max-marks" type="number" value={maxMarks} onChange={(e) => setMaxMarks(e.target.value)}
             className="bg-surface-container-low border border-outline-variant rounded-xl px-md py-sm text-sm text-on-surface focus:ring-2 focus:ring-secondary outline-none w-24" />
         </div>
         {selectedCourse && students.length > 0 && (

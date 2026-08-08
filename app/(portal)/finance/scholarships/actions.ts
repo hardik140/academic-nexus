@@ -1,12 +1,24 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib/rbac";
+import { checkRateLimit } from "@/lib/rate-limit";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 
 type ScholarshipType = Database["public"]["Tables"]["scholarships"]["Row"]["type"];
+
+const SCHOLARSHIP_TYPES = ["merit", "need", "sports", "government", "corporate", "other"] as const;
+
+const CreateScholarshipSchema = z.object({
+  studentId: z.string().uuid(),
+  name: z.string().trim().min(1).max(200),
+  type: z.enum(SCHOLARSHIP_TYPES),
+  amount: z.number().positive({ message: "Amount must be greater than zero." }),
+  academicYear: z.string().trim().max(20).optional(),
+});
 
 export interface CreateScholarshipParams {
   studentId: string;
@@ -26,7 +38,8 @@ export async function createScholarshipCore(
   actor: AuthorizedActor,
   params: CreateScholarshipParams
 ) {
-  const { studentId, name, type, amount, academicYear } = params;
+  const { studentId, name, type, amount, academicYear } = CreateScholarshipSchema.parse(params);
+  await checkRateLimit(`createScholarship:${actor.userId}`, 15, 60);
 
   const { data: student } = await supabase
     .from("students")
@@ -36,9 +49,6 @@ export async function createScholarshipCore(
 
   if (!student || student.college_id !== actor.collegeId) {
     throw new Error("Student not found in your college.");
-  }
-  if (amount <= 0) {
-    throw new Error("Amount must be greater than zero.");
   }
 
   const { error } = await supabase.from("scholarships").insert({

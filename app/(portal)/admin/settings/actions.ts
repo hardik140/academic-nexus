@@ -1,11 +1,28 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib/rbac";
+import { checkRateLimit } from "@/lib/rate-limit";
 import { logAudit } from "@/lib/audit";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
+
+const UpdateCollegeSchema = z.object({
+  name: z.string().trim().min(1, { message: "Institution name is required." }).max(200),
+  code: z.string().trim().min(1, { message: "Institution code is required." }).max(50),
+  domain: z.string().trim().max(200).optional(),
+  accreditation: z.string().trim().max(200).optional(),
+  established_year: z.number().int().min(1800).max(2100).optional(),
+  email: z.string().trim().max(200).optional(),
+  phone: z.string().trim().max(30).optional(),
+  website: z.string().trim().max(300).optional(),
+  address: z.string().trim().max(500).optional(),
+  city: z.string().trim().max(100).optional(),
+  state: z.string().trim().max(100).optional(),
+  country: z.string().trim().max(100).optional(),
+});
 
 export interface CollegeSettingsUpdate {
   name: string;
@@ -31,25 +48,24 @@ export async function updateCollegeCore(
   actor: AuthorizedActor,
   fields: CollegeSettingsUpdate
 ) {
-  if (!fields.name.trim() || !fields.code.trim()) {
-    throw new Error("Institution name and code are required.");
-  }
+  const parsed = UpdateCollegeSchema.parse(fields);
+  await checkRateLimit(`updateCollege:${actor.userId}`, 10, 60);
 
   const { error } = await supabase
     .from("colleges")
     .update({
-      name: fields.name,
-      code: fields.code,
-      domain: fields.domain || null,
-      accreditation: fields.accreditation || null,
-      established_year: fields.established_year || null,
-      email: fields.email || null,
-      phone: fields.phone || null,
-      website: fields.website || null,
-      address: fields.address || null,
-      city: fields.city || null,
-      state: fields.state || null,
-      country: fields.country || null,
+      name: parsed.name,
+      code: parsed.code,
+      domain: parsed.domain || null,
+      accreditation: parsed.accreditation || null,
+      established_year: parsed.established_year || null,
+      email: parsed.email || null,
+      phone: parsed.phone || null,
+      website: parsed.website || null,
+      address: parsed.address || null,
+      city: parsed.city || null,
+      state: parsed.state || null,
+      country: parsed.country || null,
     })
     .eq("id", actor.collegeId);
 

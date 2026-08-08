@@ -1,12 +1,26 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib/rbac";
+import { checkRateLimit } from "@/lib/rate-limit";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 
 type PaymentMethod = Database["public"]["Tables"]["payments"]["Row"]["method"];
+
+const PAYMENT_METHODS = [
+  "cash", "card", "upi", "netbanking", "cheque", "dd", "scholarship", "other",
+] as const;
+
+const RecordPaymentSchema = z.object({
+  feeId: z.string().uuid(),
+  amount: z.number().positive({ message: "Payment amount must be greater than zero." }),
+  method: z.enum(PAYMENT_METHODS),
+  transactionRef: z.string().trim().max(200).optional(),
+  notes: z.string().trim().max(1000).optional(),
+});
 
 export interface RecordPaymentParams {
   feeId: string;
@@ -25,7 +39,8 @@ export async function recordPaymentCore(
   actor: AuthorizedActor,
   params: RecordPaymentParams
 ) {
-  const { feeId, amount, method, transactionRef, notes } = params;
+  const { feeId, amount, method, transactionRef, notes } = RecordPaymentSchema.parse(params);
+  await checkRateLimit(`recordPayment:${actor.userId}`, 15, 60);
 
   const { data: fee, error: feeError } = await supabase
     .from("fees")
@@ -41,9 +56,6 @@ export async function recordPaymentCore(
   }
 
   const outstanding = fee.amount - fee.paid_amount;
-  if (amount <= 0) {
-    throw new Error("Payment amount must be greater than zero.");
-  }
   if (amount > outstanding) {
     throw new Error(`Payment amount exceeds the outstanding balance of ${outstanding.toFixed(2)}.`);
   }

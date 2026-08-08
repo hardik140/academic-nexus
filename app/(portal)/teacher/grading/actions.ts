@@ -1,12 +1,32 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib/rbac";
+import { checkRateLimit } from "@/lib/rate-limit";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 
 type ExamType = Database["public"]["Tables"]["marks"]["Row"]["exam_type"];
+
+const EXAM_TYPES = [
+  "internal_1", "internal_2", "midterm", "final", "assignment", "lab", "project", "viva",
+] as const;
+
+const SaveMarksSchema = z.object({
+  courseId: z.string().uuid(),
+  examType: z.enum(EXAM_TYPES),
+  maxMarks: z.number().positive({ message: "Max marks must be greater than zero." }),
+  entries: z
+    .array(
+      z.object({
+        studentDbId: z.string().uuid(),
+        obtainedMarks: z.number(),
+      })
+    )
+    .max(500),
+});
 
 export interface MarkEntry {
   studentDbId: string;
@@ -29,7 +49,8 @@ export async function saveMarksCore(
   actor: AuthorizedActor,
   params: SaveMarksParams
 ) {
-  const { courseId, examType, maxMarks, entries } = params;
+  const { courseId, examType, maxMarks, entries } = SaveMarksSchema.parse(params);
+  await checkRateLimit(`saveMarks:${actor.userId}`, 30, 60);
 
   const { data: course } = await supabase
     .from("courses")
@@ -46,10 +67,6 @@ export async function saveMarksCore(
   // this is the layer that actually closes that gap.
   if (actor.role === "teacher" && course.instructor_id !== actor.userId) {
     throw new Error("You can only enter marks for courses you teach.");
-  }
-
-  if (!(maxMarks > 0)) {
-    throw new Error("Max marks must be greater than zero.");
   }
 
   const rows = entries

@@ -1,10 +1,17 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib/rbac";
+import { checkRateLimit } from "@/lib/rate-limit";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
+
+const ActOnLeaveRequestSchema = z.object({
+  requestId: z.string().uuid(),
+  action: z.enum(["approved", "rejected"]),
+});
 
 /**
  * Shared by the web Server Action below and app/api/mobile/leave/act's
@@ -16,6 +23,9 @@ export async function actOnLeaveRequestCore(
   requestId: string,
   action: "approved" | "rejected"
 ) {
+  ({ requestId, action } = ActOnLeaveRequestSchema.parse({ requestId, action }));
+  await checkRateLimit(`actOnLeaveRequest:${actor.userId}`, 30, 60);
+
   // A HOD may only act on leave requests from staff in their own
   // department; admin is unrestricted. leave_requests_read (RLS) is
   // college-wide for hod, not department-scoped, so this app-layer check

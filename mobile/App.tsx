@@ -1,6 +1,16 @@
 import { StatusBar } from "expo-status-bar";
 import * as Notifications from "expo-notifications";
+import * as Sentry from "@sentry/react-native";
 import RootNavigator from "@/navigation/RootNavigator";
+
+const sentryDsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
+
+Sentry.init({
+  dsn: sentryDsn,
+  enabled: Boolean(sentryDsn),
+  tracesSampleRate: 0.1,
+  sendDefaultPii: false,
+});
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -11,7 +21,7 @@ Notifications.setNotificationHandler({
   }),
 });
 
-export default function App() {
+function App() {
   return (
     <>
       <RootNavigator />
@@ -19,3 +29,5 @@ export default function App() {
     </>
   );
 }
+
+export default Sentry.wrap(App);

@@ -1,11 +1,19 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib/rbac";
 import { checkRateLimit } from "@/lib/rate-limit";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
+
+const ApplyForGatePassSchema = z.object({
+  destination: z.string().trim().min(1).max(200),
+  reason: z.string().trim().min(1).max(1000),
+  exitTime: z.string().min(1),
+  returnTime: z.string().min(1),
+});
 
 export interface ApplyForGatePassParams {
   destination: string;
@@ -24,6 +32,7 @@ export async function applyForGatePassCore(
   actor: AuthorizedActor,
   params: ApplyForGatePassParams
 ) {
+  const { destination, reason, exitTime, returnTime } = ApplyForGatePassSchema.parse(params);
   await checkRateLimit(`applyForGatePass:${actor.userId}`, 5, 60);
 
   const { data: student } = await supabase
@@ -39,10 +48,10 @@ export async function applyForGatePassCore(
   const { error } = await supabase.from("gate_passes").insert({
     college_id: actor.collegeId,
     student_id: student.id,
-    destination: params.destination,
-    reason: params.reason,
-    exit_time: params.exitTime,
-    return_time: params.returnTime,
+    destination,
+    reason,
+    exit_time: exitTime,
+    return_time: returnTime,
     status: "pending",
   });
 

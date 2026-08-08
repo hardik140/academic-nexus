@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib/rbac";
@@ -9,7 +10,15 @@ import { checkRateLimit } from "@/lib/rate-limit";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, UserRole, UserStatus } from "@/types/database";
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const USER_ROLES = ["student", "teacher", "hod", "finance", "director", "admin", "warden"] as const;
+const USER_STATUSES = ["active", "suspended", "pending", "graduated", "alumni"] as const;
+
+const CreateUserSchema = z.object({
+  email: z.string().trim().email({ message: "Enter a valid email address." }),
+  fullName: z.string().trim().min(1, { message: "Full name is required." }).max(200),
+  role: z.enum(USER_ROLES),
+  departmentId: z.string().uuid().optional(),
+});
 
 export interface CreateUserParams {
   email: string;
@@ -29,14 +38,7 @@ export async function createUserCore(
   actor: AuthorizedActor,
   params: CreateUserParams
 ) {
-  const { email, fullName, role, departmentId } = params;
-
-  if (!EMAIL_RE.test(email)) {
-    throw new Error("Enter a valid email address.");
-  }
-  if (!fullName.trim()) {
-    throw new Error("Full name is required.");
-  }
+  const { email, fullName, role, departmentId } = CreateUserSchema.parse(params);
 
   const admin = createAdminClient();
   const { data: created, error: createErr } = await admin.auth.admin.createUser({
@@ -75,6 +77,13 @@ export async function createUserViaRequest(request: Request, params: CreateUserP
   await createUserCore(supabase, actor, params);
 }
 
+const UpdateUserProfileSchema = z.object({
+  targetUserId: z.string().uuid(),
+  fullName: z.string().trim().min(1, { message: "Full name is required." }).max(200),
+  role: z.enum(USER_ROLES),
+  phone: z.string().trim().max(20).optional(),
+});
+
 export interface UpdateUserProfileParams {
   targetUserId: string;
   fullName: string;
@@ -91,11 +100,8 @@ export async function updateUserProfileCore(
   actor: AuthorizedActor,
   params: UpdateUserProfileParams
 ) {
-  const { targetUserId, fullName, role, phone } = params;
-
-  if (!fullName.trim()) {
-    throw new Error("Full name is required.");
-  }
+  const { targetUserId, fullName, role, phone } = UpdateUserProfileSchema.parse(params);
+  await checkRateLimit(`updateUserProfile:${actor.userId}`, 20, 60);
 
   await supabase
     .from("profiles")
@@ -124,6 +130,11 @@ export async function updateUserProfileViaRequest(request: Request, params: Upda
   await updateUserProfileCore(supabase, actor, params);
 }
 
+const UpdateUserStatusSchema = z.object({
+  targetUserId: z.string().uuid(),
+  status: z.enum(USER_STATUSES),
+});
+
 /**
  * Shared by the web Server Action below and
  * app/api/mobile/admin/user-status's Route Handler.
@@ -134,6 +145,9 @@ export async function updateUserStatusCore(
   targetUserId: string,
   status: UserStatus
 ) {
+  ({ targetUserId, status } = UpdateUserStatusSchema.parse({ targetUserId, status }));
+  await checkRateLimit(`updateUserStatus:${actor.userId}`, 20, 60);
+
   if (targetUserId === actor.userId && status !== "active") {
     throw new Error("You can't suspend your own account.");
   }

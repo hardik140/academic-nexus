@@ -104,8 +104,10 @@ export function PortalShell({ profile, children }: PortalShellProps) {
     <div className="flex h-screen overflow-hidden bg-surface">
       {/* ─── Mobile overlay ─── */}
       {mobileOpen && (
-        <div
-          className="fixed inset-0 bg-black/40 z-40 lg:hidden"
+        <button
+          type="button"
+          aria-label="Close menu"
+          className="fixed inset-0 bg-black/40 z-40 lg:hidden cursor-default"
           onClick={() => setMobileOpen(false)}
         />
       )}
@@ -193,10 +195,12 @@ export function PortalShell({ profile, children }: PortalShellProps) {
           <div className="flex items-center gap-md">
             {/* Mobile hamburger */}
             <button
+              aria-label="Open menu"
               className="lg:hidden p-xs rounded-lg hover:bg-surface-container-high"
               onClick={() => setMobileOpen(true)}
             >
               <svg
+                aria-hidden="true"
                 xmlns="http://www.w3.org/2000/svg"
                 width="20"
                 height="20"
@@ -215,10 +219,12 @@ export function PortalShell({ profile, children }: PortalShellProps) {
 
             {/* Sidebar toggle */}
             <button
+              aria-label={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
               className="hidden lg:block p-xs rounded-lg hover:bg-surface-container-high text-on-surface-variant"
               onClick={() => setSidebarOpen(!sidebarOpen)}
             >
               <svg
+                aria-hidden="true"
                 xmlns="http://www.w3.org/2000/svg"
                 width="18"
                 height="18"
@@ -244,8 +250,9 @@ export function PortalShell({ profile, children }: PortalShellProps) {
 
           <div className="flex items-center gap-sm">
             {/* Notifications bell */}
-            <button className="relative p-sm rounded-xl hover:bg-surface-container-high transition-colors">
+            <button aria-label="Notifications" className="relative p-sm rounded-xl hover:bg-surface-container-high transition-colors">
               <svg
+                aria-hidden="true"
                 xmlns="http://www.w3.org/2000/svg"
                 width="18"
                 height="18"

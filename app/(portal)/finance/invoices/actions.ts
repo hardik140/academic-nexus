@@ -1,10 +1,20 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib/rbac";
+import { checkRateLimit } from "@/lib/rate-limit";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
+
+const CreateInvoiceSchema = z.object({
+  studentId: z.string().uuid(),
+  type: z.string().trim().min(1).max(100),
+  amount: z.number().positive({ message: "Amount must be greater than zero." }),
+  dueDate: z.string().min(1),
+  academicYear: z.string().trim().max(20).optional(),
+});
 
 export interface CreateInvoiceParams {
   studentId: string;
@@ -23,7 +33,8 @@ export async function createInvoiceCore(
   actor: AuthorizedActor,
   params: CreateInvoiceParams
 ) {
-  const { studentId, type, amount, dueDate, academicYear } = params;
+  const { studentId, type, amount, dueDate, academicYear } = CreateInvoiceSchema.parse(params);
+  await checkRateLimit(`createInvoice:${actor.userId}`, 20, 60);
 
   const { data: student } = await supabase
     .from("students")
@@ -33,9 +44,6 @@ export async function createInvoiceCore(
 
   if (!student || student.college_id !== actor.collegeId) {
     throw new Error("Student not found in your college.");
-  }
-  if (amount <= 0) {
-    throw new Error("Amount must be greater than zero.");
   }
 
   const { error } = await supabase.from("fees").insert({

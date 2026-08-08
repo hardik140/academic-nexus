@@ -54,6 +54,7 @@ export default function LoginPage() {
         <div className="text-center mb-xl">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-secondary text-on-secondary mb-md shadow-lg">
             <svg
+              aria-hidden="true"
               xmlns="http://www.w3.org/2000/svg"
               width="32"
               height="32"
@@ -88,7 +89,7 @@ export default function LoginPage() {
             disabled={loading}
             className="w-full flex items-center justify-center gap-sm px-lg py-md bg-surface-container-low border border-outline-variant rounded-xl font-medium text-on-surface hover:bg-surface-container-high transition-colors disabled:opacity-50"
           >
-            <svg className="w-5 h-5" viewBox="0 0 24 24">
+            <svg aria-hidden="true" className="w-5 h-5" viewBox="0 0 24 24">
               <path
                 d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
                 fill="#4285F4"
@@ -150,6 +151,8 @@ export default function LoginPage() {
           {/* Status message */}
           {message && (
             <div
+              role="status"
+              aria-live="polite"
               className={`mt-md p-md rounded-xl text-sm font-medium ${
                 message.includes("Check")
                   ? "bg-success/10 text-success border border-success/20"

@@ -42,7 +42,6 @@ export function StudentPicker({
         onChangeText={setSearch}
         placeholder="Search by name or enrollment number..."
         placeholderTextColor="#9AA0A6"
-        autoFocus={!!selected}
       />
       <View style={styles.list}>
         {filtered.map((s) => (

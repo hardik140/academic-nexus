@@ -1,10 +1,17 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib/rbac";
+import { checkRateLimit } from "@/lib/rate-limit";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
+
+const ActOnGatePassSchema = z.object({
+  passId: z.string().uuid(),
+  action: z.enum(["approved", "rejected"]),
+});
 
 /**
  * Shared by the web Server Action below and app/api/mobile/gatepass/act's
@@ -16,6 +23,9 @@ export async function actOnGatePassCore(
   passId: string,
   action: "approved" | "rejected"
 ) {
+  ({ passId, action } = ActOnGatePassSchema.parse({ passId, action }));
+  await checkRateLimit(`actOnGatePass:${actor.userId}`, 30, 60);
+
   const { error } = await supabase
     .from("gate_passes")
     .update({

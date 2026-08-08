@@ -66,6 +66,22 @@ function makeRequest(body: unknown, token?: string) {
   });
 }
 
+// Zod's .uuid() rejects anything that doesn't look like a real UUID, so
+// every fixture ID below is UUID-shaped rather than a placeholder like
+// "student-1" — these are what changed when Phase 0 added request
+// validation at every mutation boundary.
+const UUID_COURSE = "10000000-0000-4000-8000-000000000001";
+const UUID_STUDENT_ROW = "10000000-0000-4000-8000-000000000002";
+const UUID_STUDENT = "10000000-0000-4000-8000-000000000003";
+const UUID_FEE = "10000000-0000-4000-8000-000000000004";
+const UUID_LEAVE_REQUEST = "10000000-0000-4000-8000-000000000005";
+const UUID_GATEPASS = "10000000-0000-4000-8000-000000000006";
+const UUID_COMPLAINT = "10000000-0000-4000-8000-000000000007";
+const UUID_TARGET_USER = "10000000-0000-4000-8000-000000000008";
+const UUID_DEPARTMENT = "10000000-0000-4000-8000-000000000009";
+const UUID_BLOCK = "10000000-0000-4000-8000-00000000000a";
+const UUID_SELF = "10000000-0000-4000-8000-00000000000b";
+
 describe("app/api/mobile/* — HTTP-boundary authorization matrix", () => {
   beforeEach(() => {
     mockGetUser.mockReset();
@@ -80,24 +96,24 @@ describe("app/api/mobile/* — HTTP-boundary authorization matrix", () => {
   const GATEPASS_BODY = { destination: "Home", reason: "Weekend", exitTime: "2026-09-01T09:00:00Z", returnTime: "2026-09-02T18:00:00Z" };
   const COMPLAINT_BODY = { category: "plumbing", title: "Leaky tap", description: "desc", location: "Room 1", priority: "low" };
   const PUSH_BODY = { token: "ExponentPushToken[abc]", platform: "ios" };
-  const ATTENDANCE_BODY = { courseId: "course-1", date: "2026-09-01", entries: [{ studentDbId: "s1", status: "present" }] };
-  const GRADES_BODY = { courseId: "course-1", examType: "internal_1", maxMarks: 100, entries: [{ studentDbId: "s1", obtainedMarks: 80 }] };
+  const ATTENDANCE_BODY = { courseId: UUID_COURSE, date: "2026-09-01", entries: [{ studentDbId: UUID_STUDENT_ROW, status: "present" }] };
+  const GRADES_BODY = { courseId: UUID_COURSE, examType: "internal_1", maxMarks: 100, entries: [{ studentDbId: UUID_STUDENT_ROW, obtainedMarks: 80 }] };
   const LEAVE_BODY = { leaveType: "casual", startDate: "2026-09-01", endDate: "2026-09-02", reason: "Personal" };
-  const LEAVE_ACT_BODY = { requestId: "leave-1", action: "approved" };
-  const GATEPASS_ACT_BODY = { passId: "pass-1", action: "approved" };
-  const COMPLAINT_STATUS_BODY = { complaintId: "complaint-1", status: "in_progress" };
-  const INVOICE_BODY = { studentId: "student-1", type: "Tuition", amount: 5000, dueDate: "2026-09-01" };
-  const PAYMENT_BODY = { feeId: "fee-1", amount: 1000, method: "cash" };
-  const SCHOLARSHIP_BODY = { studentId: "student-1", name: "Merit Award", type: "merit", amount: 2000 };
+  const LEAVE_ACT_BODY = { requestId: UUID_LEAVE_REQUEST, action: "approved" };
+  const GATEPASS_ACT_BODY = { passId: UUID_GATEPASS, action: "approved" };
+  const COMPLAINT_STATUS_BODY = { complaintId: UUID_COMPLAINT, status: "in_progress" };
+  const INVOICE_BODY = { studentId: UUID_STUDENT, type: "Tuition", amount: 5000, dueDate: "2026-09-01" };
+  const PAYMENT_BODY = { feeId: UUID_FEE, amount: 1000, method: "cash" };
+  const SCHOLARSHIP_BODY = { studentId: UUID_STUDENT, name: "Merit Award", type: "merit", amount: 2000 };
   const ANNOUNCEMENT_BODY = { title: "Campus Update", message: "Hello everyone", audience: "all" };
-  const PLACEMENT_BODY = { studentId: "student-1", companyName: "Acme Corp", roleTitle: "SWE", packageLpa: 12, placementDate: "2026-09-01" };
+  const PLACEMENT_BODY = { studentId: UUID_STUDENT, companyName: "Acme Corp", roleTitle: "SWE", packageLpa: 12, placementDate: "2026-09-01" };
   const CREATE_USER_BODY = { email: "new@college.edu", fullName: "New User", role: "student" };
-  const UPDATE_USER_BODY = { targetUserId: "u2", fullName: "Updated Name", role: "student" };
-  const USER_STATUS_BODY = { targetUserId: "u2", status: "suspended" };
+  const UPDATE_USER_BODY = { targetUserId: UUID_TARGET_USER, fullName: "Updated Name", role: "student" };
+  const USER_STATUS_BODY = { targetUserId: UUID_TARGET_USER, status: "suspended" };
   const CREATE_DEPT_BODY = { name: "Computer Science", code: "CSE", description: "" };
-  const ASSIGN_HOD_BODY = { departmentId: "dept-1", hodUserId: null };
-  const ASSIGN_WARDEN_BODY = { blockId: "block-1", wardenUserId: null };
-  const CREATE_COURSE_BODY = { name: "Data Structures", code: "CS201", departmentId: "dept-1", credits: 4, semester: 3, type: "core" };
+  const ASSIGN_HOD_BODY = { departmentId: UUID_DEPARTMENT, hodUserId: null };
+  const ASSIGN_WARDEN_BODY = { blockId: UUID_BLOCK, wardenUserId: null };
+  const CREATE_COURSE_BODY = { name: "Data Structures", code: "CS201", departmentId: UUID_DEPARTMENT, credits: 4, semester: 3, type: "core" };
   const UPDATE_COLLEGE_BODY = { name: "Example College", code: "EC" };
 
   it.each([
@@ -279,12 +295,12 @@ describe("app/api/mobile/* — HTTP-boundary authorization matrix", () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
     mockSingle
       .mockResolvedValueOnce({ data: { role: "finance", college_id: "c1", status: "active" } })
-      .mockResolvedValueOnce({ data: { id: "student-1", college_id: "c1" } });
+      .mockResolvedValueOnce({ data: { id: UUID_STUDENT, college_id: "c1" } });
     mockInsert.mockResolvedValue({ error: null });
     const res = await createInvoice(makeRequest(INVOICE_BODY, "good-token"));
     expect(res.status).toBe(200);
     expect(mockInsert).toHaveBeenCalledWith(
-      expect.objectContaining({ college_id: "c1", student_id: "student-1", type: "Tuition", amount: 5000 })
+      expect.objectContaining({ college_id: "c1", student_id: UUID_STUDENT, type: "Tuition", amount: 5000 })
     );
   });
 
@@ -299,7 +315,7 @@ describe("app/api/mobile/* — HTTP-boundary authorization matrix", () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
     mockSingle
       .mockResolvedValueOnce({ data: { role: "finance", college_id: "c1", status: "active" } })
-      .mockResolvedValueOnce({ data: { id: "fee-1", college_id: "c1", student_id: "student-1", amount: 500, paid_amount: 0 } });
+      .mockResolvedValueOnce({ data: { id: UUID_FEE, college_id: "c1", student_id: UUID_STUDENT, amount: 500, paid_amount: 0 } });
     const res = await recordPayment(makeRequest(PAYMENT_BODY, "good-token")); // amount 1000 > outstanding 500
     expect(res.status).toBe(400);
     const body = await res.json();
@@ -310,12 +326,12 @@ describe("app/api/mobile/* — HTTP-boundary authorization matrix", () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
     mockSingle
       .mockResolvedValueOnce({ data: { role: "finance", college_id: "c1", status: "active" } })
-      .mockResolvedValueOnce({ data: { id: "fee-1", college_id: "c1", student_id: "student-1", amount: 5000, paid_amount: 0 } });
+      .mockResolvedValueOnce({ data: { id: UUID_FEE, college_id: "c1", student_id: UUID_STUDENT, amount: 5000, paid_amount: 0 } });
     mockInsert.mockResolvedValue({ error: null });
     const res = await recordPayment(makeRequest(PAYMENT_BODY, "good-token"));
     expect(res.status).toBe(200);
     expect(mockInsert).toHaveBeenCalledWith(
-      expect.objectContaining({ college_id: "c1", fee_id: "fee-1", amount: 1000, method: "cash", processed_by: "u1" })
+      expect.objectContaining({ college_id: "c1", fee_id: UUID_FEE, amount: 1000, method: "cash", processed_by: "u1" })
     );
   });
 
@@ -330,12 +346,12 @@ describe("app/api/mobile/* — HTTP-boundary authorization matrix", () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
     mockSingle
       .mockResolvedValueOnce({ data: { role: "finance", college_id: "c1", status: "active" } })
-      .mockResolvedValueOnce({ data: { id: "student-1", college_id: "c1" } });
+      .mockResolvedValueOnce({ data: { id: UUID_STUDENT, college_id: "c1" } });
     mockInsert.mockResolvedValue({ error: null });
     const res = await createScholarship(makeRequest(SCHOLARSHIP_BODY, "good-token"));
     expect(res.status).toBe(200);
     expect(mockInsert).toHaveBeenCalledWith(
-      expect.objectContaining({ college_id: "c1", student_id: "student-1", name: "Merit Award", type: "merit", amount: 2000 })
+      expect.objectContaining({ college_id: "c1", student_id: UUID_STUDENT, name: "Merit Award", type: "merit", amount: 2000 })
     );
   });
 
@@ -357,12 +373,12 @@ describe("app/api/mobile/* — HTTP-boundary authorization matrix", () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
     mockSingle
       .mockResolvedValueOnce({ data: { role: "director", college_id: "c1", status: "active" } })
-      .mockResolvedValueOnce({ data: { id: "student-1", college_id: "c1" } });
+      .mockResolvedValueOnce({ data: { id: UUID_STUDENT, college_id: "c1" } });
     mockInsert.mockResolvedValue({ error: null });
     const res = await createPlacement(makeRequest(PLACEMENT_BODY, "good-token"));
     expect(res.status).toBe(200);
     expect(mockInsert).toHaveBeenCalledWith(
-      expect.objectContaining({ college_id: "c1", student_id: "student-1", company_name: "Acme Corp", role_title: "SWE" })
+      expect.objectContaining({ college_id: "c1", student_id: UUID_STUDENT, company_name: "Acme Corp", role_title: "SWE" })
     );
   });
 
@@ -405,9 +421,9 @@ describe("app/api/mobile/* — HTTP-boundary authorization matrix", () => {
   });
 
   it("admin/user-status — an admin can't suspend their own account", async () => {
-    mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+    mockGetUser.mockResolvedValue({ data: { user: { id: UUID_SELF } } });
     mockSingle.mockResolvedValue({ data: { role: "admin", college_id: "c1", status: "active" } });
-    const res = await updateUserStatus(makeRequest({ targetUserId: "u1", status: "suspended" }, "good-token"));
+    const res = await updateUserStatus(makeRequest({ targetUserId: UUID_SELF, status: "suspended" }, "good-token"));
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.error).toMatch(/can't suspend your own account/);
@@ -504,5 +520,93 @@ describe("app/api/mobile/* — HTTP-boundary authorization matrix", () => {
       expect.objectContaining({ user_id: "u1", college_id: "c1", expo_push_token: PUSH_BODY.token, platform: "ios" }),
       expect.objectContaining({ onConflict: "expo_push_token" })
     );
+  });
+
+  // ─── Request validation (Zod) ──────────────────────────────────────
+  // Phase 0 of the production-readiness roadmap added a schema at every
+  // mutation boundary. These prove malformed bodies are actually rejected
+  // with 400 — not just that the schemas compile — for a representative
+  // sample spanning numeric range, enum membership, UUID format, and
+  // required-string/email checks. All pass RBAC first (good-token, correct
+  // role) so the request actually reaches Zod instead of stopping at 401/403.
+
+  it("finance/payment — negative amount → 400", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+    mockSingle.mockResolvedValue({ data: { role: "finance", college_id: "c1", status: "active" } });
+    const res = await recordPayment(makeRequest({ ...PAYMENT_BODY, amount: -50 }, "good-token"));
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/greater than zero/);
+  });
+
+  it("finance/payment — invalid payment method → 400", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+    mockSingle.mockResolvedValue({ data: { role: "finance", college_id: "c1", status: "active" } });
+    const res = await recordPayment(makeRequest({ ...PAYMENT_BODY, method: "bitcoin" }, "good-token"));
+    expect(res.status).toBe(400);
+  });
+
+  it("grading/save — non-positive maxMarks → 400", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+    mockSingle.mockResolvedValue({ data: { role: "teacher", college_id: "c1", status: "active" } });
+    const res = await saveGrades(makeRequest({ ...GRADES_BODY, maxMarks: 0 }, "good-token"));
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/greater than zero/);
+  });
+
+  it("attendance/save — non-UUID courseId → 400", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+    mockSingle.mockResolvedValue({ data: { role: "teacher", college_id: "c1", status: "active" } });
+    const res = await saveAttendance(makeRequest({ ...ATTENDANCE_BODY, courseId: "course-1" }, "good-token"));
+    expect(res.status).toBe(400);
+  });
+
+  it("complaints/submit — invalid category value → 400", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+    mockSingle.mockResolvedValue({ data: { role: "student", college_id: "c1", status: "active" } });
+    const res = await submitComplaint(makeRequest({ ...COMPLAINT_BODY, category: "not-a-category" }, "good-token"));
+    expect(res.status).toBe(400);
+  });
+
+  it("gatepass/act — invalid action value → 400", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+    mockSingle.mockResolvedValue({ data: { role: "warden", college_id: "c1", status: "active" } });
+    const res = await actOnGatePass(makeRequest({ ...GATEPASS_ACT_BODY, action: "hacked" }, "good-token"));
+    expect(res.status).toBe(400);
+  });
+
+  it("admin/create-user — invalid email format → 400", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+    mockSingle.mockResolvedValue({ data: { role: "admin", college_id: "c1", status: "active" } });
+    const res = await createUser(makeRequest({ ...CREATE_USER_BODY, email: "not-an-email" }, "good-token"));
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/valid email/);
+  });
+
+  it("admin/create-user — missing full name → 400", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+    mockSingle.mockResolvedValue({ data: { role: "admin", college_id: "c1", status: "active" } });
+    const res = await createUser(makeRequest({ ...CREATE_USER_BODY, fullName: "" }, "good-token"));
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/Full name is required/);
+  });
+
+  it("director/placement — missing company name → 400", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+    mockSingle.mockResolvedValue({ data: { role: "director", college_id: "c1", status: "active" } });
+    const res = await createPlacement(makeRequest({ ...PLACEMENT_BODY, companyName: "" }, "good-token"));
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/Company name is required/);
+  });
+
+  it("admin/assign-hod — non-UUID departmentId → 400", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+    mockSingle.mockResolvedValue({ data: { role: "admin", college_id: "c1", status: "active" } });
+    const res = await assignHod(makeRequest({ departmentId: "dept-1", hodUserId: null }, "good-token"));
+    expect(res.status).toBe(400);
   });
 });

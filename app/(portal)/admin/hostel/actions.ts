@@ -1,10 +1,17 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib/rbac";
+import { checkRateLimit } from "@/lib/rate-limit";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
+
+const AssignWardenSchema = z.object({
+  blockId: z.string().uuid(),
+  wardenUserId: z.string().uuid().nullable(),
+});
 
 /**
  * Shared by the web Server Action below and
@@ -16,6 +23,9 @@ export async function assignWardenCore(
   blockId: string,
   wardenUserId: string | null
 ) {
+  ({ blockId, wardenUserId } = AssignWardenSchema.parse({ blockId, wardenUserId }));
+  await checkRateLimit(`assignWarden:${actor.userId}`, 20, 60);
+
   // Verify the target profile is actually in this college and eligible
   // (warden role) before assigning — never trust the client-picked id
   // blindly, even though it came from a dropdown we populated ourselves.
