@@ -83,4 +83,20 @@ describe("requireRole", () => {
       collegeId: "college-9",
     });
   });
+
+  it("resolves super_admin against its own requireRole([\"super_admin\"]) check", async () => {
+    mockUser("user-1");
+    mockProfile({ role: "super_admin", college_id: "00000000-0000-0000-0000-000000000000" });
+
+    await expect(requireRole(["super_admin"])).resolves.toMatchObject({ role: "super_admin" });
+  });
+
+  it("super_admin is NOT implicitly admin — requireRole([\"admin\"]) rejects it", async () => {
+    mockUser("user-1");
+    mockProfile({ role: "super_admin", college_id: "00000000-0000-0000-0000-000000000000" });
+
+    await expect(requireRole(["admin"])).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+  });
 });

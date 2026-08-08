@@ -80,8 +80,18 @@ function AuthenticatedRoot() {
       return <DirectorTabNavigator />;
     case "admin":
       return <AdminTabNavigator />;
+    case "super_admin":
+      // Deliberately not a native portal yet — college creation is a rare,
+      // form-heavy admin task poorly suited to a phone screen, and nothing
+      // in the invite cascade requires it on mobile. A real native portal
+      // is a later-phase candidate, not an oversight — see the plan.
+      return (
+        <View style={{ flex: 1, justifyContent: "center", alignItems: "center", padding: 24 }}>
+          <Text>Super Admin tools are web-only for now — manage colleges from the web portal.</Text>
+        </View>
+      );
     default:
-      // All 7 roles are built for mobile now — this only fires for a
+      // All 8 roles are known here now — this only fires for a
       // stale/unexpected profiles.role value at runtime.
       return (
         <View style={{ flex: 1, justifyContent: "center", alignItems: "center", padding: 24 }}>

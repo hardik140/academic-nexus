@@ -3,78 +3,66 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib/rbac";
 import { logAudit } from "@/lib/audit";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { inviteUserCore, resendInvitationCore, revokeInvitationCore, type InviteUserParams } from "@/lib/invitations";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, UserRole, UserStatus } from "@/types/database";
 
+// Deliberately excludes "super_admin" — this is the only thing standing
+// between an admin's "edit role" form and the DB write once UserRole grows
+// to include it. Also excludes "parent" (a valid DB-level role via a CHECK
+// constraint, but with no app-layer support anywhere — see the "parent"
+// gap noted throughout lib/rbac.ts-adjacent code). Do not widen this to
+// UserRole directly.
 const USER_ROLES = ["student", "teacher", "hod", "finance", "director", "admin", "warden"] as const;
 const USER_STATUSES = ["active", "suspended", "pending", "graduated", "alumni"] as const;
 
-const CreateUserSchema = z.object({
-  email: z.string().trim().email({ message: "Enter a valid email address." }),
-  fullName: z.string().trim().min(1, { message: "Full name is required." }).max(200),
-  role: z.enum(USER_ROLES),
-  departmentId: z.string().uuid().optional(),
-});
-
-export interface CreateUserParams {
-  email: string;
-  fullName: string;
-  role: UserRole;
-  departmentId?: string;
-}
-
 /**
- * Shared by the web Server Action below and app/api/mobile/admin/create-user's
- * Route Handler — same guarded logic either way, just a different transport.
- * The service-role admin client stays entirely server-side either way; the
- * mobile app only ever sees this guarded HTTP endpoint, never the key itself.
+ * Shared by the web Server Action below and
+ * app/api/mobile/admin/invite-user's Route Handler. The actual invite logic
+ * (Zod validation, invite-tier check, rate limiting, inviteUserByEmail,
+ * bookkeeping insert, audit log) lives in lib/invitations.ts's
+ * inviteUserCore, shared across every invite-capable tier.
  */
-export async function createUserCore(
-  supabase: SupabaseClient<Database>,
-  actor: AuthorizedActor,
-  params: CreateUserParams
-) {
-  const { email, fullName, role, departmentId } = CreateUserSchema.parse(params);
-
-  const admin = createAdminClient();
-  const { data: created, error: createErr } = await admin.auth.admin.createUser({
-    email,
-    email_confirm: true,
-    user_metadata: { full_name: fullName, role, college_id: actor.collegeId },
-  });
-  if (createErr || !created.user) {
-    throw new Error(createErr?.message || "Failed to create user.");
-  }
-
-  if (departmentId) {
-    await supabase.from("profiles").update({ department_id: departmentId }).eq("id", created.user.id);
-  }
-
-  await logAudit(supabase, actor, `Created user ${email} (${role})`, "profiles", created.user.id);
-}
-
-export async function createUser(
-  email: string,
-  fullName: string,
-  role: UserRole,
-  departmentId?: string
-) {
+export async function inviteUser(params: InviteUserParams) {
   const actor = await requireRole(["admin"]);
-  await checkRateLimit(`createUser:${actor.userId}`, 20, 60);
   const supabase = await createClient();
-  await createUserCore(supabase, actor, { email, fullName, role, departmentId });
+  await inviteUserCore(supabase, actor, params);
   revalidatePath("/admin/users");
 }
 
-/** Called by app/api/mobile/admin/create-user/route.ts. */
-export async function createUserViaRequest(request: Request, params: CreateUserParams) {
+/** Called by app/api/mobile/admin/invite-user/route.ts. */
+export async function inviteUserViaRequest(request: Request, params: InviteUserParams) {
   const { supabase, ...actor } = await requireRoleFromRequest(request, ["admin"]);
-  await checkRateLimit(`createUser:${actor.userId}`, 20, 60);
-  await createUserCore(supabase, actor, params);
+  await inviteUserCore(supabase, actor, params);
+}
+
+export async function resendInvitation(invitationId: string) {
+  const actor = await requireRole(["admin"]);
+  const supabase = await createClient();
+  await resendInvitationCore(supabase, actor, invitationId);
+  revalidatePath("/admin/users");
+}
+
+/** Called by app/api/mobile/admin/invitations/resend/route.ts. */
+export async function resendInvitationViaRequest(request: Request, invitationId: string) {
+  const { supabase, ...actor } = await requireRoleFromRequest(request, ["admin"]);
+  await resendInvitationCore(supabase, actor, invitationId);
+}
+
+export async function revokeInvitation(invitationId: string) {
+  const actor = await requireRole(["admin"]);
+  const supabase = await createClient();
+  await revokeInvitationCore(supabase, actor, invitationId);
+  revalidatePath("/admin/users");
+}
+
+/** Called by app/api/mobile/admin/invitations/revoke/route.ts. */
+export async function revokeInvitationViaRequest(request: Request, invitationId: string) {
+  const { supabase, ...actor } = await requireRoleFromRequest(request, ["admin"]);
+  await revokeInvitationCore(supabase, actor, invitationId);
 }
 
 const UpdateUserProfileSchema = z.object({

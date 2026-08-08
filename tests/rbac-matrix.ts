@@ -8,6 +8,7 @@ export const ALL_ROLES: UserRole[] = [
   "director",
   "admin",
   "warden",
+  "super_admin",
 ];
 
 /**
@@ -25,6 +26,14 @@ export const ACTION_ALLOWED_ROLES: Record<string, UserRole[]> = {
   actOnLeaveRequest: ["hod", "admin"],
   actOnGatePass: ["warden", "admin"],
   saveMarks: ["teacher", "admin"],
+  // Invitation-based onboarding — super_admin is deliberately NOT implicitly
+  // admin (inviteUserAsAdmin denies it), and each tier's invite action is
+  // its own separate requireRole([...]) call, not a shared allow-list.
+  createCollege: ["super_admin"],
+  inviteUserAsSuperAdmin: ["super_admin"],
+  inviteUserAsAdmin: ["admin"],
+  inviteUserAsDirector: ["director"],
+  inviteUserAsHod: ["hod"],
 };
 
 export interface RbacMatrixRow {

@@ -21,7 +21,8 @@ export type UserRole =
   | "finance"
   | "director"
   | "admin"
-  | "warden";
+  | "warden"
+  | "super_admin";
 
 export type UserStatus = "active" | "suspended" | "pending" | "graduated" | "alumni";
 
@@ -72,12 +73,14 @@ export interface Database {
           website: string | null;
           accreditation: string | null;
           established_year: number | null;
+          created_by: string | null;
+          is_platform: boolean;
           created_at: string;
           updated_at: string;
         };
         Insert: OptionalKeys<
           Database["public"]["Tables"]["colleges"]["Row"],
-          "id" | "created_at" | "updated_at" | "domain" | "logo_url" | "address" | "city" | "state" | "country" | "phone" | "email" | "website" | "accreditation" | "established_year"
+          "id" | "created_at" | "updated_at" | "domain" | "logo_url" | "address" | "city" | "state" | "country" | "phone" | "email" | "website" | "accreditation" | "established_year" | "created_by" | "is_platform"
         >;
         Update: Partial<Database["public"]["Tables"]["colleges"]["Insert"]>;
         Relationships: [];
@@ -724,6 +727,32 @@ export interface Database {
           "id" | "created_at" | "updated_at"
         >;
         Update: Partial<Database["public"]["Tables"]["device_tokens"]["Insert"]>;
+        Relationships: [];
+      };
+
+      invitations: {
+        Row: {
+          id: string;
+          college_id: string;
+          email: string;
+          role: UserRole;
+          department_id: string | null;
+          invited_by: string;
+          user_id: string | null;
+          status: "pending" | "accepted" | "revoked" | "expired";
+          metadata: Json | null;
+          token_hash: string | null;
+          expires_at: string;
+          accepted_at: string | null;
+          accepted_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: OptionalKeys<
+          Database["public"]["Tables"]["invitations"]["Row"],
+          "id" | "department_id" | "user_id" | "status" | "metadata" | "token_hash" | "expires_at" | "accepted_at" | "accepted_by" | "created_at" | "updated_at"
+        >;
+        Update: Partial<Database["public"]["Tables"]["invitations"]["Insert"]>;
         Relationships: [];
       };
     };

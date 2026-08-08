@@ -1,0 +1,13 @@
+import { NextResponse } from "next/server";
+import { errorResponse } from "@/lib/api-errors";
+import { revokeInvitationViaRequest } from "@/app/(portal)/hod/team/actions";
+
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+    await revokeInvitationViaRequest(request, body.invitationId);
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    return errorResponse(err);
+  }
+}

@@ -3,8 +3,15 @@ import { createClient } from "@/lib/supabase/server";
 
 /**
  * Auth callback route.
- * Supabase redirects here after Google OAuth or Magic Link confirmation.
- * Exchanges the auth code for a session, then redirects to the portal.
+ * Supabase redirects here after Google OAuth or invitation-link
+ * confirmation. Exchanges the auth code for a session, then redirects to
+ * the portal (or, for a fresh invite, to /auth/accept-invite via `next`).
+ *
+ * There is no auto-provision-a-profile fallback here anymore: every account
+ * now originates from an invitation, and handle_new_user() (see migration
+ * 018) already created the profiles row — with the right role/college and
+ * status='pending' — synchronously when the invite was sent. An
+ * authenticated user with no profile row should not be a reachable state.
  */
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
@@ -16,39 +23,9 @@ export async function GET(request: Request) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (!error) {
-      // Check if user has a profile — if not, create one
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (user) {
-        const { data: existingProfile } = await supabase
-          .from("profiles")
-          .select("id")
-          .eq("id", user.id)
-          .single();
-
-        if (!existingProfile) {
-          // First-time login: create a profile with default 'student' role
-          await supabase.from("profiles").insert({
-            id: user.id,
-            college_id: "00000000-0000-0000-0000-000000000001", // Default demo college
-            full_name:
-              user.user_metadata?.full_name ||
-              user.email?.split("@")[0] ||
-              "New User",
-            email: user.email || "",
-            avatar_url: user.user_metadata?.avatar_url || null,
-            role: "student",
-            status: "active",
-          });
-        }
-      }
-
       return NextResponse.redirect(`${origin}${next}`);
     }
   }
 
-  // Auth error — redirect to login with error
   return NextResponse.redirect(`${origin}/login?error=auth_failed`);
 }

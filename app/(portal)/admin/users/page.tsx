@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { DataTable } from "@/components/ui/data-table";
 import { Modal, Button, FormField, StatusBadge } from "@/components/ui/modal";
 import { DEFAULT_QUERY_LIMIT } from "@/lib/constants";
-import { createUser, updateUserProfile, updateUserStatus as updateUserStatusAction } from "./actions";
+import { inviteUser, resendInvitation, revokeInvitation, updateUserProfile, updateUserStatus as updateUserStatusAction } from "./actions";
 import type { UserRole, UserStatus } from "@/types/database";
 
 const roles: { value: UserRole; label: string }[] = [
@@ -23,22 +23,23 @@ function AdminUsersInner() {
   const supabase = createClient();
   const searchParams = useSearchParams();
   const [users, setUsers] = useState<any[]>([]);
+  const [invitations, setInvitations] = useState<any[]>([]);
   const [departments, setDepartments] = useState<any[]>([]);
   const [editUser, setEditUser] = useState<any>(null);
-  const [showCreate, setShowCreate] = useState(false);
+  const [showInvite, setShowInvite] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [createForm, setCreateForm] = useState<{ email: string; full_name: string; role: UserRole; department_id: string }>({
+  const [inviteForm, setInviteForm] = useState<{ email: string; full_name: string; role: UserRole; department_id: string }>({
     email: "",
     full_name: "",
-    role: "student",
+    role: "director",
     department_id: "",
   });
 
-  useEffect(() => { loadUsers(); loadDepartments(); }, []);
+  useEffect(() => { loadUsers(); loadInvitations(); loadDepartments(); }, []);
 
   useEffect(() => {
-    if (searchParams.get("action") === "create") setShowCreate(true);
+    if (searchParams.get("action") === "invite") setShowInvite(true);
   }, [searchParams]);
 
   const loadUsers = async () => {
@@ -50,23 +51,57 @@ function AdminUsersInner() {
     setUsers(data || []);
   };
 
+  const loadInvitations = async () => {
+    const { data } = await supabase
+      .from("invitations")
+      .select("*")
+      .eq("status", "pending")
+      .order("created_at", { ascending: false });
+    setInvitations(data || []);
+  };
+
   const loadDepartments = async () => {
     const { data } = await supabase.from("departments").select("id, name, code").order("name");
     setDepartments(data || []);
   };
 
-  const handleCreate = async () => {
+  const handleInvite = async () => {
     setLoading(true);
     setError(null);
     try {
-      await createUser(createForm.email, createForm.full_name, createForm.role, createForm.department_id || undefined);
-      setCreateForm({ email: "", full_name: "", role: "student", department_id: "" });
-      setShowCreate(false);
-      await loadUsers();
+      await inviteUser({
+        email: inviteForm.email,
+        fullName: inviteForm.full_name,
+        role: inviteForm.role as Exclude<UserRole, "super_admin">,
+        departmentId: inviteForm.department_id || undefined,
+      });
+      setInviteForm({ email: "", full_name: "", role: "director", department_id: "" });
+      setShowInvite(false);
+      await loadInvitations();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to create user.");
+      setError(e instanceof Error ? e.message : "Failed to send invitation.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResend = async (invitationId: string) => {
+    setError(null);
+    try {
+      await resendInvitation(invitationId);
+      await loadInvitations();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to resend invitation.");
+    }
+  };
+
+  const handleRevoke = async (invitationId: string) => {
+    setError(null);
+    try {
+      await revokeInvitation(invitationId);
+      await loadInvitations();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to revoke invitation.");
     }
   };
 
@@ -104,13 +139,41 @@ function AdminUsersInner() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-extrabold text-on-surface tracking-tight">User Management</h1>
-          <p className="text-sm text-on-surface-variant mt-xs">Manage all user accounts, roles, and permissions</p>
+          <p className="text-sm text-on-surface-variant mt-xs">Manage all user accounts, roles, and invitations</p>
         </div>
-        <Button onClick={() => setShowCreate(true)}>+ Add User</Button>
+        <Button onClick={() => setShowInvite(true)}>+ Invite User</Button>
       </div>
 
-      {error && !editUser && !showCreate && (
+      {error && !editUser && !showInvite && (
         <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium">{error}</div>
+      )}
+
+      {invitations.length > 0 && (
+        <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-sm overflow-hidden">
+          <div className="px-lg py-md border-b border-outline-variant">
+            <h2 className="text-sm font-bold text-on-surface">Pending Invitations ({invitations.length})</h2>
+          </div>
+          <div className="divide-y divide-outline-variant">
+            {invitations.map((inv: any) => (
+              <div key={inv.id} className="flex items-center justify-between px-lg py-md">
+                <div>
+                  <div className="text-sm font-medium text-on-surface">{inv.email}</div>
+                  <div className="text-xs text-outline capitalize">
+                    {inv.role} · expires {new Date(inv.expires_at).toLocaleDateString()}
+                  </div>
+                </div>
+                <div className="flex gap-md">
+                  <button onClick={() => handleResend(inv.id)} className="text-xs text-secondary hover:underline font-medium">
+                    Resend
+                  </button>
+                  <button onClick={() => handleRevoke(inv.id)} className="text-xs text-error hover:underline font-medium">
+                    Revoke
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
 
       <DataTable
@@ -186,17 +249,17 @@ function AdminUsersInner() {
         )}
       />
 
-      {/* Add User Modal */}
+      {/* Invite User Modal */}
       <Modal
-        open={showCreate}
-        onClose={() => setShowCreate(false)}
-        title="Add User"
-        description="Creates a real account — the user can sign in immediately with this email."
+        open={showInvite}
+        onClose={() => setShowInvite(false)}
+        title="Invite User"
+        description="Sends an email invitation — the account is created but stays pending until they accept and set a password."
         footer={
           <>
-            <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
-            <Button onClick={handleCreate} disabled={loading || !createForm.email || !createForm.full_name}>
-              {loading ? "Creating..." : "Create User"}
+            <Button variant="outline" onClick={() => setShowInvite(false)}>Cancel</Button>
+            <Button onClick={handleInvite} disabled={loading || !inviteForm.email || !inviteForm.full_name}>
+              {loading ? "Sending..." : "Send Invitation"}
             </Button>
           </>
         }
@@ -205,10 +268,10 @@ function AdminUsersInner() {
           <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium mb-md">{error}</div>
         )}
         <div className="space-y-md">
-          <FormField label="Full Name" id="create_name" value={createForm.full_name} onChange={(v) => setCreateForm({ ...createForm, full_name: v })} placeholder="e.g. Jane Doe" required />
-          <FormField label="Email" id="create_email" type="email" value={createForm.email} onChange={(v) => setCreateForm({ ...createForm, email: v })} placeholder="jane@college.edu" required />
-          <FormField label="Role" id="create_role" type="select" value={createForm.role} onChange={(v) => setCreateForm({ ...createForm, role: v as UserRole })} options={roles} required />
-          <FormField label="Department" id="create_dept" type="select" value={createForm.department_id} onChange={(v) => setCreateForm({ ...createForm, department_id: v })} options={departmentOptions} />
+          <FormField label="Full Name" id="invite_name" value={inviteForm.full_name} onChange={(v) => setInviteForm({ ...inviteForm, full_name: v })} placeholder="e.g. Jane Doe" required />
+          <FormField label="Email" id="invite_email" type="email" value={inviteForm.email} onChange={(v) => setInviteForm({ ...inviteForm, email: v })} placeholder="jane@college.edu" required />
+          <FormField label="Role" id="invite_role" type="select" value={inviteForm.role} onChange={(v) => setInviteForm({ ...inviteForm, role: v as UserRole })} options={roles} required />
+          <FormField label="Department" id="invite_dept" type="select" value={inviteForm.department_id} onChange={(v) => setInviteForm({ ...inviteForm, department_id: v })} options={departmentOptions} />
         </div>
       </Modal>
 

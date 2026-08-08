@@ -5,6 +5,21 @@ const mockSingle = vi.fn();
 const mockInsert = vi.fn();
 const mockUpsert = vi.fn();
 const mockUpdate = vi.fn();
+// inviteUserCore (lib/invitations.ts) and createCollegeCore's invite step
+// call the real Supabase Auth Admin API — mocked here (unlike the plain
+// service-role client in Phase 0's admin/create-user, which was scoped to
+// 401/403-only coverage) because inviteUserCore is now shared across four
+// role tiers and its canInvite() enforcement is exactly what's worth
+// proving end-to-end through the HTTP boundary, not just in isolation.
+const mockGenerateLink = vi.fn();
+const mockDeleteUser = vi.fn();
+// lib/email.ts's nodemailer transport isn't configured in tests (no real
+// SMTP) — mocked so inviteUserCore's send step is a no-op here rather than
+// throwing "SMTP is not configured." vi.hoisted() (rather than a plain
+// const) because the naming-convention auto-hoist vitest normally does for
+// "mock"-prefixed variables was, for reasons not fully clear, not reliably
+// hoisting this one ahead of the vi.mock("@/lib/email", ...) factory below.
+const mockSendInvitationEmail = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/supabase/mobile", () => ({
   createMobileClient: () => ({
@@ -22,6 +37,22 @@ vi.mock("@/lib/supabase/mobile", () => ({
     const header = request.headers.get("authorization");
     return header?.startsWith("Bearer ") ? header.slice(7) : null;
   },
+}));
+
+vi.mock("@/lib/supabase/admin", () => ({
+  createAdminClient: () => ({
+    auth: {
+      admin: {
+        generateLink: mockGenerateLink,
+        deleteUser: mockDeleteUser,
+      },
+    },
+  }),
+}));
+
+vi.mock("@/lib/email", () => ({
+  sendInvitationEmail: mockSendInvitationEmail,
+  sendPasswordResetEmail: vi.fn(),
 }));
 
 // requireRole()/createClient() aren't exercised by these mobile-only routes,
@@ -46,7 +77,6 @@ import { POST as recordPayment } from "@/app/api/mobile/finance/payment/route";
 import { POST as createScholarship } from "@/app/api/mobile/finance/scholarship/route";
 import { POST as sendAnnouncement } from "@/app/api/mobile/director/announcement/route";
 import { POST as createPlacement } from "@/app/api/mobile/director/placement/route";
-import { POST as createUser } from "@/app/api/mobile/admin/create-user/route";
 import { POST as updateUser } from "@/app/api/mobile/admin/update-user/route";
 import { POST as updateUserStatus } from "@/app/api/mobile/admin/user-status/route";
 import { POST as createDepartment } from "@/app/api/mobile/admin/create-department/route";
@@ -54,6 +84,17 @@ import { POST as assignHod } from "@/app/api/mobile/admin/assign-hod/route";
 import { POST as assignWarden } from "@/app/api/mobile/admin/assign-warden/route";
 import { POST as createCourse } from "@/app/api/mobile/admin/create-course/route";
 import { POST as updateCollege } from "@/app/api/mobile/admin/update-college/route";
+import { POST as adminInviteUser } from "@/app/api/mobile/admin/invite-user/route";
+import { POST as adminResendInvitation } from "@/app/api/mobile/admin/invitations/resend/route";
+import { POST as adminRevokeInvitation } from "@/app/api/mobile/admin/invitations/revoke/route";
+import { POST as directorInviteUser } from "@/app/api/mobile/director/invite-user/route";
+import { POST as directorResendInvitation } from "@/app/api/mobile/director/invitations/resend/route";
+import { POST as directorRevokeInvitation } from "@/app/api/mobile/director/invitations/revoke/route";
+import { POST as hodInviteUser } from "@/app/api/mobile/hod/invite-user/route";
+import { POST as hodResendInvitation } from "@/app/api/mobile/hod/invitations/resend/route";
+import { POST as hodRevokeInvitation } from "@/app/api/mobile/hod/invitations/revoke/route";
+import { POST as superAdminCreateCollege } from "@/app/api/mobile/super-admin/create-college/route";
+import { POST as superAdminInviteUser } from "@/app/api/mobile/super-admin/invite-user/route";
 
 function makeRequest(body: unknown, token?: string) {
   return new Request("http://localhost/test", {
@@ -81,6 +122,8 @@ const UUID_TARGET_USER = "10000000-0000-4000-8000-000000000008";
 const UUID_DEPARTMENT = "10000000-0000-4000-8000-000000000009";
 const UUID_BLOCK = "10000000-0000-4000-8000-00000000000a";
 const UUID_SELF = "10000000-0000-4000-8000-00000000000b";
+const UUID_INVITATION = "10000000-0000-4000-8000-00000000000c";
+const UUID_NEW_COLLEGE = "10000000-0000-4000-8000-00000000000d";
 
 describe("app/api/mobile/* — HTTP-boundary authorization matrix", () => {
   beforeEach(() => {
@@ -91,6 +134,15 @@ describe("app/api/mobile/* — HTTP-boundary authorization matrix", () => {
     mockUpsert.mockResolvedValue({ error: null });
     mockUpdate.mockReset();
     mockUpdate.mockReturnValue({ eq: () => ({ eq: () => Promise.resolve({ error: null }) }) });
+    mockGenerateLink.mockReset();
+    mockGenerateLink.mockResolvedValue({
+      data: { user: { id: "invited-user-1" }, properties: { action_link: "https://example.com/invite" } },
+      error: null,
+    });
+    mockDeleteUser.mockReset();
+    mockDeleteUser.mockResolvedValue({ error: null });
+    mockSendInvitationEmail.mockReset();
+    mockSendInvitationEmail.mockResolvedValue(undefined);
   });
 
   const GATEPASS_BODY = { destination: "Home", reason: "Weekend", exitTime: "2026-09-01T09:00:00Z", returnTime: "2026-09-02T18:00:00Z" };
@@ -107,7 +159,6 @@ describe("app/api/mobile/* — HTTP-boundary authorization matrix", () => {
   const SCHOLARSHIP_BODY = { studentId: UUID_STUDENT, name: "Merit Award", type: "merit", amount: 2000 };
   const ANNOUNCEMENT_BODY = { title: "Campus Update", message: "Hello everyone", audience: "all" };
   const PLACEMENT_BODY = { studentId: UUID_STUDENT, companyName: "Acme Corp", roleTitle: "SWE", packageLpa: 12, placementDate: "2026-09-01" };
-  const CREATE_USER_BODY = { email: "new@college.edu", fullName: "New User", role: "student" };
   const UPDATE_USER_BODY = { targetUserId: UUID_TARGET_USER, fullName: "Updated Name", role: "student" };
   const USER_STATUS_BODY = { targetUserId: UUID_TARGET_USER, status: "suspended" };
   const CREATE_DEPT_BODY = { name: "Computer Science", code: "CSE", description: "" };
@@ -115,6 +166,13 @@ describe("app/api/mobile/* — HTTP-boundary authorization matrix", () => {
   const ASSIGN_WARDEN_BODY = { blockId: UUID_BLOCK, wardenUserId: null };
   const CREATE_COURSE_BODY = { name: "Data Structures", code: "CS201", departmentId: UUID_DEPARTMENT, credits: 4, semester: 3, type: "core" };
   const UPDATE_COLLEGE_BODY = { name: "Example College", code: "EC" };
+  const INVITE_DIRECTOR_BODY = { email: "director@college.edu", fullName: "New Director", role: "director" };
+  const INVITE_FINANCE_BODY = { email: "finance@college.edu", fullName: "New Finance", role: "finance" };
+  const INVITE_TEACHER_BODY = { email: "teacher@college.edu", fullName: "New Teacher", role: "teacher" };
+  const INVITE_ADMIN_BY_SUPER_ADMIN_BODY = { email: "admin2@college.edu", fullName: "New Admin", role: "admin", collegeId: UUID_NEW_COLLEGE };
+  const RESEND_INVITATION_BODY = { invitationId: UUID_INVITATION };
+  const REVOKE_INVITATION_BODY = { invitationId: UUID_INVITATION };
+  const CREATE_COLLEGE_BODY = { name: "New College", code: "NC" };
 
   it.each([
     ["gatepass/apply", () => applyGatePass(makeRequest(GATEPASS_BODY))],
@@ -131,7 +189,6 @@ describe("app/api/mobile/* — HTTP-boundary authorization matrix", () => {
     ["finance/scholarship", () => createScholarship(makeRequest(SCHOLARSHIP_BODY))],
     ["director/announcement", () => sendAnnouncement(makeRequest(ANNOUNCEMENT_BODY))],
     ["director/placement", () => createPlacement(makeRequest(PLACEMENT_BODY))],
-    ["admin/create-user", () => createUser(makeRequest(CREATE_USER_BODY))],
     ["admin/update-user", () => updateUser(makeRequest(UPDATE_USER_BODY))],
     ["admin/user-status", () => updateUserStatus(makeRequest(USER_STATUS_BODY))],
     ["admin/create-department", () => createDepartment(makeRequest(CREATE_DEPT_BODY))],
@@ -139,6 +196,17 @@ describe("app/api/mobile/* — HTTP-boundary authorization matrix", () => {
     ["admin/assign-warden", () => assignWarden(makeRequest(ASSIGN_WARDEN_BODY))],
     ["admin/create-course", () => createCourse(makeRequest(CREATE_COURSE_BODY))],
     ["admin/update-college", () => updateCollege(makeRequest(UPDATE_COLLEGE_BODY))],
+    ["admin/invite-user", () => adminInviteUser(makeRequest(INVITE_DIRECTOR_BODY))],
+    ["admin/invitations/resend", () => adminResendInvitation(makeRequest(RESEND_INVITATION_BODY))],
+    ["admin/invitations/revoke", () => adminRevokeInvitation(makeRequest(REVOKE_INVITATION_BODY))],
+    ["director/invite-user", () => directorInviteUser(makeRequest(INVITE_FINANCE_BODY))],
+    ["director/invitations/resend", () => directorResendInvitation(makeRequest(RESEND_INVITATION_BODY))],
+    ["director/invitations/revoke", () => directorRevokeInvitation(makeRequest(REVOKE_INVITATION_BODY))],
+    ["hod/invite-user", () => hodInviteUser(makeRequest(INVITE_TEACHER_BODY))],
+    ["hod/invitations/resend", () => hodResendInvitation(makeRequest(RESEND_INVITATION_BODY))],
+    ["hod/invitations/revoke", () => hodRevokeInvitation(makeRequest(REVOKE_INVITATION_BODY))],
+    ["super-admin/create-college", () => superAdminCreateCollege(makeRequest(CREATE_COLLEGE_BODY))],
+    ["super-admin/invite-user", () => superAdminInviteUser(makeRequest(INVITE_ADMIN_BY_SUPER_ADMIN_BODY))],
   ])("%s — no Authorization header → 401", async (_name, call) => {
     const res = await call();
     expect(res.status).toBe(401);
@@ -159,7 +227,6 @@ describe("app/api/mobile/* — HTTP-boundary authorization matrix", () => {
     ["finance/scholarship", () => createScholarship(makeRequest(SCHOLARSHIP_BODY, "bad-token"))],
     ["director/announcement", () => sendAnnouncement(makeRequest(ANNOUNCEMENT_BODY, "bad-token"))],
     ["director/placement", () => createPlacement(makeRequest(PLACEMENT_BODY, "bad-token"))],
-    ["admin/create-user", () => createUser(makeRequest(CREATE_USER_BODY, "bad-token"))],
     ["admin/update-user", () => updateUser(makeRequest(UPDATE_USER_BODY, "bad-token"))],
     ["admin/user-status", () => updateUserStatus(makeRequest(USER_STATUS_BODY, "bad-token"))],
     ["admin/create-department", () => createDepartment(makeRequest(CREATE_DEPT_BODY, "bad-token"))],
@@ -167,6 +234,17 @@ describe("app/api/mobile/* — HTTP-boundary authorization matrix", () => {
     ["admin/assign-warden", () => assignWarden(makeRequest(ASSIGN_WARDEN_BODY, "bad-token"))],
     ["admin/create-course", () => createCourse(makeRequest(CREATE_COURSE_BODY, "bad-token"))],
     ["admin/update-college", () => updateCollege(makeRequest(UPDATE_COLLEGE_BODY, "bad-token"))],
+    ["admin/invite-user", () => adminInviteUser(makeRequest(INVITE_DIRECTOR_BODY, "bad-token"))],
+    ["admin/invitations/resend", () => adminResendInvitation(makeRequest(RESEND_INVITATION_BODY, "bad-token"))],
+    ["admin/invitations/revoke", () => adminRevokeInvitation(makeRequest(REVOKE_INVITATION_BODY, "bad-token"))],
+    ["director/invite-user", () => directorInviteUser(makeRequest(INVITE_FINANCE_BODY, "bad-token"))],
+    ["director/invitations/resend", () => directorResendInvitation(makeRequest(RESEND_INVITATION_BODY, "bad-token"))],
+    ["director/invitations/revoke", () => directorRevokeInvitation(makeRequest(REVOKE_INVITATION_BODY, "bad-token"))],
+    ["hod/invite-user", () => hodInviteUser(makeRequest(INVITE_TEACHER_BODY, "bad-token"))],
+    ["hod/invitations/resend", () => hodResendInvitation(makeRequest(RESEND_INVITATION_BODY, "bad-token"))],
+    ["hod/invitations/revoke", () => hodRevokeInvitation(makeRequest(REVOKE_INVITATION_BODY, "bad-token"))],
+    ["super-admin/create-college", () => superAdminCreateCollege(makeRequest(CREATE_COLLEGE_BODY, "bad-token"))],
+    ["super-admin/invite-user", () => superAdminInviteUser(makeRequest(INVITE_ADMIN_BY_SUPER_ADMIN_BODY, "bad-token"))],
   ])("%s — invalid/expired token → 401", async (_name, call) => {
     mockGetUser.mockResolvedValue({ data: { user: null } });
     const res = await call();
@@ -382,18 +460,11 @@ describe("app/api/mobile/* — HTTP-boundary authorization matrix", () => {
     );
   });
 
-  // admin/create-user and admin/create-course are scoped to 401/403 only —
-  // createUserCore calls the real (unmocked) createAdminClient() once past
-  // the role guard, and createCourseCore's insert chains .select().single()
-  // after .insert(), a shape the shared mock doesn't model. Same documented
-  // scoping decision as director/announcement (see its dev log).
-
-  it("admin/create-user — authenticated as a non-admin role → 403", async () => {
-    mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
-    mockSingle.mockResolvedValue({ data: { role: "director", college_id: "c1", status: "active" } });
-    const res = await createUser(makeRequest(CREATE_USER_BODY, "good-token"));
-    expect(res.status).toBe(403);
-  });
+  // admin/create-course is scoped to 401/403 only — its insert chains
+  // .select().single() after .insert(), a shape the shared mock doesn't
+  // model. Same documented scoping decision as director/announcement (see
+  // its dev log). inviteUserCore's own createAdminClient() call IS mocked
+  // (see the top of this file) since it's now shared across four tiers.
 
   it("admin/update-user — authenticated as a non-admin role → 403", async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
@@ -511,6 +582,132 @@ describe("app/api/mobile/* — HTTP-boundary authorization matrix", () => {
     );
   });
 
+  // super-admin/create-college is scoped to 401/403 only — createCollegeCore's
+  // insert chains .select("id").single() after .insert(), the same shape
+  // admin/create-course is already scoped out for above.
+
+  it("admin/invite-user — authenticated as a non-admin role → 403", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+    mockSingle.mockResolvedValue({ data: { role: "director", college_id: "c1", status: "active" } });
+    const res = await adminInviteUser(makeRequest(INVITE_DIRECTOR_BODY, "good-token"));
+    expect(res.status).toBe(403);
+  });
+
+  it("admin/invite-user — authenticated as admin, inviting a director → succeeds", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+    mockSingle.mockResolvedValue({ data: { role: "admin", college_id: "c1", status: "active" } });
+    mockInsert.mockResolvedValue({ error: null });
+    const res = await adminInviteUser(makeRequest(INVITE_DIRECTOR_BODY, "good-token"));
+    expect(res.status).toBe(200);
+    expect(mockGenerateLink).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "invite",
+        email: "director@college.edu",
+        options: expect.objectContaining({ data: expect.objectContaining({ role: "director", college_id: "c1", status: "pending" }) }),
+      })
+    );
+    expect(mockInsert).toHaveBeenCalledWith(
+      expect.objectContaining({ email: "director@college.edu", role: "director", college_id: "c1" })
+    );
+  });
+
+  it("admin/invite-user — admin can't invite a teacher (tier enforcement) → 400", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+    mockSingle.mockResolvedValue({ data: { role: "admin", college_id: "c1", status: "active" } });
+    const res = await adminInviteUser(makeRequest(INVITE_TEACHER_BODY, "good-token"));
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/can't invite/);
+  });
+
+  it("director/invite-user — authenticated as a non-director role → 403", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+    mockSingle.mockResolvedValue({ data: { role: "hod", college_id: "c1", status: "active" } });
+    const res = await directorInviteUser(makeRequest(INVITE_FINANCE_BODY, "good-token"));
+    expect(res.status).toBe(403);
+  });
+
+  it("director/invite-user — authenticated as director, inviting finance → succeeds", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+    mockSingle.mockResolvedValue({ data: { role: "director", college_id: "c1", status: "active" } });
+    mockInsert.mockResolvedValue({ error: null });
+    const res = await directorInviteUser(makeRequest(INVITE_FINANCE_BODY, "good-token"));
+    expect(res.status).toBe(200);
+    expect(mockGenerateLink).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "invite",
+        email: "finance@college.edu",
+        options: expect.objectContaining({ data: expect.objectContaining({ role: "finance" }) }),
+      })
+    );
+  });
+
+  it("hod/invite-user — authenticated as a non-hod role → 403", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+    mockSingle.mockResolvedValue({ data: { role: "teacher", college_id: "c1", status: "active" } });
+    const res = await hodInviteUser(makeRequest(INVITE_TEACHER_BODY, "good-token"));
+    expect(res.status).toBe(403);
+  });
+
+  it("hod/invite-user — authenticated as hod, inviting a teacher → succeeds", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+    mockSingle
+      .mockResolvedValueOnce({ data: { role: "hod", college_id: "c1", status: "active" } })
+      .mockResolvedValueOnce({ data: { id: UUID_DEPARTMENT } })
+      .mockResolvedValueOnce({ data: { name: "Test College" } }); // getCollegeName lookup
+    mockInsert.mockResolvedValue({ error: null });
+    const res = await hodInviteUser(makeRequest(INVITE_TEACHER_BODY, "good-token"));
+    expect(res.status).toBe(200);
+    expect(mockGenerateLink).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "invite",
+        email: "teacher@college.edu",
+        options: expect.objectContaining({ data: expect.objectContaining({ role: "teacher" }) }),
+      })
+    );
+    expect(mockUpdate).toHaveBeenCalledWith(expect.objectContaining({ department_id: UUID_DEPARTMENT }));
+  });
+
+  it("hod/invite-user — hod not assigned to any department → 400", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+    mockSingle
+      .mockResolvedValueOnce({ data: { role: "hod", college_id: "c1", status: "active" } })
+      .mockResolvedValueOnce({ data: null });
+    const res = await hodInviteUser(makeRequest(INVITE_TEACHER_BODY, "good-token"));
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/assigned as a department's HOD/);
+  });
+
+  it("super-admin/invite-user — authenticated as a non-super_admin role → 403", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+    mockSingle.mockResolvedValue({ data: { role: "admin", college_id: "c1", status: "active" } });
+    const res = await superAdminInviteUser(makeRequest(INVITE_ADMIN_BY_SUPER_ADMIN_BODY, "good-token"));
+    expect(res.status).toBe(403);
+  });
+
+  it("super-admin/invite-user — authenticated as super_admin, inviting an Admin into a specific college → succeeds", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+    mockSingle.mockResolvedValue({ data: { role: "super_admin", college_id: "00000000-0000-0000-0000-000000000000", status: "active" } });
+    mockInsert.mockResolvedValue({ error: null });
+    const res = await superAdminInviteUser(makeRequest(INVITE_ADMIN_BY_SUPER_ADMIN_BODY, "good-token"));
+    expect(res.status).toBe(200);
+    expect(mockInsert).toHaveBeenCalledWith(
+      expect.objectContaining({ role: "admin", college_id: UUID_NEW_COLLEGE })
+    );
+  });
+
+  it("super-admin/invite-user — collegeId required when actor is super_admin → 400", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+    mockSingle.mockResolvedValue({ data: { role: "super_admin", college_id: "00000000-0000-0000-0000-000000000000", status: "active" } });
+    const res = await superAdminInviteUser(
+      makeRequest({ email: "admin2@college.edu", fullName: "New Admin", role: "admin" }, "good-token")
+    );
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/college must be selected/);
+  });
+
   it("push-token — any authenticated role (e.g. finance) is allowed", async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
     mockSingle.mockResolvedValue({ data: { role: "finance", college_id: "c1", status: "active" } });
@@ -576,19 +773,19 @@ describe("app/api/mobile/* — HTTP-boundary authorization matrix", () => {
     expect(res.status).toBe(400);
   });
 
-  it("admin/create-user — invalid email format → 400", async () => {
+  it("admin/invite-user — invalid email format → 400", async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
     mockSingle.mockResolvedValue({ data: { role: "admin", college_id: "c1", status: "active" } });
-    const res = await createUser(makeRequest({ ...CREATE_USER_BODY, email: "not-an-email" }, "good-token"));
+    const res = await adminInviteUser(makeRequest({ ...INVITE_DIRECTOR_BODY, email: "not-an-email" }, "good-token"));
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.error).toMatch(/valid email/);
   });
 
-  it("admin/create-user — missing full name → 400", async () => {
+  it("admin/invite-user — missing full name → 400", async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
     mockSingle.mockResolvedValue({ data: { role: "admin", college_id: "c1", status: "active" } });
-    const res = await createUser(makeRequest({ ...CREATE_USER_BODY, fullName: "" }, "good-token"));
+    const res = await adminInviteUser(makeRequest({ ...INVITE_DIRECTOR_BODY, fullName: "" }, "good-token"));
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.error).toMatch(/Full name is required/);

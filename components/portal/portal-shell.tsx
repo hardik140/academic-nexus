@@ -39,6 +39,7 @@ const NAV_MAP: Record<
   hod: [
     { label: "Dashboard", href: "/hod/dashboard", icon: "📊" },
     { label: "Approvals", href: "/hod/approvals", icon: "✅" },
+    { label: "Team", href: "/hod/team", icon: "✉️" },
     { label: "Faculty", href: "/hod/faculty", icon: "👥" },
     { label: "Courses", href: "/hod/courses", icon: "📚" },
     { label: "Reports", href: "/hod/reports", icon: "📈" },
@@ -54,6 +55,7 @@ const NAV_MAP: Record<
     { label: "Dashboard", href: "/director/dashboard", icon: "📊" },
     { label: "Analytics", href: "/director/analytics", icon: "📈" },
     { label: "Departments", href: "/director/departments", icon: "🏢" },
+    { label: "Team", href: "/director/team", icon: "✉️" },
     { label: "Faculty", href: "/director/faculty", icon: "👥" },
     { label: "Placements", href: "/director/placements", icon: "💼" },
   ],
@@ -73,6 +75,10 @@ const NAV_MAP: Record<
     { label: "Rooms", href: "/warden/rooms", icon: "🏠" },
     { label: "Gate Passes", href: "/warden/gatepasses", icon: "🚪" },
     { label: "Complaints", href: "/warden/complaints", icon: "🛠️" },
+  ],
+  super_admin: [
+    { label: "Dashboard", href: "/super-admin/dashboard", icon: "📊" },
+    { label: "Colleges", href: "/super-admin/colleges", icon: "🏛️" },
   ],
 };
 
@@ -98,6 +104,7 @@ export function PortalShell({ profile, children }: PortalShellProps) {
     director: "Director Portal",
     admin: "System Admin",
     warden: "Warden Portal",
+    super_admin: "Super Admin",
   };
 
   return (

@@ -47,10 +47,14 @@ export async function signInWithGoogle() {
   }
 }
 
-export async function signInWithMagicLink(email: string) {
-  const { error } = await supabase.auth.signInWithOtp({
-    email,
-    options: { emailRedirectTo: REDIRECT_URL },
+export async function signInWithPassword(email: string, password: string) {
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) throw error;
+}
+
+export async function requestPasswordReset(email: string) {
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: REDIRECT_URL,
   });
   if (error) throw error;
 }

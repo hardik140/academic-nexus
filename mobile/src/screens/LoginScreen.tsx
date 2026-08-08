@@ -9,10 +9,12 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
-import { signInWithGoogle, signInWithMagicLink } from "@/lib/auth";
+import { signInWithGoogle, signInWithPassword, requestPasswordReset } from "@/lib/auth";
 
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [mode, setMode] = useState<"sign-in" | "forgot-password">("sign-in");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null);
 
@@ -28,15 +30,28 @@ export default function LoginScreen() {
     }
   };
 
-  const handleMagicLink = async () => {
+  const handleSignIn = async () => {
+    if (!email.trim() || !password) return;
+    setLoading(true);
+    setMessage(null);
+    try {
+      await signInWithPassword(email.trim(), password);
+    } catch (e) {
+      setMessage({ text: e instanceof Error ? e.message : "Sign-in failed.", ok: false });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
     if (!email.trim()) return;
     setLoading(true);
     setMessage(null);
     try {
-      await signInWithMagicLink(email.trim());
-      setMessage({ text: "Check your email for the login link!", ok: true });
+      await requestPasswordReset(email.trim());
+      setMessage({ text: "Check your email for a password reset link.", ok: true });
     } catch (e) {
-      setMessage({ text: e instanceof Error ? e.message : "Failed to send magic link.", ok: false });
+      setMessage({ text: e instanceof Error ? e.message : "Failed to send reset link.", ok: false });
     } finally {
       setLoading(false);
     }
@@ -51,35 +66,74 @@ export default function LoginScreen() {
         <Text style={styles.title}>Academic Nexus</Text>
         <Text style={styles.subtitle}>Enterprise Student Information System</Text>
 
-        <Pressable style={styles.googleButton} onPress={handleGoogle} disabled={loading}>
-          <Text style={styles.googleButtonText}>Continue with Google</Text>
-        </Pressable>
+        {mode === "sign-in" && (
+          <>
+            <Pressable style={styles.googleButton} onPress={handleGoogle} disabled={loading}>
+              <Text style={styles.googleButtonText}>Continue with Google</Text>
+            </Pressable>
 
-        <View style={styles.dividerRow}>
-          <View style={styles.divider} />
-          <Text style={styles.dividerText}>OR</Text>
-          <View style={styles.divider} />
-        </View>
+            <View style={styles.dividerRow}>
+              <View style={styles.divider} />
+              <Text style={styles.dividerText}>OR</Text>
+              <View style={styles.divider} />
+            </View>
 
-        <Text style={styles.label}>Institutional Email</Text>
-        <TextInput
-          style={styles.input}
-          value={email}
-          onChangeText={setEmail}
-          placeholder="you@university.edu"
-          placeholderTextColor="#9AA0A6"
-          autoCapitalize="none"
-          keyboardType="email-address"
-          editable={!loading}
-        />
+            <Text style={styles.label}>Institutional Email</Text>
+            <TextInput
+              style={styles.input}
+              value={email}
+              onChangeText={setEmail}
+              placeholder="you@university.edu"
+              placeholderTextColor="#9AA0A6"
+              autoCapitalize="none"
+              keyboardType="email-address"
+              editable={!loading}
+            />
 
-        <Pressable style={styles.primaryButton} onPress={handleMagicLink} disabled={loading}>
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.primaryButtonText}>Send Magic Link</Text>
-          )}
-        </Pressable>
+            <Text style={styles.label}>Password</Text>
+            <TextInput
+              style={styles.input}
+              value={password}
+              onChangeText={setPassword}
+              placeholder="Your password"
+              placeholderTextColor="#9AA0A6"
+              secureTextEntry
+              editable={!loading}
+            />
+
+            <Pressable style={styles.primaryButton} onPress={handleSignIn} disabled={loading}>
+              {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>Sign In</Text>}
+            </Pressable>
+
+            <Pressable onPress={() => { setMode("forgot-password"); setMessage(null); }} disabled={loading}>
+              <Text style={styles.linkText}>Forgot your password?</Text>
+            </Pressable>
+          </>
+        )}
+
+        {mode === "forgot-password" && (
+          <>
+            <Text style={styles.label}>Institutional Email</Text>
+            <TextInput
+              style={styles.input}
+              value={email}
+              onChangeText={setEmail}
+              placeholder="you@university.edu"
+              placeholderTextColor="#9AA0A6"
+              autoCapitalize="none"
+              keyboardType="email-address"
+              editable={!loading}
+            />
+
+            <Pressable style={styles.primaryButton} onPress={handleForgotPassword} disabled={loading}>
+              {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>Send Reset Link</Text>}
+            </Pressable>
+
+            <Pressable onPress={() => { setMode("sign-in"); setMessage(null); }} disabled={loading}>
+              <Text style={styles.linkText}>Back to sign in</Text>
+            </Pressable>
+          </>
+        )}
 
         {message && (
           <Text style={[styles.message, message.ok ? styles.messageOk : styles.messageError]}>
@@ -134,6 +188,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   primaryButtonText: { color: "#fff", fontWeight: "700" },
+  linkText: { marginTop: 16, fontSize: 13, fontWeight: "600", color: "#0051D5", textAlign: "center" },
   message: { marginTop: 16, fontSize: 13, fontWeight: "500", textAlign: "center" },
   messageOk: { color: "#1B8A3E" },
   messageError: { color: "#BA1A1A" },

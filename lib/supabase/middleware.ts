@@ -8,8 +8,21 @@ import { checkRateLimit, RateLimitError } from "@/lib/rate-limit";
  * endpoints (e.g. the QStash-triggered cron route) that have their own
  * independent auth (a signed request), not a browser session cookie — the
  * portal login-redirect/RBAC logic below must never intercept them.
+ *
+ * `/auth/accept-invite` and `/auth/reset-password` specifically must stay
+ * public even though they require an authenticated Supabase session: an
+ * invited user lands here with status='pending', which the active-status
+ * check below would otherwise bounce back to /login before they ever see
+ * the set-password form. Both routes re-check the session themselves.
  */
-const PUBLIC_ROUTES = ["/login", "/auth/callback", "/auth/confirm", "/api"];
+const PUBLIC_ROUTES = [
+  "/login",
+  "/auth/callback",
+  "/auth/confirm",
+  "/auth/accept-invite",
+  "/auth/reset-password",
+  "/api",
+];
 
 export async function updateSession(request: NextRequest) {
   // Coarse, global first line of defense — checked before any Supabase call
