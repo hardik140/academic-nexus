@@ -24,7 +24,7 @@ const PUBLIC_ROUTES = [
   "/api",
 ];
 
-export async function updateSession(request: NextRequest) {
+export async function updateSession(request: NextRequest) { 
   // Coarse, global first line of defense — checked before any Supabase call
   // so a flood doesn't even cost an auth lookup. Fails open (see
   // lib/rate-limit.ts) if Redis isn't configured or unreachable.
