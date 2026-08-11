@@ -13,10 +13,18 @@ interface ModalProps {
   footer?: React.ReactNode;
 }
 
+// Arbitrary values, not the named max-w-{sm,md,lg} classes: this project's
+// @theme block in app/globals.css defines --spacing-{xs,sm,md,lg,xl,2xl,3xl}
+// for the padding/gap scale (p-md, gap-sm, etc). Tailwind v4 resolves
+// max-w-{name} from a same-named --spacing-{name} token when one exists,
+// ahead of its own built-in --container-{name} — so max-w-sm/md/lg/2xl were
+// silently collapsing to 8px/16px/24px/48px instead of real container
+// widths. max-w-4xl was unaffected (no --spacing-4xl override exists), which
+// is why this only showed up on modals using the default "md" size.
 const sizeMap = {
-  sm: "max-w-sm",
-  md: "max-w-lg",
-  lg: "max-w-2xl",
+  sm: "max-w-[24rem]",
+  md: "max-w-[32rem]",
+  lg: "max-w-[42rem]",
   xl: "max-w-4xl",
 };
 

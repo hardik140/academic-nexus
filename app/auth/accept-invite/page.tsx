@@ -61,7 +61,7 @@ export default async function AcceptInvitePage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-surface p-md">
-      <div className="relative w-full max-w-md min-w-[320px]">
+      <div className="relative w-full max-w-[28rem]">
         <div className="text-center mb-xl">
           <h1 className="text-3xl font-extrabold text-on-surface tracking-tight">
             Welcome to Academic Nexus
@@ -94,7 +94,7 @@ function InviteMessage({
 }) {
   return (
     <div className="min-h-screen flex items-center justify-center bg-surface p-md">
-      <div className="w-full max-w-md min-w-[320px] bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-xl p-xl text-center">
+      <div className="w-full max-w-[28rem] bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-xl p-xl text-center">
         <h1 className="text-xl font-bold text-on-surface mb-sm">{title}</h1>
         <p className="text-on-surface-variant text-sm">{message}</p>
         {linkHref && linkLabel && (

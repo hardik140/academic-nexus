@@ -9,7 +9,7 @@ export default function AdminForms() {
       <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-sm p-2xl text-center">
         <div className="text-4xl mb-md">📋</div>
         <h2 className="text-sm font-bold text-on-surface mb-xs">Coming Soon</h2>
-        <p className="text-sm text-on-surface-variant max-w-md mx-auto">
+        <p className="text-sm text-on-surface-variant max-w-[28rem] mx-auto">
           The form builder module isn&apos;t wired up yet — it needs a dedicated schema (form definitions, fields,
           submissions) before it can go live. Flagging as a follow-up.
         </p>

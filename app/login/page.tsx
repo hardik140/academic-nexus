@@ -32,10 +32,16 @@ export default function LoginPage() {
 
     if (error) {
       setMessage(error.message);
+      setLoading(false);
+      return;
     }
-    // On success, middleware/RootLayout redirects to the role's dashboard —
-    // no client-side navigation needed here.
-    setLoading(false);
+
+    // signInWithPassword only sets the session cookie — it doesn't navigate
+    // anywhere by itself. A hard reload (rather than router.push) ensures
+    // the server re-reads the fresh cookie rather than serving a cached
+    // pre-login response for "/". app/page.tsx then does the role-based
+    // redirect server-side.
+    window.location.href = "/";
   };
 
   const handleForgotPassword = async (e: React.FormEvent) => {
@@ -63,7 +69,7 @@ export default function LoginPage() {
         <div className="absolute -bottom-40 -left-40 w-96 h-96 rounded-full bg-secondary/5 blur-3xl" />
       </div>
 
-      <div className="relative w-full max-w-md min-w-[320px]">
+      <div className="relative w-full max-w-[28rem]">
         {/* Logo & Title */}
         <div className="text-center mb-xl">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-secondary text-on-secondary mb-md shadow-lg">
