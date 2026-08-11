@@ -9,7 +9,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 
 const CreateInvoiceSchema = z.object({
-  studentId: z.string().uuid(),
+  studentId: z.string().guid(),
   type: z.string().trim().min(1).max(100),
   amount: z.number().positive({ message: "Amount must be greater than zero." }),
   dueDate: z.string().min(1),

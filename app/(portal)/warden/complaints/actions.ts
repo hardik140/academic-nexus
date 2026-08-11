@@ -9,7 +9,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 
 const UpdateComplaintStatusSchema = z.object({
-  complaintId: z.string().uuid(),
+  complaintId: z.string().guid(),
   status: z.enum(["in_progress", "resolved"]),
 });
 

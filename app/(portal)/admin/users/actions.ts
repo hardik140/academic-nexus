@@ -66,7 +66,7 @@ export async function revokeInvitationViaRequest(request: Request, invitationId:
 }
 
 const UpdateUserProfileSchema = z.object({
-  targetUserId: z.string().uuid(),
+  targetUserId: z.string().guid(),
   fullName: z.string().trim().min(1, { message: "Full name is required." }).max(200),
   role: z.enum(USER_ROLES),
   phone: z.string().trim().max(20).optional(),
@@ -119,7 +119,7 @@ export async function updateUserProfileViaRequest(request: Request, params: Upda
 }
 
 const UpdateUserStatusSchema = z.object({
-  targetUserId: z.string().uuid(),
+  targetUserId: z.string().guid(),
   status: z.enum(USER_STATUSES),
 });
 

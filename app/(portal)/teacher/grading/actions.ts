@@ -15,13 +15,13 @@ const EXAM_TYPES = [
 ] as const;
 
 const SaveMarksSchema = z.object({
-  courseId: z.string().uuid(),
+  courseId: z.string().guid(),
   examType: z.enum(EXAM_TYPES),
   maxMarks: z.number().positive({ message: "Max marks must be greater than zero." }),
   entries: z
     .array(
       z.object({
-        studentDbId: z.string().uuid(),
+        studentDbId: z.string().guid(),
         obtainedMarks: z.number(),
       })
     )

@@ -5,11 +5,12 @@ import { createClient } from "@/lib/supabase/client";
 import { DataTable } from "@/components/ui/data-table";
 import { Modal, Button, FormField } from "@/components/ui/modal";
 import { PLATFORM_COLLEGE_ID } from "@/lib/constants";
-import { createCollege, inviteUser } from "./actions";
+import { createCollege, inviteUser, resendInvitation, revokeInvitation } from "./actions";
 
 export default function SuperAdminCollegesPage() {
   const supabase = createClient();
   const [colleges, setColleges] = useState<any[]>([]);
+  const [invitations, setInvitations] = useState<any[]>([]);
   const [showCreate, setShowCreate] = useState(false);
   const [inviteFor, setInviteFor] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -17,7 +18,7 @@ export default function SuperAdminCollegesPage() {
   const [createForm, setCreateForm] = useState({ name: "", code: "", city: "", state: "", country: "India" });
   const [inviteForm, setInviteForm] = useState({ email: "", fullName: "" });
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); loadInvitations(); }, []);
 
   const load = async () => {
     const { data } = await supabase
@@ -26,6 +27,35 @@ export default function SuperAdminCollegesPage() {
       .neq("id", PLATFORM_COLLEGE_ID)
       .order("created_at", { ascending: false });
     setColleges(data || []);
+  };
+
+  const loadInvitations = async () => {
+    const { data } = await supabase
+      .from("invitations")
+      .select("*, colleges:college_id(name)")
+      .eq("status", "pending")
+      .order("created_at", { ascending: false });
+    setInvitations(data || []);
+  };
+
+  const handleResend = async (invitationId: string) => {
+    setError(null);
+    try {
+      await resendInvitation(invitationId);
+      await loadInvitations();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to resend invitation.");
+    }
+  };
+
+  const handleRevoke = async (invitationId: string) => {
+    setError(null);
+    try {
+      await revokeInvitation(invitationId);
+      await loadInvitations();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to revoke invitation.");
+    }
   };
 
   const handleCreate = async () => {
@@ -56,6 +86,7 @@ export default function SuperAdminCollegesPage() {
       });
       setInviteForm({ email: "", fullName: "" });
       setInviteFor(null);
+      await loadInvitations();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to send invitation.");
     } finally {
@@ -75,6 +106,34 @@ export default function SuperAdminCollegesPage() {
 
       {error && !showCreate && !inviteFor && (
         <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium">{error}</div>
+      )}
+
+      {invitations.length > 0 && (
+        <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-sm overflow-hidden">
+          <div className="px-lg py-md border-b border-outline-variant">
+            <h2 className="text-sm font-bold text-on-surface">Pending Invitations ({invitations.length})</h2>
+          </div>
+          <div className="divide-y divide-outline-variant">
+            {invitations.map((inv: any) => (
+              <div key={inv.id} className="flex items-center justify-between px-lg py-md">
+                <div>
+                  <div className="text-sm font-medium text-on-surface">{inv.email}</div>
+                  <div className="text-xs text-outline capitalize">
+                    {inv.role} · {(inv.colleges as any)?.name ?? "—"} · expires {new Date(inv.expires_at).toLocaleDateString()}
+                  </div>
+                </div>
+                <div className="flex gap-md">
+                  <button onClick={() => handleResend(inv.id)} className="text-xs text-secondary hover:underline font-medium">
+                    Resend
+                  </button>
+                  <button onClick={() => handleRevoke(inv.id)} className="text-xs text-error hover:underline font-medium">
+                    Revoke
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
 
       <DataTable

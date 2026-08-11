@@ -15,7 +15,7 @@ const OFFER_TYPES = ["full_time", "internship", "ppo"] as const;
 const PLACEMENT_STATUSES = ["placed", "joined", "declined", "offer_revoked"] as const;
 
 const CreatePlacementSchema = z.object({
-  studentId: z.string().uuid(),
+  studentId: z.string().guid(),
   companyName: z.string().trim().min(1, { message: "Company name is required." }).max(200),
   roleTitle: z.string().trim().min(1, { message: "Role title is required." }).max(200),
   packageLpa: z.number().nonnegative().nullable(),

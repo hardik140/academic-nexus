@@ -24,12 +24,26 @@ const InviteUserSchema = z.object({
   email: z.string().trim().email({ message: "Enter a valid email address." }),
   fullName: z.string().trim().min(1, { message: "Full name is required." }).max(200),
   role: z.enum(INVITABLE_ROLES),
-  collegeId: z.string().uuid().optional(),
-  departmentId: z.string().uuid().optional(),
+  collegeId: z.string().guid().optional(),
+  departmentId: z.string().guid().optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 const INVITE_REDIRECT_PATH = "/auth/callback?next=/auth/accept-invite";
+
+/**
+ * Builds the link that actually goes in the invitation email — points at
+ * our own /auth/confirm (token_hash + verifyOtp), not GoTrue's hosted
+ * action_link. See app/auth/confirm/route.ts for why: an admin-generated
+ * link is opened by a browser that never initiated the request, so GoTrue's
+ * hosted /verify redirect lands back here as an implicit-flow hash fragment
+ * (#access_token=...), which never reaches /auth/callback's server-side
+ * `?code=` check at all.
+ */
+function confirmLink(tokenHash: string, type: "invite"): string {
+  const params = new URLSearchParams({ token_hash: tokenHash, type, next: "/auth/accept-invite" });
+  return `${process.env.NEXT_PUBLIC_APP_URL}/auth/confirm?${params.toString()}`;
+}
 
 export interface InviteUserParams {
   email: string;
@@ -127,7 +141,7 @@ export async function inviteUserCore(
     fullName: parsed.fullName,
     role: parsed.role,
     collegeName,
-    actionLink: created.properties.action_link,
+    actionLink: confirmLink(created.properties.hashed_token, "invite"),
   });
 
   await logAudit(supabase, actor, `Invited ${parsed.email} as ${parsed.role}`, "invitations", created.user.id);
@@ -135,7 +149,7 @@ export async function inviteUserCore(
   return { userId: created.user.id };
 }
 
-const InvitationIdSchema = z.object({ invitationId: z.string().uuid() });
+const InvitationIdSchema = z.object({ invitationId: z.string().guid() });
 
 async function loadOwnedInvitation(
   supabase: SupabaseClient<Database>,
@@ -219,7 +233,7 @@ export async function resendInvitationCore(
     fullName: "there",
     role: invitation.role,
     collegeName,
-    actionLink: created.properties.action_link,
+    actionLink: confirmLink(created.properties.hashed_token, "invite"),
   });
 
   await logAudit(supabase, actor, `Resent invitation to ${invitation.email}`, "invitations", invitationId);

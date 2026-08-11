@@ -16,7 +16,7 @@ const COURSE_TYPES = ["core", "elective", "lab", "project", "seminar"] as const;
 const CreateCourseSchema = z.object({
   name: z.string().trim().min(1, { message: "Course name is required." }).max(200),
   code: z.string().trim().min(1, { message: "Course code is required." }).max(50),
-  departmentId: z.string().uuid(),
+  departmentId: z.string().guid(),
   credits: z.number().positive().max(20),
   semester: z.number().int().positive().max(20),
   type: z.enum(COURSE_TYPES),

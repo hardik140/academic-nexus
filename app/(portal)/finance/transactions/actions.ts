@@ -15,7 +15,7 @@ const PAYMENT_METHODS = [
 ] as const;
 
 const RecordPaymentSchema = z.object({
-  feeId: z.string().uuid(),
+  feeId: z.string().guid(),
   amount: z.number().positive({ message: "Payment amount must be greater than zero." }),
   method: z.enum(PAYMENT_METHODS),
   transactionRef: z.string().trim().max(200).optional(),

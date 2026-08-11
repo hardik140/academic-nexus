@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib/rbac";
 import { logAudit } from "@/lib/audit";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { inviteUserCore, type InviteUserParams } from "@/lib/invitations";
+import { inviteUserCore, resendInvitationCore, revokeInvitationCore, type InviteUserParams } from "@/lib/invitations";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 
@@ -94,4 +94,18 @@ export async function inviteUser(params: InviteUserParams) {
 export async function inviteUserViaRequest(request: Request, params: InviteUserParams) {
   const { supabase, ...actor } = await requireRoleFromRequest(request, ["super_admin"]);
   await inviteUserCore(supabase, actor, params);
+}
+
+export async function resendInvitation(invitationId: string) {
+  const actor = await requireRole(["super_admin"]);
+  const supabase = await createClient();
+  await resendInvitationCore(supabase, actor, invitationId);
+  revalidatePath("/super-admin/colleges");
+}
+
+export async function revokeInvitation(invitationId: string) {
+  const actor = await requireRole(["super_admin"]);
+  const supabase = await createClient();
+  await revokeInvitationCore(supabase, actor, invitationId);
+  revalidatePath("/super-admin/colleges");
 }

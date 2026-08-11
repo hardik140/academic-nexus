@@ -13,12 +13,12 @@ type AttendanceStatus = Database["public"]["Tables"]["attendance"]["Row"]["statu
 const ATTENDANCE_STATUSES = ["present", "absent", "late", "excused"] as const;
 
 const SaveAttendanceSchema = z.object({
-  courseId: z.string().uuid(),
+  courseId: z.string().guid(),
   date: z.string().min(1),
   entries: z
     .array(
       z.object({
-        studentDbId: z.string().uuid(),
+        studentDbId: z.string().guid(),
         status: z.enum(ATTENDANCE_STATUSES),
       })
     )

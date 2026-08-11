@@ -9,7 +9,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 
 const ActOnLeaveRequestSchema = z.object({
-  requestId: z.string().uuid(),
+  requestId: z.string().guid(),
   action: z.enum(["approved", "rejected"]),
 });
 

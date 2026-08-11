@@ -13,7 +13,7 @@ type ScholarshipType = Database["public"]["Tables"]["scholarships"]["Row"]["type
 const SCHOLARSHIP_TYPES = ["merit", "need", "sports", "government", "corporate", "other"] as const;
 
 const CreateScholarshipSchema = z.object({
-  studentId: z.string().uuid(),
+  studentId: z.string().guid(),
   name: z.string().trim().min(1).max(200),
   type: z.enum(SCHOLARSHIP_TYPES),
   amount: z.number().positive({ message: "Amount must be greater than zero." }),

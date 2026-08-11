@@ -9,7 +9,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 
 const ActOnGatePassSchema = z.object({
-  passId: z.string().uuid(),
+  passId: z.string().guid(),
   action: z.enum(["approved", "rejected"]),
 });
 

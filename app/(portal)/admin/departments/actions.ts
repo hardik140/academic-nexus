@@ -58,8 +58,8 @@ export async function createDepartmentViaRequest(request: Request, params: Creat
 }
 
 const AssignHodSchema = z.object({
-  departmentId: z.string().uuid(),
-  hodUserId: z.string().uuid().nullable(),
+  departmentId: z.string().guid(),
+  hodUserId: z.string().guid().nullable(),
 });
 
 /**

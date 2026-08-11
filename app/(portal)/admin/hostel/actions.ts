@@ -9,8 +9,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 
 const AssignWardenSchema = z.object({
-  blockId: z.string().uuid(),
-  wardenUserId: z.string().uuid().nullable(),
+  blockId: z.string().guid(),
+  wardenUserId: z.string().guid().nullable(),
 });
 
 /**
