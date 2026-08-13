@@ -2,28 +2,35 @@
 
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { DataTable } from "@/components/ui/data-table";
+import { DataTable, type DataTableQuery } from "@/components/ui/data-table";
 import { Modal, Button, FormField, StatusBadge } from "@/components/ui/modal";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { createInvoice } from "./actions";
+import { createInvoice, listInvoices } from "./actions";
+
+const FEES_PAGE_SIZE = 10;
 
 export default function FinanceInvoices() {
   const supabase = createClient();
   const [fees, setFees] = useState<any[]>([]);
+  const [feesLoading, setFeesLoading] = useState(false);
+  const [totalFees, setTotalFees] = useState(0);
+  const [query, setQuery] = useState<DataTableQuery>({ search: "", sortKey: null, sortDir: "asc", page: 0 });
   const [students, setStudents] = useState<any[]>([]);
   const [showCreate, setShowCreate] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({ student_id: "", type: "", amount: "", due_date: "", academic_year: "" });
 
-  useEffect(() => { loadFees(); loadStudents(); }, []);
+  useEffect(() => { loadStudents(); }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { loadFees(query); }, [query]);
 
-  const loadFees = async () => {
-    const { data } = await supabase
-      .from("fees")
-      .select("*, students:student_id(enrollment_number, profiles:user_id(full_name))")
-      .order("due_date", { ascending: false });
-    setFees(data || []);
+  const loadFees = async (q: DataTableQuery) => {
+    setFeesLoading(true);
+    const { data, count } = await listInvoices(q);
+    setFees(data);
+    setTotalFees(count);
+    setFeesLoading(false);
   };
 
   const loadStudents = async () => {
@@ -38,10 +45,10 @@ export default function FinanceInvoices() {
     setLoading(true);
     setError(null);
     try {
-      await createInvoice(form.student_id, form.type, Number(form.amount), form.due_date, form.academic_year || undefined);
+      await createInvoice(form.student_id, form.type, Number(form.amount), form.due_date, form.academic_year || undefined, query);
       setForm({ student_id: "", type: "", amount: "", due_date: "", academic_year: "" });
       setShowCreate(false);
-      await loadFees();
+      await loadFees(query);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to raise invoice.");
     } finally {
@@ -82,6 +89,11 @@ export default function FinanceInvoices() {
         searchKey="type"
         searchPlaceholder="Search by fee type..."
         emptyMessage="No invoices raised yet."
+        serverMode
+        totalCount={totalFees}
+        loading={feesLoading}
+        onQueryChange={setQuery}
+        pageSize={FEES_PAGE_SIZE}
       />
 
       <Modal

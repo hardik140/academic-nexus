@@ -1,44 +1,54 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { createClient } from "@/lib/supabase/client";
 import { Button, StatusBadge } from "@/components/ui/modal";
-import { DataTable } from "@/components/ui/data-table";
-import { DEFAULT_QUERY_LIMIT } from "@/lib/constants";
-import { actOnGatePass } from "./actions";
+import { DataTable, type DataTableQuery } from "@/components/ui/data-table";
+import { actOnGatePass, listPendingGatePasses, listProcessedGatePasses } from "./actions";
+
+const PROCESSED_PAGE_SIZE = 10;
 
 export default function WardenGatePasses() {
-  const supabase = createClient();
-  const [passes, setPasses] = useState<any[]>([]);
+  const [pending, setPending] = useState<any[]>([]);
+  const [processed, setProcessed] = useState<any[]>([]);
+  const [processedLoading, setProcessedLoading] = useState(false);
+  const [totalProcessed, setTotalProcessed] = useState(0);
+  const [processedQuery, setProcessedQuery] = useState<DataTableQuery>({ search: "", sortKey: null, sortDir: "asc", page: 0 });
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => { loadPasses(); }, []);
+  useEffect(() => { loadPending(); }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { loadProcessed(processedQuery); }, [processedQuery]);
 
-  const loadPasses = async () => {
-    const { data } = await supabase
-      .from("gate_passes")
-      .select("*, students:student_id(enrollment_number, profiles:user_id(full_name))")
-      .order("created_at", { ascending: false })
-      .limit(DEFAULT_QUERY_LIMIT);
-    setPasses(data || []);
+  // Not paginated — this is the "needs your attention now" list, meant to
+  // show everything actionable rather than page through it. Was previously
+  // derived by filtering an already-fetched 500-row array; now scoped
+  // server-side instead of over-fetching approved/rejected/etc. rows just
+  // to discard them.
+  const loadPending = async () => {
+    setPending(await listPendingGatePasses());
+  };
+
+  const loadProcessed = async (q: DataTableQuery) => {
+    setProcessedLoading(true);
+    const { data, count } = await listProcessedGatePasses(q);
+    setProcessed(data);
+    setTotalProcessed(count);
+    setProcessedLoading(false);
   };
 
   const handleAction = async (id: string, action: "approved" | "rejected") => {
     setLoading(id);
     setError(null);
     try {
-      await actOnGatePass(id, action);
-      await loadPasses();
+      await actOnGatePass(id, action, processedQuery);
+      await Promise.all([loadPending(), loadProcessed(processedQuery)]);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to update gate pass.");
     } finally {
       setLoading(null);
     }
   };
-
-  const pending = passes.filter((p) => p.status === "pending");
-  const processed = passes.filter((p) => p.status !== "pending");
 
   return (
     <div className="space-y-lg animate-[fade-in_0.3s_ease-out]">
@@ -93,7 +103,7 @@ export default function WardenGatePasses() {
       </div>
 
       <DataTable
-        title={`Processed History (${processed.length})`}
+        title={`Processed History (${totalProcessed})`}
         columns={[
           { key: "student", header: "Student", render: (row: any) => (row.students as any)?.profiles?.full_name || "—" },
           { key: "exit_time", header: "Date", sortable: true, render: (row: any) => new Date(row.exit_time).toLocaleDateString() },
@@ -102,6 +112,11 @@ export default function WardenGatePasses() {
         ]}
         data={processed}
         keyExtractor={(row) => row.id}
+        serverMode
+        totalCount={totalProcessed}
+        loading={processedLoading}
+        onQueryChange={setProcessedQuery}
+        pageSize={PROCESSED_PAGE_SIZE}
         emptyMessage="No processed requests yet."
       />
     </div>

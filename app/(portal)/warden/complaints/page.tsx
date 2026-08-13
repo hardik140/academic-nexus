@@ -1,41 +1,37 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { createClient } from "@/lib/supabase/client";
-import { DataTable } from "@/components/ui/data-table";
+import { DataTable, type DataTableQuery } from "@/components/ui/data-table";
 import { StatusBadge } from "@/components/ui/modal";
-import { DEFAULT_QUERY_LIMIT } from "@/lib/constants";
-import { updateComplaintStatus } from "./actions";
-import type { Database } from "@/types/database";
+import { updateComplaintStatus, listHostelComplaints } from "./actions";
 
-type ComplaintCategory = Database["public"]["Tables"]["complaints"]["Row"]["category"];
-
-const HOSTEL_CATEGORIES: ComplaintCategory[] = ["hostel", "mess", "plumbing", "electrical", "ac_hvac", "carpentry", "cleaning", "safety"];
+const COMPLAINTS_PAGE_SIZE = 10;
 
 export default function WardenComplaints() {
-  const supabase = createClient();
   const [complaints, setComplaints] = useState<any[]>([]);
+  const [complaintsLoading, setComplaintsLoading] = useState(false);
+  const [totalComplaints, setTotalComplaints] = useState(0);
+  const [query, setQuery] = useState<DataTableQuery>({ search: "", sortKey: null, sortDir: "asc", page: 0 });
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => { loadComplaints(); }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { loadComplaints(query); }, [query]);
 
-  const loadComplaints = async () => {
-    const { data } = await supabase
-      .from("complaints")
-      .select("*, profiles:submitted_by(full_name)")
-      .in("category", HOSTEL_CATEGORIES)
-      .order("created_at", { ascending: false })
-      .limit(DEFAULT_QUERY_LIMIT);
-    setComplaints(data || []);
+  const loadComplaints = async (q: DataTableQuery) => {
+    setComplaintsLoading(true);
+    const { data, count } = await listHostelComplaints(q);
+    setComplaints(data);
+    setTotalComplaints(count);
+    setComplaintsLoading(false);
   };
 
   const updateStatus = async (id: string, status: "in_progress" | "resolved") => {
     setLoading(id);
     setError(null);
     try {
-      await updateComplaintStatus(id, status);
-      await loadComplaints();
+      await updateComplaintStatus(id, status, query);
+      await loadComplaints(query);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to update complaint.");
     } finally {
@@ -76,6 +72,11 @@ export default function WardenComplaints() {
         searchKey="title"
         searchPlaceholder="Filter by title or student..."
         emptyMessage="No hostel complaints found."
+        serverMode
+        totalCount={totalComplaints}
+        loading={complaintsLoading}
+        onQueryChange={setQuery}
+        pageSize={COMPLAINTS_PAGE_SIZE}
         actions={(row: any) => (
           <div className="flex gap-xs justify-end">
             {row.status === "open" && (

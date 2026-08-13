@@ -5,8 +5,40 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib/rbac";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { getCached, invalidateCache } from "@/lib/cache";
+import { resolveListSort, listCacheKey } from "@/lib/cached-list";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
+import type { DataTableQuery } from "@/components/ui/data-table";
+
+const FEES_PAGE_SIZE = 10;
+const FEES_SORT_COLUMNS = ["type", "amount", "due_date"] as const;
+const FEES_CACHE_PREFIX = "list:fees";
+
+/** Cached, paginated — see admin/users/actions.ts's listUsers for the full
+ * rationale (Server Action instead of a browser call, since getCached()
+ * needs the server-only Redis token; explicit invalidation on top of the
+ * short TTL since this is an edited list, not a stat count). */
+export async function listInvoices(q: DataTableQuery) {
+  const actor = await requireRole(["finance", "admin"]);
+  const supabase = await createClient();
+
+  const { column, ascending } = resolveListSort(FEES_SORT_COLUMNS, "due_date", false, q);
+  const cacheKey = listCacheKey(FEES_CACHE_PREFIX, actor.collegeId, q, column);
+
+  return getCached(cacheKey, 30, async () => {
+    let dbQuery = supabase
+      .from("fees")
+      .select("*, students:student_id(enrollment_number, profiles:user_id(full_name))", { count: "exact" });
+
+    if (q.search) dbQuery = dbQuery.ilike("type", `%${q.search}%`);
+    dbQuery = dbQuery.order(column, { ascending });
+
+    const from = q.page * FEES_PAGE_SIZE;
+    const { data, count } = await dbQuery.range(from, from + FEES_PAGE_SIZE - 1);
+    return { data: data || [], count: count ?? 0 };
+  });
+}
 
 const CreateInvoiceSchema = z.object({
   studentId: z.string().guid(),
@@ -65,7 +97,8 @@ export async function createInvoice(
   type: string,
   amount: number,
   dueDate: string,
-  academicYear?: string
+  academicYear?: string,
+  viewQuery?: DataTableQuery
 ) {
   const actor = await requireRole(["finance", "admin"]);
   const supabase = await createClient();
@@ -73,6 +106,10 @@ export async function createInvoice(
   revalidatePath("/finance/invoices");
   revalidatePath("/finance/transactions");
   revalidatePath("/finance/dashboard");
+  if (viewQuery) {
+    const { column } = resolveListSort(FEES_SORT_COLUMNS, "due_date", false, viewQuery);
+    await invalidateCache(listCacheKey(FEES_CACHE_PREFIX, actor.collegeId, viewQuery, column));
+  }
 }
 
 /** Called by app/api/mobile/finance/invoice/route.ts. */

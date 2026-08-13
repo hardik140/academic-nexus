@@ -2,10 +2,10 @@
 
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { DataTable } from "@/components/ui/data-table";
+import { DataTable, type DataTableQuery } from "@/components/ui/data-table";
 import { Modal, Button, FormField, StatusBadge } from "@/components/ui/modal";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { createScholarship } from "./actions";
+import { createScholarship, listScholarships } from "./actions";
 import type { Database } from "@/types/database";
 
 type ScholarshipType = Database["public"]["Tables"]["scholarships"]["Row"]["type"];
@@ -19,9 +19,14 @@ const SCHOLARSHIP_TYPES: { value: ScholarshipType; label: string }[] = [
   { value: "other", label: "Other" },
 ];
 
+const SCHOLARSHIPS_PAGE_SIZE = 10;
+
 export default function FinanceScholarships() {
   const supabase = createClient();
   const [scholarships, setScholarships] = useState<any[]>([]);
+  const [scholarshipsLoading, setScholarshipsLoading] = useState(false);
+  const [totalScholarships, setTotalScholarships] = useState(0);
+  const [query, setQuery] = useState<DataTableQuery>({ search: "", sortKey: null, sortDir: "asc", page: 0 });
   const [students, setStudents] = useState<any[]>([]);
   const [showCreate, setShowCreate] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -34,14 +39,16 @@ export default function FinanceScholarships() {
     academic_year: "",
   });
 
-  useEffect(() => { loadScholarships(); loadStudents(); }, []);
+  useEffect(() => { loadStudents(); }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { loadScholarships(query); }, [query]);
 
-  const loadScholarships = async () => {
-    const { data } = await supabase
-      .from("scholarships")
-      .select("*, students:student_id(enrollment_number, profiles:user_id(full_name))")
-      .order("awarded_date", { ascending: false });
-    setScholarships(data || []);
+  const loadScholarships = async (q: DataTableQuery) => {
+    setScholarshipsLoading(true);
+    const { data, count } = await listScholarships(q);
+    setScholarships(data);
+    setTotalScholarships(count);
+    setScholarshipsLoading(false);
   };
 
   const loadStudents = async () => {
@@ -56,10 +63,10 @@ export default function FinanceScholarships() {
     setLoading(true);
     setError(null);
     try {
-      await createScholarship(form.student_id, form.name, form.type, Number(form.amount), form.academic_year || undefined);
+      await createScholarship(form.student_id, form.name, form.type, Number(form.amount), form.academic_year || undefined, query);
       setForm({ student_id: "", name: "", amount: "", type: "merit", academic_year: "" });
       setShowCreate(false);
-      await loadScholarships();
+      await loadScholarships(query);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to award scholarship.");
     } finally {
@@ -100,6 +107,11 @@ export default function FinanceScholarships() {
         searchKey="name"
         searchPlaceholder="Search scholarships..."
         emptyMessage="No scholarships awarded yet."
+        serverMode
+        totalCount={totalScholarships}
+        loading={scholarshipsLoading}
+        onQueryChange={setQuery}
+        pageSize={SCHOLARSHIPS_PAGE_SIZE}
       />
 
       <Modal

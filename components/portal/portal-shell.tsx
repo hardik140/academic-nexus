@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { Tables } from "@/types/database";
@@ -171,9 +172,11 @@ export function PortalShell({ profile, children }: PortalShellProps) {
         <div className="border-t border-outline-variant p-md">
           <div className="flex items-center gap-sm">
             {profile.avatar_url ? (
-              <img
+              <Image
                 src={profile.avatar_url}
                 alt={profile.full_name}
+                width={36}
+                height={36}
                 className="w-9 h-9 rounded-full object-cover ring-2 ring-outline-variant"
               />
             ) : (

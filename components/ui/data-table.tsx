@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 // ─── DataTable ───────────────────────────────────────────────────────
 
@@ -11,6 +11,13 @@ interface Column<T> {
   render?: (row: T) => React.ReactNode;
   sortable?: boolean;
   className?: string;
+}
+
+export interface DataTableQuery {
+  search: string;
+  sortKey: string | null;
+  sortDir: "asc" | "desc";
+  page: number;
 }
 
 interface DataTableProps<T> {
@@ -25,6 +32,22 @@ interface DataTableProps<T> {
   title?: string;
   headerAction?: React.ReactNode;
   pageSize?: number;
+
+  /**
+   * Opt-in server-driven mode. Default (unset) keeps today's behavior:
+   * `data` is the whole result set, filtered/sorted/paginated locally.
+   *
+   * When true, `data` is assumed to already be exactly one page's worth of
+   * rows for the current query — DataTable stops touching it locally and
+   * instead calls `onQueryChange` (debounced on search, same as before)
+   * whenever search/sort/page changes, so the caller can run a real
+   * `.range()` query. `totalCount` (not `data.length`) drives the page
+   * count in this mode.
+   */
+  serverMode?: boolean;
+  totalCount?: number;
+  loading?: boolean;
+  onQueryChange?: (query: DataTableQuery) => void;
 }
 
 export function DataTable<T extends Record<string, any>>({
@@ -39,39 +62,75 @@ export function DataTable<T extends Record<string, any>>({
   title,
   headerAction,
   pageSize = 10,
+  serverMode = false,
+  totalCount,
+  loading = false,
+  onQueryChange,
 }: DataTableProps<T>) {
+  const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
-  // Filter
-  let filtered = data;
-  if (search && searchKey) {
-    const q = search.toLowerCase();
-    filtered = data.filter((row) =>
-      String(row[searchKey] || "")
-        .toLowerCase()
-        .includes(q)
-    );
-  }
+  // Debounced separately from `searchInput` so the input itself stays
+  // responsive to every keystroke while the (re-)filter/query + page reset
+  // below only runs once typing pauses.
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      setSearch(searchInput);
+      setPage(0);
+    }, 300);
+    return () => clearTimeout(timeout);
+  }, [searchInput]);
 
-  // Sort
-  if (sortKey) {
-    filtered = [...filtered].sort((a, b) => {
-      const va = a[sortKey] ?? "";
-      const vb = b[sortKey] ?? "";
-      if (va < vb) return sortDir === "asc" ? -1 : 1;
-      if (va > vb) return sortDir === "asc" ? 1 : -1;
-      return 0;
-    });
-  }
+  // Server mode: report every query change (including the initial one on
+  // mount) to the caller instead of filtering/sorting/paginating locally.
+  // `onQueryChange` deliberately isn't a dependency — an inline callback
+  // that's a new function identity every render must not re-trigger this,
+  // only an actual search/sort/page change should.
+  useEffect(() => {
+    if (!serverMode) return;
+    onQueryChange?.({ search, sortKey, sortDir, page });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serverMode, search, sortKey, sortDir, page]);
 
-  // Paginate
-  const totalPages = Math.ceil(filtered.length / pageSize);
-  const paged = filtered.slice(page * pageSize, (page + 1) * pageSize);
+  let paged: T[];
+  let totalPages: number;
+  let totalRows: number;
+
+  if (serverMode) {
+    paged = data;
+    totalRows = totalCount ?? data.length;
+    totalPages = Math.ceil(totalRows / pageSize);
+  } else {
+    let filtered = data;
+    if (search && searchKey) {
+      const q = search.toLowerCase();
+      filtered = data.filter((row) =>
+        String(row[searchKey] || "")
+          .toLowerCase()
+          .includes(q)
+      );
+    }
+
+    if (sortKey) {
+      filtered = [...filtered].sort((a, b) => {
+        const va = a[sortKey] ?? "";
+        const vb = b[sortKey] ?? "";
+        if (va < vb) return sortDir === "asc" ? -1 : 1;
+        if (va > vb) return sortDir === "asc" ? 1 : -1;
+        return 0;
+      });
+    }
+
+    totalRows = filtered.length;
+    totalPages = Math.ceil(totalRows / pageSize);
+    paged = filtered.slice(page * pageSize, (page + 1) * pageSize);
+  }
 
   const handleSort = (key: string) => {
+    setPage(0);
     if (sortKey === key) {
       setSortDir(sortDir === "asc" ? "desc" : "asc");
     } else {
@@ -94,11 +153,8 @@ export function DataTable<T extends Record<string, any>>({
             {searchKey && (
               <input
                 type="text"
-                value={search}
-                onChange={(e) => {
-                  setSearch(e.target.value);
-                  setPage(0);
-                }}
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
                 placeholder={searchPlaceholder}
                 className="w-full max-w-[20rem] bg-surface-container-low border border-outline-variant rounded-lg px-md py-xs text-sm text-on-surface placeholder:text-outline focus:ring-2 focus:ring-secondary focus:border-secondary outline-none transition-all"
               />
@@ -141,7 +197,16 @@ export function DataTable<T extends Record<string, any>>({
             </tr>
           </thead>
           <tbody className="divide-y divide-outline-variant">
-            {paged.length > 0 ? (
+            {loading ? (
+              <tr>
+                <td
+                  colSpan={columns.length + (actions ? 1 : 0)}
+                  className="px-lg py-xl text-center text-outline"
+                >
+                  Loading…
+                </td>
+              </tr>
+            ) : paged.length > 0 ? (
               paged.map((row) => (
                 <tr
                   key={keyExtractor(row)}
@@ -185,8 +250,8 @@ export function DataTable<T extends Record<string, any>>({
         <div className="px-lg py-md border-t border-outline-variant flex items-center justify-between">
           <span className="text-xs text-outline">
             Showing {page * pageSize + 1}–
-            {Math.min((page + 1) * pageSize, filtered.length)} of{" "}
-            {filtered.length}
+            {Math.min((page + 1) * pageSize, totalRows)} of{" "}
+            {totalRows}
           </span>
           <div className="flex items-center gap-xs">
             <button

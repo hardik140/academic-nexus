@@ -6,12 +6,39 @@ import { createClient } from "@/lib/supabase/server";
 import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib/rbac";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { logAudit } from "@/lib/audit";
+import { getCached, invalidateCache } from "@/lib/cache";
+import { resolveListSort, listCacheKey } from "@/lib/cached-list";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
+import type { DataTableQuery } from "@/components/ui/data-table";
 
 type CourseType = Database["public"]["Tables"]["courses"]["Row"]["type"];
 
 const COURSE_TYPES = ["core", "elective", "lab", "project", "seminar"] as const;
+const COURSES_PAGE_SIZE = 10;
+const COURSES_SORT_COLUMNS = ["code", "name", "credits", "semester"] as const;
+const COURSES_CACHE_PREFIX = "list:courses";
+
+export async function listCourses(q: DataTableQuery) {
+  const actor = await requireRole(["admin", "hod", "director"]);
+  const supabase = await createClient();
+
+  const { column, ascending } = resolveListSort(COURSES_SORT_COLUMNS, "code", true, q);
+  const cacheKey = listCacheKey(COURSES_CACHE_PREFIX, actor.collegeId, q, column);
+
+  return getCached(cacheKey, 30, async () => {
+    let dbQuery = supabase
+      .from("courses")
+      .select("*, departments:department_id(name), profiles:instructor_id(full_name)", { count: "exact" });
+
+    if (q.search) dbQuery = dbQuery.ilike("name", `%${q.search}%`);
+    dbQuery = dbQuery.order(column, { ascending });
+
+    const from = q.page * COURSES_PAGE_SIZE;
+    const { data, count } = await dbQuery.range(from, from + COURSES_PAGE_SIZE - 1);
+    return { data: data || [], count: count ?? 0 };
+  });
+}
 
 const CreateCourseSchema = z.object({
   name: z.string().trim().min(1, { message: "Course name is required." }).max(200),
@@ -85,12 +112,17 @@ export async function createCourse(
   credits: number,
   semester: number,
   type: CourseType,
-  description?: string
+  description?: string,
+  viewQuery?: DataTableQuery
 ) {
   const actor = await requireRole(["admin", "hod", "director"]);
   const supabase = await createClient();
   await createCourseCore(supabase, actor, { name, code, departmentId, credits, semester, type, description });
   revalidatePath("/admin/courses");
+  if (viewQuery) {
+    const { column } = resolveListSort(COURSES_SORT_COLUMNS, "code", true, viewQuery);
+    await invalidateCache(listCacheKey(COURSES_CACHE_PREFIX, actor.collegeId, viewQuery, column));
+  }
 }
 
 /** Called by app/api/mobile/admin/create-course/route.ts. */

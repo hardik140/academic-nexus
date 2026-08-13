@@ -3,17 +3,21 @@
 import { Suspense, useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { DataTable } from "@/components/ui/data-table";
+import { DataTable, type DataTableQuery } from "@/components/ui/data-table";
 import { Modal, Button, FormField, StatusBadge } from "@/components/ui/modal";
-import { createCourse } from "./actions";
+import { createCourse, listCourses } from "./actions";
 import type { Database } from "@/types/database";
 
 type CourseType = Database["public"]["Tables"]["courses"]["Row"]["type"];
+const COURSES_PAGE_SIZE = 10;
 
 function AdminCoursesInner() {
   const supabase = createClient();
   const searchParams = useSearchParams();
   const [courses, setCourses] = useState<any[]>([]);
+  const [coursesLoading, setCoursesLoading] = useState(false);
+  const [totalCourses, setTotalCourses] = useState(0);
+  const [query, setQuery] = useState<DataTableQuery>({ search: "", sortKey: null, sortDir: "asc", page: 0 });
   const [departments, setDepartments] = useState<any[]>([]);
   const [showCreate, setShowCreate] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -24,29 +28,35 @@ function AdminCoursesInner() {
     name: "", code: "", credits: "3", semester: "1", type: "core", department_id: "", description: "",
   });
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => { loadDepartments(); }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { loadCourses(query); }, [query]);
 
   useEffect(() => {
     if (searchParams.get("action") === "create") setShowCreate(true);
   }, [searchParams]);
 
-  const loadData = async () => {
-    const [coursesRes, deptsRes] = await Promise.all([
-      supabase.from("courses").select("*, departments:department_id(name), profiles:instructor_id(full_name)").order("code"),
-      supabase.from("departments").select("id, name, code"),
-    ]);
-    setCourses(coursesRes.data || []);
-    setDepartments(deptsRes.data || []);
+  const loadDepartments = async () => {
+    const { data } = await supabase.from("departments").select("id, name, code");
+    setDepartments(data || []);
+  };
+
+  const loadCourses = async (q: DataTableQuery) => {
+    setCoursesLoading(true);
+    const { data, count } = await listCourses(q);
+    setCourses(data);
+    setTotalCourses(count);
+    setCoursesLoading(false);
   };
 
   const handleCreate = async () => {
     setLoading(true);
     setError(null);
     try {
-      await createCourse(form.name, form.code, form.department_id, parseInt(form.credits), parseInt(form.semester), form.type, form.description || undefined);
+      await createCourse(form.name, form.code, form.department_id, parseInt(form.credits), parseInt(form.semester), form.type, form.description || undefined, query);
       setForm({ name: "", code: "", credits: "3", semester: "1", type: "core", department_id: "", description: "" });
       setShowCreate(false);
-      await loadData();
+      await loadCourses(query);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to create course.");
     } finally {
@@ -84,6 +94,11 @@ function AdminCoursesInner() {
         searchKey="name"
         searchPlaceholder="Search courses..."
         emptyMessage="No courses found."
+        serverMode
+        totalCount={totalCourses}
+        loading={coursesLoading}
+        onQueryChange={setQuery}
+        pageSize={COURSES_PAGE_SIZE}
       />
 
       <Modal

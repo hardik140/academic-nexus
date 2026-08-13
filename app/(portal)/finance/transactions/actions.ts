@@ -5,8 +5,69 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib/rbac";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { getCached, invalidateCache } from "@/lib/cache";
+import { resolveListSort, listCacheKey } from "@/lib/cached-list";
+import { listInvoices } from "../invoices/actions";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
+import type { DataTableQuery } from "@/components/ui/data-table";
+
+const PAYMENTS_PAGE_SIZE = 10;
+const PAYMENTS_SORT_COLUMNS = ["amount", "created_at"] as const;
+const PAYMENTS_CACHE_PREFIX = "list:payments";
+// invoices tab reuses finance/invoices' listInvoices — same table, same
+// select, same search field; not worth a second near-identical query.
+const FEES_CACHE_PREFIX = "list:fees";
+const FEES_SORT_COLUMNS = ["type", "amount", "due_date"] as const;
+
+export { listInvoices };
+
+export async function listPayments(q: DataTableQuery) {
+  const actor = await requireRole(["finance", "admin"]);
+  const supabase = await createClient();
+
+  const { column, ascending } = resolveListSort(PAYMENTS_SORT_COLUMNS, "created_at", false, q);
+  const cacheKey = listCacheKey(PAYMENTS_CACHE_PREFIX, actor.collegeId, q, column);
+
+  return getCached(cacheKey, 30, async () => {
+    let dbQuery = supabase
+      .from("payments")
+      .select("*, students(enrollment_number, profiles:user_id(full_name))", { count: "exact" });
+
+    if (q.search) dbQuery = dbQuery.ilike("method", `%${q.search}%`);
+    dbQuery = dbQuery.order(column, { ascending });
+
+    const from = q.page * PAYMENTS_PAGE_SIZE;
+    const { data, count } = await dbQuery.range(from, from + PAYMENTS_PAGE_SIZE - 1);
+    return { data: data || [], count: count ?? 0 };
+  });
+}
+
+/**
+ * KPI-card stats — still unbounded (sums over the *entire* fees table, not
+ * one page of it, so .range() doesn't apply the way it does above), but now
+ * at least cached rather than re-summed on every load. Short TTL (30s):
+ * this is money the finance team is actively reconciling, unlike the
+ * dashboards' 60s stat counts. The real fix — extending mv_fee_summary
+ * (migration 007) with a "pending" aggregate so this becomes an indexed
+ * materialized-view read instead of a live SUM — is a schema change, a
+ * different and larger scope than caching the existing query.
+ */
+export async function getFeeStats() {
+  const actor = await requireRole(["finance", "admin"]);
+  const supabase = await createClient();
+
+  return getCached(`stats:fees:${actor.collegeId}`, 30, async () => {
+    const { data } = await supabase.from("fees").select("amount, paid_amount, status");
+    const f = data || [];
+    return {
+      total: f.reduce((s, i) => s + (i.amount || 0), 0),
+      collected: f.reduce((s, i) => s + (i.paid_amount || 0), 0),
+      pending: f.filter((i) => i.status === "pending").reduce((s, i) => s + (i.amount - i.paid_amount), 0),
+      overdue: f.filter((i) => i.status === "overdue").reduce((s, i) => s + (i.amount - i.paid_amount), 0),
+    };
+  });
+}
 
 type PaymentMethod = Database["public"]["Tables"]["payments"]["Row"]["method"];
 
@@ -82,7 +143,9 @@ export async function recordPayment(
   amount: number,
   method: PaymentMethod,
   transactionRef?: string,
-  notes?: string
+  notes?: string,
+  feesViewQuery?: DataTableQuery,
+  paymentsViewQuery?: DataTableQuery
 ) {
   const actor = await requireRole(["finance", "admin"]);
   const supabase = await createClient();
@@ -90,6 +153,18 @@ export async function recordPayment(
   revalidatePath("/finance/transactions");
   revalidatePath("/finance/dashboard");
   revalidatePath("/finance/reports");
+
+  // A payment touches all three cached reads on this page: the fee's own
+  // row (status/paid_amount), a new payments row, and the KPI sums.
+  await invalidateCache(`stats:fees:${actor.collegeId}`);
+  if (feesViewQuery) {
+    const { column } = resolveListSort(FEES_SORT_COLUMNS, "due_date", false, feesViewQuery);
+    await invalidateCache(listCacheKey(FEES_CACHE_PREFIX, actor.collegeId, feesViewQuery, column));
+  }
+  if (paymentsViewQuery) {
+    const { column } = resolveListSort(PAYMENTS_SORT_COLUMNS, "created_at", false, paymentsViewQuery);
+    await invalidateCache(listCacheKey(PAYMENTS_CACHE_PREFIX, actor.collegeId, paymentsViewQuery, column));
+  }
 }
 
 /** Called by app/api/mobile/finance/payment/route.ts. */

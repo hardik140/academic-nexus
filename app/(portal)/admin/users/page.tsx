@@ -1,12 +1,12 @@
 "use client";
 
 import { Suspense, useState, useEffect } from "react";
+import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { DataTable } from "@/components/ui/data-table";
+import { DataTable, type DataTableQuery } from "@/components/ui/data-table";
 import { Modal, Button, FormField, StatusBadge } from "@/components/ui/modal";
-import { DEFAULT_QUERY_LIMIT } from "@/lib/constants";
-import { inviteUser, resendInvitation, revokeInvitation, updateUserProfile, updateUserStatus as updateUserStatusAction } from "./actions";
+import { inviteUser, resendInvitation, revokeInvitation, updateUserProfile, updateUserStatus as updateUserStatusAction, listUsers } from "./actions";
 import type { UserRole, UserStatus } from "@/types/database";
 
 const roles: { value: UserRole; label: string }[] = [
@@ -19,10 +19,15 @@ const roles: { value: UserRole; label: string }[] = [
   { value: "warden", label: "Warden" },
 ];
 
+const USERS_PAGE_SIZE = 10;
+
 function AdminUsersInner() {
   const supabase = createClient();
   const searchParams = useSearchParams();
   const [users, setUsers] = useState<any[]>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [totalUsers, setTotalUsers] = useState(0);
+  const [query, setQuery] = useState<DataTableQuery>({ search: "", sortKey: null, sortDir: "asc", page: 0 });
   const [invitations, setInvitations] = useState<any[]>([]);
   const [departments, setDepartments] = useState<any[]>([]);
   const [editUser, setEditUser] = useState<any>(null);
@@ -36,19 +41,31 @@ function AdminUsersInner() {
     department_id: "",
   });
 
-  useEffect(() => { loadUsers(); loadInvitations(); loadDepartments(); }, []);
+  useEffect(() => { loadInvitations(); loadDepartments(); }, []);
+
+  // DataTable reports the initial query on mount and every search/sort/page
+  // change thereafter — this is the single fetch path, real pagination via
+  // .range() instead of pulling the whole table and slicing client-side.
+  // loadUsers is a new function identity every render; only `query` itself
+  // changing should re-trigger the fetch.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { loadUsers(query); }, [query]);
 
   useEffect(() => {
     if (searchParams.get("action") === "invite") setShowInvite(true);
   }, [searchParams]);
 
-  const loadUsers = async () => {
-    const { data } = await supabase
-      .from("profiles")
-      .select("*, departments:department_id(name)")
-      .order("created_at", { ascending: false })
-      .limit(DEFAULT_QUERY_LIMIT);
-    setUsers(data || []);
+  const loadUsers = async (q: DataTableQuery) => {
+    setUsersLoading(true);
+    // Server Action, not a direct browser Supabase call — this one goes
+    // through getCached() (Redis, college-scoped, 30s TTL), unlike the rest
+    // of this page's data (invitations, departments), which is small enough
+    // that Phase 3's caching wasn't worth the added indirection there.
+    const { data, count } = await listUsers(q);
+
+    setUsers(data);
+    setTotalUsers(count);
+    setUsersLoading(false);
   };
 
   const loadInvitations = async () => {
@@ -109,9 +126,9 @@ function AdminUsersInner() {
     setLoading(true);
     setError(null);
     try {
-      await updateUserProfile(editUser.id, editUser.full_name, editUser.role, editUser.phone || undefined);
+      await updateUserProfile(editUser.id, editUser.full_name, editUser.role, editUser.phone || undefined, query);
       setEditUser(null);
-      await loadUsers();
+      await loadUsers(query);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to update user.");
     } finally {
@@ -122,8 +139,8 @@ function AdminUsersInner() {
   const updateUserStatus = async (userId: string, status: string) => {
     setError(null);
     try {
-      await updateUserStatusAction(userId, status as UserStatus);
-      await loadUsers();
+      await updateUserStatusAction(userId, status as UserStatus, query);
+      await loadUsers(query);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to update status.");
     }
@@ -186,7 +203,7 @@ function AdminUsersInner() {
             render: (row: any) => (
               <div className="flex items-center gap-sm">
                 {row.avatar_url ? (
-                  <img src={row.avatar_url} alt="" className="w-7 h-7 rounded-full object-cover" />
+                  <Image src={row.avatar_url} alt="" width={28} height={28} className="w-7 h-7 rounded-full object-cover" />
                 ) : (
                   <div className="w-7 h-7 rounded-full bg-secondary/10 text-secondary flex items-center justify-center text-[10px] font-bold">
                     {row.full_name?.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
@@ -222,6 +239,11 @@ function AdminUsersInner() {
         searchPlaceholder="Search users..."
         emptyMessage="No users found."
         onRowClick={(row) => setEditUser(row)}
+        serverMode
+        totalCount={totalUsers}
+        loading={usersLoading}
+        onQueryChange={setQuery}
+        pageSize={USERS_PAGE_SIZE}
         actions={(row: any) => (
           <div className="flex gap-xs">
             <button

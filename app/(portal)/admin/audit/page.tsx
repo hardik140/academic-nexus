@@ -1,22 +1,26 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { createClient } from "@/lib/supabase/client";
-import { DataTable } from "@/components/ui/data-table";
+import { DataTable, type DataTableQuery } from "@/components/ui/data-table";
+import { listAuditLogs } from "./actions";
+
+const LOGS_PAGE_SIZE = 10;
 
 export default function AdminAuditLog() {
-  const supabase = createClient();
   const [logs, setLogs] = useState<any[]>([]);
+  const [logsLoading, setLogsLoading] = useState(false);
+  const [totalLogs, setTotalLogs] = useState(0);
+  const [query, setQuery] = useState<DataTableQuery>({ search: "", sortKey: null, sortDir: "asc", page: 0 });
 
-  useEffect(() => { loadLogs(); }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { loadLogs(query); }, [query]);
 
-  const loadLogs = async () => {
-    const { data } = await supabase
-      .from("audit_logs")
-      .select("*, profiles:user_id(full_name, email, role)")
-      .order("created_at", { ascending: false })
-      .limit(100);
-    setLogs(data || []);
+  const loadLogs = async (q: DataTableQuery) => {
+    setLogsLoading(true);
+    const { data, count } = await listAuditLogs(q);
+    setLogs(data);
+    setTotalLogs(count);
+    setLogsLoading(false);
   };
 
   return (
@@ -27,7 +31,7 @@ export default function AdminAuditLog() {
       </div>
 
       <DataTable
-        title={`System Activity (${logs.length} entries)`}
+        title={`System Activity (${totalLogs} entries)`}
         columns={[
           {
             key: "created_at",
@@ -61,6 +65,11 @@ export default function AdminAuditLog() {
         searchKey="action"
         searchPlaceholder="Search by user or action..."
         emptyMessage="No audit log entries recorded yet."
+        serverMode
+        totalCount={totalLogs}
+        loading={logsLoading}
+        onQueryChange={setQuery}
+        pageSize={LOGS_PAGE_SIZE}
       />
     </div>
   );

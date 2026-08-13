@@ -1,31 +1,26 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { createClient } from "@/lib/supabase/client";
-import { DataTable } from "@/components/ui/data-table";
-import { DEFAULT_QUERY_LIMIT } from "@/lib/constants";
+import { DataTable, type DataTableQuery } from "@/components/ui/data-table";
+import { listFaculty } from "./actions";
+
+const FACULTY_PAGE_SIZE = 10;
 
 export default function DirectorFaculty() {
-  const supabase = createClient();
   const [faculty, setFaculty] = useState<any[]>([]);
+  const [facultyLoading, setFacultyLoading] = useState(false);
+  const [totalFaculty, setTotalFaculty] = useState(0);
+  const [query, setQuery] = useState<DataTableQuery>({ search: "", sortKey: null, sortDir: "asc", page: 0 });
 
-  useEffect(() => { loadFaculty(); }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { loadFaculty(query); }, [query]);
 
-  const loadFaculty = async () => {
-    const [facultyRes, coursesRes] = await Promise.all([
-      supabase.from("profiles").select("*, departments:department_id(name, code)").in("role", ["teacher", "hod"]).order("full_name").limit(DEFAULT_QUERY_LIMIT),
-      // Course catalog, not a per-transaction table — 2x the default cap is
-      // ample headroom while still keeping the instructor course-count tally
-      // (below) from silently undercounting under normal growth.
-      supabase.from("courses").select("id, instructor_id").limit(DEFAULT_QUERY_LIMIT * 2),
-    ]);
-
-    const courseCounts: Record<string, number> = {};
-    (coursesRes.data || []).forEach((c: any) => {
-      if (!c.instructor_id) return;
-      courseCounts[c.instructor_id] = (courseCounts[c.instructor_id] || 0) + 1;
-    });
-    setFaculty((facultyRes.data || []).map((f: any) => ({ ...f, course_count: courseCounts[f.id] || 0 })));
+  const loadFaculty = async (q: DataTableQuery) => {
+    setFacultyLoading(true);
+    const { data, count } = await listFaculty(q);
+    setFaculty(data);
+    setTotalFaculty(count);
+    setFacultyLoading(false);
   };
 
   return (
@@ -52,7 +47,9 @@ export default function DirectorFaculty() {
           },
           { key: "role", header: "Role", render: (row: any) => <span className="capitalize text-on-surface-variant">{row.role}</span> },
           { key: "department", header: "Department", render: (row: any) => (row.departments as any)?.name || "—" },
-          { key: "course_count", header: "Courses", sortable: true },
+          // Not sortable in server mode: course_count is a client-side join
+          // tally, not a real profiles column — the server can't .order() by it.
+          { key: "course_count", header: "Courses" },
           {
             key: "status",
             header: "Status",

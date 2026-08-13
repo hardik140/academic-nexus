@@ -1,52 +1,21 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { createClient } from "@/lib/supabase/client";
 import { Button, StatusBadge } from "@/components/ui/modal";
-import { DEFAULT_QUERY_LIMIT } from "@/lib/constants";
-import { actOnLeaveRequest } from "./actions";
+import { actOnLeaveRequest, listHodApprovals } from "./actions";
 
 export default function HodApprovals() {
-  const supabase = createClient();
-  const [leaveRequests, setLeaveRequests] = useState<any[]>([]);
+  const [pending, setPending] = useState<any[]>([]);
+  const [processed, setProcessed] = useState<any[]>([]);
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => { loadRequests(); }, []);
 
   const loadRequests = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
-    // Scope to staff in the department this HOD leads — leave_requests_read
-    // (RLS) is college-wide for hod, so this is what actually restricts the
-    // visible queue, not just the approve/reject action. Resolved via
-    // departments.hod_id, same as hod/dashboard and hod/reports — NOT via
-    // this HOD's own profiles.department_id, which assigning someone as HOD
-    // doesn't set (see the comment in hod/faculty/page.tsx).
-    const { data: department } = await supabase.from("departments").select("id").eq("hod_id", user.id).single();
-    if (!department) {
-      setLeaveRequests([]);
-      return;
-    }
-
-    const { data: deptStaff } = await supabase
-      .from("profiles")
-      .select("id")
-      .eq("department_id", department.id);
-    const staffIds = (deptStaff || []).map((s) => s.id);
-    if (staffIds.length === 0) {
-      setLeaveRequests([]);
-      return;
-    }
-
-    const { data } = await supabase
-      .from("leave_requests")
-      .select("*, profiles:requested_by(full_name, email, role)")
-      .in("requested_by", staffIds)
-      .order("created_at", { ascending: false })
-      .limit(DEFAULT_QUERY_LIMIT);
-    setLeaveRequests(data || []);
+    const { pending, processed } = await listHodApprovals();
+    setPending(pending);
+    setProcessed(processed);
   };
 
   const handleAction = async (id: string, action: "approved" | "rejected") => {
@@ -61,9 +30,6 @@ export default function HodApprovals() {
       setLoading(null);
     }
   };
-
-  const pending = leaveRequests.filter(r => r.status === "pending");
-  const processed = leaveRequests.filter(r => r.status !== "pending");
 
   return (
     <div className="space-y-lg animate-[fade-in_0.3s_ease-out]">
@@ -126,7 +92,7 @@ export default function HodApprovals() {
           <h2 className="text-sm font-bold text-on-surface flex items-center gap-sm">🗂️ Processed History ({processed.length})</h2>
         </div>
         <div className="divide-y divide-outline-variant">
-          {processed.slice(0, 20).map((req: any) => (
+          {processed.map((req: any) => (
             <div key={req.id} className="flex items-center justify-between px-lg py-md hover:bg-surface-container-low transition-colors">
               <div className="flex items-center gap-sm">
                 <div className="w-7 h-7 rounded-full bg-surface-container-high text-on-surface-variant flex items-center justify-center text-[10px] font-bold">

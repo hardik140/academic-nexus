@@ -30,3 +30,32 @@ export async function getCached<T>(
 
   return fresh;
 }
+
+/**
+ * Explicit cache-bust for the exact key a write just affected — e.g. list
+ * pages using getCached() for real pagination (Phase 2/3 of the load
+ * review), where the actor's current page/sort/search is a deterministic
+ * key. Unlike the dashboards' pure TTL-only caching (fine for aggregate
+ * counts, where a few seconds' staleness is invisible), a CRUD list needs
+ * this: an admin who just created a row and doesn't see it appear reads
+ * that as a bug, not a cache. Same fail-open posture as getCached — a
+ * failed delete just means that one key rides out its TTL instead of
+ * clearing immediately, never an error surfaced to the caller.
+ */
+export async function invalidateCache(key: string): Promise<void> {
+  if (!redis) return;
+  try {
+    await redis.del(key);
+  } catch {
+    // Best-effort — see getCached's fail-open rationale above.
+  }
+}
+
+/**
+ * Shared by lib/supabase/middleware.ts (reader) and every write that
+ * changes a profile's role/status (invalidator) — a single definition so
+ * the two sides can't drift into mismatched key strings.
+ */
+export function middlewareProfileCacheKey(userId: string): string {
+  return `mw-profile:${userId}`;
+}

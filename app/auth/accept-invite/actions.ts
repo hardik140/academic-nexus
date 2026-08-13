@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { logAudit } from "@/lib/audit";
 import { dashboardPathFor } from "@/lib/auth/role-routes";
+import { invalidateCache, middlewareProfileCacheKey } from "@/lib/cache";
 
 const AcceptInvitationSchema = z.object({
   password: z.string().min(8, { message: "Password must be at least 8 characters." }).max(200),
@@ -68,6 +69,11 @@ export async function acceptInvitation(password: string) {
   if (profileErr) {
     throw new Error(profileErr.message);
   }
+  // Belt-and-suspenders: /auth/accept-invite is a public route, so
+  // middleware never cached this user's (still-pending) profile in the
+  // first place — the redirect below will populate the cache fresh either
+  // way. Invalidating anyway costs nothing and removes any doubt.
+  await invalidateCache(middlewareProfileCacheKey(user.id));
 
   const { error: invitationErr } = await supabase
     .from("invitations")

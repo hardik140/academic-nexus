@@ -1,12 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { createClient } from "@/lib/supabase/client";
-import { DataTable } from "@/components/ui/data-table";
+import { DataTable, type DataTableQuery } from "@/components/ui/data-table";
 import { Modal, Button, FormField, StatusBadge } from "@/components/ui/modal";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { DEFAULT_QUERY_LIMIT } from "@/lib/constants";
-import { recordPayment } from "./actions";
+import { recordPayment, listInvoices, listPayments, getFeeStats } from "./actions";
 import type { Database } from "@/types/database";
 
 type PaymentMethod = Database["public"]["Tables"]["payments"]["Row"]["method"];
@@ -22,10 +20,20 @@ const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
   { value: "other", label: "Other" },
 ];
 
+const INVOICES_PAGE_SIZE = 10;
+const PAYMENTS_PAGE_SIZE = 10;
+
 export default function FinanceTransactions() {
-  const supabase = createClient();
   const [fees, setFees] = useState<any[]>([]);
+  const [feesLoading, setFeesLoading] = useState(false);
+  const [totalFees, setTotalFees] = useState(0);
+  const [feesQuery, setFeesQuery] = useState<DataTableQuery>({ search: "", sortKey: null, sortDir: "asc", page: 0 });
+
   const [payments, setPayments] = useState<any[]>([]);
+  const [paymentsLoading, setPaymentsLoading] = useState(false);
+  const [totalPayments, setTotalPayments] = useState(0);
+  const [paymentsQuery, setPaymentsQuery] = useState<DataTableQuery>({ search: "", sortKey: null, sortDir: "asc", page: 0 });
+
   const [tab, setTab] = useState<"invoices" | "payments">("invoices");
   const [stats, setStats] = useState({ total: 0, collected: 0, pending: 0, overdue: 0 });
   const [payFee, setPayFee] = useState<any>(null);
@@ -33,27 +41,33 @@ export default function FinanceTransactions() {
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({ amount: "", method: "cash" as PaymentMethod, transaction_ref: "", notes: "" });
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => { loadStats(); }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { loadFees(feesQuery); }, [feesQuery]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { loadPayments(paymentsQuery); }, [paymentsQuery]);
 
-  const loadData = async () => {
-    const [feesRes, paymentsRes] = await Promise.all([
-      // NOTE: intentionally unbounded — the KPI cards below sum over the full
-      // `fees` result set. A naive .limit() here would silently understate
-      // totals once a college outgrows the cap. Needs the same fix as
-      // finance/reports.tsx: push the aggregation into Postgres (extend
-      // mv_fee_summary or add a grouped view) instead of bounding this query.
-      supabase.from("fees").select("*, students(enrollment_number, profiles:user_id(full_name))").order("due_date", { ascending: false }),
-      supabase.from("payments").select("*, students(enrollment_number, profiles:user_id(full_name))").order("created_at", { ascending: false }).limit(DEFAULT_QUERY_LIMIT),
-    ]);
-    const f = (feesRes.data as any[]) || [];
-    setFees(f);
-    setPayments(paymentsRes.data || []);
-    setStats({
-      total: f.reduce((s, i) => s + (i.amount || 0), 0),
-      collected: f.reduce((s, i) => s + (i.paid_amount || 0), 0),
-      pending: f.filter(i => i.status === "pending").reduce((s, i) => s + (i.amount - i.paid_amount), 0),
-      overdue: f.filter(i => i.status === "overdue").reduce((s, i) => s + (i.amount - i.paid_amount), 0),
-    });
+  // Cached Server Actions (getCached() needs the server-only Redis token) —
+  // stats stays unbounded server-side too (see getFeeStats' comment in
+  // actions.ts) but is now at least cached instead of re-summed every load.
+  const loadStats = async () => {
+    setStats(await getFeeStats());
+  };
+
+  const loadFees = async (q: DataTableQuery) => {
+    setFeesLoading(true);
+    const { data, count } = await listInvoices(q);
+    setFees(data);
+    setTotalFees(count);
+    setFeesLoading(false);
+  };
+
+  const loadPayments = async (q: DataTableQuery) => {
+    setPaymentsLoading(true);
+    const { data, count } = await listPayments(q);
+    setPayments(data);
+    setTotalPayments(count ?? 0);
+    setPaymentsLoading(false);
   };
 
   const openRecordPayment = (fee: any) => {
@@ -67,9 +81,9 @@ export default function FinanceTransactions() {
     setLoading(true);
     setError(null);
     try {
-      await recordPayment(payFee.id, Number(form.amount), form.method, form.transaction_ref || undefined, form.notes || undefined);
+      await recordPayment(payFee.id, Number(form.amount), form.method, form.transaction_ref || undefined, form.notes || undefined, feesQuery, paymentsQuery);
       setPayFee(null);
-      await loadData();
+      await Promise.all([loadStats(), loadFees(feesQuery), loadPayments(paymentsQuery)]);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to record payment.");
     } finally {
@@ -128,6 +142,11 @@ export default function FinanceTransactions() {
           keyExtractor={(row) => row.id}
           searchKey="type"
           searchPlaceholder="Search invoices..."
+          serverMode
+          totalCount={totalFees}
+          loading={feesLoading}
+          onQueryChange={setFeesQuery}
+          pageSize={INVOICES_PAGE_SIZE}
           actions={(row: any) => (
             row.status !== "paid" && row.status !== "waived" && row.status !== "refunded" ? (
               <button onClick={() => openRecordPayment(row)} className="text-xs text-secondary hover:underline font-medium">
@@ -151,6 +170,11 @@ export default function FinanceTransactions() {
           keyExtractor={(row) => row.id}
           searchKey="method"
           searchPlaceholder="Search payments..."
+          serverMode
+          totalCount={totalPayments}
+          loading={paymentsLoading}
+          onQueryChange={setPaymentsQuery}
+          pageSize={PAYMENTS_PAGE_SIZE}
         />
       )}
 

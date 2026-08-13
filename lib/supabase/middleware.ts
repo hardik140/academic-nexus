@@ -2,6 +2,8 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { routePrefixFor, dashboardPathFor } from "@/lib/auth/role-routes";
 import { checkRateLimit, RateLimitError } from "@/lib/rate-limit";
+import { getCached, middlewareProfileCacheKey } from "@/lib/cache";
+import type { UserRole, UserStatus } from "@/types/database";
 
 /**
  * Routes that don't require authentication. `/api` covers machine-to-machine
@@ -79,12 +81,30 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Fetch user profile for role-based routing
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role, college_id, status")
-    .eq("id", user.id)
-    .single();
+  // Fetch user profile for role-based routing — cached briefly. This is
+  // purely a routing decision (which page shell to serve), never the
+  // security boundary: every mutating action independently re-checks
+  // role/status fresh via requireRole() (lib/rbac.ts), uncached, and RLS is
+  // a third, always-live layer under that. A stale read here can, at worst,
+  // let an already-authenticated browser keep loading page shells for up to
+  // this TTL after a role/status change — it can never grant access to data
+  // those other layers wouldn't already allow. This is exactly the "short
+  // and documented" propagation window this repo's own AGENTS.md
+  // anticipates for role/permission changes (Section 3) — invalidated
+  // on every write that changes role/status: admin/users' updateUserProfile
+  // /updateUserStatus and accept-invite's pending->active transition.
+  const profile = await getCached(
+    middlewareProfileCacheKey(user.id),
+    20,
+    async (): Promise<{ role: UserRole; college_id: string; status: UserStatus } | null> => {
+      const { data } = await supabase
+        .from("profiles")
+        .select("role, college_id, status")
+        .eq("id", user.id)
+        .single();
+      return data;
+    }
+  );
 
   // If no profile exists yet (first login), redirect to onboarding
   if (!profile) {

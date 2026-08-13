@@ -2,14 +2,18 @@
 
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { DataTable } from "@/components/ui/data-table";
+import { DataTable, type DataTableQuery } from "@/components/ui/data-table";
 import { Modal, Button, FormField } from "@/components/ui/modal";
-import { PLATFORM_COLLEGE_ID } from "@/lib/constants";
-import { createCollege, inviteUser, resendInvitation, revokeInvitation } from "./actions";
+import { createCollege, listColleges, inviteUser, resendInvitation, revokeInvitation } from "./actions";
+
+const COLLEGES_PAGE_SIZE = 10;
 
 export default function SuperAdminCollegesPage() {
   const supabase = createClient();
   const [colleges, setColleges] = useState<any[]>([]);
+  const [collegesLoading, setCollegesLoading] = useState(false);
+  const [totalColleges, setTotalColleges] = useState(0);
+  const [query, setQuery] = useState<DataTableQuery>({ search: "", sortKey: null, sortDir: "asc", page: 0 });
   const [invitations, setInvitations] = useState<any[]>([]);
   const [showCreate, setShowCreate] = useState(false);
   const [inviteFor, setInviteFor] = useState<any>(null);
@@ -18,15 +22,16 @@ export default function SuperAdminCollegesPage() {
   const [createForm, setCreateForm] = useState({ name: "", code: "", city: "", state: "", country: "India" });
   const [inviteForm, setInviteForm] = useState({ email: "", fullName: "" });
 
-  useEffect(() => { load(); loadInvitations(); }, []);
+  useEffect(() => { loadInvitations(); }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { load(query); }, [query]);
 
-  const load = async () => {
-    const { data } = await supabase
-      .from("colleges")
-      .select("*")
-      .neq("id", PLATFORM_COLLEGE_ID)
-      .order("created_at", { ascending: false });
-    setColleges(data || []);
+  const load = async (q: DataTableQuery) => {
+    setCollegesLoading(true);
+    const { data, count } = await listColleges(q);
+    setColleges(data);
+    setTotalColleges(count);
+    setCollegesLoading(false);
   };
 
   const loadInvitations = async () => {
@@ -62,10 +67,10 @@ export default function SuperAdminCollegesPage() {
     setLoading(true);
     setError(null);
     try {
-      await createCollege(createForm);
+      await createCollege(createForm, query);
       setCreateForm({ name: "", code: "", city: "", state: "", country: "India" });
       setShowCreate(false);
-      await load();
+      await load(query);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to create college.");
     } finally {
@@ -157,6 +162,11 @@ export default function SuperAdminCollegesPage() {
         searchKey="name"
         searchPlaceholder="Search colleges..."
         emptyMessage="No colleges yet — create the first one."
+        serverMode
+        totalCount={totalColleges}
+        loading={collegesLoading}
+        onQueryChange={setQuery}
+        pageSize={COLLEGES_PAGE_SIZE}
         actions={(row: any) => (
           <button
             onClick={(e) => { e.stopPropagation(); setInviteFor(row); }}

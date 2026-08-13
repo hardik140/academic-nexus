@@ -6,9 +6,45 @@ import { createClient } from "@/lib/supabase/server";
 import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib/rbac";
 import { logAudit } from "@/lib/audit";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { getCached, invalidateCache } from "@/lib/cache";
+import { resolveListSort, listCacheKey } from "@/lib/cached-list";
+import { PLATFORM_COLLEGE_ID } from "@/lib/constants";
 import { inviteUserCore, resendInvitationCore, revokeInvitationCore, type InviteUserParams } from "@/lib/invitations";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
+import type { DataTableQuery } from "@/components/ui/data-table";
+
+const COLLEGES_PAGE_SIZE = 10;
+const COLLEGES_SORT_COLUMNS = ["name", "code"] as const;
+const COLLEGES_CACHE_PREFIX = "list:colleges";
+
+/**
+ * super_admin's actor.collegeId is always the platform placeholder (they
+ * aren't scoped to any real tenant — migration 018), so this cache key is
+ * effectively one shared entry across every super_admin viewing the same
+ * platform-wide list, which is exactly the right scope here.
+ */
+export async function listColleges(q: DataTableQuery) {
+  const actor = await requireRole(["super_admin"]);
+  const supabase = await createClient();
+
+  const { column, ascending } = resolveListSort(COLLEGES_SORT_COLUMNS, "created_at", false, q);
+  const cacheKey = listCacheKey(COLLEGES_CACHE_PREFIX, actor.collegeId, q, column);
+
+  return getCached(cacheKey, 30, async () => {
+    let dbQuery = supabase
+      .from("colleges")
+      .select("*", { count: "exact" })
+      .neq("id", PLATFORM_COLLEGE_ID);
+
+    if (q.search) dbQuery = dbQuery.ilike("name", `%${q.search}%`);
+    dbQuery = dbQuery.order(column, { ascending });
+
+    const from = q.page * COLLEGES_PAGE_SIZE;
+    const { data, count } = await dbQuery.range(from, from + COLLEGES_PAGE_SIZE - 1);
+    return { data: data || [], count: count ?? 0 };
+  });
+}
 
 const CreateCollegeSchema = z.object({
   name: z.string().trim().min(1, { message: "College name is required." }).max(200),
@@ -63,11 +99,15 @@ export async function createCollegeCore(
   return { collegeId: college.id };
 }
 
-export async function createCollege(params: CreateCollegeParams) {
+export async function createCollege(params: CreateCollegeParams, viewQuery?: DataTableQuery) {
   const actor = await requireRole(["super_admin"]);
   const supabase = await createClient();
   const result = await createCollegeCore(supabase, actor, params);
   revalidatePath("/super-admin/colleges");
+  if (viewQuery) {
+    const { column } = resolveListSort(COLLEGES_SORT_COLUMNS, "created_at", false, viewQuery);
+    await invalidateCache(listCacheKey(COLLEGES_CACHE_PREFIX, actor.collegeId, viewQuery, column));
+  }
   return result;
 }
 

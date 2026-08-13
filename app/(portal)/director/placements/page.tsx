@@ -2,10 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { DataTable } from "@/components/ui/data-table";
+import { DataTable, type DataTableQuery } from "@/components/ui/data-table";
 import { Modal, Button, FormField, StatusBadge } from "@/components/ui/modal";
-import { DEFAULT_QUERY_LIMIT } from "@/lib/constants";
-import { createPlacement } from "./actions";
+import { createPlacement, listPlacements } from "./actions";
 import type { Database } from "@/types/database";
 
 type OfferType = NonNullable<Database["public"]["Tables"]["placements"]["Row"]["offer_type"]>;
@@ -24,10 +23,15 @@ const STATUSES: { value: PlacementStatus; label: string }[] = [
   { value: "offer_revoked", label: "Offer Revoked" },
 ];
 
+const PLACEMENTS_PAGE_SIZE = 10;
+
 export default function DirectorPlacements() {
   const supabase = createClient();
   const [summary, setSummary] = useState<any>(null);
   const [placements, setPlacements] = useState<any[]>([]);
+  const [placementsLoading, setPlacementsLoading] = useState(false);
+  const [totalPlacements, setTotalPlacements] = useState(0);
+  const [query, setQuery] = useState<DataTableQuery>({ search: "", sortKey: null, sortDir: "asc", page: 0 });
   const [students, setStudents] = useState<any[]>([]);
   const [showCreate, setShowCreate] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -50,15 +54,21 @@ export default function DirectorPlacements() {
     status: "placed",
   });
 
-  useEffect(() => { loadData(); loadStudents(); }, []);
+  useEffect(() => { loadSummary(); loadStudents(); }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { loadPlacements(query); }, [query]);
 
-  const loadData = async () => {
-    const [summaryRes, placementsRes] = await Promise.all([
-      supabase.from("mv_placement_summary").select("*").maybeSingle(),
-      supabase.from("placements").select("*, students:student_id(enrollment_number, profiles:user_id(full_name), departments(name))").order("placement_date", { ascending: false }).limit(DEFAULT_QUERY_LIMIT),
-    ]);
-    setSummary(summaryRes.data);
-    setPlacements(placementsRes.data || []);
+  const loadSummary = async () => {
+    const { data } = await supabase.from("mv_placement_summary").select("*").maybeSingle();
+    setSummary(data);
+  };
+
+  const loadPlacements = async (q: DataTableQuery) => {
+    setPlacementsLoading(true);
+    const { data, count } = await listPlacements(q);
+    setPlacements(data);
+    setTotalPlacements(count);
+    setPlacementsLoading(false);
   };
 
   const loadStudents = async () => {
@@ -80,11 +90,12 @@ export default function DirectorPlacements() {
         form.package_lpa ? Number(form.package_lpa) : null,
         form.placement_date,
         form.offer_type,
-        form.status
+        form.status,
+        query
       );
       setForm({ student_id: "", company_name: "", role_title: "", package_lpa: "", placement_date: "", offer_type: "full_time", status: "placed" });
       setShowCreate(false);
-      await loadData();
+      await Promise.all([loadSummary(), loadPlacements(query)]);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to add placement record.");
     } finally {
@@ -145,6 +156,11 @@ export default function DirectorPlacements() {
         searchKey="company_name"
         searchPlaceholder="Search by company..."
         emptyMessage="No placement records yet."
+        serverMode
+        totalCount={totalPlacements}
+        loading={placementsLoading}
+        onQueryChange={setQuery}
+        pageSize={PLACEMENTS_PAGE_SIZE}
       />
 
       <Modal

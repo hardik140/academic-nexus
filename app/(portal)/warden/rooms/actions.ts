@@ -1,0 +1,47 @@
+"use server";
+
+import { createClient } from "@/lib/supabase/server";
+import { requireRole } from "@/lib/rbac";
+import { getCached } from "@/lib/cache";
+import { resolveListSort, listCacheKey } from "@/lib/cached-list";
+import type { DataTableQuery } from "@/components/ui/data-table";
+
+const ROOMS_PAGE_SIZE = 10;
+const ROOMS_SORT_COLUMNS = ["block_name", "room_number", "type", "occupancy"] as const;
+const ROOMS_CACHE_PREFIX = "list:hostel-rooms";
+
+/**
+ * Read-only page (no mutations), so no invalidation needed — the 30s TTL
+ * alone is fine here, same as it is for the dashboards.
+ */
+export async function listWardenRooms(q: DataTableQuery) {
+  const actor = await requireRole(["warden", "admin"]);
+  const supabase = await createClient();
+
+  const { column, ascending } = resolveListSort(ROOMS_SORT_COLUMNS, "block_name", true, q);
+  const cacheKey = listCacheKey(ROOMS_CACHE_PREFIX, actor.collegeId, q, column);
+
+  return getCached(cacheKey, 30, async () => {
+    // Resolved server-side from the authenticated actor, never trusted from
+    // the client — matches the "never trust client-picked ids" precedent
+    // used throughout this codebase's assignHodCore/assignWardenCore.
+    const { data: blocks } = await supabase.from("hostel_blocks").select("id").eq("warden_id", actor.userId);
+    const blockIds = (blocks || []).map((b) => b.id);
+    if (blockIds.length === 0) {
+      return { data: [], count: 0 };
+    }
+
+    let dbQuery = supabase
+      .from("hostel_rooms")
+      .select("*", { count: "exact" })
+      .in("block_id", blockIds);
+
+    if (q.search) dbQuery = dbQuery.ilike("room_number", `%${q.search}%`);
+    dbQuery = dbQuery.order(column, { ascending });
+    if (!q.sortKey) dbQuery = dbQuery.order("room_number", { ascending: true });
+
+    const from = q.page * ROOMS_PAGE_SIZE;
+    const { data, count } = await dbQuery.range(from, from + ROOMS_PAGE_SIZE - 1);
+    return { data: data || [], count: count ?? 0 };
+  });
+}

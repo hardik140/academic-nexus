@@ -1,23 +1,26 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { createClient } from "@/lib/supabase/client";
-import { DataTable } from "@/components/ui/data-table";
+import { DataTable, type DataTableQuery } from "@/components/ui/data-table";
+import { listWardenRooms } from "./actions";
+
+const ROOMS_PAGE_SIZE = 10;
 
 export default function WardenRooms() {
-  const supabase = createClient();
   const [rooms, setRooms] = useState<any[]>([]);
+  const [roomsLoading, setRoomsLoading] = useState(false);
+  const [totalRooms, setTotalRooms] = useState(0);
+  const [query, setQuery] = useState<DataTableQuery>({ search: "", sortKey: null, sortDir: "asc", page: 0 });
 
-  useEffect(() => { loadRooms(); }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { loadRooms(query); }, [query]);
 
-  const loadRooms = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    const { data: blocks } = await supabase.from("hostel_blocks").select("id").eq("warden_id", user.id);
-    const blockIds = (blocks || []).map((b) => b.id);
-    if (blockIds.length === 0) { setRooms([]); return; }
-    const { data } = await supabase.from("hostel_rooms").select("*").in("block_id", blockIds).order("block_name").order("room_number");
-    setRooms(data || []);
+  const loadRooms = async (q: DataTableQuery) => {
+    setRoomsLoading(true);
+    const { data, count } = await listWardenRooms(q);
+    setRooms(data);
+    setTotalRooms(count);
+    setRoomsLoading(false);
   };
 
   return (
@@ -59,6 +62,11 @@ export default function WardenRooms() {
         searchKey="room_number"
         searchPlaceholder="Search by block or room #..."
         emptyMessage="No rooms found for your managed blocks."
+        serverMode
+        totalCount={totalRooms}
+        loading={roomsLoading}
+        onQueryChange={setQuery}
+        pageSize={ROOMS_PAGE_SIZE}
       />
     </div>
   );
