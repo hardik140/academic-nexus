@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Placement Cell Applicants - Academic Nexus</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                            "on-primary-fixed": "#1b1b1b",
+                            "outline-variant": "#cfc4c5",
+                            "on-surface-variant": "#4c4546",
+                            "surface-container-lowest": "#ffffff",
+                            "surface-dim": "#cbdbf5",
+                            "on-tertiary-fixed-variant": "#474747",
+                            "on-secondary": "#ffffff",
+                            "error": "#ba1a1a",
+                            "error-container": "#ffdad6",
+                            "secondary": "#0051d5",
+                            "on-error": "#ffffff",
+                            "on-tertiary-fixed": "#1b1b1b",
+                            "background": "#f9f9f9",
+                            "inverse-surface": "#303030",
+                            "on-primary": "#ffffff",
+                            "tertiary-container": "#1b1b1b",
+                            "on-secondary-fixed": "#00174b",
+                            "surface-bright": "#f9f9f9",
+                            "on-secondary-container": "#fefcff",
+                            "surface-container": "#e5eeff",
+                            "surface-variant": "#e2e2e2",
+                            "tertiary-fixed": "#e2e2e2",
+                            "surface": "#f9f9f9",
+                            "on-secondary-fixed-variant": "#003ea7",
+                            "on-primary-fixed-variant": "#474747",
+                            "inverse-primary": "#c6c6c6",
+                            "on-surface": "#1b1b1b",
+                            "tertiary": "#000000",
+                            "surface-tint": "#5e5e5e",
+                            "primary": "#000000",
+                            "on-background": "#1b1b1b",
+                            "surface-container-high": "#e8e8e8",
+                            "outline": "#76777d",
+                            "tertiary-fixed-dim": "#c6c6c6",
+                            "secondary-container": "#346cef",
+                            "on-tertiary": "#ffffff",
+                            "secondary-fixed": "#dbe1ff",
+                            "primary-container": "#1b1b1b",
+                            "inverse-on-surface": "#f1f1f1",
+                            "surface-container-low": "#f3f3f3",
+                            "on-error-container": "#93000a",
+                            "on-tertiary-container": "#848484",
+                            "surface-container-highest": "#e2e2e2",
+                            "on-primary-container": "#848484",
+                            "secondary-fixed-dim": "#b4c5ff",
+                            "primary-fixed-dim": "#c6c6c6",
+                            "primary-fixed": "#e2e2e2"
+                    },
+                    "borderRadius": {
+                            "DEFAULT": "0.125rem",
+                            "lg": "0.25rem",
+                            "xl": "0.5rem",
+                            "full": "0.75rem"
+                    },
+                    "spacing": {
+                            "gutter": "24px",
+                            "base": "4px",
+                            "md": "16px",
+                            "sm": "8px",
+                            "xs": "4px",
+                            "margin": "32px",
+                            "lg": "24px",
+                            "grid_columns": "12",
+                            "xl": "32px"
+                    },
+                    "fontFamily": {
+                            "mono-sm": ["monospace"],
+                            "display-lg": ["Inter"],
+                            "body-md": ["Inter"],
+                            "body-sm": ["Inter"],
+                            "label-md": ["Inter"],
+                            "headline-sm": ["Inter"],
+                            "body-lg": ["Inter"],
+                            "headline-lg": ["Inter"],
+                            "headline-md": ["Inter"]
+                    },
+                    "fontSize": {
+                            "mono-sm": ["12px", {"lineHeight": "16px", "fontWeight": "400"}],
+                            "display-lg": ["36px", {"lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                            "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                            "body-sm": ["13px", {"lineHeight": "18px", "fontWeight": "400"}],
+                            "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                            "headline-sm": ["16px", {"lineHeight": "24px", "fontWeight": "600"}],
+                            "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                            "headline-lg": ["28px", {"lineHeight": "36px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                            "headline-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}]
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-background text-on-background font-body-md min-h-screen flex">
+<!-- SideNavBar (from JSON) -->
+<nav class="hidden md:flex flex-col h-screen fixed left-0 top-0 py-lg px-md gap-sm bg-primary dark:bg-primary-container text-on-primary dark:text-on-primary-container docked left-0 h-full w-64 border-r border-outline-variant flat no shadows font-label-md text-label-md z-20">
+<div class="mb-xl flex items-center gap-sm px-sm">
+<span class="material-symbols-outlined text-4xl" data-icon="school">school</span>
+<div>
+<h1 class="font-headline-sm text-headline-sm text-on-primary font-black">Academic Nexus</h1>
+<p class="text-xs text-on-primary/70">College ERP</p>
+</div>
+</div>
+<ul class="flex-1 flex flex-col gap-base">
+<li>
+<a class="flex items-center gap-sm px-md py-sm rounded-lg text-on-primary-container hover:bg-surface-container-highest hover:bg-secondary transition-all duration-150 cursor-pointer active:scale-95" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+                    Dashboard
+                </a>
+</li>
+<li>
+<a class="flex items-center gap-sm px-md py-sm rounded-lg text-on-primary-container hover:bg-surface-container-highest hover:bg-secondary transition-all duration-150 cursor-pointer active:scale-95" href="#">
+<span class="material-symbols-outlined" data-icon="business">business</span>
+                    Companies
+                </a>
+</li>
+<li>
+<!-- Active State Match: Placement Drives -->
+<a class="flex items-center gap-sm px-md py-sm rounded-lg bg-secondary-container text-on-secondary-container hover:bg-secondary transition-all duration-150 cursor-pointer active:scale-95" href="#">
+<span class="material-symbols-outlined" data-icon="event_available">event_available</span>
+                    Placement Drives
+                </a>
+</li>
+<li>
+<a class="flex items-center gap-sm px-md py-sm rounded-lg text-on-primary-container hover:bg-surface-container-highest hover:bg-secondary transition-all duration-150 cursor-pointer active:scale-95" href="#">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+                    Notifications
+                </a>
+</li>
+<li>
+<a class="flex items-center gap-sm px-md py-sm rounded-lg text-on-primary-container hover:bg-surface-container-highest hover:bg-secondary transition-all duration-150 cursor-pointer active:scale-95" href="#">
+<span class="material-symbols-outlined" data-icon="analytics">analytics</span>
+                    Placement Records
+                </a>
+</li>
+<li>
+<a class="flex items-center gap-sm px-md py-sm rounded-lg text-on-primary-container hover:bg-surface-container-highest hover:bg-secondary transition-all duration-150 cursor-pointer active:scale-95" href="#">
+<span class="material-symbols-outlined" data-icon="description">description</span>
+                    Reports
+                </a>
+</li>
+</ul>
+<ul class="mt-auto flex flex-col gap-base border-t border-outline-variant pt-sm">
+<li>
+<a class="flex items-center gap-sm px-md py-sm rounded-lg text-on-primary-container hover:bg-surface-container-highest hover:bg-secondary transition-all duration-150 cursor-pointer active:scale-95" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+                    Settings
+                </a>
+</li>
+<li>
+<a class="flex items-center gap-sm px-md py-sm rounded-lg text-on-primary-container hover:bg-surface-container-highest hover:bg-secondary transition-all duration-150 cursor-pointer active:scale-95" href="#">
+<span class="material-symbols-outlined" data-icon="logout">logout</span>
+                    Logout
+                </a>
+</li>
+</ul>
+</nav>
+<!-- Main Content Area Wrapper -->
+<div class="flex-1 flex flex-col md:ml-64 w-full min-h-screen">
+<!-- TopNavBar (from JSON - Desktop Only) -->
+<header class="hidden md:flex justify-between items-center w-full px-margin h-16 bg-surface dark:bg-surface-container-high docked full-width top-0 border-b border-outline-variant dark:border-outline flat no shadows font-body-md text-body-md z-10 sticky">
+<div class="flex items-center gap-md">
+<!-- Search Bar (on_right logic dictates search should be on the right, so we leave left area empty for title/brand if needed, or back button) -->
+</div>
+<div class="flex items-center gap-md">
+<div class="relative flex items-center">
+<span class="material-symbols-outlined absolute left-sm text-on-surface-variant pointer-events-none" data-icon="search">search</span>
+<input class="pl-xl pr-sm py-sm rounded-DEFAULT border border-outline bg-surface-container-lowest text-on-surface focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary transition-all w-64 text-body-sm" placeholder="Search..." type="text"/>
+</div>
+<button class="p-sm rounded-full text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-colors duration-200 cursor-pointer active:opacity-80">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<button class="p-sm rounded-full text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-colors duration-200 cursor-pointer active:opacity-80">
+<span class="material-symbols-outlined" data-icon="help_outline">help_outline</span>
+</button>
+<div class="h-8 w-8 rounded-full bg-surface-variant overflow-hidden cursor-pointer ml-sm border border-outline-variant">
+<img alt="User profile photo" class="w-full h-full object-cover" data-alt="A professional headshot of a college administrator or professor in a well-lit office setting. The individual is wearing smart casual academic attire. The background is slightly blurred showing bookshelves or a modern campus building. The lighting is bright and clean, typical of a modern corporate or academic portrait. The overall mood is approachable, knowledgeable, and trustworthy." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA533irQuZ4erDWcws4GLdHVyKatcKPSEqY-lpFEx9qo2OJwzpEmYtzU3mF7sRvejiiR3DsSdwwOAOAdw8r_2LWtmNaSLq8deQoZKoYkMlACsLKqQK4Mv3WIXqqFsFDuYxzX1e2l4p7Wv_41vNKGLGWfDVmfgWGefUS9GsbQqy888G7fEw2WTf8Gx9yBrtbm1s43nLQqsBGC_I-6JkPP1UTSyRflNNgve9xRscis9NV3SpAIa9J0_o80JN2hhjivXZsxmWOGFhR_Yc"/>
+</div>
+</div>
+</header>
+<!-- Page Canvas -->
+<main class="flex-1 p-margin flex flex-col gap-lg bg-background w-full max-w-[1280px] mx-auto">
+<!-- Top Section -->
+<div class="flex flex-col gap-sm pt-sm">
+<a class="inline-flex items-center gap-xs text-secondary hover:underline font-body-sm text-body-sm w-fit transition-all hover:-translate-x-1" href="#">
+<span class="material-symbols-outlined text-sm" data-icon="arrow_back">arrow_back</span>
+                    Back to Drives
+                </a>
+<div>
+<h2 class="font-headline-lg text-headline-lg text-primary m-0">Applicants — Software Engineer</h2>
+<p class="font-body-lg text-body-lg text-secondary mt-xs">TCS</p>
+</div>
+</div>
+<!-- Main Content Container (Data Table Card) -->
+<div class="bg-surface-container-lowest rounded-xl border border-outline-variant shadow-sm overflow-hidden flex flex-col flex-1">
+<!-- Table Controls Toolbar -->
+<div class="px-lg py-md border-b border-outline-variant bg-surface-container flex flex-wrap gap-md justify-between items-center">
+<div class="flex items-center gap-sm">
+<div class="relative">
+<span class="material-symbols-outlined absolute left-sm top-1/2 -translate-y-1/2 text-on-surface-variant text-sm" data-icon="filter_list">filter_list</span>
+<select class="pl-xl pr-lg py-xs rounded-DEFAULT border border-outline bg-surface-container-lowest text-on-surface font-body-sm text-body-sm focus:outline-none focus:border-secondary transition-all appearance-none cursor-pointer">
+<option>All Statuses</option>
+<option>Applied</option>
+<option>Shortlisted</option>
+<option>Selected</option>
+<option>Rejected</option>
+</select>
+<span class="material-symbols-outlined absolute right-sm top-1/2 -translate-y-1/2 text-on-surface-variant text-sm pointer-events-none" data-icon="expand_more">expand_more</span>
+</div>
+<div class="relative">
+<select class="pl-md pr-lg py-xs rounded-DEFAULT border border-outline bg-surface-container-lowest text-on-surface font-body-sm text-body-sm focus:outline-none focus:border-secondary transition-all appearance-none cursor-pointer">
+<option>All Departments</option>
+<option>CSE</option>
+<option>IT</option>
+<option>ECE</option>
+</select>
+<span class="material-symbols-outlined absolute right-sm top-1/2 -translate-y-1/2 text-on-surface-variant text-sm pointer-events-none" data-icon="expand_more">expand_more</span>
+</div>
+</div>
+<div class="flex items-center gap-sm">
+<button class="inline-flex items-center gap-xs px-md py-sm rounded-DEFAULT border border-outline text-on-surface font-label-md text-label-md hover:bg-surface-container-low transition-colors">
+<span class="material-symbols-outlined text-sm" data-icon="download">download</span>
+                            Export CSV
+                        </button>
+</div>
+</div>
+<!-- Responsive Table Wrapper -->
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse min-w-[800px]">
+<thead>
+<tr class="bg-surface-container font-label-md text-label-md text-on-surface-variant border-b border-outline-variant">
+<th class="py-sm px-lg font-semibold tracking-wider">Student</th>
+<th class="py-sm px-md font-semibold tracking-wider">Department</th>
+<th class="py-sm px-md font-semibold tracking-wider">CGPA</th>
+<th class="py-sm px-md font-semibold tracking-wider">Applied Date</th>
+<th class="py-sm px-md font-semibold tracking-wider">Status</th>
+<th class="py-sm px-lg font-semibold tracking-wider text-right">Actions</th>
+</tr>
+</thead>
+<tbody class="font-body-md text-body-md divide-y divide-outline-variant/50">
+<!-- Row 1 -->
+<tr class="hover:bg-surface-container-low transition-colors duration-150">
+<td class="py-md px-lg">
+<div class="flex items-center gap-sm">
+<div class="h-8 w-8 rounded-full bg-surface-dim overflow-hidden flex-shrink-0 border border-outline-variant">
+<img class="w-full h-full object-cover" data-alt="A clean, professional headshot of an Indian male college student with neat short black hair. He is wearing a simple white collared shirt against a plain light gray background. The lighting is even and bright, presenting a smart, academic appearance. The image acts as a typical formal photo used on an academic ID card or application portal." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCb_RT3R1ORAe35klL2rQzftvjYsVRBZNy7d3_8YOoyLBZ0_pO9v6HkfiboXRMmqYBOwHaaAcCLZOsPKaqv1X2edopu_HY-GSSZ5bnQmKgnpwdgmTJ8zAv4o1Kd7UjgPbiy12LzMOAHAF3c9AGU3UyChgU805vNbRQ0GhKGL0JIqAAbCPGho2GvaTlrppj-LcAMVregYxA7PT5QJhiNyDIHZXTlo9kCHL5VmGY9fERVA1MlLw_s_SE6Rjj154xf1mabdPlRd53XfHs"/>
+</div>
+<div>
+<p class="font-medium text-on-surface">Rahul Sharma</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant">21BCE1024</p>
+</div>
+</div>
+</td>
+<td class="py-md px-md text-on-surface-variant">CSE</td>
+<td class="py-md px-md font-medium text-on-surface">8.9</td>
+<td class="py-md px-md text-on-surface-variant font-mono-sm text-mono-sm">Oct 12, 2023</td>
+<td class="py-md px-md">
+<span class="inline-flex items-center px-sm py-xs rounded-full bg-surface-container-highest text-on-surface-variant font-label-md text-[10px] leading-tight">Applied</span>
+</td>
+<td class="py-md px-lg text-right">
+<div class="flex items-center justify-end gap-sm font-label-md text-label-md">
+<button class="text-secondary hover:text-secondary-container transition-colors">Shortlist</button>
+<span class="text-outline-variant">|</span>
+<button class="text-error hover:text-on-error-container transition-colors">Reject</button>
+</div>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="hover:bg-surface-container-low transition-colors duration-150">
+<td class="py-md px-lg">
+<div class="flex items-center gap-sm">
+<div class="h-8 w-8 rounded-full bg-surface-dim overflow-hidden flex-shrink-0 border border-outline-variant">
+<img class="w-full h-full object-cover" data-alt="A clean, professional headshot of an Indian female college student with long black hair neatly tied back. She is wearing a dark blue blazer over a light blouse. The background is a soft, muted studio white. The lighting is soft and flattering, suitable for a professional corporate or academic application profile. She exudes confidence and focus." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBYznB7Upm3vumUNlj1YUsDinE_vpu4isntvVGHxUD4baI4qJwHkyKq8qng-bVduo9pP9GJz8C3KJyp0t6ftXNDrTzEKMoXcOHJBCHFlzgHcrl4tENkN23k9ptVWJwdZXnhGGbUrI-EY1GHU51O7YNbLLhlOV8d5TCdfYfCKEa0LqdWoUlKJhd3JjvBYA9K0VWzHp1_68Wt_Li5IDrPdiSgZmFLSPekDTkvhFeDvViXmJMeaAsFfyugOvJwHeHH2u4XjLyOPg7bfTI"/>
+</div>
+<div>
+<p class="font-medium text-on-surface">Priya Patel</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant">21BIT0892</p>
+</div>
+</div>
+</td>
+<td class="py-md px-md text-on-surface-variant">IT</td>
+<td class="py-md px-md font-medium text-on-surface">9.2</td>
+<td class="py-md px-md text-on-surface-variant font-mono-sm text-mono-sm">Oct 11, 2023</td>
+<td class="py-md px-md">
+<span class="inline-flex items-center px-sm py-xs rounded-full bg-secondary-fixed text-on-secondary-fixed font-label-md text-[10px] leading-tight">Shortlisted</span>
+</td>
+<td class="py-md px-lg text-right">
+<div class="flex items-center justify-end gap-sm font-label-md text-label-md">
+<button class="text-secondary hover:text-secondary-container transition-colors">Interview</button>
+<span class="text-outline-variant">|</span>
+<button class="text-error hover:text-on-error-container transition-colors">Reject</button>
+</div>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="hover:bg-surface-container-low transition-colors duration-150">
+<td class="py-md px-lg">
+<div class="flex items-center gap-sm">
+<div class="h-8 w-8 rounded-full bg-surface-dim overflow-hidden flex-shrink-0 border border-outline-variant flex items-center justify-center text-secondary font-bold text-xs">
+                                            AK
+                                        </div>
+<div>
+<p class="font-medium text-on-surface">Amit Kumar</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant">21BCE0445</p>
+</div>
+</div>
+</td>
+<td class="py-md px-md text-on-surface-variant">CSE</td>
+<td class="py-md px-md font-medium text-on-surface">8.1</td>
+<td class="py-md px-md text-on-surface-variant font-mono-sm text-mono-sm">Oct 10, 2023</td>
+<td class="py-md px-md">
+<span class="inline-flex items-center px-sm py-xs rounded-full bg-[#E6F4EA] text-[#137333] font-label-md text-[10px] leading-tight">Selected</span>
+</td>
+<td class="py-md px-lg text-right">
+<div class="flex items-center justify-end gap-sm font-label-md text-label-md">
+<button class="text-on-surface-variant hover:text-on-surface transition-colors">View Profile</button>
+</div>
+</td>
+</tr>
+<!-- Row 4 -->
+<tr class="hover:bg-surface-container-low transition-colors duration-150">
+<td class="py-md px-lg">
+<div class="flex items-center gap-sm">
+<div class="h-8 w-8 rounded-full bg-surface-dim overflow-hidden flex-shrink-0 border border-outline-variant">
+<img class="w-full h-full object-cover" data-alt="A professional portrait of a young adult male student with glasses. He has a neat, professional haircut and is wearing a light blue button-down shirt. The photo is cropped tightly around the shoulders and head against a neutral gray background. The image style is realistic, bright, and suitable for a formal academic or job placement portal." src="https://lh3.googleusercontent.com/aida-public/AB6AXuByzuQWsHqUxsJoErlJfR0mzB7BA3XPB6oSUVJXZx2IjLc7UXFsgh8GCzujiUCIl59aaefjJWo6o0aIjprKCEqCjFZ1cuZUAKgjedmmO0PonWZKBdZvUa7R4ngi5sArmMYu9ZzkWMNYWlzA5wJqj0uSpVlwYvtUo8XAq1EP2w_nUv6lsyT6FnsuQI6veYQYLig8vIwd30tzDBetU9aFABmuK91NFqA93cZhF27-4UKxCQk22cECxwzf1V6Ex9-KGlrFY0rWdIQL-CA"/>
+</div>
+<div>
+<p class="font-medium text-on-surface">Suresh Nair</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant">21BCE2210</p>
+</div>
+</div>
+</td>
+<td class="py-md px-md text-on-surface-variant">CSE</td>
+<td class="py-md px-md font-medium text-on-surface">7.5</td>
+<td class="py-md px-md text-on-surface-variant font-mono-sm text-mono-sm">Oct 12, 2023</td>
+<td class="py-md px-md">
+<span class="inline-flex items-center px-sm py-xs rounded-full bg-error-container text-on-error-container font-label-md text-[10px] leading-tight">Rejected</span>
+</td>
+<td class="py-md px-lg text-right">
+<div class="flex items-center justify-end gap-sm font-label-md text-label-md">
+<button class="text-on-surface-variant hover:text-on-surface transition-colors">View Notes</button>
+</div>
+</td>
+</tr>
+<!-- Row 5 -->
+<tr class="hover:bg-surface-container-low transition-colors duration-150">
+<td class="py-md px-lg">
+<div class="flex items-center gap-sm">
+<div class="h-8 w-8 rounded-full bg-surface-dim overflow-hidden flex-shrink-0 border border-outline-variant flex items-center justify-center text-secondary font-bold text-xs">
+                                            NR
+                                        </div>
+<div>
+<p class="font-medium text-on-surface">Neha Reddy</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant">21BEC0112</p>
+</div>
+</div>
+</td>
+<td class="py-md px-md text-on-surface-variant">ECE</td>
+<td class="py-md px-md font-medium text-on-surface">8.6</td>
+<td class="py-md px-md text-on-surface-variant font-mono-sm text-mono-sm">Oct 13, 2023</td>
+<td class="py-md px-md">
+<span class="inline-flex items-center px-sm py-xs rounded-full bg-secondary-fixed text-on-secondary-fixed font-label-md text-[10px] leading-tight">Shortlisted</span>
+</td>
+<td class="py-md px-lg text-right">
+<div class="flex items-center justify-end gap-sm font-label-md text-label-md">
+<button class="text-secondary hover:text-secondary-container transition-colors">Select</button>
+<span class="text-outline-variant">|</span>
+<button class="text-error hover:text-on-error-container transition-colors">Reject</button>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Pagination Footer -->
+<div class="px-lg py-md border-t border-outline-variant bg-surface flex justify-between items-center text-body-sm text-on-surface-variant">
+<div>Showing 1 to 5 of 142 entries</div>
+<div class="flex gap-xs">
+<button class="px-sm py-xs border border-outline-variant rounded bg-surface-container-lowest hover:bg-surface-container-low disabled:opacity-50">Prev</button>
+<button class="px-sm py-xs border border-secondary rounded bg-secondary text-on-primary">1</button>
+<button class="px-sm py-xs border border-outline-variant rounded bg-surface-container-lowest hover:bg-surface-container-low">2</button>
+<button class="px-sm py-xs border border-outline-variant rounded bg-surface-container-lowest hover:bg-surface-container-low">3</button>
+<button class="px-sm py-xs border border-outline-variant rounded bg-surface-container-lowest hover:bg-surface-container-low">Next</button>
+</div>
+</div>
+</div>
+</main>
+</div>
+</body></html>

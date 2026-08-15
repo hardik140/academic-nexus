@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { errorResponse } from "@/lib/api-errors";
-import { assignHodViaRequest } from "@/app/(portal)/admin/departments/actions";
+import { assignHodViaRequest } from "@/app/(portal)/director/departments/actions";
 
 export async function POST(request: Request) {
   try {

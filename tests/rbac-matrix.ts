@@ -9,6 +9,7 @@ export const ALL_ROLES: UserRole[] = [
   "admin",
   "warden",
   "super_admin",
+  "placement_cell",
 ];
 
 /**
@@ -34,6 +35,22 @@ export const ACTION_ALLOWED_ROLES: Record<string, UserRole[]> = {
   inviteUserAsAdmin: ["admin"],
   inviteUserAsDirector: ["director"],
   inviteUserAsHod: ["hod"],
+  // Placement Cell — a Director-controlled functional role (see the
+  // Placement Cell plan). assign/revoke are Director-exclusive on purpose
+  // (System Admin structurally can't reach them); operational CRUD on
+  // companies/drives/applications/notifications is placement_cell + admin,
+  // matching this codebase's existing "admin co-manages every domain
+  // module" convention (fees, scholarships, hostel, the original
+  // placements table); staff read (oversight) also includes director.
+  assignPlacementCell: ["director"],
+  revokePlacementCell: ["director"],
+  managePlacementCompanies: ["placement_cell", "admin"],
+  managePlacementDrives: ["placement_cell", "admin"],
+  updatePlacementApplicationStatus: ["placement_cell", "admin"],
+  updateStudentPlacementStatus: ["placement_cell", "admin"],
+  sendPlacementNotification: ["placement_cell", "admin"],
+  readPlacementCellData: ["placement_cell", "director", "admin"],
+  applyToPlacementDrive: ["student"],
 };
 
 export interface RbacMatrixRow {

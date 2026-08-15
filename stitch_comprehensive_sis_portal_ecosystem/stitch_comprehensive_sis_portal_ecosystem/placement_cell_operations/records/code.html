@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Student Placement Records - Academic Nexus</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-container-lowest": "#ffffff",
+                        "secondary": "#0051d5",
+                        "secondary-fixed": "#dbe1ff",
+                        "on-error": "#ffffff",
+                        "tertiary-container": "#1b1b1b",
+                        "surface-dim": "#cbdbf5",
+                        "primary": "#000000",
+                        "tertiary": "#000000",
+                        "on-primary": "#ffffff",
+                        "error-container": "#ffdad6",
+                        "on-tertiary-fixed-variant": "#474747",
+                        "surface-container-high": "#e8e8e8",
+                        "primary-fixed-dim": "#c6c6c6",
+                        "tertiary-fixed-dim": "#c6c6c6",
+                        "inverse-primary": "#c6c6c6",
+                        "on-secondary-fixed": "#00174b",
+                        "on-tertiary-fixed": "#1b1b1b",
+                        "surface-container-low": "#f3f3f3",
+                        "outline-variant": "#cfc4c5",
+                        "surface-container-highest": "#e2e2e2",
+                        "on-secondary-fixed-variant": "#003ea7",
+                        "background": "#f9f9f9",
+                        "on-surface-variant": "#4c4546",
+                        "on-tertiary": "#ffffff",
+                        "surface-variant": "#e2e2e2",
+                        "on-tertiary-container": "#848484",
+                        "on-primary-container": "#848484",
+                        "surface-tint": "#5e5e5e",
+                        "surface-container": "#e5eeff",
+                        "on-error-container": "#93000a",
+                        "inverse-on-surface": "#f1f1f1",
+                        "tertiary-fixed": "#e2e2e2",
+                        "on-primary-fixed-variant": "#474747",
+                        "secondary-fixed-dim": "#b4c5ff",
+                        "on-surface": "#1b1b1b",
+                        "error": "#ba1a1a",
+                        "surface-bright": "#f9f9f9",
+                        "on-primary-fixed": "#1b1b1b",
+                        "on-secondary-container": "#fefcff",
+                        "secondary-container": "#346cef",
+                        "inverse-surface": "#303030",
+                        "primary-container": "#1b1b1b",
+                        "surface": "#f9f9f9",
+                        "on-secondary": "#ffffff",
+                        "primary-fixed": "#e2e2e2",
+                        "outline": "#76777d",
+                        "on-background": "#1b1b1b"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "lg": "24px",
+                        "xs": "4px",
+                        "margin": "32px",
+                        "base": "4px",
+                        "gutter": "24px",
+                        "grid_columns": "12",
+                        "xl": "32px",
+                        "md": "16px",
+                        "sm": "8px"
+                    },
+                    "fontFamily": {
+                        "body-md": ["Inter", "sans-serif"],
+                        "label-md": ["Inter", "sans-serif"],
+                        "headline-md": ["Inter", "sans-serif"],
+                        "headline-lg": ["Inter", "sans-serif"],
+                        "body-sm": ["Inter", "sans-serif"],
+                        "body-lg": ["Inter", "sans-serif"],
+                        "headline-sm": ["Inter", "sans-serif"],
+                        "display-lg": ["Inter", "sans-serif"],
+                        "mono-sm": ["monospace"]
+                    },
+                    "fontSize": {
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "headline-md": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "headline-lg": ["28px", { "lineHeight": "36px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "body-sm": ["13px", { "lineHeight": "18px", "fontWeight": "400" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "headline-sm": ["16px", { "lineHeight": "24px", "fontWeight": "600" }],
+                        "display-lg": ["36px", { "lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "mono-sm": ["12px", { "lineHeight": "16px", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-background font-body-md text-on-background antialiased flex h-screen overflow-hidden">
+<!-- SideNavBar -->
+<nav class="bg-surface dark:bg-surface-dim h-screen w-64 fixed left-0 top-0 border-r border-outline-variant dark:border-outline flex flex-col h-full py-md px-sm z-50">
+<!-- Header -->
+<div class="px-md pb-lg mb-md border-b border-outline-variant flex items-center gap-md">
+<div class="w-10 h-10 rounded-full bg-secondary-container flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-on-secondary-container">school</span>
+</div>
+<div>
+<h1 class="font-headline-sm text-headline-sm font-bold text-on-surface dark:text-on-surface-variant leading-tight">Academic Nexus</h1>
+<p class="font-label-md text-label-md text-on-surface-variant font-normal">Placement Cell</p>
+</div>
+</div>
+<!-- Navigation Links -->
+<ul class="flex flex-col gap-xs flex-grow font-label-md text-label-md">
+<li>
+<a class="flex items-center gap-md px-md py-sm rounded text-on-surface-variant dark:text-outline-variant hover:bg-surface-container dark:hover:bg-surface-container-high transition-colors cursor-pointer active:scale-95 transition-transform group" href="#">
+<span class="material-symbols-outlined text-[20px]">dashboard</span>
+<span>Dashboard</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-md px-md py-sm rounded text-on-surface-variant dark:text-outline-variant hover:bg-surface-container dark:hover:bg-surface-container-high transition-colors cursor-pointer active:scale-95 transition-transform group" href="#">
+<span class="material-symbols-outlined text-[20px]">business</span>
+<span>Companies</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-md px-md py-sm rounded text-on-surface-variant dark:text-outline-variant hover:bg-surface-container dark:hover:bg-surface-container-high transition-colors cursor-pointer active:scale-95 transition-transform group" href="#">
+<span class="material-symbols-outlined text-[20px]">event_available</span>
+<span>Placement Drives</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-md px-md py-sm rounded text-on-surface-variant dark:text-outline-variant hover:bg-surface-container dark:hover:bg-surface-container-high transition-colors cursor-pointer active:scale-95 transition-transform group" href="#">
+<span class="material-symbols-outlined text-[20px]">notifications</span>
+<span>Notifications</span>
+</a>
+</li>
+<!-- ACTIVE TAB -->
+<li>
+<a class="flex items-center gap-md px-md py-sm bg-surface-container text-secondary dark:text-secondary-fixed-dim font-bold border-r-2 border-secondary cursor-pointer active:scale-95 transition-transform" href="#">
+<span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1;">school</span>
+<span>Placement Records</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-md px-md py-sm rounded text-on-surface-variant dark:text-outline-variant hover:bg-surface-container dark:hover:bg-surface-container-high transition-colors cursor-pointer active:scale-95 transition-transform group" href="#">
+<span class="material-symbols-outlined text-[20px]">assessment</span>
+<span>Reports</span>
+</a>
+</li>
+</ul>
+<!-- CTA Button -->
+<div class="mt-auto pt-lg border-t border-outline-variant">
+<button class="w-full bg-primary text-on-primary rounded font-label-md text-label-md py-sm px-md flex items-center justify-center gap-sm hover:opacity-90 transition-opacity">
+<span class="material-symbols-outlined text-[18px]">add</span>
+                Post New Drive
+            </button>
+</div>
+</nav>
+<!-- Main Content Area -->
+<main class="ml-64 flex-1 h-screen overflow-y-auto bg-background">
+<!-- Top App Bar (Optional context, keeping it minimal as requested focus is table) -->
+<header class="h-16 border-b border-outline-variant bg-surface flex items-center justify-between px-lg sticky top-0 z-40">
+<div class="flex items-center gap-sm">
+<!-- Breadcrumb or Context could go here -->
+</div>
+<div class="flex items-center gap-md">
+<button class="p-2 text-on-surface-variant hover:bg-surface-container rounded-full transition-colors">
+<span class="material-symbols-outlined">search</span>
+</button>
+<div class="w-8 h-8 rounded-full overflow-hidden border border-outline-variant cursor-pointer">
+<img alt="Administrator Profile" class="w-full h-full object-cover" data-alt="Professional headshot portrait of a placement cell administrator, wearing formal business attire, neutral background, studio lighting, crisp and sharp focus, conveying authority and approachability in a corporate academic setting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDUahH5DAbtLXYcQh9mSQZhzxP0uDwN37vTdcI-cqgdvfH6ZrN1Pf116UA78KiPE2C10wSrZfW5oQrXiAmaI166DfzuQQN54NiwGI7RxJZUXaj8HN9-FNrtQVb2VGBtaxOQPQdeHpDruemiPP2O5vzZyO055onJHxt4Ixb56vAPfkN2FFRfa9xKnVwmKPjTt2bjkalYyNT0ceshLhlCHgu_QpTUfwMKX01ztxUe8a9MHOFplf_S3XimUUGh6n0hLk6bwE6ACrqryh4"/>
+</div>
+</div>
+</header>
+<!-- Page Content -->
+<div class="max-w-[1280px] mx-auto p-margin">
+<!-- Page Header -->
+<div class="mb-lg">
+<h2 class="font-headline-lg text-headline-lg text-on-surface">Student Placement Records</h2>
+<p class="font-body-md text-body-md text-on-surface-variant mt-xs">Master placement status for every student.</p>
+</div>
+<!-- Main Data Table Container (Level 1 Elevation) -->
+<div class="bg-surface-container-low border border-outline-variant rounded-xl overflow-hidden flex flex-col">
+<!-- Table Toolbar -->
+<div class="p-lg border-b border-outline-variant flex flex-col sm:flex-row sm:items-center justify-between gap-md bg-surface">
+<div class="flex items-center gap-sm">
+<h3 class="font-headline-sm text-headline-sm text-on-surface">All Students</h3>
+<span class="font-label-md text-label-md bg-surface-container-highest text-on-surface-variant px-2 py-0.5 rounded-full">1,204</span>
+</div>
+<div class="flex items-center gap-md">
+<!-- Search Input -->
+<div class="relative w-64">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-[18px]">search</span>
+<input class="w-full bg-surface border border-outline text-on-surface font-body-sm text-body-sm rounded pl-10 pr-3 py-1.5 focus:border-secondary focus:ring-1 focus:ring-secondary transition-all outline-none" placeholder="Search students, enr no..." type="text"/>
+</div>
+<!-- Filter Button -->
+<button class="flex items-center gap-xs px-3 py-1.5 border border-outline rounded text-on-surface font-label-md text-label-md hover:bg-surface-container-highest transition-colors">
+<span class="material-symbols-outlined text-[18px]">filter_list</span>
+                            Filter
+                        </button>
+<!-- Export Button -->
+<button class="flex items-center gap-xs px-3 py-1.5 border border-outline rounded text-on-surface font-label-md text-label-md hover:bg-surface-container-highest transition-colors">
+<span class="material-symbols-outlined text-[18px]">download</span>
+                            Export
+                        </button>
+</div>
+</div>
+<!-- Table Wrapper (Horizontal Scroll for overflow) -->
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse whitespace-nowrap">
+<!-- Table Header -->
+<thead class="bg-surface-container font-label-md text-label-md text-on-surface-variant border-b border-outline-variant">
+<tr>
+<th class="py-sm px-md font-semibold">Student</th>
+<th class="py-sm px-md font-semibold">Enrollment No.</th>
+<th class="py-sm px-md font-semibold">Department</th>
+<th class="py-sm px-md font-semibold">Year</th>
+<th class="py-sm px-md font-semibold">Placement Status</th>
+<th class="py-sm px-md font-semibold">Company</th>
+<th class="py-sm px-md font-semibold">Package (LPA)</th>
+<th class="py-sm px-md font-semibold text-right">Actions</th>
+</tr>
+</thead>
+<!-- Table Body -->
+<tbody class="font-body-sm text-body-sm text-on-surface divide-y divide-outline-variant bg-surface">
+<!-- Row 1: Placed -->
+<tr class="hover:bg-surface-container-lowest transition-colors group">
+<td class="py-sm px-md">
+<div class="flex items-center gap-sm">
+<div class="w-8 h-8 rounded-full overflow-hidden bg-surface-variant shrink-0">
+<img class="w-full h-full object-cover" data-alt="Headshot of a smiling young male college student, South Asian descent, wearing a neat button-down shirt, neutral grey background, studio lighting, professional and academic appearance." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD4bwJZ4gTGgNX9EsWon8stBqmsOIDXTTV18KBNhGSkPz58OAj_ai5d99BrED65OK3AH9-IZAAQ7cMEkFFSvrD6qULnzAUQ0u-grOeP329tkqGHvdf-Fe-uhrqLJupznUB3XVnIsDshEOCV6WEYoe5LEx_Tdfjw2_sxOdvzl3Nt_ytxczNMYYPaDn7Pa2b181bsqVGIJn9xFM5ybOU-wfzrYotFuQC1NYsiHBiXTJ3mJMpUx02JGjpyu0TE7URk9gubUxDIyiteWSM"/>
+</div>
+<span class="font-semibold group-hover:text-secondary transition-colors cursor-pointer">Rahul Sharma</span>
+</div>
+</td>
+<td class="py-sm px-md font-mono-sm text-mono-sm text-on-surface-variant">ENR20210045</td>
+<td class="py-sm px-md">Computer Science</td>
+<td class="py-sm px-md">4th Year</td>
+<td class="py-sm px-md">
+<span class="inline-flex items-center px-2 py-0.5 rounded-full font-label-md text-label-md bg-[#e6f4ea] text-[#137333] border border-[#ceead6]">Placed</span>
+</td>
+<td class="py-sm px-md font-semibold">TechNova Inc.</td>
+<td class="py-sm px-md">12.5</td>
+<td class="py-sm px-md text-right">
+<button class="text-secondary hover:text-secondary-container font-label-md text-label-md">View Profile</button>
+</td>
+</tr>
+<!-- Row 2: Selected -->
+<tr class="hover:bg-surface-container-lowest transition-colors group">
+<td class="py-sm px-md">
+<div class="flex items-center gap-sm">
+<div class="w-8 h-8 rounded-full overflow-hidden bg-surface-variant shrink-0">
+<img class="w-full h-full object-cover" data-alt="Headshot of an earnest young female college student, East Asian descent, wearing glasses and a smart blouse, light blue studio background, bright lighting, academic portrait style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDy__pBQiNAwy9z08zYVQLiBqrmnWxVMjHnOfotzgjmBz2FdT9I3KIBKRpKPTamWzkeiCSzH3uomYc_qCRpiGoMqnBsqRhLJmAnh_y7OxVV6TatuhmvRBgMlvcjDQE3zwNjE2HmDFLSjKxOA-eiVOPmK81sIvMXGNSBO-Bbrnm8erZcAUmx5fRQlFBJenr34kwlkDdQhA0ScKeEdyeL2cWG_4irMZm22eIa2lPzyBGUhiTpJZkY_JJHtUp3c8Zl_Ev68mrrk5ahq2o"/>
+</div>
+<span class="font-semibold group-hover:text-secondary transition-colors cursor-pointer">Emily Chen</span>
+</div>
+</td>
+<td class="py-sm px-md font-mono-sm text-mono-sm text-on-surface-variant">ENR20210112</td>
+<td class="py-sm px-md">Information Tech</td>
+<td class="py-sm px-md">4th Year</td>
+<td class="py-sm px-md">
+<span class="inline-flex items-center px-2 py-0.5 rounded-full font-label-md text-label-md bg-secondary-fixed text-on-secondary-fixed border border-secondary-fixed-dim">Selected</span>
+</td>
+<td class="py-sm px-md">DataSys Corp</td>
+<td class="py-sm px-md text-on-surface-variant italic">Awaiting Offer</td>
+<td class="py-sm px-md text-right">
+<button class="text-secondary hover:text-secondary-container font-label-md text-label-md">View Profile</button>
+</td>
+</tr>
+<!-- Row 3: Shortlisted -->
+<tr class="hover:bg-surface-container-lowest transition-colors group">
+<td class="py-sm px-md">
+<div class="flex items-center gap-sm">
+<div class="w-8 h-8 rounded-full overflow-hidden bg-surface-variant shrink-0 flex items-center justify-center text-on-surface-variant font-bold">
+                                            MK
+                                        </div>
+<span class="font-semibold group-hover:text-secondary transition-colors cursor-pointer">Marcus King</span>
+</div>
+</td>
+<td class="py-sm px-md font-mono-sm text-mono-sm text-on-surface-variant">ENR20210334</td>
+<td class="py-sm px-md">Electronics</td>
+<td class="py-sm px-md">4th Year</td>
+<td class="py-sm px-md">
+<span class="inline-flex items-center px-2 py-0.5 rounded-full font-label-md text-label-md bg-[#fef7e0] text-[#b06000] border border-[#fde293]">Shortlisted</span>
+</td>
+<td class="py-sm px-md">ElectroDynamics</td>
+<td class="py-sm px-md text-on-surface-variant">-</td>
+<td class="py-sm px-md text-right">
+<button class="text-secondary hover:text-secondary-container font-label-md text-label-md">View Profile</button>
+</td>
+</tr>
+<!-- Row 4: Applied -->
+<tr class="hover:bg-surface-container-lowest transition-colors group">
+<td class="py-sm px-md">
+<div class="flex items-center gap-sm">
+<div class="w-8 h-8 rounded-full overflow-hidden bg-surface-variant shrink-0">
+<img class="w-full h-full object-cover" data-alt="Headshot of a focused young female college student, wearing a casual sweater, looking directly at camera, soft white studio background, professional academic portrait." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCl7_gVd1v0YnI3tPe405SlxdLytG_x89iIqmP6Ec4KTfy6BVBmOIq6aVUcg1NRcvKs8WelPwY9-kPL4IDjscfG307FnQV9EN4TmXLpBaRaP-L5vAA0SOw2LOJTAAua068FviUZCEx6ojv_0ovxqDXumiJVLV8hl96IDQR4Gb2ArGpCY3qSieJXGLDx5PvNmTO8CofnpelTRA3O1ehrRl7bXF2Gazkz5ZO1Voap4W9jQXN48QFyTy2pzB6x4Tt4acscw3RytE6qZu0"/>
+</div>
+<span class="font-semibold group-hover:text-secondary transition-colors cursor-pointer">Sarah Jenkins</span>
+</div>
+</td>
+<td class="py-sm px-md font-mono-sm text-mono-sm text-on-surface-variant">ENR20210089</td>
+<td class="py-sm px-md">Computer Science</td>
+<td class="py-sm px-md">4th Year</td>
+<td class="py-sm px-md">
+<span class="inline-flex items-center px-2 py-0.5 rounded-full font-label-md text-label-md bg-[#f3f4f6] text-[#4b5563] border border-[#d1d5db]">Applied</span>
+</td>
+<td class="py-sm px-md">CloudNet</td>
+<td class="py-sm px-md text-on-surface-variant">-</td>
+<td class="py-sm px-md text-right">
+<button class="text-secondary hover:text-secondary-container font-label-md text-label-md">View Profile</button>
+</td>
+</tr>
+<!-- Row 5: Eligible -->
+<tr class="hover:bg-surface-container-lowest transition-colors group">
+<td class="py-sm px-md">
+<div class="flex items-center gap-sm">
+<div class="w-8 h-8 rounded-full overflow-hidden bg-surface-variant shrink-0 flex items-center justify-center text-on-surface-variant font-bold">
+                                            AP
+                                        </div>
+<span class="font-semibold group-hover:text-secondary transition-colors cursor-pointer">Aisha Patel</span>
+</div>
+</td>
+<td class="py-sm px-md font-mono-sm text-mono-sm text-on-surface-variant">ENR20210567</td>
+<td class="py-sm px-md">Mechanical</td>
+<td class="py-sm px-md">4th Year</td>
+<td class="py-sm px-md">
+<span class="inline-flex items-center px-2 py-0.5 rounded-full font-label-md text-label-md bg-surface-container-highest text-on-surface-variant border border-outline-variant">Eligible</span>
+</td>
+<td class="py-sm px-md text-on-surface-variant italic">None yet</td>
+<td class="py-sm px-md text-on-surface-variant">-</td>
+<td class="py-sm px-md text-right">
+<button class="text-secondary hover:text-secondary-container font-label-md text-label-md">View Profile</button>
+</td>
+</tr>
+<!-- Row 6: Not Placed (Error state color) -->
+<tr class="hover:bg-surface-container-lowest transition-colors group">
+<td class="py-sm px-md">
+<div class="flex items-center gap-sm">
+<div class="w-8 h-8 rounded-full overflow-hidden bg-surface-variant shrink-0">
+<img class="w-full h-full object-cover" data-alt="Headshot of a male college student, wearing a simple polo shirt, neutral expression, clean grey background, standard student ID photo style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBD591O-xBedxCZSc8MzAH9fN69YFEy4m7BPgc_HdS6xMwtnkqkVkKGyOtfqiytJNkrD1nGomDsXA8rPlwWkuO4APTAevMfQXwxtIYTasSEe6nD52WukXC7KBZsWs0RciyXsRb4dL8zQQXbOCJWTzQmobl9gy50qYe4Yu68kA134VS3nnlnzySsi4HuHHrN48u2i_wJt5EZYiUm9w_KzB3WwZ6j6jXKnz28BK-yUzS7Jasa3_qT2PaCvvnm9P5zmRUw-1r9JZ9VIyk"/>
+</div>
+<span class="font-semibold group-hover:text-secondary transition-colors cursor-pointer">David Smith</span>
+</div>
+</td>
+<td class="py-sm px-md font-mono-sm text-mono-sm text-on-surface-variant">ENR20200890</td>
+<td class="py-sm px-md">Civil Engineering</td>
+<td class="py-sm px-md">Graduated</td>
+<td class="py-sm px-md">
+<span class="inline-flex items-center px-2 py-0.5 rounded-full font-label-md text-label-md bg-error-container text-on-error-container border border-[#ffb4ab]">Not Placed</span>
+</td>
+<td class="py-sm px-md text-on-surface-variant italic">-</td>
+<td class="py-sm px-md text-on-surface-variant">-</td>
+<td class="py-sm px-md text-right">
+<button class="text-secondary hover:text-secondary-container font-label-md text-label-md">View Profile</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Pagination Footer -->
+<div class="p-sm px-md border-t border-outline-variant bg-surface flex items-center justify-between">
+<span class="font-body-sm text-body-sm text-on-surface-variant">Showing 1 to 6 of 1,204 entries</span>
+<div class="flex items-center gap-xs">
+<button class="px-2 py-1 border border-outline-variant rounded text-on-surface-variant hover:bg-surface-container-highest transition-colors font-label-md text-label-md disabled:opacity-50">Prev</button>
+<button class="w-7 h-7 flex items-center justify-center rounded bg-secondary text-on-primary font-label-md text-label-md">1</button>
+<button class="w-7 h-7 flex items-center justify-center rounded hover:bg-surface-container-highest text-on-surface font-label-md text-label-md transition-colors">2</button>
+<button class="w-7 h-7 flex items-center justify-center rounded hover:bg-surface-container-highest text-on-surface font-label-md text-label-md transition-colors">3</button>
+<span class="text-on-surface-variant px-1">...</span>
+<button class="px-2 py-1 border border-outline-variant rounded text-on-surface-variant hover:bg-surface-container-highest transition-colors font-label-md text-label-md">Next</button>
+</div>
+</div>
+</div>
+</div>
+</main>
+</body></html>

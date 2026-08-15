@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Notifications - Academic Nexus</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-bright": "#f9f9f9",
+                        "surface-container": "#eeeeee",
+                        "on-primary": "#ffffff",
+                        "surface-container-low": "#f3f3f3",
+                        "tertiary": "#000000",
+                        "on-tertiary-fixed-variant": "#474747",
+                        "on-secondary": "#ffffff",
+                        "surface-tint": "#5e5e5e",
+                        "on-surface-variant": "#4c4546",
+                        "surface-dim": "#dadada",
+                        "secondary-container": "#346cef",
+                        "on-primary-container": "#848484",
+                        "surface-container-high": "#e8e8e8",
+                        "inverse-surface": "#303030",
+                        "error-container": "#ffdad6",
+                        "inverse-on-surface": "#f1f1f1",
+                        "inverse-primary": "#c6c6c6",
+                        "on-surface": "#1b1b1b",
+                        "on-error": "#ffffff",
+                        "on-tertiary-fixed": "#1b1b1b",
+                        "surface-variant": "#e2e2e2",
+                        "background": "#f9f9f9",
+                        "on-primary-fixed": "#1b1b1b",
+                        "outline": "#76777d",
+                        "error": "#ba1a1a",
+                        "primary": "#000000",
+                        "secondary-fixed-dim": "#b4c5ff",
+                        "on-primary-fixed-variant": "#474747",
+                        "on-secondary-container": "#fefcff",
+                        "primary-fixed-dim": "#c6c6c6",
+                        "primary-fixed": "#e2e2e2",
+                        "on-secondary-fixed": "#00174b",
+                        "on-background": "#1b1b1b",
+                        "surface-container-lowest": "#ffffff",
+                        "tertiary-fixed": "#e2e2e2",
+                        "surface-container-highest": "#e2e2e2",
+                        "tertiary-container": "#1b1b1b",
+                        "surface": "#f9f9f9",
+                        "on-secondary-fixed-variant": "#003ea7",
+                        "primary-container": "#1b1b1b",
+                        "secondary-fixed": "#dbe1ff",
+                        "on-tertiary": "#ffffff",
+                        "on-tertiary-container": "#848484",
+                        "tertiary-fixed-dim": "#c6c6c6",
+                        "on-error-container": "#93000a",
+                        "outline-variant": "#cfc4c5",
+                        "secondary": "#0051d5"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "sm": "8px",
+                        "xl": "32px",
+                        "md": "16px",
+                        "grid_columns": "12",
+                        "xs": "4px",
+                        "margin": "32px",
+                        "lg": "24px",
+                        "gutter": "24px",
+                        "base": "4px"
+                    },
+                    "fontFamily": {
+                        "display-lg": ["Inter"],
+                        "mono-sm": ["monospace"],
+                        "body-lg": ["Inter"],
+                        "headline-sm": ["Inter"],
+                        "body-md": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "label-md": ["Inter"],
+                        "headline-md": ["Inter"],
+                        "body-sm": ["Inter"]
+                    },
+                    "fontSize": {
+                        "display-lg": ["36px", { "lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "mono-sm": ["12px", { "lineHeight": "16px", "fontWeight": "400" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "headline-sm": ["16px", { "lineHeight": "24px", "fontWeight": "600" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "headline-lg": ["28px", { "lineHeight": "36px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "headline-md": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "body-sm": ["13px", { "lineHeight": "18px", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-surface font-body-md text-body-md text-on-surface antialiased">
+<!-- Top Navigation -->
+<nav class="fixed top-0 right-0 left-64 h-16 bg-surface dark:bg-surface text-primary dark:text-primary-fixed font-label-md text-label-md border-b border-outline-variant flat no shadows flex items-center justify-between px-xl w-full z-10 transition-all focus-within:ring-2 focus-within:ring-secondary">
+<div class="flex items-center gap-md w-full justify-between pr-[18rem]">
+<div class="flex items-center gap-md">
+<span class="material-symbols-outlined text-on-surface-variant cursor-pointer">search</span>
+<input class="bg-transparent border-none focus:ring-0 text-body-md font-body-md w-64 text-on-surface placeholder:text-on-surface-variant" placeholder="Search..." type="text"/>
+</div>
+<div class="flex items-center gap-lg">
+<span class="material-symbols-outlined text-on-surface-variant hover:text-secondary cursor-pointer transition-colors" data-icon="help">help</span>
+<div class="relative cursor-pointer">
+<span class="material-symbols-outlined text-on-surface-variant hover:text-secondary transition-colors" data-icon="notifications">notifications</span>
+<div class="absolute top-0 right-0 w-2 h-2 bg-error rounded-full"></div>
+</div>
+<div class="flex items-center gap-sm cursor-pointer hover:bg-surface-container-low px-sm py-xs rounded-DEFAULT transition-colors">
+<img alt="User Avatar" class="w-8 h-8 rounded-full object-cover" data-alt="A small, professional headshot avatar of an academic user, crisp high-key lighting, modern corporate style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA95MyFifn86oT6SjjXaRZbDG60FbvBmDGag3NjPIe0vULXUj_zov6jr59blkawBC4qb7aQMyXMFCMOIMYUtLWInuCLLkH-VeNhpEJEnr_L31wrlXyCufiu1qBoHWVUYGAtC3eMuiP3vknOZv1se9LzAdd63i94grNs75ONYLwcgEEgo1X8IDXRdOo_SJC55JdmvJdNh_0inYxUjRwb0FPkQvI0Eqvrn7nesVQH1y1t0H4y__BpqFDfObPXaiBs8LQuWnT8mlAVR0E"/>
+<span class="font-label-md text-label-md">Profile</span>
+</div>
+</div>
+</div>
+</nav>
+<!-- Side Navigation -->
+<aside class="fixed left-0 top-0 h-full w-64 bg-surface dark:bg-surface text-secondary dark:text-secondary-fixed font-body-md text-body-md border-r border-outline-variant flat no shadows flex flex-col h-full py-md z-20">
+<div class="px-lg pb-xl border-b border-outline-variant mb-md">
+<div class="flex items-center gap-sm mb-sm">
+<img alt="Academic Nexus Logo" class="w-8 h-8 object-contain" data-alt="Academic Nexus Logo, modern, minimal geometric design in deep professional blue and black, white background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDVBaA3KEXMQgMtQdxjpsVyQVh07Mj72iBzJGZa3cc5hJcevYQwxs5J5S9qYuj2wVwXVXFVHseXI5Msw58FvrN5lgCY1oCE4PfNyR0e_te4qNI37flz_6AVoFnekgd_lI_WBTMD1vd77TxVdClySQZvTXiXnGct_0OpShk4YkNe_odQ5-aIxJlbK4bOhGpgn7jwWjQbjbmHd1_CQ1QmntlS3BtWVHILOD9Bu7jG-MuTEv2StedL3rZ8kdRZFnjp_GgPkY6_UnjLvXQ"/>
+<h1 class="text-headline-md font-headline-md text-primary dark:text-on-primary-fixed">Academic Nexus</h1>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Management Portal</p>
+</div>
+<nav class="flex-1 flex flex-col gap-xs px-sm overflow-y-auto">
+<a class="flex items-center gap-md px-md py-sm rounded-DEFAULT text-on-surface-variant hover:text-secondary hover:bg-surface-container-low transition-colors cursor-pointer active:scale-95" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+                Dashboard
+            </a>
+<a class="flex items-center gap-md px-md py-sm rounded-DEFAULT text-on-surface-variant hover:text-secondary hover:bg-surface-container-low transition-colors cursor-pointer active:scale-95" href="#">
+<span class="material-symbols-outlined" data-icon="business">business</span>
+                Companies
+            </a>
+<a class="flex items-center gap-md px-md py-sm rounded-DEFAULT text-on-surface-variant hover:text-secondary hover:bg-surface-container-low transition-colors cursor-pointer active:scale-95" href="#">
+<span class="material-symbols-outlined" data-icon="event_available">event_available</span>
+                Placement Drives
+            </a>
+<a class="flex items-center gap-md px-md py-sm rounded-DEFAULT text-secondary font-bold border-r-4 border-secondary bg-surface-container cursor-pointer active:scale-95" href="#">
+<span class="material-symbols-outlined" data-icon="notifications" data-weight="fill">notifications</span>
+                Notifications
+            </a>
+<a class="flex items-center gap-md px-md py-sm rounded-DEFAULT text-on-surface-variant hover:text-secondary hover:bg-surface-container-low transition-colors cursor-pointer active:scale-95" href="#">
+<span class="material-symbols-outlined" data-icon="assessment">assessment</span>
+                Placement Records
+            </a>
+<a class="flex items-center gap-md px-md py-sm rounded-DEFAULT text-on-surface-variant hover:text-secondary hover:bg-surface-container-low transition-colors cursor-pointer active:scale-95" href="#">
+<span class="material-symbols-outlined" data-icon="analytics">analytics</span>
+                Reports
+            </a>
+</nav>
+<div class="px-sm mt-auto pt-md border-t border-outline-variant">
+<a class="flex items-center gap-md px-md py-sm rounded-DEFAULT text-on-surface-variant hover:text-secondary hover:bg-surface-container-low transition-colors cursor-pointer active:scale-95" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+                Settings
+            </a>
+<a class="flex items-center gap-md px-md py-sm rounded-DEFAULT text-on-surface-variant hover:text-secondary hover:bg-surface-container-low transition-colors cursor-pointer active:scale-95" href="#">
+<span class="material-symbols-outlined" data-icon="logout">logout</span>
+                Logout
+            </a>
+</div>
+</aside>
+<!-- Main Content -->
+<main class="ml-64 pt-16 min-h-screen p-margin max-w-[1280px]">
+<div class="mb-lg flex justify-between items-end">
+<div>
+<h2 class="font-headline-lg text-headline-lg text-on-surface">Notifications Management</h2>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-xs">Draft and review broadcast messages for the student body.</p>
+</div>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-12 gap-gutter">
+<!-- Left Column: Create Notification Form -->
+<section class="col-span-1 md:col-span-4 flex flex-col gap-md">
+<div class="bg-surface-container-low rounded-xl border border-outline-variant p-lg shadow-sm">
+<h3 class="font-headline-sm text-headline-sm text-on-surface mb-md">Create Notification</h3>
+<form class="flex flex-col gap-md">
+<!-- Title Field -->
+<div class="flex flex-col gap-xs">
+<label class="font-label-md text-label-md text-on-surface-variant" for="notif-title">Title</label>
+<input class="font-body-md text-body-md bg-surface-container-lowest border border-outline rounded-lg px-md py-sm focus:border-secondary focus:ring-2 focus:ring-secondary focus:ring-opacity-50 transition-all outline-none text-on-surface" id="notif-title" placeholder="e.g., Tech Mahindra Drive Details" type="text"/>
+</div>
+<!-- Target Audience Dropdown -->
+<div class="flex flex-col gap-xs">
+<label class="font-label-md text-label-md text-on-surface-variant" for="notif-audience">Target Audience</label>
+<div class="relative">
+<select class="appearance-none w-full font-body-md text-body-md bg-surface-container-lowest border border-outline rounded-lg px-md py-sm pr-xl focus:border-secondary focus:ring-2 focus:ring-secondary focus:ring-opacity-50 transition-all outline-none text-on-surface" id="notif-audience">
+<option value="entire_college">Entire College</option>
+<option value="specific_dept">Specific Department</option>
+<option value="specific_batch">Specific Batch Year</option>
+<option value="eligible_students">Eligible Students</option>
+</select>
+<span class="material-symbols-outlined absolute right-sm top-1/2 -translate-y-1/2 pointer-events-none text-on-surface-variant">expand_more</span>
+</div>
+</div>
+<!-- Message Textarea -->
+<div class="flex flex-col gap-xs flex-1">
+<label class="font-label-md text-label-md text-on-surface-variant" for="notif-message">Message</label>
+<textarea class="font-body-md text-body-md bg-surface-container-lowest border border-outline rounded-lg px-md py-sm focus:border-secondary focus:ring-2 focus:ring-secondary focus:ring-opacity-50 transition-all outline-none text-on-surface resize-none" id="notif-message" placeholder="Enter the detailed notification text here..." rows="6"></textarea>
+</div>
+<!-- Submit Button -->
+<button class="mt-sm bg-secondary text-on-secondary font-label-md text-label-md py-sm px-lg rounded-lg hover:bg-secondary-fixed-variant transition-colors flex justify-center items-center gap-xs w-full shadow-sm" type="button">
+<span class="material-symbols-outlined text-[18px]">send</span>
+                            Send Notification
+                        </button>
+</form>
+</div>
+</section>
+<!-- Right Column: Recently Sent Notifications List -->
+<section class="col-span-1 md:col-span-8 flex flex-col gap-md">
+<div class="bg-surface-container-low rounded-xl border border-outline-variant overflow-hidden shadow-sm flex flex-col h-full">
+<div class="px-lg py-md border-b border-outline-variant bg-surface-container-highest flex justify-between items-center">
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Recently Sent</h3>
+<button class="text-secondary font-label-md text-label-md hover:underline flex items-center gap-xs">
+                            View All <span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+</button>
+</div>
+<div class="flex-1 overflow-y-auto p-0">
+<!-- Notification Item 1 -->
+<div class="px-lg py-md border-b border-outline-variant hover:bg-surface-container transition-colors cursor-pointer">
+<div class="flex justify-between items-start mb-xs">
+<h4 class="font-headline-sm text-headline-sm text-on-surface">Registration Deadline for Infosys Drive</h4>
+<span class="font-mono-sm text-mono-sm text-on-surface-variant bg-surface-dim px-sm py-[2px] rounded-DEFAULT">2 hours ago</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant line-clamp-2 mb-sm">
+                                All eligible final year students are reminded that the registration portal for the upcoming Infosys recruitment drive closes tonight at 11:59 PM. Please ensure your profiles are complete.
+                            </p>
+<div class="flex items-center gap-sm">
+<span class="bg-surface-container-highest text-on-surface-variant font-label-md text-label-md px-sm py-[2px] rounded-full inline-flex items-center gap-[2px]">
+<span class="material-symbols-outlined text-[14px]">groups</span> Eligible Students
+                                </span>
+<span class="text-on-primary-container font-body-sm text-body-sm flex items-center gap-[2px]">
+<span class="material-symbols-outlined text-[14px]">visibility</span> 452 views
+                                </span>
+</div>
+</div>
+<!-- Notification Item 2 -->
+<div class="px-lg py-md border-b border-outline-variant hover:bg-surface-container transition-colors cursor-pointer">
+<div class="flex justify-between items-start mb-xs">
+<h4 class="font-headline-sm text-headline-sm text-on-surface">Pre-Placement Talk: Tech Mahindra</h4>
+<span class="font-mono-sm text-mono-sm text-on-surface-variant bg-surface-dim px-sm py-[2px] rounded-DEFAULT">Yesterday</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant line-clamp-2 mb-sm">
+                                The mandatory pre-placement talk for Tech Mahindra will be held in the Main Auditorium tomorrow at 10:00 AM. Attendance will be recorded and is strictly required for applicants.
+                            </p>
+<div class="flex items-center gap-sm">
+<span class="bg-surface-container-highest text-on-surface-variant font-label-md text-label-md px-sm py-[2px] rounded-full inline-flex items-center gap-[2px]">
+<span class="material-symbols-outlined text-[14px]">apartment</span> CS &amp; IT Depts
+                                </span>
+<span class="text-on-primary-container font-body-sm text-body-sm flex items-center gap-[2px]">
+<span class="material-symbols-outlined text-[14px]">visibility</span> 890 views
+                                </span>
+</div>
+</div>
+<!-- Notification Item 3 -->
+<div class="px-lg py-md border-b border-outline-variant hover:bg-surface-container transition-colors cursor-pointer">
+<div class="flex justify-between items-start mb-xs">
+<h4 class="font-headline-sm text-headline-sm text-on-surface">Aptitude Test Results Declared</h4>
+<span class="font-mono-sm text-mono-sm text-on-surface-variant bg-surface-dim px-sm py-[2px] rounded-DEFAULT">Oct 24, 2023</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant line-clamp-2 mb-sm">
+                                The results for the centralized aptitude test conducted last week are now available on the student dashboard. Shortlisted candidates will be contacted for technical rounds shortly.
+                            </p>
+<div class="flex items-center gap-sm">
+<span class="bg-surface-container-highest text-on-surface-variant font-label-md text-label-md px-sm py-[2px] rounded-full inline-flex items-center gap-[2px]">
+<span class="material-symbols-outlined text-[14px]">school</span> 2024 Batch
+                                </span>
+<span class="text-on-primary-container font-body-sm text-body-sm flex items-center gap-[2px]">
+<span class="material-symbols-outlined text-[14px]">visibility</span> 1.2k views
+                                </span>
+</div>
+</div>
+<!-- Notification Item 4 -->
+<div class="px-lg py-md hover:bg-surface-container transition-colors cursor-pointer">
+<div class="flex justify-between items-start mb-xs">
+<h4 class="font-headline-sm text-headline-sm text-on-surface">Resume Building Workshop</h4>
+<span class="font-mono-sm text-mono-sm text-on-surface-variant bg-surface-dim px-sm py-[2px] rounded-DEFAULT">Oct 22, 2023</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant line-clamp-2 mb-sm">
+                                A specialized workshop on creating ATS-friendly resumes will be conducted by industry experts this Friday. Register via the portal to secure your seat.
+                            </p>
+<div class="flex items-center gap-sm">
+<span class="bg-surface-container-highest text-on-surface-variant font-label-md text-label-md px-sm py-[2px] rounded-full inline-flex items-center gap-[2px]">
+<span class="material-symbols-outlined text-[14px]">public</span> Entire College
+                                </span>
+<span class="text-on-primary-container font-body-sm text-body-sm flex items-center gap-[2px]">
+<span class="material-symbols-outlined text-[14px]">visibility</span> 2.1k views
+                                </span>
+</div>
+</div>
+</div>
+</div>
+</section>
+</div>
+</main>
+</body></html>

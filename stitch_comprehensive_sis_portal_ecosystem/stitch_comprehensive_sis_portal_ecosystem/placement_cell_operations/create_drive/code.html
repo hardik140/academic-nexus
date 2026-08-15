@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Academic Nexus - Create Placement Drive</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                            "on-primary-container": "#848484",
+                            "on-background": "#1b1b1b",
+                            "surface-container-lowest": "#ffffff",
+                            "tertiary-fixed-dim": "#c6c6c6",
+                            "on-secondary-container": "#fefcff",
+                            "error-container": "#ffdad6",
+                            "secondary-fixed-dim": "#b4c5ff",
+                            "surface": "#f9f9f9",
+                            "inverse-primary": "#c6c6c6",
+                            "background": "#f9f9f9",
+                            "secondary-container": "#346cef",
+                            "primary-fixed": "#e2e2e2",
+                            "error": "#ba1a1a",
+                            "secondary": "#0051d5",
+                            "tertiary": "#000000",
+                            "on-primary-fixed-variant": "#474747",
+                            "on-error-container": "#93000a",
+                            "on-primary-fixed": "#1b1b1b",
+                            "on-primary": "#ffffff",
+                            "on-surface-variant": "#45464d",
+                            "on-error": "#ffffff",
+                            "surface-dim": "#cbdbf5",
+                            "on-tertiary-fixed": "#1b1b1b",
+                            "on-secondary-fixed-variant": "#003ea7",
+                            "on-surface": "#1b1b1b",
+                            "tertiary-fixed": "#e2e2e2",
+                            "on-tertiary": "#ffffff",
+                            "tertiary-container": "#1b1b1b",
+                            "on-tertiary-container": "#848484",
+                            "on-secondary": "#ffffff",
+                            "surface-tint": "#5e5e5e",
+                            "on-secondary-fixed": "#00174b",
+                            "primary": "#000000",
+                            "surface-container-low": "#f3f3f3",
+                            "secondary-fixed": "#dbe1ff",
+                            "surface-variant": "#e2e2e2",
+                            "primary-fixed-dim": "#c6c6c6",
+                            "outline": "#76777d",
+                            "surface-bright": "#f9f9f9",
+                            "inverse-surface": "#303030",
+                            "surface-container": "#eeeeee",
+                            "primary-container": "#1b1b1b",
+                            "inverse-on-surface": "#f1f1f1",
+                            "on-tertiary-fixed-variant": "#474747",
+                            "surface-container-highest": "#e2e2e2",
+                            "outline-variant": "#cfc4c5",
+                            "surface-container-high": "#e8e8e8"
+                    },
+                    "borderRadius": {
+                            "DEFAULT": "0.125rem",
+                            "lg": "0.25rem",
+                            "xl": "0.5rem",
+                            "full": "0.75rem"
+                    },
+                    "spacing": {
+                            "xl": "32px",
+                            "xs": "4px",
+                            "lg": "24px",
+                            "sm": "8px",
+                            "grid_columns": "12",
+                            "margin": "32px",
+                            "md": "16px",
+                            "base": "4px",
+                            "gutter": "24px"
+                    },
+                    "fontFamily": {
+                            "headline-md": ["Inter"],
+                            "headline-sm": ["Inter"],
+                            "headline-lg": ["Inter"],
+                            "body-sm": ["Inter"],
+                            "body-md": ["Inter"],
+                            "body-lg": ["Inter"],
+                            "mono-sm": ["monospace"],
+                            "label-md": ["Inter"],
+                            "display-lg": ["Inter"]
+                    },
+                    "fontSize": {
+                            "headline-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                            "headline-sm": ["16px", {"lineHeight": "24px", "fontWeight": "600"}],
+                            "headline-lg": ["28px", {"lineHeight": "36px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                            "body-sm": ["13px", {"lineHeight": "18px", "fontWeight": "400"}],
+                            "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                            "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                            "mono-sm": ["12px", {"lineHeight": "16px", "fontWeight": "400"}],
+                            "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                            "display-lg": ["36px", {"lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700"}]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .material-symbols-outlined[data-weight="fill"] {
+            font-variation-settings: 'FILL' 1;
+        }
+        
+        /* Custom scrollbar for textareas */
+        textarea::-webkit-scrollbar {
+            width: 8px;
+        }
+        textarea::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        textarea::-webkit-scrollbar-thumb {
+            background-color: theme('colors.outline-variant');
+            border-radius: theme('borderRadius.full');
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface h-screen w-screen overflow-hidden font-body-md text-body-md antialiased relative">
+<!-- Background Context Container -->
+<div class="absolute inset-0 z-0">
+<!-- Render the requested screen in the background -->
+<iframe class="w-full h-full border-none pointer-events-none select-none" src="{{DATA:SCREEN:SCREEN_2}}"></iframe>
+</div>
+<!-- Modal Overlay -->
+<div class="absolute inset-0 z-50 flex items-center justify-center bg-inverse-surface/40 backdrop-blur-sm p-md sm:p-lg">
+<!-- Modal Container -->
+<div class="bg-surface-container-lowest rounded w-full max-w-3xl shadow-xl border border-outline-variant flex flex-col max-h-[921px] animate-in fade-in zoom-in-95 duration-200">
+<!-- Header -->
+<div class="flex items-center justify-between px-lg py-md border-b border-outline-variant bg-surface-container-lowest rounded-t">
+<h2 class="font-headline-md text-headline-md text-on-surface">Create Placement Drive</h2>
+<button class="text-on-surface-variant hover:text-on-surface transition-colors p-sm rounded hover:bg-surface-container-highest cursor-pointer focus:outline-none focus:ring-2 focus:ring-secondary focus:ring-offset-2">
+<span class="material-symbols-outlined block text-[20px]">close</span>
+</button>
+</div>
+<!-- Body -->
+<div class="flex-1 overflow-y-auto px-lg py-lg space-y-lg">
+<!-- Form Grid -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-x-lg gap-y-md">
+<!-- Left Column -->
+<div class="space-y-md">
+<!-- Company Dropdown -->
+<div class="space-y-xs">
+<label class="block font-label-md text-label-md text-on-surface-variant" for="company">Company</label>
+<div class="relative">
+<select class="w-full bg-surface-container-lowest border border-outline text-on-surface font-body-md text-body-md rounded px-md py-sm appearance-none focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary transition-colors cursor-pointer" id="company">
+<option disabled="" selected="" value="">Select Company</option>
+<option value="techcorp">TechCorp Innovations</option>
+<option value="globalfin">Global Finance Ltd.</option>
+<option value="nexussystems">Nexus Systems</option>
+<option value="dataflow">DataFlow Analytics</option>
+</select>
+<div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-sm text-on-surface-variant">
+<span class="material-symbols-outlined text-[20px]">arrow_drop_down</span>
+</div>
+</div>
+</div>
+<!-- Package Input -->
+<div class="space-y-xs">
+<label class="block font-label-md text-label-md text-on-surface-variant" for="package">Package (LPA)</label>
+<input class="w-full bg-surface-container-lowest border border-outline text-on-surface font-body-md text-body-md rounded px-md py-sm focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary transition-colors placeholder:text-on-surface-variant/50" id="package" placeholder="e.g. 12.5" type="number"/>
+</div>
+<!-- Max Backlogs Input -->
+<div class="space-y-xs">
+<label class="block font-label-md text-label-md text-on-surface-variant" for="backlogs">Max Backlogs Allowed</label>
+<input class="w-full bg-surface-container-lowest border border-outline text-on-surface font-body-md text-body-md rounded px-md py-sm focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary transition-colors placeholder:text-on-surface-variant/50" id="backlogs" min="0" placeholder="0" type="number"/>
+</div>
+<!-- Drive Date Picker -->
+<div class="space-y-xs">
+<label class="block font-label-md text-label-md text-on-surface-variant" for="drive-date">Drive Date</label>
+<div class="relative">
+<input class="w-full bg-surface-container-lowest border border-outline text-on-surface font-body-md text-body-md rounded px-md py-sm pl-[40px] focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary transition-colors" id="drive-date" type="date"/>
+<div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-sm text-on-surface-variant">
+<span class="material-symbols-outlined text-[20px]">event</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Right Column -->
+<div class="space-y-md">
+<!-- Job Role Input -->
+<div class="space-y-xs">
+<label class="block font-label-md text-label-md text-on-surface-variant" for="job-role">Job Role</label>
+<input class="w-full bg-surface-container-lowest border border-outline text-on-surface font-body-md text-body-md rounded px-md py-sm focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary transition-colors placeholder:text-on-surface-variant/50" id="job-role" placeholder="e.g. Software Development Engineer" type="text"/>
+</div>
+<!-- Minimum CGPA Input -->
+<div class="space-y-xs">
+<label class="block font-label-md text-label-md text-on-surface-variant" for="cgpa">Minimum CGPA</label>
+<input class="w-full bg-surface-container-lowest border border-outline text-on-surface font-body-md text-body-md rounded px-md py-sm focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary transition-colors placeholder:text-on-surface-variant/50" id="cgpa" max="10" min="0" placeholder="e.g. 7.5" step="0.1" type="number"/>
+</div>
+<!-- Application Deadline Picker -->
+<div class="space-y-xs">
+<label class="block font-label-md text-label-md text-on-surface-variant" for="deadline">Application Deadline</label>
+<div class="relative">
+<input class="w-full bg-surface-container-lowest border border-outline text-on-surface font-body-md text-body-md rounded px-md py-sm pl-[40px] focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary transition-colors" id="deadline" type="datetime-local"/>
+<div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-sm text-on-surface-variant">
+<span class="material-symbols-outlined text-[20px]">schedule</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Full Width: Job Description -->
+<div class="space-y-xs">
+<label class="block font-label-md text-label-md text-on-surface-variant" for="description">Job Description</label>
+<textarea class="w-full bg-surface-container-lowest border border-outline text-on-surface font-body-md text-body-md rounded px-md py-sm focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary transition-colors resize-y placeholder:text-on-surface-variant/50" id="description" placeholder="Enter detailed job description, responsibilities, and requirements..." rows="4"></textarea>
+</div>
+<!-- Eligible Departments -->
+<div class="space-y-sm">
+<label class="block font-label-md text-label-md text-on-surface-variant">Eligible Departments</label>
+<div class="flex flex-wrap gap-sm">
+<!-- Selected Chip -->
+<button class="inline-flex items-center justify-center px-md py-[6px] rounded-full bg-secondary text-on-secondary font-label-md text-label-md transition-colors hover:bg-secondary/90 focus:outline-none focus:ring-2 focus:ring-secondary focus:ring-offset-1" type="button">
+<span class="material-symbols-outlined text-[16px] mr-xs">check</span>
+                            CSE
+                        </button>
+<!-- Selected Chip -->
+<button class="inline-flex items-center justify-center px-md py-[6px] rounded-full bg-secondary text-on-secondary font-label-md text-label-md transition-colors hover:bg-secondary/90 focus:outline-none focus:ring-2 focus:ring-secondary focus:ring-offset-1" type="button">
+<span class="material-symbols-outlined text-[16px] mr-xs">check</span>
+                            IT
+                        </button>
+<!-- Unselected Chip -->
+<button class="inline-flex items-center justify-center px-md py-[6px] rounded-full bg-surface-container-lowest border border-outline text-on-surface-variant font-label-md text-label-md transition-colors hover:bg-surface-container hover:text-on-surface focus:outline-none focus:ring-2 focus:ring-secondary focus:ring-offset-1" type="button">
+                            ECE
+                        </button>
+<!-- Unselected Chip -->
+<button class="inline-flex items-center justify-center px-md py-[6px] rounded-full bg-surface-container-lowest border border-outline text-on-surface-variant font-label-md text-label-md transition-colors hover:bg-surface-container hover:text-on-surface focus:outline-none focus:ring-2 focus:ring-secondary focus:ring-offset-1" type="button">
+                            MECH
+                        </button>
+</div>
+</div>
+</div>
+<!-- Footer -->
+<div class="flex items-center justify-end px-lg py-md border-t border-outline-variant bg-surface-container-low rounded-b gap-md">
+<button class="px-lg py-sm rounded font-label-md text-label-md text-secondary hover:bg-secondary/10 transition-colors focus:outline-none focus:ring-2 focus:ring-secondary focus:ring-offset-1 bg-transparent" type="button">
+                    Cancel
+                </button>
+<button class="px-lg py-sm rounded font-label-md text-label-md bg-secondary text-on-secondary hover:bg-secondary/90 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-secondary focus:ring-offset-1" type="button">
+                    Create Drive
+                </button>
+</div>
+</div>
+</div>
+</body></html>

@@ -11,6 +11,7 @@ const ALL_ROLES: UserRole[] = [
   "admin",
   "warden",
   "super_admin",
+  "placement_cell",
 ];
 
 /**
@@ -57,14 +58,20 @@ describe("canInvite — INVITE_PERMISSIONS cascade", () => {
     }
   });
 
+  it("only director can invite placement_cell — Admin structurally cannot assign it", () => {
+    for (const role of ALL_ROLES) {
+      expect(canInvite(role, "placement_cell")).toBe(role === "director");
+    }
+  });
+
   it("no one can invite a super_admin — that's bootstrap-only", () => {
     for (const role of ALL_ROLES) {
       expect(canInvite(role, "super_admin")).toBe(false);
     }
   });
 
-  it("teacher, finance, warden, and student invite no one", () => {
-    for (const role of ["teacher", "finance", "warden", "student"] as UserRole[]) {
+  it("teacher, finance, warden, student, and placement_cell invite no one", () => {
+    for (const role of ["teacher", "finance", "warden", "student", "placement_cell"] as UserRole[]) {
       expect(INVITE_PERMISSIONS[role]).toEqual([]);
     }
   });

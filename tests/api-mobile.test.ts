@@ -80,7 +80,7 @@ import { POST as createPlacement } from "@/app/api/mobile/director/placement/rou
 import { POST as updateUser } from "@/app/api/mobile/admin/update-user/route";
 import { POST as updateUserStatus } from "@/app/api/mobile/admin/user-status/route";
 import { POST as createDepartment } from "@/app/api/mobile/admin/create-department/route";
-import { POST as assignHod } from "@/app/api/mobile/admin/assign-hod/route";
+import { POST as assignHod } from "@/app/api/mobile/director/assign-hod/route";
 import { POST as assignWarden } from "@/app/api/mobile/admin/assign-warden/route";
 import { POST as createCourse } from "@/app/api/mobile/admin/create-course/route";
 import { POST as updateCollege } from "@/app/api/mobile/admin/update-college/route";
@@ -192,7 +192,7 @@ describe("app/api/mobile/* — HTTP-boundary authorization matrix", () => {
     ["admin/update-user", () => updateUser(makeRequest(UPDATE_USER_BODY))],
     ["admin/user-status", () => updateUserStatus(makeRequest(USER_STATUS_BODY))],
     ["admin/create-department", () => createDepartment(makeRequest(CREATE_DEPT_BODY))],
-    ["admin/assign-hod", () => assignHod(makeRequest(ASSIGN_HOD_BODY))],
+    ["director/assign-hod", () => assignHod(makeRequest(ASSIGN_HOD_BODY))],
     ["admin/assign-warden", () => assignWarden(makeRequest(ASSIGN_WARDEN_BODY))],
     ["admin/create-course", () => createCourse(makeRequest(CREATE_COURSE_BODY))],
     ["admin/update-college", () => updateCollege(makeRequest(UPDATE_COLLEGE_BODY))],
@@ -230,7 +230,7 @@ describe("app/api/mobile/* — HTTP-boundary authorization matrix", () => {
     ["admin/update-user", () => updateUser(makeRequest(UPDATE_USER_BODY, "bad-token"))],
     ["admin/user-status", () => updateUserStatus(makeRequest(USER_STATUS_BODY, "bad-token"))],
     ["admin/create-department", () => createDepartment(makeRequest(CREATE_DEPT_BODY, "bad-token"))],
-    ["admin/assign-hod", () => assignHod(makeRequest(ASSIGN_HOD_BODY, "bad-token"))],
+    ["director/assign-hod", () => assignHod(makeRequest(ASSIGN_HOD_BODY, "bad-token"))],
     ["admin/assign-warden", () => assignWarden(makeRequest(ASSIGN_WARDEN_BODY, "bad-token"))],
     ["admin/create-course", () => createCourse(makeRequest(CREATE_COURSE_BODY, "bad-token"))],
     ["admin/update-college", () => updateCollege(makeRequest(UPDATE_COLLEGE_BODY, "bad-token"))],
@@ -527,16 +527,16 @@ describe("app/api/mobile/* — HTTP-boundary authorization matrix", () => {
     );
   });
 
-  it("admin/assign-hod — authenticated as a non-admin role → 403", async () => {
+  it("director/assign-hod — authenticated as admin (college-level, not director) → 403", async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
-    mockSingle.mockResolvedValue({ data: { role: "director", college_id: "c1", status: "active" } });
+    mockSingle.mockResolvedValue({ data: { role: "admin", college_id: "c1", status: "active" } });
     const res = await assignHod(makeRequest(ASSIGN_HOD_BODY, "good-token"));
     expect(res.status).toBe(403);
   });
 
-  it("admin/assign-hod — authenticated as admin, clearing the HOD → succeeds", async () => {
+  it("director/assign-hod — authenticated as director, clearing the HOD → succeeds", async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
-    mockSingle.mockResolvedValue({ data: { role: "admin", college_id: "c1", status: "active" } });
+    mockSingle.mockResolvedValue({ data: { role: "director", college_id: "c1", status: "active" } });
     const res = await assignHod(makeRequest(ASSIGN_HOD_BODY, "good-token"));
     expect(res.status).toBe(200);
     expect(mockUpdate).toHaveBeenCalledWith(expect.objectContaining({ hod_id: null }));
@@ -800,9 +800,9 @@ describe("app/api/mobile/* — HTTP-boundary authorization matrix", () => {
     expect(body.error).toMatch(/Company name is required/);
   });
 
-  it("admin/assign-hod — non-UUID departmentId → 400", async () => {
+  it("director/assign-hod — non-UUID departmentId → 400", async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
-    mockSingle.mockResolvedValue({ data: { role: "admin", college_id: "c1", status: "active" } });
+    mockSingle.mockResolvedValue({ data: { role: "director", college_id: "c1", status: "active" } });
     const res = await assignHod(makeRequest({ departmentId: "dept-1", hodUserId: null }, "good-token"));
     expect(res.status).toBe(400);
   });

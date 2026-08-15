@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Academic Nexus - Assign Placement Cell</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "primary-container": "#1b1b1b",
+                        "secondary": "#0051d5",
+                        "surface-container-lowest": "#ffffff",
+                        "tertiary-fixed": "#e2e2e2",
+                        "on-tertiary-fixed-variant": "#474747",
+                        "on-error-container": "#93000a",
+                        "surface-container-highest": "#e2e2e2",
+                        "on-tertiary": "#ffffff",
+                        "on-background": "#1b1b1b",
+                        "surface": "#f9f9f9",
+                        "on-secondary-fixed-variant": "#003ea7",
+                        "on-secondary-container": "#fefcff",
+                        "on-tertiary-fixed": "#1b1b1b",
+                        "secondary-fixed": "#dbe1ff",
+                        "on-tertiary-container": "#848484",
+                        "on-primary-fixed-variant": "#474747",
+                        "surface-tint": "#5e5e5e",
+                        "on-surface-variant": "#4c4546",
+                        "surface-dim": "#cbdbf5",
+                        "surface-bright": "#f9f9f9",
+                        "inverse-on-surface": "#f1f1f1",
+                        "tertiary-fixed-dim": "#c6c6c6",
+                        "primary-fixed-dim": "#c6c6c6",
+                        "tertiary": "#000000",
+                        "on-secondary-fixed": "#00174b",
+                        "surface-container-low": "#f3f3f3",
+                        "surface-container": "#e5eeff",
+                        "on-primary": "#ffffff",
+                        "error": "#ba1a1a",
+                        "on-surface": "#1b1b1b",
+                        "background": "#f9f9f9",
+                        "outline-variant": "#cfc4c5",
+                        "on-primary-fixed": "#1b1b1b",
+                        "surface-variant": "#e2e2e2",
+                        "inverse-primary": "#c6c6c6",
+                        "on-primary-container": "#848484",
+                        "inverse-surface": "#303030",
+                        "error-container": "#ffdad6",
+                        "primary": "#000000",
+                        "primary-fixed": "#e2e2e2",
+                        "secondary-container": "#346cef",
+                        "secondary-fixed-dim": "#b4c5ff",
+                        "on-secondary": "#ffffff",
+                        "on-error": "#ffffff",
+                        "surface-container-high": "#e8e8e8",
+                        "outline": "#76777d",
+                        "tertiary-container": "#1b1b1b"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "xs": "4px",
+                        "gutter": "24px",
+                        "base": "4px",
+                        "md": "16px",
+                        "grid_columns": "12",
+                        "sm": "8px",
+                        "lg": "24px",
+                        "xl": "32px",
+                        "margin": "32px"
+                    },
+                    "fontFamily": {
+                        "mono-sm": ["monospace"],
+                        "label-md": ["Inter"],
+                        "headline-sm": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "body-md": ["Inter"],
+                        "body-sm": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "headline-md": ["Inter"],
+                        "display-lg": ["Inter"]
+                    },
+                    "fontSize": {
+                        "mono-sm": ["12px", { "lineHeight": "16px", "fontWeight": "400" }],
+                        "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "headline-sm": ["16px", { "lineHeight": "24px", "fontWeight": "600" }],
+                        "headline-lg": ["28px", { "lineHeight": "36px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "body-sm": ["13px", { "lineHeight": "18px", "fontWeight": "400" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "headline-md": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "display-lg": ["36px", { "lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-surface text-on-surface h-screen w-screen overflow-hidden flex relative">
+<!-- Dashboard Background (Dimmed) -->
+<div class="absolute inset-0 z-0 flex flex-col pointer-events-none opacity-40">
+<!-- Top App Bar Mock -->
+<header class="bg-surface border-b border-outline-variant flex justify-between items-center h-16 px-gutter ml-[240px]">
+<div class="font-headline-sm text-headline-sm font-bold text-primary">Academic Nexus</div>
+<div class="flex gap-md">
+<span class="material-symbols-outlined text-primary">settings</span>
+<span class="material-symbols-outlined text-primary">account_circle</span>
+</div>
+</header>
+<div class="flex flex-1 overflow-hidden">
+<!-- Side Nav Mock -->
+<nav class="bg-surface fixed left-0 top-0 h-full w-[240px] border-r border-outline-variant flex flex-col py-lg px-md">
+<div class="mb-xl px-sm">
+<div class="font-headline-md text-headline-md font-bold text-primary">Academic Nexus</div>
+<div class="font-label-md text-label-md text-on-surface-variant mt-xs">Placement Cell</div>
+</div>
+<div class="flex flex-col gap-sm">
+<div class="flex items-center gap-sm px-sm py-sm rounded-DEFAULT text-secondary font-bold border-r-4 border-secondary bg-surface-container-low">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="font-headline-sm text-headline-sm">Dashboard</span>
+</div>
+<div class="flex items-center gap-sm px-sm py-sm rounded-DEFAULT text-on-surface-variant">
+<span class="material-symbols-outlined">business</span>
+<span class="font-body-md text-body-md">Companies</span>
+</div>
+</div>
+</nav>
+<!-- Main Content Area Mock -->
+<main class="ml-[240px] flex-1 p-xl">
+<div class="font-headline-lg text-headline-lg mb-lg">Dashboard</div>
+<div class="grid grid-cols-3 gap-lg">
+<div class="bg-surface-container-low border border-outline-variant p-lg rounded-lg h-32"></div>
+<div class="bg-surface-container-low border border-outline-variant p-lg rounded-lg h-32"></div>
+<div class="bg-surface-container-low border border-outline-variant p-lg rounded-lg h-32"></div>
+</div>
+</main>
+</div>
+</div>
+<!-- Modal Overlay -->
+<div class="absolute inset-0 z-50 flex items-center justify-center bg-tertiary/40 backdrop-blur-sm p-md">
+<!-- Modal Container -->
+<div aria-labelledby="modal-title" aria-modal="true" class="bg-surface-container-low border border-outline-variant rounded-xl shadow-[0_4px_12px_rgba(94,94,94,0.08)] w-full max-w-md overflow-hidden flex flex-col" role="dialog">
+<!-- Modal Header -->
+<div class="px-lg py-md border-b border-outline-variant flex justify-between items-center bg-surface">
+<h2 class="font-headline-md text-headline-md text-on-surface" id="modal-title">Assign Placement Cell</h2>
+<button class="text-on-surface-variant hover:text-on-surface transition-colors p-xs rounded-DEFAULT hover:bg-surface-container focus:outline-none focus:ring-2 focus:ring-secondary">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">close</span>
+</button>
+</div>
+<!-- Modal Body -->
+<div class="p-lg bg-surface">
+<!-- Tab Toggle -->
+<div class="flex rounded-DEFAULT p-xs bg-surface-container-highest mb-lg border border-outline-variant">
+<button class="flex-1 py-sm font-label-md text-label-md rounded-DEFAULT bg-surface text-secondary shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all text-center focus:outline-none focus:ring-2 focus:ring-secondary inset-ring">
+                        Invite New User
+                    </button>
+<button class="flex-1 py-sm font-label-md text-label-md rounded-DEFAULT text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-all text-center focus:outline-none focus:ring-2 focus:ring-secondary inset-ring">
+                        Select Existing User
+                    </button>
+</div>
+<!-- Form Content (Invite New User) -->
+<form class="flex flex-col gap-md">
+<!-- Name Field -->
+<div class="flex flex-col gap-xs">
+<label class="font-label-md text-label-md text-on-surface" for="invite-name">Name</label>
+<input class="bg-surface-bright border border-outline rounded-DEFAULT px-md py-sm font-body-md text-body-md text-on-surface focus:border-secondary focus:ring-1 focus:ring-secondary outline-none transition-all placeholder:text-on-surface-variant/50" id="invite-name" placeholder="e.g. Priya Sharma" type="text"/>
+</div>
+<!-- Email Field -->
+<div class="flex flex-col gap-xs">
+<label class="font-label-md text-label-md text-on-surface" for="invite-email">Email</label>
+<input class="bg-surface-bright border border-outline rounded-DEFAULT px-md py-sm font-body-md text-body-md text-on-surface focus:border-secondary focus:ring-1 focus:ring-secondary outline-none transition-all placeholder:text-on-surface-variant/50" id="invite-email" placeholder="priya@college.edu" type="email"/>
+</div>
+</form>
+</div>
+<!-- Modal Footer -->
+<div class="px-lg py-md border-t border-outline-variant bg-surface flex justify-end gap-sm">
+<button class="px-md py-sm rounded-DEFAULT border border-outline text-on-surface font-label-md text-label-md hover:bg-surface-container-low transition-colors focus:outline-none focus:ring-2 focus:ring-secondary" type="button">
+                    Cancel
+                </button>
+<button class="px-md py-sm rounded-DEFAULT bg-secondary text-on-secondary font-label-md text-label-md hover:bg-secondary-container hover:text-on-secondary-container transition-colors focus:outline-none focus:ring-2 focus:ring-secondary focus:ring-offset-2 focus:ring-offset-surface" type="button">
+                    Send Invitation
+                </button>
+</div>
+</div>
+</div>
+</body></html>

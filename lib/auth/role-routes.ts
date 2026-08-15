@@ -15,6 +15,7 @@ export const ROLE_ROUTES: Record<UserRole, string> = {
   admin: "/admin",
   warden: "/warden",
   super_admin: "/super-admin",
+  placement_cell: "/placement-cell",
 };
 
 export const DEFAULT_ROLE: UserRole = "student";

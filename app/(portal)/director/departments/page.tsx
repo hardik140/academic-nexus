@@ -1,19 +1,62 @@
-import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
+"use client";
 
-export default async function DirectorDepartments() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+import { useState, useEffect } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { Modal, Button, FormField } from "@/components/ui/modal";
+import { assignHod, listEligibleHodCandidates } from "./actions";
 
-  const [deptRes, enrollRes] = await Promise.all([
-    supabase.from("departments").select("*, profiles:hod_id(full_name)").order("name"),
-    supabase.from("mv_department_enrollment").select("*"),
-  ]);
+export default function DirectorDepartments() {
+  const supabase = createClient();
+  const [departments, setDepartments] = useState<any[]>([]);
+  const [enrollmentByDept, setEnrollmentByDept] = useState<Record<string, any>>({});
+  const [staff, setStaff] = useState<any[]>([]);
+  const [editDept, setEditDept] = useState<any>(null);
+  const [selectedHod, setSelectedHod] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const departments = deptRes.data || [];
-  const enrollmentByDept: Record<string, any> = {};
-  (enrollRes.data || []).forEach((e: any) => { enrollmentByDept[e.department_id] = e; });
+  const load = async () => {
+    const [deptRes, enrollRes] = await Promise.all([
+      supabase.from("departments").select("*, profiles:hod_id(full_name)").order("name"),
+      supabase.from("mv_department_enrollment").select("*"),
+    ]);
+    setDepartments(deptRes.data || []);
+    const byDept: Record<string, any> = {};
+    (enrollRes.data || []).forEach((e: any) => { byDept[e.department_id] = e; });
+    setEnrollmentByDept(byDept);
+  };
+
+  const loadStaff = async () => {
+    setStaff(await listEligibleHodCandidates());
+  };
+
+  useEffect(() => { load(); loadStaff(); }, []);
+
+  const openEdit = (dept: any) => {
+    setEditDept(dept);
+    setSelectedHod(dept.hod_id || "");
+    setError(null);
+  };
+
+  const handleAssignHod = async () => {
+    if (!editDept) return;
+    setLoading(true);
+    setError(null);
+    try {
+      await assignHod(editDept.id, selectedHod || null);
+      setEditDept(null);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to assign HOD.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const hodOptions = [
+    { value: "", label: "— No HOD assigned —" },
+    ...staff.map((s: any) => ({ value: s.id, label: `${s.full_name} (${s.role})` })),
+  ];
 
   return (
     <div className="space-y-lg animate-[fade-in_0.3s_ease-out]">
@@ -22,11 +65,19 @@ export default async function DirectorDepartments() {
         <p className="text-sm text-on-surface-variant mt-xs">Institution-wide department overview</p>
       </div>
 
+      {error && !editDept && (
+        <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium">{error}</div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-md">
         {departments.map((d: any) => {
           const e = enrollmentByDept[d.id];
           return (
-            <div key={d.id} className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-lg shadow-sm hover:shadow-md transition-all">
+            <button
+              key={d.id}
+              onClick={() => openEdit(d)}
+              className="text-left bg-surface-container-lowest border border-outline-variant rounded-2xl p-lg shadow-sm hover:shadow-md transition-all"
+            >
               <div className="flex items-center justify-between mb-md">
                 <span className="font-mono text-sm font-bold text-secondary">{d.code}</span>
                 <span className={`text-xs font-semibold px-sm py-xs rounded-full ${d.status === "active" ? "bg-success/10 text-success" : "bg-error/10 text-error"}`}>{d.status}</span>
@@ -43,7 +94,8 @@ export default async function DirectorDepartments() {
                   <div className="font-bold text-on-surface">{e?.avg_cgpa || "—"}</div>
                 </div>
               </div>
-            </div>
+              <div className="mt-md text-xs font-medium text-secondary">Assign HOD →</div>
+            </button>
           );
         })}
         {departments.length === 0 && (
@@ -52,6 +104,31 @@ export default async function DirectorDepartments() {
           </div>
         )}
       </div>
+
+      <Modal
+        open={!!editDept}
+        onClose={() => setEditDept(null)}
+        title={`Assign HOD — ${editDept?.name || ""}`}
+        description="Only staff with the HOD or Teacher role are eligible."
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setEditDept(null)}>Cancel</Button>
+            <Button onClick={handleAssignHod} disabled={loading}>{loading ? "Saving..." : "Save"}</Button>
+          </>
+        }
+      >
+        {error && (
+          <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium mb-md">{error}</div>
+        )}
+        <FormField
+          label="Head of Department"
+          id="edit_hod"
+          type="select"
+          value={selectedHod}
+          onChange={setSelectedHod}
+          options={hodOptions}
+        />
+      </Modal>
     </div>
   );
 }

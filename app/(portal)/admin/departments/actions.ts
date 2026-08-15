@@ -49,6 +49,7 @@ export async function createDepartment(params: CreateDepartmentParams) {
   const supabase = await createClient();
   await createDepartmentCore(supabase, actor, params);
   revalidatePath("/admin/departments");
+  revalidatePath("/director/departments");
 }
 
 /** Called by app/api/mobile/admin/create-department/route.ts. */
@@ -57,62 +58,6 @@ export async function createDepartmentViaRequest(request: Request, params: Creat
   await createDepartmentCore(supabase, actor, params);
 }
 
-const AssignHodSchema = z.object({
-  departmentId: z.string().guid(),
-  hodUserId: z.string().guid().nullable(),
-});
-
-/**
- * Shared by the web Server Action below and
- * app/api/mobile/admin/assign-hod's Route Handler.
- */
-export async function assignHodCore(
-  supabase: SupabaseClient<Database>,
-  actor: AuthorizedActor,
-  departmentId: string,
-  hodUserId: string | null
-) {
-  ({ departmentId, hodUserId } = AssignHodSchema.parse({ departmentId, hodUserId }));
-  await checkRateLimit(`assignHod:${actor.userId}`, 20, 60);
-
-  // Verify the target profile is actually in this college and eligible
-  // (hod or teacher role) before assigning — never trust the client-picked
-  // id blindly, even though it came from a dropdown we populated ourselves.
-  if (hodUserId) {
-    const { data: candidate } = await supabase
-      .from("profiles")
-      .select("id, role, college_id")
-      .eq("id", hodUserId)
-      .single();
-
-    if (!candidate || candidate.college_id !== actor.collegeId) {
-      throw new Error("Selected staff member not found in your college.");
-    }
-    if (!["hod", "teacher"].includes(candidate.role)) {
-      throw new Error("Only HOD or teacher staff can be assigned as department head.");
-    }
-  }
-
-  const { error } = await supabase
-    .from("departments")
-    .update({ hod_id: hodUserId })
-    .eq("id", departmentId)
-    .eq("college_id", actor.collegeId);
-
-  if (error) {
-    throw new Error(error.message);
-  }
-}
-
-export async function assignHod(departmentId: string, hodUserId: string | null) {
-  const actor = await requireRole(["admin"]);
-  const supabase = await createClient();
-  await assignHodCore(supabase, actor, departmentId, hodUserId);
-  revalidatePath("/admin/departments");
-}
-
-/** Called by app/api/mobile/admin/assign-hod/route.ts. */
-export async function assignHodViaRequest(request: Request, departmentId: string, hodUserId: string | null) {
-  const { supabase, ...actor } = await requireRoleFromRequest(request, ["admin"]);
-  await assignHodCore(supabase, actor, departmentId, hodUserId);
-}
+// HOD assignment moved to app/(portal)/director/departments/actions.ts —
+// it's a Director-level institutional decision, not a college-admin one.
+// See that file for assignHod/assignHodCore/assignHodViaRequest.

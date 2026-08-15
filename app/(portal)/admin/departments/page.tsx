@@ -5,21 +5,18 @@ import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { DataTable } from "@/components/ui/data-table";
 import { Modal, Button, FormField, StatusBadge } from "@/components/ui/modal";
-import { createDepartment, assignHod } from "./actions";
+import { createDepartment } from "./actions";
 
 function AdminDepartmentsInner() {
   const supabase = createClient();
   const searchParams = useSearchParams();
   const [departments, setDepartments] = useState<any[]>([]);
-  const [staff, setStaff] = useState<any[]>([]);
   const [showCreate, setShowCreate] = useState(false);
-  const [editDept, setEditDept] = useState<any>(null);
-  const [selectedHod, setSelectedHod] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({ name: "", code: "", description: "" });
 
-  useEffect(() => { loadDepartments(); loadStaff(); }, []);
+  useEffect(() => { loadDepartments(); }, []);
 
   useEffect(() => {
     if (searchParams.get("action") === "create") setShowCreate(true);
@@ -31,15 +28,6 @@ function AdminDepartmentsInner() {
       .select("*, profiles:hod_id(full_name)")
       .order("name");
     setDepartments(data || []);
-  };
-
-  const loadStaff = async () => {
-    const { data } = await supabase
-      .from("profiles")
-      .select("id, full_name, role")
-      .in("role", ["hod", "teacher"])
-      .order("full_name");
-    setStaff(data || []);
   };
 
   const handleCreate = async () => {
@@ -57,46 +45,22 @@ function AdminDepartmentsInner() {
     }
   };
 
-  const openEdit = (dept: any) => {
-    setEditDept(dept);
-    setSelectedHod(dept.hod_id || "");
-    setError(null);
-  };
-
-  const handleAssignHod = async () => {
-    if (!editDept) return;
-    setLoading(true);
-    setError(null);
-    try {
-      await assignHod(editDept.id, selectedHod || null);
-      setEditDept(null);
-      await loadDepartments();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to assign HOD.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const hodOptions = [
-    { value: "", label: "— No HOD assigned —" },
-    ...staff.map((s) => ({ value: s.id, label: `${s.full_name} (${s.role})` })),
-  ];
-
   return (
     <div className="space-y-lg animate-[fade-in_0.3s_ease-out]">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-extrabold text-on-surface tracking-tight">Departments</h1>
-          <p className="text-sm text-on-surface-variant mt-xs">Manage academic departments</p>
+          <p className="text-sm text-on-surface-variant mt-xs">Create and manage academic departments</p>
         </div>
         <Button onClick={() => setShowCreate(true)}>+ Add Department</Button>
       </div>
 
-      {error && !editDept && (
+      {error && !showCreate && (
         <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium">{error}</div>
       )}
 
+      {/* HOD assignment is a Director-level decision (see director/departments) —
+          this view is read-only for that field, department creation only. */}
       <DataTable
         columns={[
           { key: "name", header: "Department", sortable: true, render: (row: any) => <span className="font-medium text-on-surface">{row.name}</span> },
@@ -109,15 +73,6 @@ function AdminDepartmentsInner() {
         searchKey="name"
         searchPlaceholder="Search departments..."
         emptyMessage="No departments found."
-        onRowClick={(row) => openEdit(row)}
-        actions={(row: any) => (
-          <button
-            onClick={(e) => { e.stopPropagation(); openEdit(row); }}
-            className="text-xs text-secondary hover:underline font-medium"
-          >
-            Assign HOD
-          </button>
-        )}
       />
 
       <Modal
@@ -136,31 +91,6 @@ function AdminDepartmentsInner() {
           <FormField label="Code" id="dept_code" value={form.code} onChange={(v) => setForm({ ...form, code: v })} placeholder="e.g. CSE" required />
           <FormField label="Description" id="dept_desc" type="textarea" value={form.description} onChange={(v) => setForm({ ...form, description: v })} placeholder="Brief description..." />
         </div>
-      </Modal>
-
-      <Modal
-        open={!!editDept}
-        onClose={() => setEditDept(null)}
-        title={`Assign HOD — ${editDept?.name || ""}`}
-        description="Only staff with the HOD or Teacher role are eligible."
-        footer={
-          <>
-            <Button variant="outline" onClick={() => setEditDept(null)}>Cancel</Button>
-            <Button onClick={handleAssignHod} disabled={loading}>{loading ? "Saving..." : "Save"}</Button>
-          </>
-        }
-      >
-        {error && (
-          <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium mb-md">{error}</div>
-        )}
-        <FormField
-          label="Head of Department"
-          id="edit_hod"
-          type="select"
-          value={selectedHod}
-          onChange={setSelectedHod}
-          options={hodOptions}
-        />
       </Modal>
     </div>
   );

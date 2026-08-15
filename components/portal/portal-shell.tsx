@@ -27,6 +27,7 @@ const NAV_MAP: Record<
     { label: "Grades", href: "/student/grades", icon: "📝" },
     { label: "Hostel", href: "/student/hostel", icon: "🏠" },
     { label: "Gate Pass", href: "/student/gatepass", icon: "🚪" },
+    { label: "Placement", href: "/student/placements", icon: "🎯" },
     { label: "Complaints", href: "/student/complaints", icon: "🛠️" },
   ],
   teacher: [
@@ -59,6 +60,7 @@ const NAV_MAP: Record<
     { label: "Team", href: "/director/team", icon: "✉️" },
     { label: "Faculty", href: "/director/faculty", icon: "👥" },
     { label: "Placements", href: "/director/placements", icon: "💼" },
+    { label: "Placement Cell", href: "/director/placement-cell", icon: "🎯" },
   ],
   admin: [
     { label: "Dashboard", href: "/admin/dashboard", icon: "📊" },
@@ -80,6 +82,14 @@ const NAV_MAP: Record<
   super_admin: [
     { label: "Dashboard", href: "/super-admin/dashboard", icon: "📊" },
     { label: "Colleges", href: "/super-admin/colleges", icon: "🏛️" },
+  ],
+  placement_cell: [
+    { label: "Dashboard", href: "/placement-cell/dashboard", icon: "📊" },
+    { label: "Companies", href: "/placement-cell/companies", icon: "🏢" },
+    { label: "Placement Drives", href: "/placement-cell/drives", icon: "🎯" },
+    { label: "Notifications", href: "/placement-cell/notifications", icon: "🔔" },
+    { label: "Placement Records", href: "/placement-cell/records", icon: "📋" },
+    { label: "Reports", href: "/placement-cell/reports", icon: "📈" },
   ],
 };
 
@@ -106,6 +116,7 @@ export function PortalShell({ profile, children }: PortalShellProps) {
     admin: "System Admin",
     warden: "Warden Portal",
     super_admin: "Super Admin",
+    placement_cell: "Placement Cell Portal",
   };
 
   return (

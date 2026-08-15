@@ -22,7 +22,8 @@ export type UserRole =
   | "director"
   | "admin"
   | "warden"
-  | "super_admin";
+  | "super_admin"
+  | "placement_cell";
 
 export type UserStatus = "active" | "suspended" | "pending" | "graduated" | "alumni";
 
@@ -709,6 +710,133 @@ export interface Database {
           "id" | "created_at" | "package_lpa" | "placement_date" | "offer_type" | "status"
         >;
         Update: Partial<Database["public"]["Tables"]["placements"]["Insert"]>;
+        Relationships: [];
+      };
+
+      companies: {
+        Row: {
+          id: string;
+          college_id: string;
+          name: string;
+          industry: string | null;
+          website: string | null;
+          location: string | null;
+          hr_contact_name: string | null;
+          hr_email: string | null;
+          hr_phone: string | null;
+          description: string | null;
+          status: "active" | "inactive";
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: OptionalKeys<
+          Database["public"]["Tables"]["companies"]["Row"],
+          | "id"
+          | "created_at"
+          | "updated_at"
+          | "industry"
+          | "website"
+          | "location"
+          | "hr_contact_name"
+          | "hr_email"
+          | "hr_phone"
+          | "description"
+          | "status"
+          | "created_by"
+        >;
+        Update: Partial<Database["public"]["Tables"]["companies"]["Insert"]>;
+        Relationships: [];
+      };
+
+      placement_drives: {
+        Row: {
+          id: string;
+          college_id: string;
+          company_id: string;
+          job_role: string;
+          job_description: string | null;
+          package_lpa: number | null;
+          min_cgpa: number | null;
+          max_backlogs: number | null;
+          eligible_batch_years: number[] | null;
+          application_deadline: string;
+          drive_date: string | null;
+          status: "draft" | "published" | "closed" | "cancelled";
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: OptionalKeys<
+          Database["public"]["Tables"]["placement_drives"]["Row"],
+          | "id"
+          | "created_at"
+          | "updated_at"
+          | "job_description"
+          | "package_lpa"
+          | "min_cgpa"
+          | "max_backlogs"
+          | "eligible_batch_years"
+          | "drive_date"
+          | "status"
+          | "created_by"
+        >;
+        Update: Partial<Database["public"]["Tables"]["placement_drives"]["Insert"]>;
+        Relationships: [];
+      };
+
+      placement_drive_departments: {
+        Row: {
+          drive_id: string;
+          department_id: string;
+        };
+        Insert: Database["public"]["Tables"]["placement_drive_departments"]["Row"];
+        Update: Partial<Database["public"]["Tables"]["placement_drive_departments"]["Insert"]>;
+        Relationships: [];
+      };
+
+      placement_applications: {
+        Row: {
+          id: string;
+          college_id: string;
+          drive_id: string;
+          student_id: string;
+          status: "applied" | "shortlisted" | "interview" | "selected" | "rejected" | "offer_declined";
+          applied_at: string;
+          updated_at: string;
+        };
+        Insert: OptionalKeys<
+          Database["public"]["Tables"]["placement_applications"]["Row"],
+          "id" | "status" | "applied_at" | "updated_at"
+        >;
+        Update: Partial<Database["public"]["Tables"]["placement_applications"]["Insert"]>;
+        Relationships: [];
+      };
+
+      student_placement_profiles: {
+        Row: {
+          id: string;
+          college_id: string;
+          student_id: string;
+          placement_status:
+            | "not_placed"
+            | "eligible"
+            | "applied"
+            | "shortlisted"
+            | "selected"
+            | "placed"
+            | "rejected"
+            | "opted_out";
+          notes: string | null;
+          updated_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: OptionalKeys<
+          Database["public"]["Tables"]["student_placement_profiles"]["Row"],
+          "id" | "placement_status" | "notes" | "updated_by" | "created_at" | "updated_at"
+        >;
+        Update: Partial<Database["public"]["Tables"]["student_placement_profiles"]["Insert"]>;
         Relationships: [];
       };
 

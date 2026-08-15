@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Academic Nexus - Add Company</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "surface-bright": "#f9f9f9",
+                      "surface": "#f9f9f9",
+                      "outline-variant": "#cfc4c5",
+                      "background": "#f9f9f9",
+                      "on-tertiary-fixed-variant": "#474747",
+                      "on-surface-variant": "#4c4546",
+                      "surface-container-highest": "#e2e2e2",
+                      "on-secondary": "#ffffff",
+                      "on-primary-fixed-variant": "#474747",
+                      "inverse-surface": "#303030",
+                      "surface-tint": "#5e5e5e",
+                      "inverse-on-surface": "#f1f1f1",
+                      "on-primary-container": "#848484",
+                      "secondary-fixed-dim": "#b4c5ff",
+                      "on-tertiary-fixed": "#1b1b1b",
+                      "secondary-container": "#346cef",
+                      "surface-variant": "#e2e2e2",
+                      "surface-container-high": "#e8e8e8",
+                      "tertiary-fixed": "#e2e2e2",
+                      "on-surface": "#1b1b1b",
+                      "on-secondary-fixed": "#00174b",
+                      "secondary-fixed": "#dbe1ff",
+                      "tertiary-container": "#1b1b1b",
+                      "surface-dim": "#cbdbf5",
+                      "secondary": "#0051d5",
+                      "surface-container-lowest": "#ffffff",
+                      "on-primary": "#ffffff",
+                      "primary": "#000000",
+                      "primary-fixed": "#e2e2e2",
+                      "on-tertiary": "#ffffff",
+                      "on-background": "#1b1b1b",
+                      "tertiary": "#000000",
+                      "on-secondary-container": "#fefcff",
+                      "on-error-container": "#93000a",
+                      "on-primary-fixed": "#1b1b1b",
+                      "on-tertiary-container": "#848484",
+                      "error": "#ba1a1a",
+                      "inverse-primary": "#c6c6c6",
+                      "surface-container": "#e5eeff",
+                      "tertiary-fixed-dim": "#c6c6c6",
+                      "surface-container-low": "#f3f3f3",
+                      "primary-container": "#1b1b1b",
+                      "error-container": "#ffdad6",
+                      "on-secondary-fixed-variant": "#003ea7",
+                      "primary-fixed-dim": "#c6c6c6",
+                      "outline": "#76777d",
+                      "on-error": "#ffffff"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.125rem",
+                      "lg": "0.25rem",
+                      "xl": "0.5rem",
+                      "full": "0.75rem"
+              },
+              "spacing": {
+                      "lg": "24px",
+                      "sm": "8px",
+                      "gutter": "24px",
+                      "xl": "32px",
+                      "grid_columns": "12",
+                      "xs": "4px",
+                      "margin": "32px",
+                      "base": "4px",
+                      "md": "16px"
+              },
+              "fontFamily": {
+                      "label-md": [
+                              "Inter"
+                      ],
+                      "body-lg": [
+                              "Inter"
+                      ],
+                      "body-sm": [
+                              "Inter"
+                      ],
+                      "body-md": [
+                              "Inter"
+                      ],
+                      "headline-md": [
+                              "Inter"
+                      ],
+                      "headline-sm": [
+                              "Inter"
+                      ],
+                      "headline-lg": [
+                              "Inter"
+                      ],
+                      "display-lg": [
+                              "Inter"
+                      ],
+                      "mono-sm": [
+                              "monospace"
+                      ]
+              },
+              "fontSize": {
+                      "label-md": [
+                              "12px",
+                              {
+                                      "lineHeight": "16px",
+                                      "letterSpacing": "0.05em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "body-lg": [
+                              "16px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "body-sm": [
+                              "13px",
+                              {
+                                      "lineHeight": "18px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "body-md": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "headline-md": [
+                              "20px",
+                              {
+                                      "lineHeight": "28px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "headline-sm": [
+                              "16px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "headline-lg": [
+                              "28px",
+                              {
+                                      "lineHeight": "36px",
+                                      "letterSpacing": "-0.01em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "display-lg": [
+                              "36px",
+                              {
+                                      "lineHeight": "44px",
+                                      "letterSpacing": "-0.02em",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "mono-sm": [
+                              "12px",
+                              {
+                                      "lineHeight": "16px",
+                                      "fontWeight": "400"
+                              }
+                      ]
+              }
+      },
+          },
+        }
+    </script>
+<style>
+        .input-base {
+            @apply w-full border border-outline bg-surface-container-lowest rounded px-md py-sm font-body-md text-on-surface focus:border-secondary focus:ring-2 focus:ring-secondary/20 outline-none transition-all duration-200 placeholder-on-surface-variant;
+        }
+        .label-base {
+            @apply font-label-md text-label-md text-on-surface-variant mb-xs block uppercase;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-md min-h-screen relative overflow-hidden">
+<!-- Blurred Background Context (Companies List) -->
+<div class="absolute inset-0 pointer-events-none opacity-40 blur-[2px] p-xl flex flex-col gap-lg z-0">
+<div class="flex justify-between items-center w-[calc(100%-16rem)] ml-auto">
+<h1 class="font-headline-lg text-headline-lg text-on-surface">Companies</h1>
+<button class="bg-primary text-on-primary rounded px-md py-sm font-label-md text-label-md">Add Company</button>
+</div>
+<div class="w-[calc(100%-16rem)] ml-auto bg-surface-container-low rounded border border-outline-variant p-lg">
+<div class="h-12 bg-surface-container border-b border-outline-variant mb-4"></div>
+<div class="h-16 bg-surface-container-lowest border-b border-outline-variant mb-2"></div>
+<div class="h-16 bg-surface-container-lowest border-b border-outline-variant mb-2"></div>
+<div class="h-16 bg-surface-container-lowest border-b border-outline-variant"></div>
+</div>
+</div>
+<!-- Modal Overlay -->
+<div class="fixed inset-0 bg-primary/40 backdrop-blur-sm z-50 flex items-center justify-center p-md">
+<!-- Modal Card -->
+<div class="bg-surface-container-lowest rounded-lg w-full max-w-2xl border border-outline-variant shadow-lg flex flex-col max-h-[921px] overflow-hidden transform scale-100 transition-transform">
+<!-- Header -->
+<div class="px-xl py-lg border-b border-outline-variant flex justify-between items-center bg-surface-container-low">
+<h2 class="font-headline-md text-headline-md text-on-surface m-0">Add Company</h2>
+<button class="text-on-surface-variant hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">close</span>
+</button>
+</div>
+<!-- Scrollable Content -->
+<div class="px-xl py-lg overflow-y-auto">
+<form class="flex flex-col gap-lg">
+<!-- 2-Column Grid -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-x-gutter gap-y-md">
+<!-- Company Name -->
+<div>
+<label class="label-base" for="companyName">Company Name</label>
+<input class="input-base" id="companyName" placeholder="Enter company name" type="text"/>
+</div>
+<!-- Industry -->
+<div>
+<label class="label-base" for="industry">Industry</label>
+<div class="relative">
+<select class="input-base appearance-none pr-xl" id="industry">
+<option disabled="" selected="" value="">Select industry</option>
+<option value="tech">Information Technology</option>
+<option value="finance">Finance &amp; Banking</option>
+<option value="consulting">Consulting</option>
+<option value="manufacturing">Manufacturing</option>
+</select>
+<span class="material-symbols-outlined absolute right-md top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none">arrow_drop_down</span>
+</div>
+</div>
+<!-- Website -->
+<div>
+<label class="label-base" for="website">Website</label>
+<input class="input-base" id="website" placeholder="https://example.com" type="url"/>
+</div>
+<!-- Location -->
+<div>
+<label class="label-base" for="location">Location</label>
+<input class="input-base" id="location" placeholder="City, State" type="text"/>
+</div>
+<!-- HR Contact Name -->
+<div>
+<label class="label-base" for="hrName">HR Contact Name</label>
+<input class="input-base" id="hrName" placeholder="Full name" type="text"/>
+</div>
+<!-- HR Email -->
+<div>
+<label class="label-base" for="hrEmail">HR Email</label>
+<input class="input-base" id="hrEmail" placeholder="email@company.com" type="email"/>
+</div>
+<!-- HR Phone -->
+<div>
+<label class="label-base" for="hrPhone">HR Phone</label>
+<input class="input-base" id="hrPhone" placeholder="+1 (555) 000-0000" type="tel"/>
+</div>
+<!-- Status -->
+<div>
+<label class="label-base" for="status">Status</label>
+<div class="relative">
+<select class="input-base appearance-none pr-xl" id="status">
+<option value="lead">Lead</option>
+<option value="active">Active</option>
+<option value="blacklisted">Blacklisted</option>
+</select>
+<span class="material-symbols-outlined absolute right-md top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none">arrow_drop_down</span>
+</div>
+</div>
+</div>
+<!-- Full Width Description -->
+<div class="pt-sm">
+<label class="label-base" for="description">Description (Optional)</label>
+<textarea class="input-base resize-y" id="description" placeholder="Brief overview of the company..." rows="4"></textarea>
+</div>
+</form>
+</div>
+<!-- Footer -->
+<div class="px-xl py-lg border-t border-outline-variant bg-surface-bright flex justify-end gap-md items-center">
+<button class="px-md py-sm rounded border border-outline-variant text-on-surface font-label-md text-label-md hover:bg-surface-container transition-colors">
+                    Cancel
+                </button>
+<button class="px-md py-sm rounded bg-secondary text-on-secondary font-label-md text-label-md hover:bg-secondary/90 transition-colors shadow-sm">
+                    Add Company
+                </button>
+</div>
+</div>
+</div>
+</body></html>

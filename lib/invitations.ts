@@ -18,7 +18,16 @@ async function getCollegeName(supabase: SupabaseClient<Database>, collegeId: str
   return data?.name || "Academic Nexus";
 }
 
-const INVITABLE_ROLES = ["student", "teacher", "hod", "finance", "director", "admin", "warden"] as const;
+const INVITABLE_ROLES = [
+  "student",
+  "teacher",
+  "hod",
+  "finance",
+  "director",
+  "admin",
+  "warden",
+  "placement_cell",
+] as const;
 
 const InviteUserSchema = z.object({
   email: z.string().trim().email({ message: "Enter a valid email address." }),

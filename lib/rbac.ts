@@ -33,7 +33,7 @@ export interface AuthorizedActor {
  * RLS-enforced Supabase calls.
  */
 export async function requireRole(
-  allowedRoles: UserRole[]
+  allowedRoles: readonly UserRole[]
 ): Promise<AuthorizedActor> {
   const supabase = await createClient();
 
@@ -83,7 +83,7 @@ export async function requireRole(
  */
 export async function requireRoleFromRequest(
   request: Request,
-  allowedRoles: UserRole[]
+  allowedRoles: readonly UserRole[]
 ): Promise<AuthorizedActor & { supabase: ReturnType<typeof createMobileClient> }> {
   const token = bearerTokenFrom(request);
   if (!token) {

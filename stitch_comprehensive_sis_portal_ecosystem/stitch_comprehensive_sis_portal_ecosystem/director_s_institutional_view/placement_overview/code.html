@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Placement Overview - Academic Nexus</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-variant": "#e2e2e2",
+                        "surface-bright": "#f9f9f9",
+                        "outline": "#76777d",
+                        "surface-container-low": "#f3f3f3",
+                        "on-primary": "#ffffff",
+                        "secondary-container": "#346cef",
+                        "primary-fixed": "#e2e2e2",
+                        "tertiary-fixed-dim": "#c6c6c6",
+                        "primary-fixed-dim": "#c6c6c6",
+                        "surface-container": "#eeeeee",
+                        "on-tertiary-fixed-variant": "#474747",
+                        "inverse-surface": "#303030",
+                        "error-container": "#ffdad6",
+                        "background": "#f9f9f9",
+                        "inverse-primary": "#c6c6c6",
+                        "on-surface": "#1b1b1b",
+                        "outline-variant": "#cfc4c5",
+                        "surface-container-lowest": "#ffffff",
+                        "surface-container-high": "#e8e8e8",
+                        "on-tertiary-container": "#848484",
+                        "secondary": "#0051d5",
+                        "on-primary-fixed-variant": "#474747",
+                        "surface": "#f9f9f9",
+                        "tertiary": "#000000",
+                        "surface-tint": "#5e5e5e",
+                        "on-background": "#1b1b1b",
+                        "error": "#ba1a1a",
+                        "primary-container": "#1b1b1b",
+                        "on-tertiary-fixed": "#1b1b1b",
+                        "on-secondary-fixed-variant": "#003ea7",
+                        "on-secondary": "#ffffff",
+                        "on-error": "#ffffff",
+                        "on-primary-fixed": "#1b1b1b",
+                        "surface-dim": "#cbdbf5",
+                        "secondary-fixed": "#dbe1ff",
+                        "on-surface-variant": "#4c4546",
+                        "on-error-container": "#93000a",
+                        "primary": "#000000",
+                        "on-primary-container": "#848484",
+                        "on-tertiary": "#ffffff",
+                        "tertiary-fixed": "#e2e2e2",
+                        "surface-container-highest": "#e2e2e2",
+                        "secondary-fixed-dim": "#b4c5ff",
+                        "on-secondary-container": "#fefcff",
+                        "tertiary-container": "#1b1b1b",
+                        "inverse-on-surface": "#f1f1f1",
+                        "on-secondary-fixed": "#00174b"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "grid_columns": "12",
+                        "gutter": "24px",
+                        "sm": "8px",
+                        "xl": "32px",
+                        "lg": "24px",
+                        "base": "4px",
+                        "xs": "4px",
+                        "margin": "32px",
+                        "md": "16px"
+                    },
+                    "fontFamily": {
+                        "headline-lg": ["Inter"],
+                        "body-md": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "label-md": ["Inter"],
+                        "mono-sm": ["monospace"],
+                        "display-lg": ["Inter"],
+                        "body-sm": ["Inter"],
+                        "headline-md": ["Inter"],
+                        "headline-sm": ["Inter"]
+                    },
+                    "fontSize": {
+                        "headline-lg": ["28px", { "lineHeight": "36px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "mono-sm": ["12px", { "lineHeight": "16px", "fontWeight": "400" }],
+                        "display-lg": ["36px", { "lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "body-sm": ["13px", { "lineHeight": "18px", "fontWeight": "400" }],
+                        "headline-md": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "headline-sm": ["16px", { "lineHeight": "24px", "fontWeight": "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .material-symbols-outlined.filled {
+            font-variation-settings: 'FILL' 1;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-md text-body-md overflow-x-hidden">
+<!-- TopNavBar -->
+<nav class="flex justify-between items-center w-full px-margin h-16 bg-surface dark:bg-surface-container-high docked full-width top-0 border-b border-outline-variant dark:border-outline fixed z-50">
+<div class="flex items-center gap-4">
+<!-- Brand Logo -->
+<span class="font-headline-md text-headline-md font-bold text-primary dark:text-on-primary-fixed">Academic Nexus</span>
+</div>
+<div class="flex flex-1 max-w-md mx-8">
+<div class="relative w-full">
+<span class="material-symbols-outlined absolute left-3 top-1/2 transform -translate-y-1/2 text-on-surface-variant">search</span>
+<input class="w-full pl-10 pr-4 py-2 bg-surface-container-low border border-outline-variant rounded-lg focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary text-body-md transition-colors duration-200" placeholder="Search..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<button class="p-2 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low rounded-full transition-colors duration-200 cursor-pointer active:opacity-80">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<button class="p-2 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low rounded-full transition-colors duration-200 cursor-pointer active:opacity-80">
+<span class="material-symbols-outlined" data-icon="help_outline">help_outline</span>
+</button>
+<div class="w-8 h-8 rounded-full overflow-hidden border border-outline-variant cursor-pointer">
+<img alt="User profile photo" class="w-full h-full object-cover" data-alt="A professional headshot portrait of a confident academic director or administrative professional in their 40s. The lighting is soft and flattering studio lighting against a clean, light-mode background. The aesthetic is corporate, modern, and reliable, suitable for a high-end enterprise resource planning system profile photo." src="https://lh3.googleusercontent.com/aida-public/AB6AXuABvrPMqGPvs8XaFdlq1hscINf84ZSi1H9vBkTcYrP4ky6drMz5cxLTS6sebbl0md5k9u_BIyh0fC5sK9vPxs4G7Y8gcY4lzs7IQJsbYhjcExR8tkuvP0H21XhsK75o8vZZGeTl2b33mFM3OIOIxh3FUjc1A4OiqFfcNVZyadSSF3JhyiYzt9uW0IlpNP2p6XWNqeWaKqcR050tZukdr-9csSYTQNZkqezt4JSpGk1_NAXMBUpTeX_gUHXJ0KUfslVbF-eiCYKXA-A"/>
+</div>
+</div>
+</nav>
+<!-- SideNavBar & Main Content Wrapper -->
+<div class="flex pt-16 h-screen">
+<!-- SideNavBar -->
+<aside class="flex flex-col h-[calc(100vh-4rem)] fixed left-0 top-16 py-lg px-md gap-sm bg-primary dark:bg-primary-container text-on-primary dark:text-on-primary-container docked left-0 w-64 border-r border-outline-variant z-40 overflow-y-auto">
+<div class="mb-6 px-4">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 bg-secondary rounded-lg flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined filled text-on-secondary">school</span>
+</div>
+<div>
+<h2 class="font-headline-sm text-headline-sm text-on-primary font-black truncate">Academic Nexus</h2>
+<p class="font-label-md text-label-md text-on-primary-container opacity-80">College ERP</p>
+</div>
+</div>
+</div>
+<nav class="flex-1 flex flex-col gap-1">
+<a class="flex items-center gap-3 px-4 py-3 bg-secondary-container text-on-secondary-container rounded-lg font-label-md text-label-md cursor-pointer active:scale-95 transition-all duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span>Dashboard</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-primary-container hover:bg-surface-container-highest rounded-lg font-label-md text-label-md hover:bg-secondary transition-all duration-150 cursor-pointer active:scale-95" href="#">
+<span class="material-symbols-outlined" data-icon="business">business</span>
+<span>Companies</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-primary-container hover:bg-surface-container-highest rounded-lg font-label-md text-label-md hover:bg-secondary transition-all duration-150 cursor-pointer active:scale-95" href="#">
+<span class="material-symbols-outlined" data-icon="event_available">event_available</span>
+<span>Placement Drives</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-primary-container hover:bg-surface-container-highest rounded-lg font-label-md text-label-md hover:bg-secondary transition-all duration-150 cursor-pointer active:scale-95" href="#">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+<span>Notifications</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-primary-container hover:bg-surface-container-highest rounded-lg font-label-md text-label-md hover:bg-secondary transition-all duration-150 cursor-pointer active:scale-95" href="#">
+<span class="material-symbols-outlined" data-icon="analytics">analytics</span>
+<span>Placement Records</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-primary-container hover:bg-surface-container-highest rounded-lg font-label-md text-label-md hover:bg-secondary transition-all duration-150 cursor-pointer active:scale-95" href="#">
+<span class="material-symbols-outlined" data-icon="description">description</span>
+<span>Reports</span>
+</a>
+</nav>
+<div class="mt-auto border-t border-on-primary-container/20 pt-4 flex flex-col gap-1">
+<a class="flex items-center gap-3 px-4 py-3 text-on-primary-container hover:bg-surface-container-highest rounded-lg font-label-md text-label-md hover:bg-secondary transition-all duration-150 cursor-pointer active:scale-95" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span>Settings</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-primary-container hover:bg-surface-container-highest rounded-lg font-label-md text-label-md hover:bg-secondary transition-all duration-150 cursor-pointer active:scale-95" href="#">
+<span class="material-symbols-outlined" data-icon="logout">logout</span>
+<span>Logout</span>
+</a>
+</div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="flex-1 ml-64 p-margin overflow-y-auto">
+<div class="max-w-[1280px] mx-auto space-y-8">
+<!-- Page Header -->
+<div class="flex justify-between items-end">
+<div>
+<h1 class="font-display-lg text-display-lg text-on-surface">Placement Overview</h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant mt-1">Director's real-time campus placement metrics.</p>
+</div>
+<button class="bg-primary text-on-primary font-label-md text-label-md px-4 py-2 rounded flex items-center gap-2 hover:bg-primary/90 transition-colors">
+<span class="material-symbols-outlined text-[18px]">download</span>
+                        Export Report
+                    </button>
+</div>
+<!-- KPI Bento Row -->
+<div class="grid grid-cols-1 md:grid-cols-5 gap-6">
+<!-- KPI 1 -->
+<div class="bg-surface-container-low border border-outline-variant rounded-xl p-6 relative overflow-hidden group">
+<div class="flex items-start justify-between relative z-10">
+<div>
+<p class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-2">Students Placed</p>
+<p class="font-display-lg text-display-lg text-on-surface">842</p>
+</div>
+<div class="w-10 h-10 bg-secondary/10 rounded-lg flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined">group</span>
+</div>
+</div>
+<div class="mt-4 flex items-center gap-1 font-body-sm text-body-sm text-green-700">
+<span class="material-symbols-outlined text-[16px]">trending_up</span>
+<span>+12% from last year</span>
+</div>
+</div>
+<!-- KPI 2 -->
+<div class="bg-surface-container-low border border-outline-variant rounded-xl p-6 relative overflow-hidden group">
+<div class="flex items-start justify-between relative z-10">
+<div>
+<p class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-2">Placement Rate</p>
+<p class="font-display-lg text-display-lg text-on-surface">78.5<span class="text-headline-md">%</span></p>
+</div>
+<div class="w-10 h-10 bg-secondary/10 rounded-lg flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined">analytics</span>
+</div>
+</div>
+<div class="w-full bg-surface-container-highest h-1.5 rounded-full mt-4">
+<div class="bg-secondary h-1.5 rounded-full" style="width: 78.5%"></div>
+</div>
+</div>
+<!-- KPI 3 -->
+<div class="bg-surface-container-low border border-outline-variant rounded-xl p-6 relative overflow-hidden group">
+<div class="flex items-start justify-between relative z-10">
+<div>
+<p class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-2">Companies</p>
+<p class="font-display-lg text-display-lg text-on-surface">124</p>
+</div>
+<div class="w-10 h-10 bg-secondary/10 rounded-lg flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined">domain</span>
+</div>
+</div>
+<div class="mt-4 flex items-center gap-1 font-body-sm text-body-sm text-on-surface-variant">
+<span>Across 15 sectors</span>
+</div>
+</div>
+<!-- KPI 4 -->
+<div class="bg-secondary text-on-secondary rounded-xl p-6 shadow-md relative overflow-hidden group">
+<!-- Decorative bg -->
+<div class="absolute -right-6 -top-6 w-24 h-24 bg-white/10 rounded-full blur-xl"></div>
+<div class="flex items-start justify-between relative z-10">
+<div>
+<p class="font-label-md text-label-md text-on-secondary/80 uppercase tracking-wider mb-2">Active Drives</p>
+<p class="font-display-lg text-display-lg text-on-secondary">12</p>
+</div>
+<div class="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center text-on-secondary">
+<span class="material-symbols-outlined">campaign</span>
+</div>
+</div>
+<div class="mt-4 flex items-center gap-1 font-body-sm text-body-sm text-on-secondary/90">
+<span>Currently ongoing</span>
+</div>
+</div>
+<!-- KPI 5 -->
+<div class="bg-surface-container-low border border-outline-variant rounded-xl p-6 relative overflow-hidden group">
+<div class="flex items-start justify-between relative z-10">
+<div>
+<p class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-2">Offers Generated</p>
+<p class="font-display-lg text-display-lg text-on-surface">956</p>
+</div>
+<div class="w-10 h-10 bg-secondary/10 rounded-lg flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined">work</span>
+</div>
+</div>
+<div class="mt-4 flex items-center gap-1 font-body-sm text-body-sm text-on-surface-variant">
+<span>1.14 offers per student</span>
+</div>
+</div>
+</div>
+<!-- Statistics Section -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+<!-- Left Panel: Department-wise -->
+<div class="bg-surface-container-low border border-outline-variant rounded-xl p-6 flex flex-col h-[400px]">
+<div class="flex justify-between items-center mb-6">
+<h2 class="font-headline-md text-headline-md text-on-surface">Department-wise Placement</h2>
+<button class="text-secondary hover:text-on-secondary-fixed-variant transition-colors p-1">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</div>
+<div class="flex-1 flex flex-col justify-between space-y-4 overflow-y-auto pr-2">
+<!-- Dept Row 1 -->
+<div class="group cursor-pointer">
+<div class="flex justify-between font-body-md text-body-md mb-1.5">
+<span class="text-on-surface font-semibold">Computer Science (CS)</span>
+<span class="text-on-surface-variant">320 / 350</span>
+</div>
+<div class="w-full bg-surface-container-highest h-2 rounded-full overflow-hidden">
+<div class="bg-secondary h-full rounded-full transition-all duration-500 group-hover:brightness-110" style="width: 91%"></div>
+</div>
+</div>
+<!-- Dept Row 2 -->
+<div class="group cursor-pointer">
+<div class="flex justify-between font-body-md text-body-md mb-1.5">
+<span class="text-on-surface font-semibold">Information Technology (IT)</span>
+<span class="text-on-surface-variant">215 / 240</span>
+</div>
+<div class="w-full bg-surface-container-highest h-2 rounded-full overflow-hidden">
+<div class="bg-secondary h-full rounded-full transition-all duration-500 group-hover:brightness-110" style="width: 89%"></div>
+</div>
+</div>
+<!-- Dept Row 3 -->
+<div class="group cursor-pointer">
+<div class="flex justify-between font-body-md text-body-md mb-1.5">
+<span class="text-on-surface font-semibold">Electronics &amp; Communication (EC)</span>
+<span class="text-on-surface-variant">145 / 180</span>
+</div>
+<div class="w-full bg-surface-container-highest h-2 rounded-full overflow-hidden">
+<div class="bg-secondary h-full rounded-full transition-all duration-500 group-hover:brightness-110" style="width: 80%"></div>
+</div>
+</div>
+<!-- Dept Row 4 -->
+<div class="group cursor-pointer">
+<div class="flex justify-between font-body-md text-body-md mb-1.5">
+<span class="text-on-surface font-semibold">Mechanical Engineering (ME)</span>
+<span class="text-on-surface-variant">98 / 150</span>
+</div>
+<div class="w-full bg-surface-container-highest h-2 rounded-full overflow-hidden">
+<div class="bg-secondary h-full rounded-full transition-all duration-500 group-hover:brightness-110 opacity-80" style="width: 65%"></div>
+</div>
+</div>
+<!-- Dept Row 5 -->
+<div class="group cursor-pointer">
+<div class="flex justify-between font-body-md text-body-md mb-1.5">
+<span class="text-on-surface font-semibold">Electrical Engineering (EE)</span>
+<span class="text-on-surface-variant">64 / 120</span>
+</div>
+<div class="w-full bg-surface-container-highest h-2 rounded-full overflow-hidden">
+<div class="bg-secondary h-full rounded-full transition-all duration-500 group-hover:brightness-110 opacity-60" style="width: 53%"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- Right Panel: Company-wise -->
+<div class="bg-surface-container-low border border-outline-variant rounded-xl p-6 flex flex-col h-[400px]">
+<div class="flex justify-between items-center mb-6">
+<h2 class="font-headline-md text-headline-md text-on-surface">Top Recruiting Companies</h2>
+<button class="text-secondary hover:text-on-secondary-fixed-variant transition-colors p-1">
+<span class="material-symbols-outlined">filter_list</span>
+</button>
+</div>
+<div class="flex-1 flex flex-col justify-between space-y-4 overflow-y-auto pr-2">
+<!-- Company Row 1 -->
+<div class="group cursor-pointer flex items-center gap-4">
+<div class="w-10 h-10 bg-surface-container-highest rounded border border-outline-variant flex items-center justify-center font-bold text-on-surface-variant shrink-0">
+                                    TN
+                                </div>
+<div class="flex-1">
+<div class="flex justify-between font-body-md text-body-md mb-1.5">
+<span class="text-on-surface font-semibold">TechNova Solutions</span>
+<span class="text-on-surface-variant font-mono-sm text-mono-sm">145 Offers</span>
+</div>
+<div class="w-full bg-surface-container-highest h-2 rounded-full overflow-hidden">
+<div class="bg-inverse-surface h-full rounded-full transition-all duration-500 group-hover:bg-primary" style="width: 100%"></div>
+</div>
+</div>
+</div>
+<!-- Company Row 2 -->
+<div class="group cursor-pointer flex items-center gap-4">
+<div class="w-10 h-10 bg-surface-container-highest rounded border border-outline-variant flex items-center justify-center font-bold text-on-surface-variant shrink-0">
+                                    GF
+                                </div>
+<div class="flex-1">
+<div class="flex justify-between font-body-md text-body-md mb-1.5">
+<span class="text-on-surface font-semibold">Global Finance Group</span>
+<span class="text-on-surface-variant font-mono-sm text-mono-sm">98 Offers</span>
+</div>
+<div class="w-full bg-surface-container-highest h-2 rounded-full overflow-hidden">
+<div class="bg-inverse-surface/80 h-full rounded-full transition-all duration-500 group-hover:bg-primary" style="width: 67%"></div>
+</div>
+</div>
+</div>
+<!-- Company Row 3 -->
+<div class="group cursor-pointer flex items-center gap-4">
+<div class="w-10 h-10 bg-surface-container-highest rounded border border-outline-variant flex items-center justify-center font-bold text-on-surface-variant shrink-0">
+                                    AD
+                                </div>
+<div class="flex-1">
+<div class="flex justify-between font-body-md text-body-md mb-1.5">
+<span class="text-on-surface font-semibold">AeroDynamics Inc.</span>
+<span class="text-on-surface-variant font-mono-sm text-mono-sm">75 Offers</span>
+</div>
+<div class="w-full bg-surface-container-highest h-2 rounded-full overflow-hidden">
+<div class="bg-inverse-surface/70 h-full rounded-full transition-all duration-500 group-hover:bg-primary" style="width: 51%"></div>
+</div>
+</div>
+</div>
+<!-- Company Row 4 -->
+<div class="group cursor-pointer flex items-center gap-4">
+<div class="w-10 h-10 bg-surface-container-highest rounded border border-outline-variant flex items-center justify-center font-bold text-on-surface-variant shrink-0">
+                                    DC
+                                </div>
+<div class="flex-1">
+<div class="flex justify-between font-body-md text-body-md mb-1.5">
+<span class="text-on-surface font-semibold">DataCore Analytics</span>
+<span class="text-on-surface-variant font-mono-sm text-mono-sm">62 Offers</span>
+</div>
+<div class="w-full bg-surface-container-highest h-2 rounded-full overflow-hidden">
+<div class="bg-inverse-surface/50 h-full rounded-full transition-all duration-500 group-hover:bg-primary" style="width: 42%"></div>
+</div>
+</div>
+</div>
+<!-- Company Row 5 -->
+<div class="group cursor-pointer flex items-center gap-4">
+<div class="w-10 h-10 bg-surface-container-highest rounded border border-outline-variant flex items-center justify-center font-bold text-on-surface-variant shrink-0">
+                                    Z
+                                </div>
+<div class="flex-1">
+<div class="flex justify-between font-body-md text-body-md mb-1.5">
+<span class="text-on-surface font-semibold">Zenith Consulting</span>
+<span class="text-on-surface-variant font-mono-sm text-mono-sm">45 Offers</span>
+</div>
+<div class="w-full bg-surface-container-highest h-2 rounded-full overflow-hidden">
+<div class="bg-inverse-surface/40 h-full rounded-full transition-all duration-500 group-hover:bg-primary" style="width: 31%"></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+</body></html>
