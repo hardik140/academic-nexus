@@ -7,6 +7,8 @@ import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib
 import { checkRateLimit } from "@/lib/rate-limit";
 import { getCached, invalidateCache } from "@/lib/cache";
 import { resolveListSort, listCacheKey } from "@/lib/cached-list";
+import { logAudit } from "@/lib/audit";
+import { PERMISSIONS } from "@/lib/permissions";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import type { DataTableQuery } from "@/components/ui/data-table";
@@ -20,7 +22,7 @@ const FEES_CACHE_PREFIX = "list:fees";
  * needs the server-only Redis token; explicit invalidation on top of the
  * short TTL since this is an edited list, not a stat count). */
 export async function listInvoices(q: DataTableQuery) {
-  const actor = await requireRole(["finance", "admin"]);
+  const actor = await requireRole(PERMISSIONS.invoice_read);
   const supabase = await createClient();
 
   const { column, ascending } = resolveListSort(FEES_SORT_COLUMNS, "due_date", false, q);
@@ -29,7 +31,8 @@ export async function listInvoices(q: DataTableQuery) {
   return getCached(cacheKey, 30, async () => {
     let dbQuery = supabase
       .from("fees")
-      .select("*, students:student_id(enrollment_number, profiles:user_id(full_name))", { count: "exact" });
+      .select("*, students:student_id(enrollment_number, profiles:user_id(full_name))", { count: "exact" })
+      .eq("college_id", actor.collegeId);
 
     if (q.search) dbQuery = dbQuery.ilike("type", `%${q.search}%`);
     dbQuery = dbQuery.order(column, { ascending });
@@ -78,18 +81,26 @@ export async function createInvoiceCore(
     throw new Error("Student not found in your college.");
   }
 
-  const { error } = await supabase.from("fees").insert({
-    college_id: actor.collegeId,
-    student_id: studentId,
-    type,
-    amount,
-    due_date: dueDate,
-    academic_year: academicYear || null,
-  });
+  const { data: fee, error } = await supabase
+    .from("fees")
+    .insert({
+      college_id: actor.collegeId,
+      student_id: studentId,
+      type,
+      amount,
+      due_date: dueDate,
+      academic_year: academicYear || null,
+    })
+    .select("id")
+    .single();
 
-  if (error) {
-    throw new Error(error.message);
+  if (error || !fee) {
+    throw new Error(error?.message || "Failed to create invoice.");
   }
+
+  await logAudit(supabase, actor, "invoice_created", "fees", fee.id, {
+    newValue: { student_id: studentId, type, amount, due_date: dueDate },
+  });
 }
 
 export async function createInvoice(
@@ -100,7 +111,7 @@ export async function createInvoice(
   academicYear?: string,
   viewQuery?: DataTableQuery
 ) {
-  const actor = await requireRole(["finance", "admin"]);
+  const actor = await requireRole(PERMISSIONS.invoice_create);
   const supabase = await createClient();
   await createInvoiceCore(supabase, actor, { studentId, type, amount, dueDate, academicYear });
   revalidatePath("/finance/invoices");
@@ -114,6 +125,6 @@ export async function createInvoice(
 
 /** Called by app/api/mobile/finance/invoice/route.ts. */
 export async function createInvoiceViaRequest(request: Request, params: CreateInvoiceParams) {
-  const { supabase, ...actor } = await requireRoleFromRequest(request, ["finance", "admin"]);
+  const { supabase, ...actor } = await requireRoleFromRequest(request, PERMISSIONS.invoice_create);
   await createInvoiceCore(supabase, actor, params);
 }

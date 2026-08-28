@@ -60,9 +60,14 @@ export default function DirectorDepartments() {
 
   return (
     <div className="space-y-lg animate-[fade-in_0.3s_ease-out]">
-      <div>
-        <h1 className="text-2xl font-extrabold text-on-surface tracking-tight">Departments</h1>
-        <p className="text-sm text-on-surface-variant mt-xs">Institution-wide department overview</p>
+      <div className="flex items-center justify-between gap-md flex-wrap">
+        <div>
+          <h1 className="text-2xl font-extrabold text-on-surface tracking-tight">Departments</h1>
+          <p className="text-sm text-on-surface-variant mt-xs">Institution-wide department overview</p>
+        </div>
+        <a href="/director/departments/performance" className="text-xs font-medium text-secondary hover:underline">
+          Performance Heatmap →
+        </a>
       </div>
 
       {error && !editDept && (

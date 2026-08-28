@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { RoomTransferPanel } from "./room-transfer-panel";
 
 export default async function StudentHostel() {
   const supabase = await createClient();
@@ -119,6 +120,8 @@ export default async function StudentHostel() {
           </div>
         </div>
       </div>
+
+      {allocation && <RoomTransferPanel />}
 
       {/* Quick Links */}
       <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-sm p-lg">
