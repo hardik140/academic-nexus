@@ -1,0 +1,142 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { z } from "zod";
+import { createClient } from "@/lib/supabase/server";
+import { requireRole } from "@/lib/rbac";
+import { checkRateLimit } from "@/lib/rate-limit";
+import { getCached, invalidateCache } from "@/lib/cache";
+import { logAudit } from "@/lib/audit";
+import { PERMISSIONS } from "@/lib/permissions";
+
+function substitutionsCacheKey(hodUserId: string) {
+  return `hod-substitutions:${hodUserId}`;
+}
+
+/** Resolves the department a HOD actor owns, via departments.hod_id — same as hod/approvals. */
+async function resolveHodDepartmentId(supabase: Awaited<ReturnType<typeof createClient>>, userId: string) {
+  const { data } = await supabase.from("departments").select("id").eq("hod_id", userId).single();
+  return data?.id ?? null;
+}
+
+const SELECT_COLS =
+  "*, courses:course_id(name, code), original:original_teacher_id(full_name), substitute:substitute_teacher_id(full_name)";
+
+/**
+ * Department-scoped by the *course's* department, same as
+ * listCorrectionApprovals — a substitution requirement is a claim about a
+ * specific course's class, so the course's own department is the right
+ * approval boundary.
+ */
+export async function listSubstitutionNeeds() {
+  const actor = await requireRole(PERMISSIONS.substitution_manage);
+  const supabase = await createClient();
+
+  return getCached(substitutionsCacheKey(actor.userId), 30, async () => {
+    if (actor.role === "admin") {
+      const baseQuery = () => supabase.from("substitution_assignments").select(SELECT_COLS);
+      const [neededRes, assignedRes] = await Promise.all([
+        baseQuery().eq("status", "needed").order("date", { ascending: true }),
+        baseQuery().eq("status", "assigned").order("date", { ascending: true }),
+      ]);
+      return { needed: neededRes.data || [], assigned: assignedRes.data || [] };
+    }
+
+    const departmentId = await resolveHodDepartmentId(supabase, actor.userId);
+    if (!departmentId) return { needed: [], assigned: [] };
+
+    const { data: deptCourses } = await supabase.from("courses").select("id").eq("department_id", departmentId);
+    const courseIds = (deptCourses || []).map((c) => c.id);
+    if (courseIds.length === 0) return { needed: [], assigned: [] };
+
+    const baseQuery = () => supabase.from("substitution_assignments").select(SELECT_COLS).in("course_id", courseIds);
+    const [neededRes, assignedRes] = await Promise.all([
+      baseQuery().eq("status", "needed").order("date", { ascending: true }),
+      baseQuery().eq("status", "assigned").order("date", { ascending: true }),
+    ]);
+    return { needed: neededRes.data || [], assigned: assignedRes.data || [] };
+  });
+}
+
+/** Populates the substitute picker — department teachers, any role='teacher' or 'hod' account. */
+export async function listDepartmentTeachers() {
+  const actor = await requireRole(PERMISSIONS.substitution_manage);
+  const supabase = await createClient();
+
+  if (actor.role === "admin") {
+    const { data } = await supabase.from("profiles").select("id, full_name").in("role", ["teacher", "hod"]).order("full_name");
+    return data || [];
+  }
+
+  const departmentId = await resolveHodDepartmentId(supabase, actor.userId);
+  if (!departmentId) return [];
+  const { data } = await supabase
+    .from("profiles")
+    .select("id, full_name")
+    .eq("department_id", departmentId)
+    .in("role", ["teacher", "hod"])
+    .order("full_name");
+  return data || [];
+}
+
+const AssignSchema = z.object({
+  id: z.string().guid(),
+  substituteTeacherId: z.string().guid(),
+});
+
+export async function assignSubstitute(idRaw: string, substituteTeacherIdRaw: string) {
+  const actor = await requireRole(PERMISSIONS.substitution_manage);
+  const { id, substituteTeacherId } = AssignSchema.parse({ id: idRaw, substituteTeacherId: substituteTeacherIdRaw });
+  await checkRateLimit(`assignSubstitute:${actor.userId}`, 30, 60);
+  const supabase = await createClient();
+
+  type RowWithCourse = { status: string; course_id: string; date: string; original_teacher_id: string; courses: { department_id: string; name: string; code: string } | null };
+  const { data: rowRaw } = await supabase
+    .from("substitution_assignments")
+    .select("status, course_id, date, original_teacher_id, courses:course_id(department_id, name, code)")
+    .eq("id", id)
+    .eq("college_id", actor.collegeId)
+    .single();
+  const row = rowRaw as unknown as RowWithCourse | null;
+
+  if (!row || row.status !== "needed") {
+    throw new Error("Substitution requirement not found or already resolved.");
+  }
+  if (row.original_teacher_id === substituteTeacherId) {
+    throw new Error("The substitute cannot be the same as the original teacher.");
+  }
+
+  if (actor.role === "hod") {
+    const departmentId = await resolveHodDepartmentId(supabase, actor.userId);
+    if (!departmentId || row.courses?.department_id !== departmentId) {
+      throw new Error("You can only assign substitutes for courses in your own department.");
+    }
+  }
+
+  const { error } = await supabase
+    .from("substitution_assignments")
+    .update({ status: "assigned", substitute_teacher_id: substituteTeacherId, assigned_by: actor.userId, assigned_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  await logAudit(supabase, actor, "substitution_assigned", "substitution_assignments", id, {
+    oldValue: { status: "needed" },
+    newValue: { status: "assigned", substitute_teacher_id: substituteTeacherId },
+  });
+
+  await supabase.from("notifications").insert({
+    college_id: actor.collegeId,
+    title: "Substitution assigned to you",
+    message: `Cover ${row.courses?.code || "a class"} — ${row.courses?.name || ""} on ${new Date(row.date).toLocaleDateString()}.`,
+    receiver_id: substituteTeacherId,
+    sender_id: actor.userId,
+    type: "action_required",
+    link: `/teacher/attendance?course=${row.course_id}`,
+  });
+
+  await invalidateCache(substitutionsCacheKey(actor.userId));
+  revalidatePath("/hod/substitutions");
+  revalidatePath("/hod/dashboard");
+}

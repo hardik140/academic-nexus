@@ -44,6 +44,7 @@ const ROLE_LABELS: Record<string, string> = {
   admin: "College Admin",
   warden: "Warden",
   super_admin: "Super Admin",
+  placement_cell: "Placement Cell",
 };
 
 export async function sendInvitationEmail(params: {

@@ -2,6 +2,8 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { StatusBadge } from "@/components/ui/modal";
+import { computeEffectiveFeeStatus } from "@/lib/finance-status";
+import { FinanceRequestsPanel } from "./finance-requests-panel";
 
 export default async function StudentFees() {
   const supabase = await createClient();
@@ -25,7 +27,12 @@ export default async function StudentFees() {
   const totalBilled = (fees || []).reduce((s, f) => s + f.amount, 0);
   const totalPaid = (fees || []).reduce((s, f) => s + f.paid_amount, 0);
   const totalDue = totalBilled - totalPaid;
-  const overdueFees = (fees || []).filter(f => f.status === "overdue");
+  // Computed live — nothing ever sets fees.status = 'overdue' (see
+  // lib/finance-status.ts), so a raw status === "overdue" filter here
+  // always read zero.
+  const overdueFees = (fees || []).filter(f => computeEffectiveFeeStatus(f) === "overdue");
+
+  const eligiblePayments = (payments || []).filter((p) => p.status === "cleared");
 
   return (
     <div className="space-y-lg animate-[fade-in_0.3s_ease-out]">
@@ -101,7 +108,7 @@ export default async function StudentFees() {
                   <td className="px-lg py-md text-success">{formatCurrency(f.paid_amount)}</td>
                   <td className="px-lg py-md font-semibold text-on-surface">{formatCurrency(f.amount - f.paid_amount)}</td>
                   <td className="px-lg py-md text-on-surface-variant">{formatDate(f.due_date)}</td>
-                  <td className="px-lg py-md"><StatusBadge status={f.status} /></td>
+                  <td className="px-lg py-md"><StatusBadge status={computeEffectiveFeeStatus(f)} /></td>
                 </tr>
               ))}
               {(!fees || fees.length === 0) && (
@@ -135,6 +142,11 @@ export default async function StudentFees() {
           )}
         </div>
       </div>
+
+      <FinanceRequestsPanel
+        payments={eligiblePayments.map((p) => ({ id: p.id, amount: p.amount, method: p.method, created_at: p.created_at }))}
+        fees={(fees || []).map((f) => ({ id: f.id, type: f.type, due_date: f.due_date }))}
+      />
     </div>
   );
 }

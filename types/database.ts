@@ -377,6 +377,51 @@ export interface Database {
         Relationships: [];
       };
 
+      refund_requests: {
+        Row: {
+          id: string;
+          college_id: string;
+          student_id: string;
+          payment_id: string;
+          amount: number;
+          reason: string;
+          status: "pending" | "approved" | "rejected";
+          reviewed_by: string | null;
+          reviewed_at: string | null;
+          review_notes: string | null;
+          created_at: string;
+        };
+        Insert: OptionalKeys<
+          Database["public"]["Tables"]["refund_requests"]["Row"],
+          "id" | "created_at" | "status" | "reviewed_by" | "reviewed_at" | "review_notes"
+        >;
+        Update: Partial<Database["public"]["Tables"]["refund_requests"]["Insert"]>;
+        Relationships: [];
+      };
+
+      financial_disputes: {
+        Row: {
+          id: string;
+          college_id: string;
+          student_id: string;
+          fee_id: string | null;
+          payment_id: string | null;
+          description: string;
+          status: "submitted" | "under_investigation" | "resolved" | "rejected";
+          assigned_to: string | null;
+          resolution_notes: string | null;
+          resolved_by: string | null;
+          resolved_at: string | null;
+          created_at: string;
+        };
+        Insert: OptionalKeys<
+          Database["public"]["Tables"]["financial_disputes"]["Row"],
+          "id" | "created_at" | "fee_id" | "payment_id" | "status" | "assigned_to" | "resolution_notes" | "resolved_by" | "resolved_at"
+        >;
+        Update: Partial<Database["public"]["Tables"]["financial_disputes"]["Insert"]>;
+        Relationships: [];
+      };
+
       hostel_blocks: {
         Row: {
           id: string;
@@ -436,6 +481,29 @@ export interface Database {
           "id" | "created_at" | "allocated_date" | "vacated_date" | "status"
         >;
         Update: Partial<Database["public"]["Tables"]["hostel_allocations"]["Insert"]>;
+        Relationships: [];
+      };
+
+      room_transfer_requests: {
+        Row: {
+          id: string;
+          college_id: string;
+          student_id: string;
+          current_allocation_id: string | null;
+          reason: string;
+          status: "pending" | "approved" | "rejected";
+          reviewed_by: string | null;
+          reviewed_at: string | null;
+          review_notes: string | null;
+          new_room_id: string | null;
+          new_allocation_id: string | null;
+          created_at: string;
+        };
+        Insert: OptionalKeys<
+          Database["public"]["Tables"]["room_transfer_requests"]["Row"],
+          "id" | "created_at" | "current_allocation_id" | "status" | "reviewed_by" | "reviewed_at" | "review_notes" | "new_room_id" | "new_allocation_id"
+        >;
+        Update: Partial<Database["public"]["Tables"]["room_transfer_requests"]["Insert"]>;
         Relationships: [];
       };
 
@@ -620,6 +688,56 @@ export interface Database {
           "id" | "created_at" | "status" | "approved_by" | "approved_at"
         >;
         Update: Partial<Database["public"]["Tables"]["leave_requests"]["Insert"]>;
+        Relationships: [];
+      };
+
+      attendance_correction_requests: {
+        Row: {
+          id: string;
+          college_id: string;
+          attendance_id: string;
+          student_id: string;
+          course_id: string;
+          date: string;
+          current_status: "present" | "absent" | "late" | "excused";
+          requested_status: "present" | "absent" | "late" | "excused";
+          reason: string;
+          evidence_note: string | null;
+          submitted_by: string;
+          status: "pending" | "approved" | "rejected";
+          reviewed_by: string | null;
+          reviewed_at: string | null;
+          created_at: string;
+        };
+        Insert: OptionalKeys<
+          Database["public"]["Tables"]["attendance_correction_requests"]["Row"],
+          "id" | "created_at" | "evidence_note" | "status" | "reviewed_by" | "reviewed_at"
+        >;
+        Update: Partial<Database["public"]["Tables"]["attendance_correction_requests"]["Insert"]>;
+        Relationships: [];
+      };
+
+      substitution_assignments: {
+        Row: {
+          id: string;
+          college_id: string;
+          leave_request_id: string;
+          course_id: string;
+          timetable_slot_id: string | null;
+          original_teacher_id: string;
+          substitute_teacher_id: string | null;
+          date: string;
+          status: "needed" | "assigned" | "cancelled";
+          reason: string | null;
+          assigned_by: string | null;
+          assigned_at: string | null;
+          created_at: string;
+        };
+        Insert: OptionalKeys<
+          Database["public"]["Tables"]["substitution_assignments"]["Row"],
+          "id" | "created_at" | "timetable_slot_id" | "substitute_teacher_id" | "status" | "reason" | "assigned_by" | "assigned_at"
+        >;
+        Update: Partial<Database["public"]["Tables"]["substitution_assignments"]["Insert"]>;
         Relationships: [];
       };
 
@@ -883,6 +1001,284 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["invitations"]["Insert"]>;
         Relationships: [];
       };
+
+      decisions: {
+        Row: {
+          id: string;
+          college_id: string;
+          category:
+            | "department_change"
+            | "hod_assignment"
+            | "financial_exception"
+            | "policy_exception"
+            | "placement_drive_approval"
+            | "scholarship_exception"
+            | "risk_escalation_decision"
+            | "other";
+          title: string;
+          description: string;
+          requested_by: string;
+          department_id: string | null;
+          urgency: "low" | "medium" | "high" | "critical";
+          financial_impact: number | null;
+          student_impact_count: number | null;
+          institutional_impact_summary: string | null;
+          recommendation: string | null;
+          supporting_document_ids: string[] | null;
+          deadline: string | null;
+          status: "pending" | "approved" | "rejected" | "sent_back" | "info_requested" | "delegated" | "withdrawn";
+          decided_by: string | null;
+          decided_at: string | null;
+          decision_reason: string | null;
+          delegated_to: string | null;
+          source: "human" | "system";
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: OptionalKeys<
+          Database["public"]["Tables"]["decisions"]["Row"],
+          | "id"
+          | "created_at"
+          | "updated_at"
+          | "department_id"
+          | "urgency"
+          | "financial_impact"
+          | "student_impact_count"
+          | "institutional_impact_summary"
+          | "recommendation"
+          | "supporting_document_ids"
+          | "deadline"
+          | "status"
+          | "decided_by"
+          | "decided_at"
+          | "decision_reason"
+          | "delegated_to"
+          | "source"
+        >;
+        Update: Partial<Database["public"]["Tables"]["decisions"]["Insert"]>;
+        Relationships: [];
+      };
+
+      risk_flags: {
+        Row: {
+          id: string;
+          college_id: string;
+          flag_type:
+            | "attendance_decline"
+            | "academic_backlog"
+            | "fee_overdue"
+            | "placement_inactivity"
+            | "hostel_issue"
+            | "faculty_workload_gap"
+            | "composite_student_risk"
+            | "institutional_metric";
+          severity: "low" | "medium" | "high" | "critical";
+          scope_level: "institution" | "department" | "student" | "faculty" | "hostel_block";
+          department_id: string | null;
+          student_id: string | null;
+          affected_count: number | null;
+          title: string;
+          description: string;
+          detected_at: string;
+          source: "system_computed" | "director_manual";
+          status: "open" | "assigned" | "acknowledged" | "in_progress" | "resolved" | "dismissed";
+          assigned_to: string | null;
+          assigned_by: string | null;
+          assigned_at: string | null;
+          acknowledged_at: string | null;
+          resolved_at: string | null;
+          resolution_notes: string | null;
+          reviewed_by: string | null;
+          reviewed_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: OptionalKeys<
+          Database["public"]["Tables"]["risk_flags"]["Row"],
+          | "id"
+          | "created_at"
+          | "updated_at"
+          | "department_id"
+          | "student_id"
+          | "affected_count"
+          | "detected_at"
+          | "source"
+          | "status"
+          | "assigned_to"
+          | "assigned_by"
+          | "assigned_at"
+          | "acknowledged_at"
+          | "resolved_at"
+          | "resolution_notes"
+          | "reviewed_by"
+          | "reviewed_at"
+        >;
+        Update: Partial<Database["public"]["Tables"]["risk_flags"]["Insert"]>;
+        Relationships: [];
+      };
+
+      escalation_notes: {
+        Row: {
+          id: string;
+          college_id: string;
+          entity_type: "decision" | "risk_flag";
+          entity_id: string;
+          author_id: string;
+          entry_type:
+            | "note"
+            | "info_request"
+            | "info_response"
+            | "evidence"
+            | "status_change"
+            | "assigned"
+            | "acknowledged"
+            | "resolved";
+          body: string | null;
+          attachment_url: string | null;
+          created_at: string;
+        };
+        Insert: OptionalKeys<
+          Database["public"]["Tables"]["escalation_notes"]["Row"],
+          "id" | "created_at" | "body" | "attachment_url"
+        >;
+        Update: Partial<Database["public"]["Tables"]["escalation_notes"]["Insert"]>;
+        Relationships: [];
+      };
+
+      strategic_goals: {
+        Row: {
+          id: string;
+          college_id: string;
+          title: string;
+          description: string | null;
+          tracking_mode: "auto" | "manual";
+          metric_key:
+            | "placement_rate"
+            | "avg_cgpa"
+            | "attendance_pct"
+            | "fee_collection_pct"
+            | "hostel_occupancy_pct"
+            | null;
+          metric_label: string;
+          metric_unit: string | null;
+          baseline_value: number | null;
+          current_value: number | null;
+          target_value: number;
+          owner_id: string | null;
+          department_id: string | null;
+          status: "on_track" | "at_risk" | "off_track" | "achieved" | "abandoned";
+          start_date: string;
+          target_date: string;
+          created_by: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: OptionalKeys<
+          Database["public"]["Tables"]["strategic_goals"]["Row"],
+          | "id"
+          | "created_at"
+          | "updated_at"
+          | "description"
+          | "metric_key"
+          | "metric_unit"
+          | "baseline_value"
+          | "current_value"
+          | "owner_id"
+          | "department_id"
+          | "status"
+        >;
+        Update: Partial<Database["public"]["Tables"]["strategic_goals"]["Insert"]>;
+        Relationships: [];
+      };
+
+      strategic_goal_milestones: {
+        Row: {
+          id: string;
+          college_id: string;
+          goal_id: string;
+          title: string;
+          target_date: string | null;
+          status: "pending" | "done" | "missed";
+          completed_at: string | null;
+          sort_order: number;
+          created_at: string;
+        };
+        Insert: OptionalKeys<
+          Database["public"]["Tables"]["strategic_goal_milestones"]["Row"],
+          "id" | "created_at" | "target_date" | "status" | "completed_at" | "sort_order"
+        >;
+        Update: Partial<Database["public"]["Tables"]["strategic_goal_milestones"]["Insert"]>;
+        Relationships: [];
+      };
+
+      institution_metric_snapshots: {
+        Row: {
+          id: string;
+          college_id: string;
+          snapshot_at: string;
+          overall_score: number | null;
+          academic_score: number | null;
+          fee_collection_score: number | null;
+          placement_score: number | null;
+          hostel_score: number | null;
+          faculty_score: number | null;
+          risk_open_count: number | null;
+          decisions_pending_count: number | null;
+          data_completeness_flags: Json | null;
+          created_at: string;
+        };
+        Insert: OptionalKeys<
+          Database["public"]["Tables"]["institution_metric_snapshots"]["Row"],
+          | "id"
+          | "created_at"
+          | "snapshot_at"
+          | "overall_score"
+          | "academic_score"
+          | "fee_collection_score"
+          | "placement_score"
+          | "hostel_score"
+          | "faculty_score"
+          | "risk_open_count"
+          | "decisions_pending_count"
+          | "data_completeness_flags"
+        >;
+        Update: Partial<Database["public"]["Tables"]["institution_metric_snapshots"]["Insert"]>;
+        Relationships: [];
+      };
+
+      command_center_view_state: {
+        Row: {
+          user_id: string;
+          college_id: string;
+          last_viewed_at: string | null;
+          last_briefing_generated_at: string | null;
+          updated_at: string;
+        };
+        Insert: OptionalKeys<
+          Database["public"]["Tables"]["command_center_view_state"]["Row"],
+          "last_viewed_at" | "last_briefing_generated_at" | "updated_at"
+        >;
+        Update: Partial<Database["public"]["Tables"]["command_center_view_state"]["Insert"]>;
+        Relationships: [];
+      };
+
+      forecast_scenarios: {
+        Row: {
+          id: string;
+          college_id: string;
+          created_by: string;
+          name: string;
+          assumptions: Json;
+          computed_results: Json;
+          created_at: string;
+        };
+        Insert: OptionalKeys<
+          Database["public"]["Tables"]["forecast_scenarios"]["Row"],
+          "id" | "created_at"
+        >;
+        Update: Partial<Database["public"]["Tables"]["forecast_scenarios"]["Insert"]>;
+        Relationships: [];
+      };
     };
 
     Views: {
@@ -938,6 +1334,42 @@ export interface Database {
           avg_package: number | null;
           max_package: number | null;
           min_package: number | null;
+        };
+        Relationships: [];
+      };
+
+      mv_department_health: {
+        Row: {
+          college_id: string;
+          department_id: string;
+          department_name: string;
+          department_code: string;
+          total_students: number;
+          avg_cgpa: number | null;
+          attendance_pct: number | null;
+          backlog_count: number;
+          backlog_rate: number | null;
+          fee_collection_pct: number | null;
+          placement_rate: number | null;
+        };
+        Relationships: [];
+      };
+
+      mv_placement_funnel: {
+        Row: {
+          college_id: string;
+          department_id: string;
+          department_name: string;
+          department_code: string;
+          total_students: number;
+          not_placed_count: number;
+          eligible_count: number;
+          applied_count: number;
+          shortlisted_count: number;
+          selected_count: number;
+          placed_count: number;
+          rejected_count: number;
+          opted_out_count: number;
         };
         Relationships: [];
       };

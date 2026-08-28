@@ -7,6 +7,9 @@ import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib
 import { checkRateLimit } from "@/lib/rate-limit";
 import { getCached, invalidateCache } from "@/lib/cache";
 import { resolveListSort, listCacheKey } from "@/lib/cached-list";
+import { logAudit } from "@/lib/audit";
+import { PERMISSIONS } from "@/lib/permissions";
+import { computeEffectiveFeeStatus } from "@/lib/finance-status";
 import { listInvoices } from "../invoices/actions";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
@@ -23,7 +26,7 @@ const FEES_SORT_COLUMNS = ["type", "amount", "due_date"] as const;
 export { listInvoices };
 
 export async function listPayments(q: DataTableQuery) {
-  const actor = await requireRole(["finance", "admin"]);
+  const actor = await requireRole(PERMISSIONS.payment_read);
   const supabase = await createClient();
 
   const { column, ascending } = resolveListSort(PAYMENTS_SORT_COLUMNS, "created_at", false, q);
@@ -32,7 +35,8 @@ export async function listPayments(q: DataTableQuery) {
   return getCached(cacheKey, 30, async () => {
     let dbQuery = supabase
       .from("payments")
-      .select("*, students(enrollment_number, profiles:user_id(full_name))", { count: "exact" });
+      .select("*, students(enrollment_number, profiles:user_id(full_name))", { count: "exact" })
+      .eq("college_id", actor.collegeId);
 
     if (q.search) dbQuery = dbQuery.ilike("method", `%${q.search}%`);
     dbQuery = dbQuery.order(column, { ascending });
@@ -54,17 +58,22 @@ export async function listPayments(q: DataTableQuery) {
  * different and larger scope than caching the existing query.
  */
 export async function getFeeStats() {
-  const actor = await requireRole(["finance", "admin"]);
+  const actor = await requireRole(PERMISSIONS.payment_read);
   const supabase = await createClient();
 
   return getCached(`stats:fees:${actor.collegeId}`, 30, async () => {
-    const { data } = await supabase.from("fees").select("amount, paid_amount, status");
+    const { data } = await supabase.from("fees").select("amount, paid_amount, status, due_date").eq("college_id", actor.collegeId);
     const f = data || [];
+    // "overdue" is computed live (computeEffectiveFeeStatus), not the stored
+    // status column — nothing anywhere ever sets fees.status = 'overdue'
+    // (no cron, no trigger), so a raw status === "overdue" filter here
+    // always read zero. See lib/finance-status.ts.
+    const withEffectiveStatus = f.map((i) => ({ ...i, effectiveStatus: computeEffectiveFeeStatus(i) }));
     return {
       total: f.reduce((s, i) => s + (i.amount || 0), 0),
       collected: f.reduce((s, i) => s + (i.paid_amount || 0), 0),
-      pending: f.filter((i) => i.status === "pending").reduce((s, i) => s + (i.amount - i.paid_amount), 0),
-      overdue: f.filter((i) => i.status === "overdue").reduce((s, i) => s + (i.amount - i.paid_amount), 0),
+      pending: withEffectiveStatus.filter((i) => i.effectiveStatus === "pending").reduce((s, i) => s + (i.amount - i.paid_amount), 0),
+      overdue: withEffectiveStatus.filter((i) => i.effectiveStatus === "overdue").reduce((s, i) => s + (i.amount - i.paid_amount), 0),
     };
   });
 }
@@ -121,21 +130,29 @@ export async function recordPaymentCore(
     throw new Error(`Payment amount exceeds the outstanding balance of ${outstanding.toFixed(2)}.`);
   }
 
-  const { error } = await supabase.from("payments").insert({
-    college_id: actor.collegeId,
-    fee_id: fee.id,
-    student_id: fee.student_id,
-    amount,
-    method,
-    transaction_ref: transactionRef || null,
-    notes: notes || null,
-    status: "cleared",
-    processed_by: actor.userId,
-  });
+  const { data: payment, error } = await supabase
+    .from("payments")
+    .insert({
+      college_id: actor.collegeId,
+      fee_id: fee.id,
+      student_id: fee.student_id,
+      amount,
+      method,
+      transaction_ref: transactionRef || null,
+      notes: notes || null,
+      status: "cleared",
+      processed_by: actor.userId,
+    })
+    .select("id")
+    .single();
 
-  if (error) {
-    throw new Error(error.message);
+  if (error || !payment) {
+    throw new Error(error?.message || "Failed to record payment.");
   }
+
+  await logAudit(supabase, actor, "payment_recorded", "payments", payment.id, {
+    newValue: { fee_id: fee.id, amount, method },
+  });
 }
 
 export async function recordPayment(
@@ -147,7 +164,7 @@ export async function recordPayment(
   feesViewQuery?: DataTableQuery,
   paymentsViewQuery?: DataTableQuery
 ) {
-  const actor = await requireRole(["finance", "admin"]);
+  const actor = await requireRole(PERMISSIONS.payment_record);
   const supabase = await createClient();
   await recordPaymentCore(supabase, actor, { feeId, amount, method, transactionRef, notes });
   revalidatePath("/finance/transactions");
@@ -169,6 +186,6 @@ export async function recordPayment(
 
 /** Called by app/api/mobile/finance/payment/route.ts. */
 export async function recordPaymentViaRequest(request: Request, params: RecordPaymentParams) {
-  const { supabase, ...actor } = await requireRoleFromRequest(request, ["finance", "admin"]);
+  const { supabase, ...actor } = await requireRoleFromRequest(request, PERMISSIONS.payment_record);
   await recordPaymentCore(supabase, actor, params);
 }
