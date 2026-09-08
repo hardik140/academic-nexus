@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { Modal, Button, FormField } from "@/components/ui/modal";
-import { sendAnnouncement, getDashboardStats } from "./actions";
+import { Modal, Button, FormField, StatusBadge } from "@/components/ui/modal";
+import { HealthGauge } from "@/components/charts/health-gauge";
+import { sendAnnouncement, getDashboardStats, getCommandCenterData } from "./actions";
 
 const AUDIENCES: { value: "all" | "staff" | "students"; label: string }[] = [
   { value: "all", label: "Everyone" },
@@ -11,11 +13,37 @@ const AUDIENCES: { value: "all" | "staff" | "students"; label: string }[] = [
   { value: "students", label: "Students" },
 ];
 
+const SUB_SCORES: { key: "academic_score" | "fee_collection_score" | "placement_score" | "hostel_score" | "faculty_score"; label: string }[] = [
+  { key: "academic_score", label: "Academic Health" },
+  { key: "fee_collection_score", label: "Financial (Fee Collection)" },
+  { key: "placement_score", label: "Placement Health" },
+  { key: "hostel_score", label: "Hostel Health" },
+  { key: "faculty_score", label: "Faculty Health" },
+];
+const NOT_TRACKED_SCORES = [
+  { label: "Infrastructure Health", note: "No asset/equipment data model yet" },
+  { label: "Compliance Health", note: "No accreditation tracking module yet" },
+];
+
+function scoreColorClass(score: number): string {
+  if (score >= 75) return "text-success";
+  if (score >= 50) return "text-warning";
+  return "text-error";
+}
+
+function trendFor(latest: number | null, baseline: number | null) {
+  if (latest == null || baseline == null) return null;
+  const delta = Math.round((latest - baseline) * 10) / 10;
+  if (delta === 0) return null;
+  return { delta, direction: delta > 0 ? "up" : "down" };
+}
+
 export default function DirectorDashboard() {
   const supabase = createClient();
   const [profile, setProfile] = useState<any>(null);
   const [stats, setStats] = useState({ totalStudents: 0, totalFaculty: 0, totalDepartments: 0 });
   const [departments, setDepartments] = useState<any[]>([]);
+  const [command, setCommand] = useState<any>(null);
   const [showAnnounce, setShowAnnounce] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -26,21 +54,27 @@ export default function DirectorDashboard() {
     audience: "all",
   });
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => {
+    loadData();
+  }, []);
 
   const loadData = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (!user) return;
 
-    const [profileRes, statsResult, deptListRes] = await Promise.all([
+    const [profileRes, statsResult, deptListRes, commandData] = await Promise.all([
       supabase.from("profiles").select("*").eq("id", user.id).single(),
       getDashboardStats(),
       supabase.from("departments").select("*, profiles:hod_id(full_name)").order("name"),
+      getCommandCenterData(),
     ]);
 
     setProfile(profileRes.data);
     setStats(statsResult);
     setDepartments(deptListRes.data || []);
+    setCommand(commandData);
   };
 
   const openAnnounce = () => {
@@ -64,16 +98,16 @@ export default function DirectorDashboard() {
     }
   };
 
+  const latest = command?.latest;
+  const baseline = command?.baseline;
+  const completeness: Record<string, string> = latest?.data_completeness_flags || {};
+
   return (
     <div className="space-y-lg animate-[fade-in_0.3s_ease-out]">
       <div className="flex items-center justify-between gap-md flex-wrap">
         <div>
-          <h1 className="text-2xl font-extrabold text-on-surface tracking-tight">
-            Institutional Overview
-          </h1>
-          <p className="text-sm text-on-surface-variant mt-xs">
-            Director&apos;s 360° View • {profile?.full_name}
-          </p>
+          <h1 className="text-2xl font-extrabold text-on-surface tracking-tight">Command Center</h1>
+          <p className="text-sm text-on-surface-variant mt-xs">Director&apos;s 360° View • {profile?.full_name}</p>
         </div>
         <Button onClick={openAnnounce}>📢 Send Announcement</Button>
       </div>
@@ -81,6 +115,116 @@ export default function DirectorDashboard() {
       {success && (
         <div className="bg-success/10 border border-success/20 text-success rounded-xl p-md text-sm font-medium">{success}</div>
       )}
+
+      {/* What changed since last login */}
+      {command && (
+        <div className="bg-secondary/5 border border-secondary/20 rounded-2xl p-lg">
+          <h2 className="text-sm font-bold text-on-surface mb-sm">📌 What Changed Since Your Last Visit</h2>
+          {!command.priorViewedAt ? (
+            <p className="text-sm text-on-surface-variant">This is your first visit to the Command Center — nothing to compare yet.</p>
+          ) : !baseline ? (
+            <p className="text-sm text-on-surface-variant">No snapshot was recorded before your last visit — nothing to compare yet.</p>
+          ) : (
+            <div className="flex flex-wrap gap-lg text-sm">
+              {trendFor(latest?.overall_score, baseline?.overall_score) && (
+                <span>
+                  Overall health {trendFor(latest.overall_score, baseline.overall_score)!.direction === "up" ? "↑" : "↓"}{" "}
+                  {Math.abs(trendFor(latest.overall_score, baseline.overall_score)!.delta)} pts
+                </span>
+              )}
+              <span>
+                {command.topRiskFlags.length} open risk flag{command.topRiskFlags.length === 1 ? "" : "s"}
+              </span>
+              <span>
+                {command.topDecisions.length} decision{command.topDecisions.length === 1 ? "" : "s"} awaiting approval
+              </span>
+              {!trendFor(latest?.overall_score, baseline?.overall_score) && (
+                <span className="text-outline">No material score change.</span>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Institution Health Score */}
+      <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-sm p-lg">
+        <h2 className="text-sm font-bold text-on-surface mb-md">Institution Health Score</h2>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-lg items-center">
+          <HealthGauge
+            score={latest?.overall_score ?? null}
+            contributingCount={SUB_SCORES.filter((s) => latest?.[s.key] != null).length}
+            possibleCount={SUB_SCORES.length}
+          />
+          <div className="lg:col-span-2 grid grid-cols-2 md:grid-cols-4 gap-md">
+            {SUB_SCORES.map((s) => {
+              const value = latest?.[s.key];
+              const isMissing = value == null || completeness[s.key] === "insufficient_data";
+              return (
+                <div key={s.key} className="bg-surface-container-low rounded-xl p-md">
+                  <div className="text-[11px] font-semibold text-outline uppercase tracking-wider mb-xs">{s.label}</div>
+                  {isMissing ? (
+                    <div className="text-sm text-outline">Insufficient data</div>
+                  ) : (
+                    <div className={`text-2xl font-extrabold ${scoreColorClass(value)}`}>{value}</div>
+                  )}
+                </div>
+              );
+            })}
+            {NOT_TRACKED_SCORES.map((s) => (
+              <div key={s.label} className="bg-surface-container-low rounded-xl p-md">
+                <div className="text-[11px] font-semibold text-outline uppercase tracking-wider mb-xs">{s.label}</div>
+                <div className="text-sm text-outline">Not tracked yet</div>
+                <div className="text-[10px] text-outline mt-xs">{s.note}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Attention + Decisions summary */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-lg">
+        <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-sm overflow-hidden">
+          <div className="px-lg py-md border-b border-outline-variant flex items-center justify-between">
+            <h2 className="text-sm font-bold text-on-surface">🚨 Needs Attention</h2>
+            <Link href="/director/attention" className="text-xs font-medium text-secondary hover:underline">
+              View All →
+            </Link>
+          </div>
+          <div className="divide-y divide-outline-variant">
+            {command?.topRiskFlags?.length > 0 ? (
+              command.topRiskFlags.map((f: any) => (
+                <Link key={f.id} href={`/director/attention/${f.id}`} className="flex items-center justify-between px-lg py-md hover:bg-surface-container-low transition-colors">
+                  <span className="text-sm text-on-surface">{f.title}</span>
+                  <StatusBadge status={f.severity} />
+                </Link>
+              ))
+            ) : (
+              <div className="p-xl text-center text-sm text-outline">No critical institutional risks detected.</div>
+            )}
+          </div>
+        </div>
+
+        <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-sm overflow-hidden">
+          <div className="px-lg py-md border-b border-outline-variant flex items-center justify-between">
+            <h2 className="text-sm font-bold text-on-surface">🗳️ Decisions Waiting</h2>
+            <Link href="/director/decisions" className="text-xs font-medium text-secondary hover:underline">
+              View All →
+            </Link>
+          </div>
+          <div className="divide-y divide-outline-variant">
+            {command?.topDecisions?.length > 0 ? (
+              command.topDecisions.map((d: any) => (
+                <Link key={d.id} href={`/director/decisions/${d.id}`} className="flex items-center justify-between px-lg py-md hover:bg-surface-container-low transition-colors">
+                  <span className="text-sm text-on-surface">{d.title}</span>
+                  <StatusBadge status={d.urgency} />
+                </Link>
+              ))
+            ) : (
+              <div className="p-xl text-center text-sm text-outline">No decisions awaiting approval.</div>
+            )}
+          </div>
+        </div>
+      </div>
 
       {/* KPIs */}
       <div className="grid grid-cols-3 gap-md">
@@ -112,14 +256,20 @@ export default function DirectorDashboard() {
               </tr>
             </thead>
             <tbody className="divide-y divide-outline-variant">
-              {departments && departments.length > 0 ? departments.map((dept: any) => (
-                <tr key={dept.id} className="hover:bg-surface-container-low transition-colors">
-                  <td className="px-lg py-md font-medium text-on-surface">{dept.name}</td>
-                  <td className="px-lg py-md text-on-surface-variant">{dept.code}</td>
-                  <td className="px-lg py-md text-on-surface-variant">{(dept.profiles as any)?.full_name || "—"}</td>
+              {departments && departments.length > 0 ? (
+                departments.map((dept: any) => (
+                  <tr key={dept.id} className="hover:bg-surface-container-low transition-colors">
+                    <td className="px-lg py-md font-medium text-on-surface">{dept.name}</td>
+                    <td className="px-lg py-md text-on-surface-variant">{dept.code}</td>
+                    <td className="px-lg py-md text-on-surface-variant">{(dept.profiles as any)?.full_name || "—"}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={3} className="px-lg py-xl text-center text-outline">
+                    No departments configured.
+                  </td>
                 </tr>
-              )) : (
-                <tr><td colSpan={3} className="px-lg py-xl text-center text-outline">No departments configured.</td></tr>
               )}
             </tbody>
           </table>
@@ -133,8 +283,12 @@ export default function DirectorDashboard() {
         description="Broadcasts a notification to the selected audience."
         footer={
           <>
-            <Button variant="outline" onClick={() => setShowAnnounce(false)}>Cancel</Button>
-            <Button onClick={handleSend} disabled={loading || !form.title || !form.message}>{loading ? "Sending..." : "Send"}</Button>
+            <Button variant="outline" onClick={() => setShowAnnounce(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSend} disabled={loading || !form.title || !form.message}>
+              {loading ? "Sending..." : "Send"}
+            </Button>
           </>
         }
       >
@@ -142,9 +296,25 @@ export default function DirectorDashboard() {
           <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium mb-md">{error}</div>
         )}
         <div className="space-y-md">
-          <FormField label="Audience" id="audience" type="select" value={form.audience} onChange={(v) => setForm({ ...form, audience: v as "all" | "staff" | "students" })} options={AUDIENCES} required />
+          <FormField
+            label="Audience"
+            id="audience"
+            type="select"
+            value={form.audience}
+            onChange={(v) => setForm({ ...form, audience: v as "all" | "staff" | "students" })}
+            options={AUDIENCES}
+            required
+          />
           <FormField label="Title" id="title" value={form.title} onChange={(v) => setForm({ ...form, title: v })} placeholder="e.g. Campus Update" required />
-          <FormField label="Message" id="message" type="textarea" value={form.message} onChange={(v) => setForm({ ...form, message: v })} placeholder="Write your announcement..." required />
+          <FormField
+            label="Message"
+            id="message"
+            type="textarea"
+            value={form.message}
+            onChange={(v) => setForm({ ...form, message: v })}
+            placeholder="Write your announcement..."
+            required
+          />
         </div>
       </Modal>
     </div>

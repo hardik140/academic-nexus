@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { Button, StatusBadge } from "@/components/ui/modal";
 import { DataTable, type DataTableQuery } from "@/components/ui/data-table";
-import { actOnGatePass, listPendingGatePasses, listProcessedGatePasses } from "./actions";
+import { actOnGatePass, listPendingGatePasses, listProcessedGatePasses, verifyGatePassMovement } from "./actions";
 
 const PROCESSED_PAGE_SIZE = 10;
 
@@ -45,6 +45,19 @@ export default function WardenGatePasses() {
       await Promise.all([loadPending(), loadProcessed(processedQuery)]);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to update gate pass.");
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const handleMovement = async (id: string, action: "exit" | "return") => {
+    setLoading(id);
+    setError(null);
+    try {
+      await verifyGatePassMovement(id, action);
+      await loadProcessed(processedQuery);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to verify movement.");
     } finally {
       setLoading(null);
     }
@@ -109,6 +122,30 @@ export default function WardenGatePasses() {
           { key: "exit_time", header: "Date", sortable: true, render: (row: any) => new Date(row.exit_time).toLocaleDateString() },
           { key: "destination", header: "Destination", sortable: true },
           { key: "status", header: "Status", render: (row: any) => <StatusBadge status={row.status} /> },
+          {
+            key: "movement",
+            header: "Movement",
+            render: (row: any) => {
+              if (row.status === "approved") {
+                return (
+                  <Button size="sm" variant="outline" onClick={() => handleMovement(row.id, "exit")} disabled={loading === row.id}>
+                    {loading === row.id ? "..." : "Verify Exit"}
+                  </Button>
+                );
+              }
+              if (row.status === "active") {
+                return (
+                  <Button size="sm" variant="outline" onClick={() => handleMovement(row.id, "return")} disabled={loading === row.id}>
+                    {loading === row.id ? "..." : "Verify Return"}
+                  </Button>
+                );
+              }
+              if (row.status === "returned") {
+                return <span className="text-xs text-outline">✓ {row.actual_return ? new Date(row.actual_return).toLocaleString() : ""}</span>;
+              }
+              return <span className="text-xs text-outline">—</span>;
+            },
+          },
         ]}
         data={processed}
         keyExtractor={(row) => row.id}

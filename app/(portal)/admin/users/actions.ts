@@ -44,7 +44,8 @@ export async function listUsers(q: DataTableQuery) {
   return getCached(cacheKey, 30, async () => {
     let dbQuery = supabase
       .from("profiles")
-      .select("*, departments:department_id(name)", { count: "exact" });
+      .select("*, departments:department_id(name)", { count: "exact" })
+      .eq("college_id", actor.collegeId);
 
     if (q.search) {
       dbQuery = dbQuery.ilike("full_name", `%${q.search}%`);

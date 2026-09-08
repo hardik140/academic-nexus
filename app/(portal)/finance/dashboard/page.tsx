@@ -1,6 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { getCached } from "@/lib/cache";
+import { computeEffectiveFeeStatus } from "@/lib/finance-status";
+import { getFinanceExceptions } from "../exceptions/actions";
 
 export default async function FinanceDashboard() {
   const supabase = await createClient();
@@ -20,14 +22,19 @@ export default async function FinanceDashboard() {
     `dashboard:finance:${viewerProfile?.college_id}:fee-stats`,
     60,
     async () => {
-      const { data: allFees } = await supabase.from("fees").select("amount, paid_amount, status");
+      const { data: allFees } = await supabase.from("fees").select("amount, paid_amount, status, due_date");
       const totalBilled = allFees?.reduce((s, f) => s + f.amount, 0) || 0;
       const totalCollected = allFees?.reduce((s, f) => s + f.paid_amount, 0) || 0;
-      const totalOverdue = allFees?.filter(f => f.status === "overdue").reduce((s, f) => s + (f.amount - f.paid_amount), 0) || 0;
+      // Computed live — nothing ever sets fees.status = 'overdue' (see
+      // lib/finance-status.ts), so a raw status === "overdue" filter here
+      // always read zero.
+      const totalOverdue = allFees?.filter(f => computeEffectiveFeeStatus(f) === "overdue").reduce((s, f) => s + (f.amount - f.paid_amount), 0) || 0;
       const collectionRate = totalBilled > 0 ? (totalCollected / totalBilled) * 100 : 0;
       return { totalBilled, totalCollected, totalOverdue, collectionRate };
     }
   );
+
+  const exceptions = await getFinanceExceptions();
 
   // Recent payments
   const { data: recentPayments } = await supabase
@@ -38,11 +45,47 @@ export default async function FinanceDashboard() {
 
   const formatCurr = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
 
+  const actionItems = [
+    { label: "refund request", count: exceptions.refundsAwaitingApproval.length, href: "/finance/refunds", severity: "high" as const },
+    { label: "dispute needing attention", count: exceptions.disputesNeedingAttention.length, href: "/finance/disputes", severity: "high" as const },
+    { label: "overdue fee", count: exceptions.overdueFees.length, href: "/finance/exceptions", severity: "medium" as const },
+    { label: "possible duplicate payment", count: exceptions.duplicatePayments.length, href: "/finance/exceptions", severity: "medium" as const },
+    { label: "overpayment", count: exceptions.overpayments.length, href: "/finance/exceptions", severity: "medium" as const },
+  ].filter((i) => i.count > 0);
+
   return (
     <div className="space-y-lg animate-[fade-in_0.3s_ease-out]">
       <div>
         <h1 className="text-2xl font-extrabold text-on-surface tracking-tight">Finance Dashboard</h1>
         <p className="text-sm text-on-surface-variant mt-xs">Revenue, collections, and transaction management</p>
+      </div>
+
+      {/* Action Required — real counts from getFinanceExceptions(), not
+          decorative; every item links to the real underlying workflow. */}
+      <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-sm">
+        <div className="px-lg py-md border-b border-outline-variant flex items-center justify-between">
+          <h2 className="text-sm font-bold text-on-surface">Action Required</h2>
+          <span className="text-xs font-semibold text-outline">{actionItems.length} item{actionItems.length !== 1 ? "s" : ""}</span>
+        </div>
+        <div className="divide-y divide-outline-variant">
+          {actionItems.length === 0 ? (
+            <div className="p-xl text-center text-sm text-outline">🎉 Nothing needs your attention right now.</div>
+          ) : (
+            actionItems.map((item, i) => (
+              <a
+                key={i}
+                href={item.href}
+                className="flex items-center justify-between px-lg py-md hover:bg-surface-container-low transition-colors"
+              >
+                <span className="text-sm text-on-surface">
+                  <span className={`font-bold ${item.severity === "high" ? "text-error" : "text-warning"}`}>{item.count}</span>{" "}
+                  {item.label}{item.count !== 1 ? "s" : ""}
+                </span>
+                <span className="text-xs font-semibold text-secondary">View →</span>
+              </a>
+            ))
+          )}
+        </div>
       </div>
 
       {/* Quick Actions */}

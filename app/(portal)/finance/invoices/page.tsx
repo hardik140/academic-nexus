@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { DataTable, type DataTableQuery } from "@/components/ui/data-table";
 import { Modal, Button, FormField, StatusBadge } from "@/components/ui/modal";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { computeEffectiveFeeStatus } from "@/lib/finance-status";
 import { createInvoice, listInvoices } from "./actions";
 
 const FEES_PAGE_SIZE = 10;
@@ -82,7 +83,7 @@ export default function FinanceInvoices() {
           { key: "amount", header: "Amount", sortable: true, render: (row: any) => formatCurrency(row.amount) },
           { key: "paid_amount", header: "Paid", render: (row: any) => formatCurrency(row.paid_amount) },
           { key: "due_date", header: "Due Date", sortable: true, render: (row: any) => formatDate(row.due_date) },
-          { key: "status", header: "Status", render: (row: any) => <StatusBadge status={row.status} /> },
+          { key: "status", header: "Status", render: (row: any) => <StatusBadge status={computeEffectiveFeeStatus(row)} /> },
         ]}
         data={fees}
         keyExtractor={(row) => row.id}
