@@ -7,6 +7,8 @@ import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib
 import { checkRateLimit } from "@/lib/rate-limit";
 import { getCached, invalidateCache } from "@/lib/cache";
 import { resolveListSort, listCacheKey } from "@/lib/cached-list";
+import { logAudit } from "@/lib/audit";
+import { PERMISSIONS } from "@/lib/permissions";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import type { DataTableQuery } from "@/components/ui/data-table";
@@ -19,7 +21,7 @@ const SCHOLARSHIPS_SORT_COLUMNS = ["name", "amount"] as const;
 const SCHOLARSHIPS_CACHE_PREFIX = "list:scholarships";
 
 export async function listScholarships(q: DataTableQuery) {
-  const actor = await requireRole(["finance", "admin"]);
+  const actor = await requireRole(PERMISSIONS.scholarship_read);
   const supabase = await createClient();
 
   const { column, ascending } = resolveListSort(SCHOLARSHIPS_SORT_COLUMNS, "awarded_date", false, q);
@@ -28,7 +30,8 @@ export async function listScholarships(q: DataTableQuery) {
   return getCached(cacheKey, 30, async () => {
     let dbQuery = supabase
       .from("scholarships")
-      .select("*, students:student_id(enrollment_number, profiles:user_id(full_name))", { count: "exact" });
+      .select("*, students:student_id(enrollment_number, profiles:user_id(full_name))", { count: "exact" })
+      .eq("college_id", actor.collegeId);
 
     if (q.search) dbQuery = dbQuery.ilike("name", `%${q.search}%`);
     dbQuery = dbQuery.order(column, { ascending });
@@ -78,19 +81,27 @@ export async function createScholarshipCore(
     throw new Error("Student not found in your college.");
   }
 
-  const { error } = await supabase.from("scholarships").insert({
-    college_id: actor.collegeId,
-    student_id: studentId,
-    name,
-    type,
-    amount,
-    academic_year: academicYear || null,
-    awarded_date: new Date().toISOString().slice(0, 10),
-  });
+  const { data: scholarship, error } = await supabase
+    .from("scholarships")
+    .insert({
+      college_id: actor.collegeId,
+      student_id: studentId,
+      name,
+      type,
+      amount,
+      academic_year: academicYear || null,
+      awarded_date: new Date().toISOString().slice(0, 10),
+    })
+    .select("id")
+    .single();
 
-  if (error) {
-    throw new Error(error.message);
+  if (error || !scholarship) {
+    throw new Error(error?.message || "Failed to create scholarship.");
   }
+
+  await logAudit(supabase, actor, "scholarship_created", "scholarships", scholarship.id, {
+    newValue: { student_id: studentId, name, type, amount },
+  });
 }
 
 export async function createScholarship(
@@ -101,7 +112,7 @@ export async function createScholarship(
   academicYear?: string,
   viewQuery?: DataTableQuery
 ) {
-  const actor = await requireRole(["finance", "admin"]);
+  const actor = await requireRole(PERMISSIONS.scholarship_manage);
   const supabase = await createClient();
   await createScholarshipCore(supabase, actor, { studentId, name, type, amount, academicYear });
   revalidatePath("/finance/scholarships");
@@ -114,6 +125,6 @@ export async function createScholarship(
 
 /** Called by app/api/mobile/finance/scholarship/route.ts. */
 export async function createScholarshipViaRequest(request: Request, params: CreateScholarshipParams) {
-  const { supabase, ...actor } = await requireRoleFromRequest(request, ["finance", "admin"]);
+  const { supabase, ...actor } = await requireRoleFromRequest(request, PERMISSIONS.scholarship_manage);
   await createScholarshipCore(supabase, actor, params);
 }

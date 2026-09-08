@@ -15,30 +15,82 @@ export default async function DirectorAnalytics() {
 
   // The views themselves now refresh every 15 min (scheduled via QStash),
   // so this is a second, finer cache layer on top of that.
-  const { attendance, fees, enrollment, placement } = await getCached(
+  const { attendance, fees, enrollment, placement, deptHealth, facultyCount } = await getCached(
     `analytics:director:${viewerProfile?.college_id}:mv`,
     60,
     async () => {
-      const [attRes, feeRes, enrollRes, placeRes] = await Promise.all([
+      const [attRes, feeRes, enrollRes, placeRes, deptHealthRes, facultyRes] = await Promise.all([
         supabase.from("mv_attendance_summary").select("*"),
         supabase.from("mv_fee_summary").select("*").single(),
         supabase.from("mv_department_enrollment").select("*").order("total_students", { ascending: false }),
         supabase.from("mv_placement_summary").select("*").single(),
+        supabase.from("mv_department_health").select("*"),
+        supabase.from("profiles").select("*", { count: "exact", head: true }).in("role", ["teacher", "hod"]),
       ]);
       return {
         attendance: attRes.data || [],
         fees: feeRes.data,
         enrollment: enrollRes.data || [],
         placement: placeRes.data,
+        deptHealth: deptHealthRes.data || [],
+        facultyCount: facultyRes.count || 0,
       };
     }
   );
 
+  const totalStudentsForRetention = enrollment.reduce((s, d) => s + (d.total_students || 0), 0);
+  const activeStudentsForRetention = enrollment.reduce((s, d) => s + (d.active_students || 0), 0);
+  const retentionPct = totalStudentsForRetention > 0 ? Math.round((activeStudentsForRetention / totalStudentsForRetention) * 1000) / 10 : null;
+
+  const withBacklog = deptHealth.filter((d: any) => d.backlog_rate != null);
+  const institutionBacklogRate = withBacklog.length
+    ? Math.round((withBacklog.reduce((s: number, d: any) => s + d.backlog_rate, 0) / withBacklog.length) * 10) / 10
+    : null;
+
+  const facultyStudentRatio = facultyCount > 0 && activeStudentsForRetention > 0 ? Math.round(activeStudentsForRetention / facultyCount) : null;
+
   return (
     <div className="space-y-lg animate-[fade-in_0.3s_ease-out]">
-      <div>
-        <h1 className="text-2xl font-extrabold text-on-surface tracking-tight">Analytics</h1>
-        <p className="text-sm text-on-surface-variant mt-xs">Institutional KPIs from pre-computed materialized views</p>
+      <div className="flex items-center justify-between gap-md flex-wrap">
+        <div>
+          <h1 className="text-2xl font-extrabold text-on-surface tracking-tight">Analytics</h1>
+          <p className="text-sm text-on-surface-variant mt-xs">Institutional KPIs from pre-computed materialized views</p>
+        </div>
+        <a href="/director/departments/performance" className="text-xs font-medium text-secondary hover:underline">
+          Department Heatmap →
+        </a>
+      </div>
+
+      {/* Institution-wide health signals */}
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-md">
+        <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-lg shadow-sm">
+          <div className="text-xs font-semibold text-outline uppercase tracking-wider mb-sm">Retention Rate</div>
+          {retentionPct != null ? (
+            <div className={`text-3xl font-extrabold ${retentionPct >= 90 ? "text-success" : retentionPct >= 75 ? "text-warning" : "text-error"}`}>
+              {retentionPct}%
+            </div>
+          ) : (
+            <div className="text-sm text-outline">Insufficient data</div>
+          )}
+        </div>
+        <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-lg shadow-sm">
+          <div className="text-xs font-semibold text-outline uppercase tracking-wider mb-sm">Backlog Rate</div>
+          {institutionBacklogRate != null ? (
+            <div className={`text-3xl font-extrabold ${institutionBacklogRate <= 10 ? "text-success" : institutionBacklogRate <= 20 ? "text-warning" : "text-error"}`}>
+              {institutionBacklogRate}%
+            </div>
+          ) : (
+            <div className="text-sm text-outline">Insufficient data</div>
+          )}
+        </div>
+        <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-lg shadow-sm">
+          <div className="text-xs font-semibold text-outline uppercase tracking-wider mb-sm">Faculty : Student Ratio</div>
+          {facultyStudentRatio != null ? (
+            <div className="text-3xl font-extrabold text-on-surface">1:{facultyStudentRatio}</div>
+          ) : (
+            <div className="text-sm text-outline">Insufficient data</div>
+          )}
+        </div>
       </div>
 
       {/* Summary Cards */}

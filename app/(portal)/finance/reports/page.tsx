@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { formatCurrency } from "@/lib/utils";
 import { getCached } from "@/lib/cache";
+import { computeEffectiveFeeStatus } from "@/lib/finance-status";
 
 export default async function FinanceReports() {
   const supabase = await createClient();
@@ -26,7 +27,7 @@ export default async function FinanceReports() {
     async () => {
       const [summaryRes, feesRes] = await Promise.all([
         supabase.from("mv_fee_summary").select("*").maybeSingle(),
-        supabase.from("fees").select("amount, paid_amount, status, students(departments(name, code))"),
+        supabase.from("fees").select("amount, paid_amount, status, due_date, students(departments(name, code))"),
       ]);
       return { summary: summaryRes.data, fees: feesRes.data || [] };
     }
@@ -44,9 +45,16 @@ export default async function FinanceReports() {
   });
   const deptBreakdown = Object.values(byDept);
 
-  // Status breakdown
+  // Status breakdown — computed live (computeEffectiveFeeStatus), since
+  // mv_fee_summary's total_overdue and the raw stored status both inherit
+  // the same dead-'overdue' problem documented in lib/finance-status.ts.
   const statusCounts: Record<string, number> = {};
-  fees.forEach((f: any) => { statusCounts[f.status] = (statusCounts[f.status] || 0) + 1; });
+  let totalOutstandingOverdue = 0;
+  fees.forEach((f: any) => {
+    const effective = computeEffectiveFeeStatus(f);
+    statusCounts[effective] = (statusCounts[effective] || 0) + 1;
+    if (effective === "overdue") totalOutstandingOverdue += f.amount - f.paid_amount;
+  });
 
   return (
     <div className="space-y-lg animate-[fade-in_0.3s_ease-out]">
@@ -65,8 +73,8 @@ export default async function FinanceReports() {
           <div className="text-2xl font-extrabold text-success">{formatCurrency(summary?.total_collected || 0)}</div>
         </div>
         <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-lg shadow-sm">
-          <div className="text-xs font-semibold text-outline uppercase tracking-wider mb-sm">Outstanding</div>
-          <div className="text-2xl font-extrabold text-error">{formatCurrency(summary?.total_overdue || 0)}</div>
+          <div className="text-xs font-semibold text-outline uppercase tracking-wider mb-sm">Outstanding (Overdue)</div>
+          <div className="text-2xl font-extrabold text-error">{formatCurrency(totalOutstandingOverdue)}</div>
         </div>
         <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-lg shadow-sm">
           <div className="text-xs font-semibold text-outline uppercase tracking-wider mb-sm">Collection Rate</div>

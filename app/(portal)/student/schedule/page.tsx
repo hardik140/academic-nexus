@@ -24,11 +24,24 @@ export default async function StudentSchedule() {
 
   const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
   const todayIndex = new Date().getDay();
+  const todayDate = new Date().toISOString().split("T")[0];
   const groupedSlots: Record<number, any[]> = {};
   (slots || []).forEach((slot: any) => {
     if (!groupedSlots[slot.day_of_week]) groupedSlots[slot.day_of_week] = [];
     groupedSlots[slot.day_of_week].push(slot);
   });
+
+  // Today's assigned substitutions, by course — read-only downstream touch:
+  // a class covered by a substitute today shows who's covering it, without
+  // mutating the underlying timetable_slots row.
+  const { data: todaySubs } = await supabase
+    .from("substitution_assignments")
+    .select("course_id, substitute:substitute_teacher_id(full_name)")
+    .eq("date", todayDate)
+    .eq("status", "assigned");
+  const substituteByCourse = new Map(
+    (todaySubs || []).map((s: any) => [s.course_id, s.substitute?.full_name])
+  );
 
   return (
     <div className="space-y-lg animate-[fade-in_0.3s_ease-out]">
@@ -61,22 +74,30 @@ export default async function StudentSchedule() {
                 </div>
                 {groupedSlots[day] && groupedSlots[day].length > 0 ? (
                   <div className="flex flex-wrap gap-sm">
-                    {groupedSlots[day].map((slot: any) => (
-                      <div
-                        key={slot.id}
-                        className={`border rounded-xl px-md py-sm ${
-                          isToday ? "bg-surface-container-lowest border-secondary/30 shadow-sm" : "bg-surface-container-low border-outline-variant"
-                        }`}
-                      >
-                        <div className="text-sm font-semibold text-on-surface">
-                          {slot.courses?.code} — {slot.courses?.name}
+                    {groupedSlots[day].map((slot: any) => {
+                      const substituteName = isToday ? substituteByCourse.get(slot.course_id) : undefined;
+                      return (
+                        <div
+                          key={slot.id}
+                          className={`border rounded-xl px-md py-sm ${
+                            isToday ? "bg-surface-container-lowest border-secondary/30 shadow-sm" : "bg-surface-container-low border-outline-variant"
+                          }`}
+                        >
+                          <div className="text-sm font-semibold text-on-surface">
+                            {slot.courses?.code} — {slot.courses?.name}
+                          </div>
+                          <div className="text-xs text-outline mt-xs">
+                            🕐 {slot.start_time?.slice(0, 5)} – {slot.end_time?.slice(0, 5)}
+                            {slot.room && ` • 📍 Room ${slot.room}`}
+                          </div>
+                          {substituteName && (
+                            <div className="text-[11px] font-semibold text-warning mt-xs">
+                              👤 Substitute: {substituteName}
+                            </div>
+                          )}
                         </div>
-                        <div className="text-xs text-outline mt-xs">
-                          🕐 {slot.start_time?.slice(0, 5)} – {slot.end_time?.slice(0, 5)}
-                          {slot.room && ` • 📍 Room ${slot.room}`}
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="text-xs text-outline italic">No classes scheduled</div>

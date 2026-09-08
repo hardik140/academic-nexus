@@ -7,6 +7,7 @@ import { checkRateLimit } from "@/lib/rate-limit";
 import { logAudit } from "@/lib/audit";
 import { canInvite } from "@/lib/auth/invite-tiers";
 import { sendInvitationEmail } from "@/lib/email";
+import { getPublicAppUrl } from "@/lib/app-url";
 
 /**
  * Best-effort college-name lookup for the invitation email body. Never
@@ -51,7 +52,7 @@ const INVITE_REDIRECT_PATH = "/auth/callback?next=/auth/accept-invite";
  */
 function confirmLink(tokenHash: string, type: "invite"): string {
   const params = new URLSearchParams({ token_hash: tokenHash, type, next: "/auth/accept-invite" });
-  return `${process.env.NEXT_PUBLIC_APP_URL}/auth/confirm?${params.toString()}`;
+  return `${getPublicAppUrl()}/auth/confirm?${params.toString()}`;
 }
 
 export interface InviteUserParams {
@@ -102,6 +103,7 @@ export async function inviteUserCore(
   }
 
   const admin = createAdminClient();
+  const appUrl = getPublicAppUrl();
   // generateLink (not inviteUserByEmail) — it still creates the auth.users
   // row and still mints a real, Supabase-validated token exactly the same
   // way, but returns the action_link to app code instead of emailing it
@@ -119,7 +121,7 @@ export async function inviteUserCore(
         status: "pending",
         invited_by: actor.userId,
       },
-      redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}${INVITE_REDIRECT_PATH}`,
+      redirectTo: `${appUrl}${INVITE_REDIRECT_PATH}`,
     },
   });
 
@@ -201,6 +203,7 @@ export async function resendInvitationCore(
   }
 
   const admin = createAdminClient();
+  const appUrl = getPublicAppUrl();
   if (invitation.user_id) {
     await admin.auth.admin.deleteUser(invitation.user_id);
   }
@@ -215,7 +218,7 @@ export async function resendInvitationCore(
         status: "pending",
         invited_by: actor.userId,
       },
-      redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}${INVITE_REDIRECT_PATH}`,
+      redirectTo: `${appUrl}${INVITE_REDIRECT_PATH}`,
     },
   });
   if (inviteErr || !created.user) {

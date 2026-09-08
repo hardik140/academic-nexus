@@ -187,12 +187,23 @@ const statusColors: Record<string, string> = {
   enrolled: "bg-success/10 text-success",
   placed: "bg-success/10 text-success",
   returned: "bg-success/10 text-success",
+  on_track: "bg-success/10 text-success",
+  achieved: "bg-success/10 text-success",
+  low: "bg-success/10 text-success",
 
   pending: "bg-warning/10 text-warning",
   partial: "bg-warning/10 text-warning",
   late: "bg-warning/10 text-warning",
   in_progress: "bg-warning/10 text-warning",
   on_leave: "bg-warning/10 text-warning",
+  open: "bg-warning/10 text-warning",
+  assigned: "bg-warning/10 text-warning",
+  acknowledged: "bg-warning/10 text-warning",
+  sent_back: "bg-warning/10 text-warning",
+  info_requested: "bg-warning/10 text-warning",
+  at_risk: "bg-warning/10 text-warning",
+  medium: "bg-warning/10 text-warning",
+  high: "bg-warning/10 text-warning",
 
   absent: "bg-error/10 text-error",
   rejected: "bg-error/10 text-error",
@@ -203,11 +214,17 @@ const statusColors: Record<string, string> = {
   expired: "bg-error/10 text-error",
   closed: "bg-error/10 text-error",
   escalated: "bg-error/10 text-error",
+  off_track: "bg-error/10 text-error",
+  dismissed: "bg-error/10 text-error",
+  critical: "bg-error/10 text-error",
+  withdrawn: "bg-error/10 text-error",
 
   excused: "bg-info/10 text-info",
   upcoming: "bg-info/10 text-info",
   ongoing: "bg-info/10 text-info",
   issued: "bg-info/10 text-info",
+  delegated: "bg-info/10 text-info",
+  abandoned: "bg-surface-container-high text-on-surface-variant",
 };
 
 export function StatusBadge({ status, className }: StatusBadgeProps) {

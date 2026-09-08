@@ -21,13 +21,42 @@ const mockDeleteUser = vi.fn();
 // hoisting this one ahead of the vi.mock("@/lib/email", ...) factory below.
 const mockSendInvitationEmail = vi.hoisted(() => vi.fn());
 
+// Resolves an awaited .select().eq()/.in() chain that never calls
+// .single() — the array-returning shape used by block-resolution helpers
+// like resolveWardenScopedStudentIds (warden/gatepasses/actions.ts). Default
+// {data: []} matches this codebase's universal `(data || []).map(...)`/
+// `.length === 0` guard pattern, so any test that doesn't care about this
+// path (e.g. createSubstitutionNeeds's timetable_slots lookup) still no-ops
+// safely without configuring it.
+const mockSelectResolve = vi.fn();
+
+// Self-referencing so .eq()/.in() can chain any number of times before
+// .single() — some Core functions filter by a single column
+// (.eq(id).single()), others additionally scope by college_id
+// (.eq(id).eq(college_id).single()). Also directly thenable (awaited with
+// no .single() at all) via mockSelectResolve, for array-returning queries.
+const eqChain: { eq: () => typeof eqChain; in: () => typeof eqChain; single: typeof mockSingle; then: (resolve: (v: unknown) => unknown, reject?: (e: unknown) => unknown) => unknown } = {
+  eq: () => eqChain,
+  in: () => eqChain,
+  single: mockSingle,
+  then: (resolve, reject) => mockSelectResolve().then(resolve, reject),
+};
+
+// Both thenable (so `await insert(x)` resolves directly, for callers that
+// don't chain) and .select().single()-able (for the finance Core functions,
+// which insert-then-read-back the new row's id to pass to logAudit).
+function chainableInsert(result: { data?: unknown; error: unknown }) {
+  return {
+    then: (resolve: (v: unknown) => unknown, reject?: (e: unknown) => unknown) => Promise.resolve(result).then(resolve, reject),
+    select: () => ({ single: () => Promise.resolve(result) }),
+  };
+}
+
 vi.mock("@/lib/supabase/mobile", () => ({
   createMobileClient: () => ({
     auth: { getUser: mockGetUser },
     from: () => ({
-      select: () => ({
-        eq: () => ({ single: mockSingle }),
-      }),
+      select: () => eqChain,
       insert: mockInsert,
       upsert: mockUpsert,
       update: mockUpdate,
@@ -129,6 +158,8 @@ describe("app/api/mobile/* — HTTP-boundary authorization matrix", () => {
   beforeEach(() => {
     mockGetUser.mockReset();
     mockSingle.mockReset();
+    mockSelectResolve.mockReset();
+    mockSelectResolve.mockResolvedValue({ data: [] });
     mockInsert.mockReset();
     mockUpsert.mockReset();
     mockUpsert.mockResolvedValue({ error: null });
@@ -293,6 +324,67 @@ describe("app/api/mobile/* — HTTP-boundary authorization matrix", () => {
     expect(res.status).toBe(403);
   });
 
+  // Regression coverage for a real IDOR found via source audit: neither
+  // saveAttendanceCore nor saveMarksCore verified the client-supplied
+  // studentDbId was actually enrolled in the course — RLS only checks the
+  // actor's role + college, not the student_id being written, so a teacher
+  // could previously mark attendance/grades for an arbitrary student UUID,
+  // including one in a different college. Fixed via
+  // lib/course-enrollment.ts's verifyStudentsEnrolled.
+  it("attendance/save — teacher owns the course and the student IS enrolled → succeeds", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+    // Sequenced: (1) profile lookup, (2) course ownership check.
+    mockSingle
+      .mockResolvedValueOnce({ data: { role: "teacher", college_id: "c1", status: "active" } })
+      .mockResolvedValueOnce({ data: { instructor_id: "u1" } });
+    // verifyStudentsEnrolled's chain: students -> course_enrollments.
+    mockSelectResolve
+      .mockResolvedValueOnce({ data: [{ id: UUID_STUDENT_ROW, user_id: UUID_TARGET_USER }] })
+      .mockResolvedValueOnce({ data: [{ student_id: UUID_TARGET_USER }] });
+    const res = await saveAttendance(makeRequest(ATTENDANCE_BODY, "good-token"));
+    expect(res.status).toBe(200);
+  });
+
+  it("attendance/save — teacher owns the course but the student is NOT enrolled → 400 (IDOR regression)", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+    mockSingle
+      .mockResolvedValueOnce({ data: { role: "teacher", college_id: "c1", status: "active" } })
+      .mockResolvedValueOnce({ data: { instructor_id: "u1" } });
+    mockSelectResolve
+      .mockResolvedValueOnce({ data: [{ id: UUID_STUDENT_ROW, user_id: UUID_TARGET_USER }] })
+      .mockResolvedValueOnce({ data: [] }); // no course_enrollments row for this student
+    const res = await saveAttendance(makeRequest(ATTENDANCE_BODY, "good-token"));
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/not enrolled/);
+  });
+
+  it("grading/save — teacher owns the course and the student IS enrolled → succeeds", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+    mockSingle
+      .mockResolvedValueOnce({ data: { role: "teacher", college_id: "c1", status: "active" } })
+      .mockResolvedValueOnce({ data: { instructor_id: "u1" } });
+    mockSelectResolve
+      .mockResolvedValueOnce({ data: [{ id: UUID_STUDENT_ROW, user_id: UUID_TARGET_USER }] })
+      .mockResolvedValueOnce({ data: [{ student_id: UUID_TARGET_USER }] });
+    const res = await saveGrades(makeRequest(GRADES_BODY, "good-token"));
+    expect(res.status).toBe(200);
+  });
+
+  it("grading/save — teacher owns the course but the student is NOT enrolled → 400 (IDOR regression)", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+    mockSingle
+      .mockResolvedValueOnce({ data: { role: "teacher", college_id: "c1", status: "active" } })
+      .mockResolvedValueOnce({ data: { instructor_id: "u1" } });
+    mockSelectResolve
+      .mockResolvedValueOnce({ data: [{ id: UUID_STUDENT_ROW, user_id: UUID_TARGET_USER }] })
+      .mockResolvedValueOnce({ data: [] });
+    const res = await saveGrades(makeRequest(GRADES_BODY, "good-token"));
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/not enrolled/);
+  });
+
   it("leave/apply — authenticated as a non-teacher/admin role → 403", async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
     mockSingle.mockResolvedValue({ data: { role: "warden", college_id: "c1", status: "active" } });
@@ -320,12 +412,37 @@ describe("app/api/mobile/* — HTTP-boundary authorization matrix", () => {
 
   it("leave/act — authenticated as admin (bypasses the department-ownership check) → succeeds and updates the request", async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
-    mockSingle.mockResolvedValue({ data: { role: "admin", college_id: "c1", status: "active" } });
+    // Sequenced: (1) requireRoleFromRequest's profile lookup, (2)
+    // actOnLeaveRequestCore's own leave-request lookup (status must be
+    // 'pending' to pass the not-already-processed guard).
+    mockSingle
+      .mockResolvedValueOnce({ data: { role: "admin", college_id: "c1", status: "active" } })
+      .mockResolvedValueOnce({
+        data: { requested_by: "u1", start_date: "2026-01-01", end_date: "2026-01-02", status: "pending", profiles: { department_id: UUID_DEPARTMENT } },
+      });
     const res = await actOnLeave(makeRequest(LEAVE_ACT_BODY, "good-token"));
     expect(res.status).toBe(200);
     expect(mockUpdate).toHaveBeenCalledWith(
       expect.objectContaining({ status: "approved", approved_by: "u1" })
     );
+  });
+
+  // Regression coverage for a real workflow-bypass finding: actOnLeaveRequestCore
+  // never checked the request's current status before transitioning it, so an
+  // already-approved (or already-rejected) leave request could be re-approved
+  // or re-rejected indefinitely, re-firing createSubstitutionNeeds each time.
+  it("leave/act — request is already approved → 400 (state-transition regression)", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+    mockSingle
+      .mockResolvedValueOnce({ data: { role: "admin", college_id: "c1", status: "active" } })
+      .mockResolvedValueOnce({
+        data: { requested_by: "u1", start_date: "2026-01-01", end_date: "2026-01-02", status: "approved", profiles: { department_id: UUID_DEPARTMENT } },
+      });
+    const res = await actOnLeave(makeRequest(LEAVE_ACT_BODY, "good-token"));
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/already processed/);
+    expect(mockUpdate).not.toHaveBeenCalled();
   });
 
   it("gatepass/act — authenticated as a non-warden/admin role → 403", async () => {
@@ -337,12 +454,53 @@ describe("app/api/mobile/* — HTTP-boundary authorization matrix", () => {
 
   it("gatepass/act — authenticated as warden → succeeds and updates the gate pass", async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
-    mockSingle.mockResolvedValue({ data: { role: "warden", college_id: "c1", status: "active" } });
+    // Sequenced: (1) requireRoleFromRequest's profile lookup, (2)
+    // actOnGatePassCore's own pass lookup (student_id + embedded student
+    // name for the notification), (3) assertGatePassInWardenScope's
+    // hostel_allocations->block_id lookup, (4) its hostel_blocks
+    // ownership check (truthy row = this warden owns that block).
+    mockSingle
+      .mockResolvedValueOnce({ data: { role: "warden", college_id: "c1", status: "active" } })
+      .mockResolvedValueOnce({
+        data: {
+          student_id: UUID_STUDENT,
+          status: "pending",
+          destination: "Home",
+          students: { profiles: { id: UUID_TARGET_USER, full_name: "Test Student" } },
+        },
+      })
+      .mockResolvedValueOnce({ data: { room_id: UUID_STUDENT_ROW, hostel_rooms: { block_id: UUID_BLOCK } } })
+      .mockResolvedValueOnce({ data: { id: UUID_BLOCK } });
     const res = await actOnGatePass(makeRequest(GATEPASS_ACT_BODY, "good-token"));
     expect(res.status).toBe(200);
     expect(mockUpdate).toHaveBeenCalledWith(
       expect.objectContaining({ status: "approved", approved_by: "u1" })
     );
+  });
+
+  // Regression coverage for a real workflow-bypass finding: actOnGatePassCore
+  // never checked the pass's current status before transitioning it (unlike
+  // verifyGatePassMovementCore in the same file, which already guarded this
+  // correctly) — an already-approved or already-rejected pass could be
+  // re-approved/re-rejected, overwriting approved_by/approved_at and
+  // re-sending the student a notification each time.
+  it("gatepass/act — pass is already approved → 400 (state-transition regression)", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+    mockSingle
+      .mockResolvedValueOnce({ data: { role: "warden", college_id: "c1", status: "active" } })
+      .mockResolvedValueOnce({
+        data: {
+          student_id: UUID_STUDENT,
+          status: "approved",
+          destination: "Home",
+          students: { profiles: { id: UUID_TARGET_USER, full_name: "Test Student" } },
+        },
+      });
+    const res = await actOnGatePass(makeRequest(GATEPASS_ACT_BODY, "good-token"));
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/already processed/);
+    expect(mockUpdate).not.toHaveBeenCalled();
   });
 
   it("complaints/status — authenticated as a non-warden/admin role → 403", async () => {
@@ -354,12 +512,51 @@ describe("app/api/mobile/* — HTTP-boundary authorization matrix", () => {
 
   it("complaints/status — authenticated as warden → succeeds and updates the complaint", async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
-    mockSingle.mockResolvedValue({ data: { role: "warden", college_id: "c1", status: "active" } });
+    // Sequenced: (1) requireRoleFromRequest's profile lookup, (2)
+    // updateComplaintStatusCore's own existing-row lookup (used for the
+    // audit diff and — only on 'resolved' — the student notification;
+    // this test uses 'in_progress' so no further .single() calls happen).
+    mockSingle
+      .mockResolvedValueOnce({ data: { role: "warden", college_id: "c1", status: "active" } })
+      .mockResolvedValueOnce({ data: { status: "open", submitted_by: UUID_TARGET_USER, title: "Leaky tap" } });
+    // resolveWardenScopedSubmitterIds's chain: hostel_blocks -> hostel_rooms
+    // -> hostel_allocations -> students, resolving the complainant's block
+    // as one this warden owns (submitted_by === UUID_TARGET_USER above must
+    // land in the final students->user_id result for the scope check to pass).
+    mockSelectResolve
+      .mockResolvedValueOnce({ data: [{ id: UUID_BLOCK }] })
+      .mockResolvedValueOnce({ data: [{ id: UUID_STUDENT_ROW }] })
+      .mockResolvedValueOnce({ data: [{ student_id: UUID_STUDENT }] })
+      .mockResolvedValueOnce({ data: [{ user_id: UUID_TARGET_USER }] });
     const res = await updateComplaintStatus(makeRequest(COMPLAINT_STATUS_BODY, "good-token"));
     expect(res.status).toBe(200);
     expect(mockUpdate).toHaveBeenCalledWith(
       expect.objectContaining({ status: "in_progress", resolved_at: null })
     );
+  });
+
+  // Regression coverage for a real scoping gap found via source audit:
+  // updateComplaintStatusCore had no block-ownership check at all, unlike
+  // every other warden/*/actions.ts file — any warden at a college could
+  // view/resolve hostel complaints from every block, not just their own.
+  // Here the warden's own block (UUID_BLOCK) resolves to a DIFFERENT
+  // complainant than the one who filed this complaint (UUID_TARGET_USER),
+  // so the scope check must reject it.
+  it("complaints/status — complaint's student is in a DIFFERENT warden's block → 400 (IDOR regression)", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+    mockSingle
+      .mockResolvedValueOnce({ data: { role: "warden", college_id: "c1", status: "active" } })
+      .mockResolvedValueOnce({ data: { status: "open", submitted_by: UUID_TARGET_USER, title: "Leaky tap" } });
+    mockSelectResolve
+      .mockResolvedValueOnce({ data: [{ id: UUID_BLOCK }] }) // this warden's own block
+      .mockResolvedValueOnce({ data: [{ id: UUID_STUDENT_ROW }] })
+      .mockResolvedValueOnce({ data: [{ student_id: UUID_STUDENT }] })
+      .mockResolvedValueOnce({ data: [{ user_id: UUID_SELF }] }); // resolves to a DIFFERENT profile than UUID_TARGET_USER
+    const res = await updateComplaintStatus(makeRequest(COMPLAINT_STATUS_BODY, "good-token"));
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toMatch(/your own hostel block/);
+    expect(mockUpdate).not.toHaveBeenCalled();
   });
 
   it("finance/invoice — authenticated as a non-finance/admin role → 403", async () => {
@@ -374,7 +571,7 @@ describe("app/api/mobile/* — HTTP-boundary authorization matrix", () => {
     mockSingle
       .mockResolvedValueOnce({ data: { role: "finance", college_id: "c1", status: "active" } })
       .mockResolvedValueOnce({ data: { id: UUID_STUDENT, college_id: "c1" } });
-    mockInsert.mockResolvedValue({ error: null });
+    mockInsert.mockReturnValue(chainableInsert({ data: { id: UUID_FEE }, error: null }));
     const res = await createInvoice(makeRequest(INVOICE_BODY, "good-token"));
     expect(res.status).toBe(200);
     expect(mockInsert).toHaveBeenCalledWith(
@@ -405,7 +602,7 @@ describe("app/api/mobile/* — HTTP-boundary authorization matrix", () => {
     mockSingle
       .mockResolvedValueOnce({ data: { role: "finance", college_id: "c1", status: "active" } })
       .mockResolvedValueOnce({ data: { id: UUID_FEE, college_id: "c1", student_id: UUID_STUDENT, amount: 5000, paid_amount: 0 } });
-    mockInsert.mockResolvedValue({ error: null });
+    mockInsert.mockReturnValue(chainableInsert({ data: { id: "payment-1" }, error: null }));
     const res = await recordPayment(makeRequest(PAYMENT_BODY, "good-token"));
     expect(res.status).toBe(200);
     expect(mockInsert).toHaveBeenCalledWith(
@@ -425,7 +622,7 @@ describe("app/api/mobile/* — HTTP-boundary authorization matrix", () => {
     mockSingle
       .mockResolvedValueOnce({ data: { role: "finance", college_id: "c1", status: "active" } })
       .mockResolvedValueOnce({ data: { id: UUID_STUDENT, college_id: "c1" } });
-    mockInsert.mockResolvedValue({ error: null });
+    mockInsert.mockReturnValue(chainableInsert({ data: { id: "scholarship-1" }, error: null }));
     const res = await createScholarship(makeRequest(SCHOLARSHIP_BODY, "good-token"));
     expect(res.status).toBe(200);
     expect(mockInsert).toHaveBeenCalledWith(

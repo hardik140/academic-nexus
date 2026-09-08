@@ -28,7 +28,7 @@ export async function listFaculty(q: DataTableQuery) {
   const cacheKey = listCacheKey(FACULTY_CACHE_PREFIX, actor.collegeId, q, column);
 
   return getCached(cacheKey, 30, async () => {
-    const [facultyRes, coursesRes] = await Promise.all([
+    const [facultyRes, coursesRes, slotsRes] = await Promise.all([
       (() => {
         let dbQuery = supabase
           .from("profiles")
@@ -43,6 +43,7 @@ export async function listFaculty(q: DataTableQuery) {
       // ample headroom while still keeping this tally from silently
       // undercounting under normal growth.
       supabase.from("courses").select("id, instructor_id").limit(DEFAULT_QUERY_LIMIT * 2),
+      supabase.from("timetable_slots").select("instructor_id").limit(DEFAULT_QUERY_LIMIT * 2),
     ]);
 
     const courseCounts: Record<string, number> = {};
@@ -51,7 +52,41 @@ export async function listFaculty(q: DataTableQuery) {
       courseCounts[c.instructor_id] = (courseCounts[c.instructor_id] || 0) + 1;
     });
 
-    const data = (facultyRes.data || []).map((f: any) => ({ ...f, course_count: courseCounts[f.id] || 0 }));
+    const weeklyPeriods: Record<string, number> = {};
+    (slotsRes.data || []).forEach((s: any) => {
+      if (!s.instructor_id) return;
+      weeklyPeriods[s.instructor_id] = (weeklyPeriods[s.instructor_id] || 0) + 1;
+    });
+
+    // Attendance/marks entry counts are only fetched for the faculty rows on
+    // this page — real raw counts ("N sessions marked"), not a fabricated
+    // completion percentage, since there is no reliable "expected count"
+    // (semester calendars/holidays aren't modeled) to divide by honestly.
+    const pageIds = (facultyRes.data || []).map((f: any) => f.id);
+    const [attendanceRes, marksRes] = pageIds.length
+      ? await Promise.all([
+          supabase.from("attendance").select("marked_by, date").in("marked_by", pageIds),
+          supabase.from("marks").select("entered_by").in("entered_by", pageIds),
+        ])
+      : [{ data: [] }, { data: [] }];
+
+    const attendanceSessions: Record<string, Set<string>> = {};
+    (attendanceRes.data || []).forEach((a: any) => {
+      if (!attendanceSessions[a.marked_by]) attendanceSessions[a.marked_by] = new Set();
+      attendanceSessions[a.marked_by].add(a.date);
+    });
+    const marksCounts: Record<string, number> = {};
+    (marksRes.data || []).forEach((m: any) => {
+      marksCounts[m.entered_by] = (marksCounts[m.entered_by] || 0) + 1;
+    });
+
+    const data = (facultyRes.data || []).map((f: any) => ({
+      ...f,
+      course_count: courseCounts[f.id] || 0,
+      weekly_periods: weeklyPeriods[f.id] || 0,
+      attendance_sessions_marked: attendanceSessions[f.id]?.size || 0,
+      marks_entered: marksCounts[f.id] || 0,
+    }));
     return { data, count: facultyRes.count ?? 0 };
   });
 }
