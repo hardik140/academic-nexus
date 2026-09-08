@@ -44,7 +44,7 @@ components/
    NEXT_PUBLIC_SUPABASE_URL=https://xxxx.supabase.co
    NEXT_PUBLIC_SUPABASE_ANON_KEY=public-anon-key
    SUPABASE_SERVICE_ROLE_KEY=service-role-key
-   NEXTAUTH_URL=http://localhost:3000
+  NEXT_PUBLIC_APP_URL=http://localhost:3000
 
 4. Run locally
    npm run dev
