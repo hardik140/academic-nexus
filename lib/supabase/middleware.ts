@@ -40,6 +40,15 @@ export async function updateSession(request: NextRequest) {
   }
 
   let supabaseResponse = NextResponse.next({ request });
+  const pathname = request.nextUrl.pathname;
+
+  // Auth exchange endpoints establish or replace the session themselves.
+  // Running getUser() here first can refresh the browser's previous session
+  // concurrently with verifyOtp()/exchangeCodeForSession(), causing Supabase
+  // to reject a one-time refresh token before the new session is written.
+  if (pathname === "/auth/confirm" || pathname === "/auth/callback") {
+    return supabaseResponse;
+  }
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -66,8 +75,6 @@ export async function updateSession(request: NextRequest) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-
-  const pathname = request.nextUrl.pathname;
 
   // Allow public routes
   if (PUBLIC_ROUTES.some((route) => pathname.startsWith(route))) {

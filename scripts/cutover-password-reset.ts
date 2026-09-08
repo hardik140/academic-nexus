@@ -16,6 +16,7 @@
  */
 import dotenv from "dotenv";
 import { createClient } from "@supabase/supabase-js";
+import { getPublicAppUrl } from "../lib/app-url";
 import { prompt } from "./lib/prompt";
 
 dotenv.config({ path: ".env.local" });
@@ -24,7 +25,14 @@ async function main() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  let appUrl: string;
+
+  try {
+    appUrl = getPublicAppUrl();
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : error);
+    process.exit(1);
+  }
 
   if (!supabaseUrl || !anonKey || !serviceRoleKey) {
     console.error("Missing Supabase env vars in .env.local.");
