@@ -47,9 +47,12 @@ export default function DirectorFaculty() {
           },
           { key: "role", header: "Role", render: (row: any) => <span className="capitalize text-on-surface-variant">{row.role}</span> },
           { key: "department", header: "Department", render: (row: any) => (row.departments as any)?.name || "—" },
-          // Not sortable in server mode: course_count is a client-side join
-          // tally, not a real profiles column — the server can't .order() by it.
+          // Not sortable in server mode: these are client-side join tallies,
+          // not real profiles columns — the server can't .order() by them.
           { key: "course_count", header: "Courses" },
+          { key: "weekly_periods", header: "Weekly Periods" },
+          { key: "attendance_sessions_marked", header: "Attendance Sessions" },
+          { key: "marks_entered", header: "Marks Entered" },
           {
             key: "status",
             header: "Status",

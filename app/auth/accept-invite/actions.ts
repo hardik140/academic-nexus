@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { logAudit } from "@/lib/audit";
 import { dashboardPathFor } from "@/lib/auth/role-routes";
 import { invalidateCache, middlewareProfileCacheKey } from "@/lib/cache";
@@ -43,12 +44,22 @@ export async function acceptInvitation(password: string) {
     throw new Error("This invitation has already been accepted — sign in normally instead.");
   }
 
-  const { data: invitation } = await supabase
+  // This lookup is scoped to the authenticated user's exact id. Use the
+  // server-only client so onboarding does not fail closed when an older
+  // deployment has not yet applied the invitee SELECT RLS migration.
+  const admin = createAdminClient();
+  const { data: invitation, error: invitationLookupError } = await admin
     .from("invitations")
     .select("id, expires_at")
     .eq("user_id", user.id)
     .eq("status", "pending")
-    .single();
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (invitationLookupError) {
+    throw new Error(`Unable to load your invitation. ${invitationLookupError.message}`);
+  }
 
   if (!invitation) {
     throw new Error("No pending invitation found for this account.");
@@ -75,7 +86,7 @@ export async function acceptInvitation(password: string) {
   // way. Invalidating anyway costs nothing and removes any doubt.
   await invalidateCache(middlewareProfileCacheKey(user.id));
 
-  const { error: invitationErr } = await supabase
+  const { error: invitationErr } = await admin
     .from("invitations")
     .update({ status: "accepted", accepted_at: new Date().toISOString(), accepted_by: user.id })
     .eq("id", invitation.id);

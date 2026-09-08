@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { DataTable, type DataTableQuery } from "@/components/ui/data-table";
 import { Modal, Button, FormField, StatusBadge } from "@/components/ui/modal";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { computeEffectiveFeeStatus } from "@/lib/finance-status";
 import { recordPayment, listInvoices, listPayments, getFeeStats } from "./actions";
 import type { Database } from "@/types/database";
 
@@ -136,7 +137,7 @@ export default function FinanceTransactions() {
             { key: "amount", header: "Amount", sortable: true, render: (row: any) => <span className="font-semibold">{formatCurrency(row.amount)}</span> },
             { key: "paid_amount", header: "Paid", render: (row: any) => <span className="text-success">{formatCurrency(row.paid_amount)}</span> },
             { key: "due_date", header: "Due Date", sortable: true, render: (row: any) => formatDate(row.due_date) },
-            { key: "status", header: "Status", render: (row: any) => <StatusBadge status={row.status} /> },
+            { key: "status", header: "Status", render: (row: any) => <StatusBadge status={computeEffectiveFeeStatus(row)} /> },
           ]}
           data={fees}
           keyExtractor={(row) => row.id}

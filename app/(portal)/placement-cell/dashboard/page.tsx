@@ -3,6 +3,8 @@ import { StatsCard } from "@/components/ui/stats-card";
 import { StatusBadge } from "@/components/ui/modal";
 import { getPlacementCellDashboard } from "./actions";
 import { listSentPlacementNotifications } from "../notifications/actions";
+import { RequestDecisionButton } from "@/components/portal/request-decision-modal";
+import { DirectorEscalationsPanel } from "@/components/portal/director-escalations-panel";
 
 export default async function PlacementCellDashboard() {
   const [stats, notifications] = await Promise.all([
@@ -14,10 +16,15 @@ export default async function PlacementCellDashboard() {
 
   return (
     <div className="space-y-lg animate-[fade-in_0.3s_ease-out]">
-      <div>
-        <h1 className="text-2xl font-extrabold text-on-surface tracking-tight">Placement Dashboard</h1>
-        <p className="text-sm text-on-surface-variant mt-xs">Run the placement process for your college</p>
+      <div className="flex items-start justify-between gap-md">
+        <div>
+          <h1 className="text-2xl font-extrabold text-on-surface tracking-tight">Placement Dashboard</h1>
+          <p className="text-sm text-on-surface-variant mt-xs">Run the placement process for your college</p>
+        </div>
+        <RequestDecisionButton />
       </div>
+
+      <DirectorEscalationsPanel />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-md">
         <StatsCard label="Total Students" value={stats.totalStudents} icon="👥" />

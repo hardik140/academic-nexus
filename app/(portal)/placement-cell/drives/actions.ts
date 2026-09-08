@@ -310,13 +310,20 @@ export async function updateApplicationStatus(applicationId: string, status: (ty
 
   const { data: applicationData } = await supabase
     .from("placement_applications")
-    .select("id, college_id, student_id, drive_id, placement_drives:drive_id(job_role, package_lpa, company_id, companies:company_id(name))")
+    .select("id, college_id, student_id, drive_id, status, placement_drives:drive_id(job_role, package_lpa, company_id, companies:company_id(name))")
     .eq("id", parsed.applicationId)
     .single();
-  const application = applicationData as unknown as ApplicationWithDrive | null;
+  const application = applicationData as unknown as (ApplicationWithDrive & { status: string }) | null;
 
   if (!application || application.college_id !== actor.collegeId) {
     throw new Error("Application not found in your college.");
+  }
+  // Re-applying the same status (most concretely: calling "selected" twice)
+  // would otherwise insert a second row into `placements` below — there's
+  // no unique constraint there to catch it, and it would silently inflate
+  // placement-rate analytics on director/analytics.
+  if (application.status === parsed.status) {
+    throw new Error(`This application is already marked ${parsed.status}.`);
   }
 
   const { error } = await supabase

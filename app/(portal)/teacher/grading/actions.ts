@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib/rbac";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { verifyStudentsEnrolled } from "@/lib/course-enrollment";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 
@@ -68,6 +69,12 @@ export async function saveMarksCore(
   if (actor.role === "teacher" && course.instructor_id !== actor.userId) {
     throw new Error("You can only enter marks for courses you teach.");
   }
+
+  // RLS (marks_teacher_manage) only checks the actor's role + college, never
+  // the student_id being written — without this, any teacher could write a
+  // marks row for an arbitrary student UUID, including one in a different
+  // college. See lib/course-enrollment.ts.
+  await verifyStudentsEnrolled(supabase, courseId, entries.map((e) => e.studentDbId));
 
   const rows = entries
     .filter((e) => Number.isFinite(e.obtainedMarks))

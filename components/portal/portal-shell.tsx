@@ -25,6 +25,7 @@ const NAV_MAP: Record<
     { label: "Attendance", href: "/student/attendance", icon: "✅" },
     { label: "Fees", href: "/student/fees", icon: "💰" },
     { label: "Grades", href: "/student/grades", icon: "📝" },
+    { label: "Insights", href: "/student/insights", icon: "🧠" },
     { label: "Hostel", href: "/student/hostel", icon: "🏠" },
     { label: "Gate Pass", href: "/student/gatepass", icon: "🚪" },
     { label: "Placement", href: "/student/placements", icon: "🎯" },
@@ -41,13 +42,18 @@ const NAV_MAP: Record<
   hod: [
     { label: "Dashboard", href: "/hod/dashboard", icon: "📊" },
     { label: "Approvals", href: "/hod/approvals", icon: "✅" },
+    { label: "Substitutions", href: "/hod/substitutions", icon: "🔄" },
     { label: "Team", href: "/hod/team", icon: "✉️" },
     { label: "Faculty", href: "/hod/faculty", icon: "👥" },
+    { label: "Workload", href: "/hod/workload", icon: "⚖️" },
     { label: "Courses", href: "/hod/courses", icon: "📚" },
     { label: "Reports", href: "/hod/reports", icon: "📈" },
   ],
   finance: [
     { label: "Dashboard", href: "/finance/dashboard", icon: "📊" },
+    { label: "Exceptions", href: "/finance/exceptions", icon: "🚨" },
+    { label: "Refunds", href: "/finance/refunds", icon: "💸" },
+    { label: "Disputes", href: "/finance/disputes", icon: "⚖️" },
     { label: "Transactions", href: "/finance/transactions", icon: "💳" },
     { label: "Invoices", href: "/finance/invoices", icon: "🧾" },
     { label: "Scholarships", href: "/finance/scholarships", icon: "🎓" },
@@ -55,12 +61,18 @@ const NAV_MAP: Record<
   ],
   director: [
     { label: "Dashboard", href: "/director/dashboard", icon: "📊" },
+    { label: "Attention", href: "/director/attention", icon: "🚨" },
+    { label: "Decisions", href: "/director/decisions", icon: "🗳️" },
     { label: "Analytics", href: "/director/analytics", icon: "📈" },
     { label: "Departments", href: "/director/departments", icon: "🏢" },
+    { label: "Placements", href: "/director/placements/funnel", icon: "🎯" },
+    { label: "Hostel", href: "/director/hostel", icon: "🏠" },
     { label: "Team", href: "/director/team", icon: "✉️" },
     { label: "Faculty", href: "/director/faculty", icon: "👥" },
-    { label: "Placements", href: "/director/placements", icon: "💼" },
-    { label: "Placement Cell", href: "/director/placement-cell", icon: "🎯" },
+    { label: "Goals", href: "/director/goals", icon: "🏆" },
+    { label: "Ask the Institution", href: "/director/ask", icon: "💬" },
+    { label: "Forecast", href: "/director/forecast", icon: "🔮" },
+    { label: "Briefing", href: "/director/briefing", icon: "📰" },
   ],
   admin: [
     { label: "Dashboard", href: "/admin/dashboard", icon: "📊" },
@@ -76,6 +88,7 @@ const NAV_MAP: Record<
   warden: [
     { label: "Dashboard", href: "/warden/dashboard", icon: "📊" },
     { label: "Rooms", href: "/warden/rooms", icon: "🏠" },
+    { label: "Transfers", href: "/warden/transfers", icon: "🔄" },
     { label: "Gate Passes", href: "/warden/gatepasses", icon: "🚪" },
     { label: "Complaints", href: "/warden/complaints", icon: "🛠️" },
   ],
@@ -92,6 +105,24 @@ const NAV_MAP: Record<
     { label: "Reports", href: "/placement-cell/reports", icon: "📈" },
   ],
 };
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Falls back to the parent segment when the last path segment is a UUID
+ * (a dynamic [id] route, e.g. /director/decisions/<uuid>) — otherwise the
+ * naive "last segment, capitalized" breadcrumb shows a raw record id.
+ * Also turns hyphenated route segments (e.g. "placement-cell") into
+ * space-separated words for readability.
+ */
+function breadcrumbLabel(pathname: string): string {
+  const segments = pathname.split("/").filter(Boolean);
+  let last = segments.pop() || "dashboard";
+  if (UUID_PATTERN.test(last) && segments.length > 0) {
+    last = segments.pop()!;
+  }
+  return last.replace(/-/g, " ");
+}
 
 export function PortalShell({ profile, children }: PortalShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -264,32 +295,56 @@ export function PortalShell({ profile, children }: PortalShellProps) {
             {/* Breadcrumb */}
             <div className="text-sm text-on-surface-variant">
               <span className="font-semibold text-on-surface capitalize">
-                {pathname.split("/").filter(Boolean).pop() || "Dashboard"}
+                {breadcrumbLabel(pathname)}
               </span>
             </div>
           </div>
 
           <div className="flex items-center gap-sm">
-            {/* Notifications bell */}
-            <button aria-label="Notifications" className="relative p-sm rounded-xl hover:bg-surface-container-high transition-colors">
-              <svg
-                aria-hidden="true"
-                xmlns="http://www.w3.org/2000/svg"
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="text-on-surface-variant"
-              >
-                <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
-                <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
-              </svg>
-              <span className="absolute top-1 right-1 w-2 h-2 bg-error rounded-full" />
-            </button>
+            {/* Notifications bell — wired to a real Notification Center for
+                director only in this pass (see app/(portal)/director/notifications);
+                every other role keeps the previous static, non-functional bell. */}
+            {profile.role === "director" ? (
+              <Link href="/director/notifications" aria-label="Notifications" className="relative p-sm rounded-xl hover:bg-surface-container-high transition-colors block">
+                <svg
+                  aria-hidden="true"
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="text-on-surface-variant"
+                >
+                  <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+                  <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+                </svg>
+                <span className="absolute top-1 right-1 w-2 h-2 bg-error rounded-full" />
+              </Link>
+            ) : (
+              <button aria-label="Notifications" className="relative p-sm rounded-xl hover:bg-surface-container-high transition-colors">
+                <svg
+                  aria-hidden="true"
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="text-on-surface-variant"
+                >
+                  <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+                  <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+                </svg>
+                <span className="absolute top-1 right-1 w-2 h-2 bg-error rounded-full" />
+              </button>
+            )}
 
             {/* Logout */}
             <button
