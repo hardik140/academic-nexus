@@ -7,7 +7,9 @@ import { requireRole, type AuthorizedActor } from "@/lib/rbac";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { getCached, invalidateCache } from "@/lib/cache";
 import { logAudit } from "@/lib/audit";
+import { assertClaimed } from "@/lib/concurrent-claim";
 import { resolveListSort, listCacheKey } from "@/lib/cached-list";
+import { assertValidTransition, PLACEMENT_APPLICATION_TRANSITIONS, type PlacementApplicationStatus } from "@/lib/state-transitions";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import type { DataTableQuery } from "@/components/ui/data-table";
@@ -318,22 +320,39 @@ export async function updateApplicationStatus(applicationId: string, status: (ty
   if (!application || application.college_id !== actor.collegeId) {
     throw new Error("Application not found in your college.");
   }
-  // Re-applying the same status (most concretely: calling "selected" twice)
-  // would otherwise insert a second row into `placements` below — there's
-  // no unique constraint there to catch it, and it would silently inflate
-  // placement-rate analytics on director/analytics.
-  if (application.status === parsed.status) {
-    throw new Error(`This application is already marked ${parsed.status}.`);
-  }
+  // Full transition-graph check (see lib/state-transitions.ts) — not just a
+  // same-status guard. Re-applying the same status (most concretely:
+  // calling "selected" twice) would otherwise insert a second row into
+  // `placements` below — there's no unique constraint there to catch it —
+  // and an invalid jump like "rejected -> selected" would insert a
+  // placements row for a candidate that was already turned down. Both are
+  // now rejected by the graph itself, not by a one-off same-status check.
+  assertValidTransition(
+    PLACEMENT_APPLICATION_TRANSITIONS,
+    application.status as PlacementApplicationStatus,
+    parsed.status,
+    "application"
+  );
 
-  const { error } = await supabase
+  // The transition graph above rejects an invalid *sequential* move; this
+  // compare-and-swap is what rejects a concurrent one. Both matter here for
+  // the same reason: `placements` has no unique constraint, so two racing
+  // "selected" calls would insert two offer rows for one candidate and
+  // corrupt placement-rate analytics. See lib/concurrent-claim.ts.
+  const { data: claimed, error } = await supabase
     .from("placement_applications")
     .update({ status: parsed.status })
     .eq("id", parsed.applicationId)
-    .eq("college_id", actor.collegeId);
+    .eq("college_id", actor.collegeId)
+    // Cast: `application` is read through the embedded-select workaround and
+    // widens status to plain `string`; assertValidTransition above has
+    // already proved it is a real PlacementApplicationStatus.
+    .eq("status", application.status as PlacementApplicationStatus)
+    .select("id");
   if (error) {
     throw new Error(error.message);
   }
+  assertClaimed(claimed, "application");
 
   if (parsed.status === "shortlisted" || parsed.status === "interview") {
     await supabase

@@ -7,6 +7,8 @@ import { requireRole, type AuthorizedActor } from "@/lib/rbac";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { getCached, invalidateCache } from "@/lib/cache";
 import { logAudit } from "@/lib/audit";
+import { assertClaimed } from "@/lib/concurrent-claim";
+import { assertNotSelfApproval } from "@/lib/segregation-of-duties";
 import { PERMISSIONS } from "@/lib/permissions";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
@@ -203,6 +205,7 @@ export async function decideOnDecisionCore(
   if (!["pending", "info_requested", "sent_back"].includes(existing.status)) {
     throw new Error("This decision has already been decided.");
   }
+  assertNotSelfApproval(actor, existing.requested_by, "decision request");
 
   const update: Database["public"]["Tables"]["decisions"]["Update"] = {
     status: action,
@@ -219,15 +222,21 @@ export async function decideOnDecisionCore(
     update.delegated_to = delegateTo;
   }
 
-  const { error } = await supabase
+  // Compare-and-swap on the exact status read above, so two directors (or
+  // one double-click) can't both record a decision and both notify the
+  // requester. See lib/concurrent-claim.ts.
+  const { data: claimed, error } = await supabase
     .from("decisions")
     .update(update)
     .eq("id", decisionId)
-    .eq("college_id", actor.collegeId);
+    .eq("college_id", actor.collegeId)
+    .eq("status", existing.status)
+    .select("id");
 
   if (error) {
     throw new Error(error.message);
   }
+  assertClaimed(claimed, "decision");
 
   await logAudit(supabase, actor, `decision_${action}`, "decisions", decisionId, {
     oldValue: { status: existing.status },

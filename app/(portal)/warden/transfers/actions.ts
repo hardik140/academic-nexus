@@ -7,6 +7,7 @@ import { requireRole, type AuthorizedActor } from "@/lib/rbac";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { getCached, invalidateCache } from "@/lib/cache";
 import { logAudit } from "@/lib/audit";
+import { assertClaimed } from "@/lib/concurrent-claim";
 import { PERMISSIONS } from "@/lib/permissions";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
@@ -117,11 +118,16 @@ export async function rejectRoomTransfer(requestIdRaw: string, reviewNotesRaw: s
     }
   }
 
-  const { error } = await supabase
+  // Compare-and-swap on the pending status read above — see
+  // lib/concurrent-claim.ts.
+  const { data: claimed, error } = await supabase
     .from("room_transfer_requests")
     .update({ status: "rejected", reviewed_by: actor.userId, reviewed_at: new Date().toISOString(), review_notes: reviewNotes })
-    .eq("id", requestId);
+    .eq("id", requestId)
+    .eq("status", "pending")
+    .select("id");
   if (error) throw new Error(error.message);
+  assertClaimed(claimed, "transfer request");
 
   await logAudit(supabase, actor, "room_transfer_rejected", "room_transfer_requests", requestId, {
     oldValue: { status: "pending" },
@@ -192,6 +198,23 @@ export async function approveRoomTransfer(requestIdRaw: string, newRoomIdRaw: st
     throw new Error("This room has no available capacity.");
   }
 
+  // Claim the request BEFORE any side effect, not after. Every validation
+  // that can legitimately fail has run by now, so this compare-and-swap is
+  // the mutex for the whole approval: a second warden racing this one fails
+  // here having changed nothing, instead of getting all the way through and
+  // leaving the student with two active allocations and a double-counted
+  // room. The remaining steps still aren't atomic with each other — that
+  // needs a real transaction (tracked separately); this at least makes the
+  // failure mode "visibly incomplete" rather than "silently duplicated".
+  const { data: claimed, error: claimError } = await supabase
+    .from("room_transfer_requests")
+    .update({ status: "approved", reviewed_by: actor.userId, reviewed_at: new Date().toISOString() })
+    .eq("id", requestId)
+    .eq("status", "pending")
+    .select("id");
+  if (claimError) throw new Error(claimError.message);
+  assertClaimed(claimed, "transfer request");
+
   // Concurrency-safe capacity check: optimistic compare-and-swap on the
   // exact occupancy value just read. If another transfer/allocation filled
   // the last bed between the read above and this write, zero rows match
@@ -230,15 +253,11 @@ export async function approveRoomTransfer(requestIdRaw: string, newRoomIdRaw: st
     .single();
   if (newAllocationError || !newAllocation) throw new Error(newAllocationError?.message || "Failed to create new allocation.");
 
+  // Status/reviewer were already written by the claim above; this only
+  // records which room and allocation the approval actually produced.
   const { error: updateRequestError } = await supabase
     .from("room_transfer_requests")
-    .update({
-      status: "approved",
-      reviewed_by: actor.userId,
-      reviewed_at: new Date().toISOString(),
-      new_room_id: newRoomId,
-      new_allocation_id: newAllocation.id,
-    })
+    .update({ new_room_id: newRoomId, new_allocation_id: newAllocation.id })
     .eq("id", requestId);
   if (updateRequestError) throw new Error(updateRequestError.message);
 

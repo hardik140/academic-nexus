@@ -26,7 +26,11 @@ export const ACTION_ALLOWED_ROLES: Record<string, UserRole[]> = {
   updateUserStatus: ["admin"],
   actOnLeaveRequest: ["hod", "admin"],
   actOnGatePass: ["warden", "admin"],
-  saveMarks: ["teacher", "admin"],
+  // 'hod' added deliberately: HODs teach. Course ownership
+  // (courses.instructor_id) is the real boundary and applies to hod
+  // identically — see teacher/grading/actions.ts.
+  saveMarks: ["teacher", "hod", "admin"],
+  markAttendance: ["teacher", "hod", "admin"],
   // Invitation-based onboarding — super_admin is deliberately NOT implicitly
   // admin (inviteUserAsAdmin denies it), and each tier's invite action is
   // its own separate requireRole([...]) call, not a shared allow-list.

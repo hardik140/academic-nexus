@@ -7,6 +7,7 @@ import { requireRole } from "@/lib/rbac";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { getCached, invalidateCache } from "@/lib/cache";
 import { logAudit } from "@/lib/audit";
+import { assertClaimed } from "@/lib/concurrent-claim";
 import { PERMISSIONS } from "@/lib/permissions";
 
 function refundsCacheKey(collegeId: string) {
@@ -52,11 +53,14 @@ export async function rejectRefund(requestIdRaw: string, reviewNotesRaw: string)
     throw new Error("Refund request not found or already processed.");
   }
 
-  const { error } = await supabase
+  const { data: rejected, error } = await supabase
     .from("refund_requests")
     .update({ status: "rejected", reviewed_by: actor.userId, reviewed_at: new Date().toISOString(), review_notes: reviewNotes })
-    .eq("id", requestId);
+    .eq("id", requestId)
+    .eq("status", "pending")
+    .select("id");
   if (error) throw new Error(error.message);
+  assertClaimed(rejected, "refund request");
 
   await logAudit(supabase, actor, "refund_rejected", "refund_requests", requestId, {
     oldValue: { status: "pending" },
@@ -166,11 +170,20 @@ export async function approveRefund(requestIdRaw: string) {
     await supabase.from("payments").update({ status: "refunded" }).eq("id", payment.id);
   }
 
-  const { error: updateRequestError } = await supabase
+  // The fee compare-and-swap above is what actually protects the money (and
+  // its "balance just changed - please retry" path is why the request is NOT
+  // claimed before it: claiming first would mark this approved and make the
+  // documented retry impossible). This predicate is the second line: it stops
+  // a racing approver from re-auditing and re-notifying an already-approved
+  // refund. See lib/concurrent-claim.ts.
+  const { data: approved, error: updateRequestError } = await supabase
     .from("refund_requests")
     .update({ status: "approved", reviewed_by: actor.userId, reviewed_at: new Date().toISOString() })
-    .eq("id", requestId);
+    .eq("id", requestId)
+    .eq("status", "pending")
+    .select("id");
   if (updateRequestError) throw new Error(updateRequestError.message);
+  assertClaimed(approved, "refund request");
 
   await logAudit(supabase, actor, "refund_approved", "refund_requests", requestId, {
     oldValue: { fee_paid_amount: fee.paid_amount, fee_status: fee.status },
