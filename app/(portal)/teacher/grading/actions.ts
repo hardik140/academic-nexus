@@ -66,7 +66,9 @@ export async function saveMarksCore(
   // A teacher may only grade their own course; admin can grade any.
   // RLS (marks_teacher_manage) only checks role, not course ownership —
   // this is the layer that actually closes that gap.
-  if (actor.role === "teacher" && course.instructor_id !== actor.userId) {
+  // `!== "admin"`: a teaching HOD is held to the same course-ownership rule
+  // as any other instructor; admin stays unrestricted as before.
+  if (actor.role !== "admin" && course.instructor_id !== actor.userId) {
     throw new Error("You can only enter marks for courses you teach.");
   }
 
@@ -104,7 +106,8 @@ export async function saveMarksCore(
 }
 
 export async function saveMarks(params: SaveMarksParams) {
-  const actor = await requireRole(["teacher", "admin"]);
+  // 'hod' — see the identical widening in teacher/attendance/actions.ts.
+  const actor = await requireRole(["teacher", "hod", "admin"]);
   const supabase = await createClient();
   const result = await saveMarksCore(supabase, actor, params);
   revalidatePath("/teacher/grading");
@@ -113,6 +116,6 @@ export async function saveMarks(params: SaveMarksParams) {
 
 /** Called by app/api/mobile/grading/save/route.ts. */
 export async function saveMarksViaRequest(request: Request, params: SaveMarksParams) {
-  const { supabase, ...actor } = await requireRoleFromRequest(request, ["teacher", "admin"]);
+  const { supabase, ...actor } = await requireRoleFromRequest(request, ["teacher", "hod", "admin"]);
   return saveMarksCore(supabase, actor, params);
 }

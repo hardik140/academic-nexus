@@ -67,7 +67,10 @@ export async function saveAttendanceCore(
   // real instead of decorative. admin can mark any. RLS
   // (attendance_teacher_mark) only checks role, not course ownership — this
   // is the layer that actually closes that gap.
-  if (actor.role === "teacher" && course.instructor_id !== actor.userId) {
+  // `!== "admin"` rather than `=== "teacher"`: a HOD who teaches is subject to
+  // exactly the same course-ownership rule as any other instructor, and admin
+  // stays unrestricted as before. See the role-list widening below.
+  if (actor.role !== "admin" && course.instructor_id !== actor.userId) {
     const { data: substitution } = await supabase
       .from("substitution_assignments")
       .select("id")
@@ -112,7 +115,12 @@ export async function saveAttendanceCore(
 }
 
 export async function saveAttendance(params: SaveAttendanceParams) {
-  const actor = await requireRole(["teacher", "admin"]);
+  // 'hod' included because in a real college HODs teach — profiles.role is a
+  // single column with no composition, so a teaching HOD previously had no way
+  // to mark their own class. The instructor_id check above is what actually
+  // enforces the boundary, and it applies to hod identically; this widening
+  // grants no access to a course the actor doesn't instruct.
+  const actor = await requireRole(["teacher", "hod", "admin"]);
   const supabase = await createClient();
   const result = await saveAttendanceCore(supabase, actor, params);
   revalidatePath("/teacher/attendance");
@@ -121,7 +129,7 @@ export async function saveAttendance(params: SaveAttendanceParams) {
 
 /** Called by app/api/mobile/attendance/save/route.ts. */
 export async function saveAttendanceViaRequest(request: Request, params: SaveAttendanceParams) {
-  const { supabase, ...actor } = await requireRoleFromRequest(request, ["teacher", "admin"]);
+  const { supabase, ...actor } = await requireRoleFromRequest(request, ["teacher", "hod", "admin"]);
   return saveAttendanceCore(supabase, actor, params);
 }
 

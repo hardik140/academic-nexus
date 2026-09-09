@@ -7,6 +7,8 @@ import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib
 import { checkRateLimit } from "@/lib/rate-limit";
 import { getCached, invalidateCache } from "@/lib/cache";
 import { logAudit } from "@/lib/audit";
+import { assertClaimed } from "@/lib/concurrent-claim";
+import { assertNotSelfApproval } from "@/lib/segregation-of-duties";
 import { PERMISSIONS } from "@/lib/permissions";
 import { computeAffectedClasses } from "@/lib/leave-impact";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -139,6 +141,11 @@ export async function actOnLeaveRequestCore(
     throw new Error("Leave request not found or already processed.");
   }
 
+  // A HOD carries their own department_id (set by lib/invitations.ts), so
+  // their own leave request passes the department-ownership check below and
+  // appears in their own queue. See lib/segregation-of-duties.ts.
+  assertNotSelfApproval(actor, request.requested_by, "leave request");
+
   // A HOD may only act on leave requests from staff in their own
   // department; admin is unrestricted. leave_requests_read (RLS) is
   // college-wide for hod, not department-scoped, so this app-layer check
@@ -156,7 +163,11 @@ export async function actOnLeaveRequestCore(
     }
   }
 
-  const { error } = await supabase
+  // .eq("status", "pending") re-asserts the precondition checked above as part
+  // of this write, so two HODs approving at the same moment can't both pass —
+  // otherwise the second overwrites approved_by and createSubstitutionNeeds
+  // below runs twice. See lib/concurrent-claim.ts.
+  const { data: claimed, error } = await supabase
     .from("leave_requests")
     .update({
       status: action,
@@ -164,11 +175,14 @@ export async function actOnLeaveRequestCore(
       approved_at: new Date().toISOString(),
     })
     .eq("id", requestId)
-    .eq("college_id", actor.collegeId);
+    .eq("college_id", actor.collegeId)
+    .eq("status", "pending")
+    .select("id");
 
   if (error) {
     throw new Error(error.message);
   }
+  assertClaimed(claimed, "leave request");
 
   await logAudit(supabase, actor, action === "approved" ? "leave_approved" : "leave_rejected", "leave_requests", requestId, {
     oldValue: { status: request.status },
@@ -331,6 +345,7 @@ export async function actOnAttendanceCorrectionCore(
   if (!request || request.status !== "pending") {
     throw new Error("Correction request not found or already processed.");
   }
+  assertNotSelfApproval(actor, request.submitted_by, "attendance correction");
 
   if (actor.role === "hod") {
     const { data: department } = await supabase.from("departments").select("id").eq("hod_id", actor.userId).single();
@@ -340,13 +355,19 @@ export async function actOnAttendanceCorrectionCore(
     }
   }
 
-  const { error: updateRequestError } = await supabase
+  // Same compare-and-swap as actOnLeaveRequestCore — without it two reviewers
+  // both pass the pending check above and the attendance row below gets
+  // written twice, the second time from a stale requested_status.
+  const { data: claimed, error: updateRequestError } = await supabase
     .from("attendance_correction_requests")
     .update({ status: action, reviewed_by: actor.userId, reviewed_at: new Date().toISOString() })
-    .eq("id", requestId);
+    .eq("id", requestId)
+    .eq("status", "pending")
+    .select("id");
   if (updateRequestError) {
     throw new Error(updateRequestError.message);
   }
+  assertClaimed(claimed, "correction request");
 
   if (action === "approved") {
     const { error: updateAttendanceError } = await supabase

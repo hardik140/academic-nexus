@@ -7,6 +7,8 @@ import { requireRole, type AuthorizedActor } from "@/lib/rbac";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { getCached, invalidateCache, middlewareProfileCacheKey } from "@/lib/cache";
 import { logAudit } from "@/lib/audit";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { assertClaimed } from "@/lib/concurrent-claim";
 import { PERMISSIONS } from "@/lib/permissions";
 import { inviteUserCore, type InviteUserParams } from "@/lib/invitations";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -75,15 +77,33 @@ export async function promoteToPlacementCellCore(
     throw new Error("Only teacher or admin staff can be promoted to Placement Cell.");
   }
 
-  const { error } = await supabase
+  // Written through the SERVICE-ROLE client, not the director's own.
+  //
+  // `profiles` has exactly two UPDATE policies — profiles_update_self (own
+  // row) and profiles_admin_manage (admin only). A director has NO update
+  // path on profiles at all, so this write matched zero rows and returned
+  // no error: promote/revoke/reactivate have silently done nothing since the
+  // Placement Cell module shipped. Confirmed against the live database by
+  // measuring affected rows, not the error value.
+  //
+  // Authorization is unchanged and still enforced in app code — the caller
+  // already passed requireRole(PERMISSIONS.assign_placement_cell) (director
+  // only) plus the college and promotable-role checks above. That is this
+  // codebase's documented contract for the service-role client.
+  //
+  // .select("id") + assertClaimed is what stops this regressing into another
+  // silent no-op if the policy situation changes again.
+  const { data: promoted, error } = await createAdminClient()
     .from("profiles")
     .update({ role: "placement_cell", status: "active" })
     .eq("id", userId)
-    .eq("college_id", actor.collegeId);
+    .eq("college_id", actor.collegeId)
+    .select("id");
 
   if (error) {
     throw new Error(error.message);
   }
+  assertClaimed(promoted, "staff member");
 
   await invalidateCache(middlewareProfileCacheKey(userId));
   await logAudit(supabase, actor, "Promoted to Placement Cell", "profiles", userId);
@@ -145,15 +165,19 @@ export async function revokePlacementCellCore(
 
   await loadOwnedPlacementCellUser(supabase, actor, userId);
 
-  const { error } = await supabase
+  // Service-role write — see promoteToPlacementCellCore above for why a
+  // director's own client cannot update another profile.
+  const { data: revoked, error } = await createAdminClient()
     .from("profiles")
     .update({ status: "suspended" })
     .eq("id", userId)
-    .eq("college_id", actor.collegeId);
+    .eq("college_id", actor.collegeId)
+    .select("id");
 
   if (error) {
     throw new Error(error.message);
   }
+  assertClaimed(revoked, "Placement Cell user");
 
   await invalidateCache(middlewareProfileCacheKey(userId));
   await logAudit(supabase, actor, "Revoked Placement Cell access", "profiles", userId);
@@ -175,15 +199,18 @@ export async function reactivatePlacementCell(userId: string) {
 
   await loadOwnedPlacementCellUser(supabase, actor, validatedId);
 
-  const { error } = await supabase
+  // Service-role write — see promoteToPlacementCellCore above.
+  const { data: reactivated, error } = await createAdminClient()
     .from("profiles")
     .update({ status: "active" })
     .eq("id", validatedId)
-    .eq("college_id", actor.collegeId);
+    .eq("college_id", actor.collegeId)
+    .select("id");
 
   if (error) {
     throw new Error(error.message);
   }
+  assertClaimed(reactivated, "Placement Cell user");
 
   await invalidateCache(middlewareProfileCacheKey(validatedId));
   await logAudit(supabase, actor, "Re-activated Placement Cell access", "profiles", validatedId);

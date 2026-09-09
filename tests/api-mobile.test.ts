@@ -13,6 +13,10 @@ const mockUpdate = vi.fn();
 // proving end-to-end through the HTTP boundary, not just in isolation.
 const mockGenerateLink = vi.fn();
 const mockDeleteUser = vi.fn();
+// Writes made through the SERVICE-ROLE client — inviteUserCore applies the
+// invited role/department there now (migrations 042/043), not through the
+// caller's own client.
+const mockAdminUpdate = vi.fn();
 // lib/email.ts's nodemailer transport isn't configured in tests (no real
 // SMTP) — mocked so inviteUserCore's send step is a no-op here rather than
 // throwing "SMTP is not configured." vi.hoisted() (rather than a plain
@@ -75,6 +79,20 @@ vi.mock("@/lib/supabase/admin", () => ({
         generateLink: mockGenerateLink,
         deleteUser: mockDeleteUser,
       },
+    },
+    // inviteUserCore now applies the invited role through the SERVICE-ROLE
+    // client, because handle_new_user() no longer trusts a client-supplied
+    // role (migration 043) and migration 042's trigger blocks role writes
+    // from a HOD's own session. Chain-shaped and always successful.
+    from: () => {
+      const chain = {
+        update: (row: unknown) => {
+          mockAdminUpdate(row);
+          return chain;
+        },
+        eq: () => Promise.resolve({ error: null }),
+      };
+      return chain;
     },
   }),
 }));
@@ -154,6 +172,29 @@ const UUID_SELF = "10000000-0000-4000-8000-00000000000b";
 const UUID_INVITATION = "10000000-0000-4000-8000-00000000000c";
 const UUID_NEW_COLLEGE = "10000000-0000-4000-8000-00000000000d";
 
+/**
+ * An `.update(...)` chain: any number of `.eq()`s, then either awaited
+ * directly or terminated with `.select()`.
+ *
+ * The `.select()` tail models the compare-and-swap every approval action now
+ * ends with (see lib/concurrent-claim.ts). `matchedRows` is what the status
+ * predicate matched: one row means this caller won and may proceed; an empty
+ * array means someone else already acted — which Supabase reports as success
+ * with NO error, so assertClaimed has to read the rows, not the error.
+ */
+function updateChain(matchedRows: unknown[] = [{ id: "row-1" }]) {
+  const chain: {
+    eq: () => typeof chain;
+    select: () => Promise<{ data: unknown[]; error: null }>;
+    then: (resolve: (v: unknown) => unknown) => unknown;
+  } = {
+    eq: () => chain,
+    select: () => Promise.resolve({ data: matchedRows, error: null }),
+    then: (resolve: (v: unknown) => unknown) => Promise.resolve({ error: null }).then(resolve),
+  };
+  return chain;
+}
+
 describe("app/api/mobile/* — HTTP-boundary authorization matrix", () => {
   beforeEach(() => {
     mockGetUser.mockReset();
@@ -164,7 +205,7 @@ describe("app/api/mobile/* — HTTP-boundary authorization matrix", () => {
     mockUpsert.mockReset();
     mockUpsert.mockResolvedValue({ error: null });
     mockUpdate.mockReset();
-    mockUpdate.mockReturnValue({ eq: () => ({ eq: () => Promise.resolve({ error: null }) }) });
+    mockUpdate.mockReturnValue(updateChain());
     mockGenerateLink.mockReset();
     mockGenerateLink.mockResolvedValue({
       data: { user: { id: "invited-user-1" }, properties: { action_link: "https://example.com/invite" } },
@@ -172,6 +213,7 @@ describe("app/api/mobile/* — HTTP-boundary authorization matrix", () => {
     });
     mockDeleteUser.mockReset();
     mockDeleteUser.mockResolvedValue({ error: null });
+    mockAdminUpdate.mockReset();
     mockSendInvitationEmail.mockReset();
     mockSendInvitationEmail.mockResolvedValue(undefined);
   });
@@ -418,7 +460,10 @@ describe("app/api/mobile/* — HTTP-boundary authorization matrix", () => {
     mockSingle
       .mockResolvedValueOnce({ data: { role: "admin", college_id: "c1", status: "active" } })
       .mockResolvedValueOnce({
-        data: { requested_by: "u1", start_date: "2026-01-01", end_date: "2026-01-02", status: "pending", profiles: { department_id: UUID_DEPARTMENT } },
+        // requested_by is deliberately NOT the actor ("u1"): separation of
+        // duties (lib/segregation-of-duties.ts) now rejects self-approval,
+        // and this case is about the department-ownership bypass instead.
+        data: { requested_by: "teacher-7", start_date: "2026-01-01", end_date: "2026-01-02", status: "pending", profiles: { department_id: UUID_DEPARTMENT } },
       });
     const res = await actOnLeave(makeRequest(LEAVE_ACT_BODY, "good-token"));
     expect(res.status).toBe(200);
@@ -862,7 +907,13 @@ describe("app/api/mobile/* — HTTP-boundary authorization matrix", () => {
         options: expect.objectContaining({ data: expect.objectContaining({ role: "teacher" }) }),
       })
     );
-    expect(mockUpdate).toHaveBeenCalledWith(expect.objectContaining({ department_id: UUID_DEPARTMENT }));
+    // Asserted against the service-role client: inviteUserCore applies the
+    // invited role and department there, because handle_new_user() no longer
+    // trusts a client-supplied role (043) and a HOD's own session is blocked
+    // from writing role by the profiles trigger (042).
+    expect(mockAdminUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ role: "teacher", department_id: UUID_DEPARTMENT })
+    );
   });
 
   it("hod/invite-user — hod not assigned to any department → 400", async () => {

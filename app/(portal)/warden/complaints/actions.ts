@@ -8,6 +8,7 @@ import { checkRateLimit } from "@/lib/rate-limit";
 import { getCached, invalidateCache } from "@/lib/cache";
 import { resolveListSort, listCacheKey } from "@/lib/cached-list";
 import { logAudit } from "@/lib/audit";
+import { assertClaimed } from "@/lib/concurrent-claim";
 import { PERMISSIONS } from "@/lib/permissions";
 import { resolveWardenScopedStudentIds } from "../gatepasses/actions";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -106,18 +107,23 @@ export async function updateComplaintStatusCore(
     }
   }
 
-  const { error } = await supabase
+  // Compare-and-swap on the exact status read above. See
+  // lib/concurrent-claim.ts.
+  const { data: claimed, error } = await supabase
     .from("complaints")
     .update({
       status,
       resolved_at: status === "resolved" ? new Date().toISOString() : null,
     })
     .eq("id", complaintId)
-    .eq("college_id", actor.collegeId);
+    .eq("college_id", actor.collegeId)
+    .eq("status", existing.status)
+    .select("id");
 
   if (error) {
     throw new Error(error.message);
   }
+  assertClaimed(claimed, "complaint");
 
   await logAudit(supabase, actor, `complaint_${status}`, "complaints", complaintId, {
     oldValue: { status: existing.status },

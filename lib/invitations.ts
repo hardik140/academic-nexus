@@ -129,8 +129,34 @@ export async function inviteUserCore(
     throw new Error(inviteErr?.message || "Failed to create the invited account.");
   }
 
-  if (parsed.departmentId) {
-    await supabase.from("profiles").update({ department_id: parsed.departmentId }).eq("id", created.user.id);
+  // Set the invited role (and department) on the freshly-created profile.
+  //
+  // This MUST go through the service-role `admin` client, not the caller's
+  // `supabase` client, for two reasons:
+  //
+  //  1. handle_new_user() no longer reads role from raw_user_meta_data
+  //     (migration 043) — a client could forge it there — so the role is now
+  //     applied here, after the invite cascade in canInvite() has authorized it.
+  //  2. migration 042's trigger blocks role writes from every caller except
+  //     the service role and admin/super_admin/director. Using the caller's
+  //     client would break a HOD inviting a teacher.
+  //
+  // `status` is deliberately left at 'pending' — the invitee flips it to
+  // 'active' themselves at accept-invite time, which is the one self-write
+  // migration 042 permits.
+  const { error: profileErr } = await admin
+    .from("profiles")
+    .update({
+      role: parsed.role,
+      ...(parsed.departmentId ? { department_id: parsed.departmentId } : {}),
+    })
+    .eq("id", created.user.id);
+
+  if (profileErr) {
+    // The auth user exists but carries no role — it would land as an inert
+    // pending student. Fail loudly rather than leaving a half-provisioned
+    // account for someone to puzzle over later.
+    throw new Error(`Invited account created but could not be assigned the ${parsed.role} role: ${profileErr.message}`);
   }
 
   const { error: insertErr } = await supabase.from("invitations").insert({

@@ -7,6 +7,7 @@ import { requireRole, type AuthorizedActor } from "@/lib/rbac";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { getCached, invalidateCache } from "@/lib/cache";
 import { logAudit } from "@/lib/audit";
+import { assertClaimed } from "@/lib/concurrent-claim";
 import { PERMISSIONS } from "@/lib/permissions";
 import { computeEffectiveFeeStatus } from "@/lib/finance-status";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -330,10 +331,20 @@ export async function actOnRiskFlag(params: { flagId: string; action: "acknowled
     update.resolution_notes = resolutionNotes ?? null;
   }
 
-  const { error } = await supabase.from("risk_flags").update(update).eq("id", flagId).eq("college_id", actor.collegeId);
+  // Compare-and-swap on the status read above — the lifecycle is
+  // acknowledge -> start -> resolve, and without this two clicks can skip or
+  // reorder a step. See lib/concurrent-claim.ts.
+  const { data: claimed, error } = await supabase
+    .from("risk_flags")
+    .update(update)
+    .eq("id", flagId)
+    .eq("college_id", actor.collegeId)
+    .eq("status", existing.status)
+    .select("id");
   if (error) {
     throw new Error(error.message);
   }
+  assertClaimed(claimed, "escalation");
 
   await logAudit(supabase, actor, `risk_flag_${newStatus}`, "risk_flags", flagId, {
     oldValue: { status: existing.status },
@@ -383,6 +394,16 @@ export async function reviewRiskFlag(params: { flagId: string; outcome: "accept"
   if (!existing) {
     throw new Error("Risk flag not found.");
   }
+  // Review is specifically a review OF A RESOLUTION — "accept" or "reopen"
+  // only make sense once something has actually been resolved. Without
+  // this, a director could "accept"/"reopen" a flag still open/assigned/
+  // acknowledged/in_progress, which isn't a real transition this workflow
+  // supports (see lib/state-transitions.ts for the general pattern this
+  // mirrors; this one's asymmetric — "accept" doesn't change status at all
+  // — so it's a direct precondition rather than a graph lookup).
+  if (existing.status !== "resolved") {
+    throw new Error("Only a resolved escalation can be reviewed.");
+  }
 
   const update: Database["public"]["Tables"]["risk_flags"]["Update"] = {
     reviewed_by: actor.userId,
@@ -392,10 +413,18 @@ export async function reviewRiskFlag(params: { flagId: string; outcome: "accept"
     update.status = "in_progress";
   }
 
-  const { error } = await supabase.from("risk_flags").update(update).eq("id", flagId).eq("college_id", actor.collegeId);
+  // Compare-and-swap on 'resolved' — the precondition checked just above.
+  const { data: claimed, error } = await supabase
+    .from("risk_flags")
+    .update(update)
+    .eq("id", flagId)
+    .eq("college_id", actor.collegeId)
+    .eq("status", "resolved")
+    .select("id");
   if (error) {
     throw new Error(error.message);
   }
+  assertClaimed(claimed, "escalation");
 
   await logAudit(supabase, actor, `risk_flag_review_${outcome}`, "risk_flags", flagId, {
     oldValue: { status: existing.status },

@@ -8,6 +8,7 @@ import { checkRateLimit } from "@/lib/rate-limit";
 import { getCached, invalidateCache } from "@/lib/cache";
 import { resolveListSort, listCacheKey } from "@/lib/cached-list";
 import { logAudit } from "@/lib/audit";
+import { assertClaimed } from "@/lib/concurrent-claim";
 import { PERMISSIONS } from "@/lib/permissions";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
@@ -170,7 +171,10 @@ export async function actOnGatePassCore(
   }
   await assertGatePassInWardenScope(supabase, actor, pass.student_id);
 
-  const { error } = await supabase
+  // Compare-and-swap on the status read above, so two wardens acting on the
+  // same pass at once can't both pass the pending check and both notify the
+  // student. See lib/concurrent-claim.ts.
+  const { data: claimed, error } = await supabase
     .from("gate_passes")
     .update({
       status: action,
@@ -178,11 +182,14 @@ export async function actOnGatePassCore(
       approved_at: new Date().toISOString(),
     })
     .eq("id", passId)
-    .eq("college_id", actor.collegeId);
+    .eq("college_id", actor.collegeId)
+    .eq("status", "pending")
+    .select("id");
 
   if (error) {
     throw new Error(error.message);
   }
+  assertClaimed(claimed, "gate pass");
 
   await logAudit(supabase, actor, `gate_pass_${action}`, "gate_passes", passId, {
     oldValue: { status: pass.status },
@@ -286,10 +293,18 @@ export async function verifyGatePassMovementCore(
       ? { status: "active" as const, actual_exit: new Date().toISOString() }
       : { status: "returned" as const, actual_return: new Date().toISOString() };
 
-  const { error } = await supabase.from("gate_passes").update(update).eq("id", passId);
+  // Compare-and-swap on requiredStatus — double-clicking "Verify exit" must
+  // record one actual_exit, not overwrite it with a second timestamp.
+  const { data: claimed, error } = await supabase
+    .from("gate_passes")
+    .update(update)
+    .eq("id", passId)
+    .eq("status", requiredStatus)
+    .select("id");
   if (error) {
     throw new Error(error.message);
   }
+  assertClaimed(claimed, "gate pass");
 
   await logAudit(supabase, actor, `gate_pass_${action}_verified`, "gate_passes", passId, {
     oldValue: { status: pass.status },

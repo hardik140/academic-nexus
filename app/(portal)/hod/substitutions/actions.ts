@@ -7,6 +7,7 @@ import { requireRole } from "@/lib/rbac";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { getCached, invalidateCache } from "@/lib/cache";
 import { logAudit } from "@/lib/audit";
+import { assertClaimed } from "@/lib/concurrent-claim";
 import { PERMISSIONS } from "@/lib/permissions";
 
 function substitutionsCacheKey(hodUserId: string) {
@@ -113,13 +114,20 @@ export async function assignSubstitute(idRaw: string, substituteTeacherIdRaw: st
     }
   }
 
-  const { error } = await supabase
+  // Compare-and-swap on 'needed' — two HODs assigning different substitutes
+  // to the same slot at once would otherwise both "succeed", with the loser's
+  // teacher still receiving the "assigned to you" notification below for a
+  // class they aren't actually covering. See lib/concurrent-claim.ts.
+  const { data: claimed, error } = await supabase
     .from("substitution_assignments")
     .update({ status: "assigned", substitute_teacher_id: substituteTeacherId, assigned_by: actor.userId, assigned_at: new Date().toISOString() })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("status", "needed")
+    .select("id");
   if (error) {
     throw new Error(error.message);
   }
+  assertClaimed(claimed, "substitution requirement");
 
   await logAudit(supabase, actor, "substitution_assigned", "substitution_assignments", id, {
     oldValue: { status: "needed" },

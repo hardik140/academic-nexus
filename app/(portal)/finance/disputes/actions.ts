@@ -7,6 +7,7 @@ import { requireRole, type AuthorizedActor } from "@/lib/rbac";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { getCached, invalidateCache } from "@/lib/cache";
 import { logAudit } from "@/lib/audit";
+import { assertClaimed } from "@/lib/concurrent-claim";
 import { PERMISSIONS } from "@/lib/permissions";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
@@ -55,11 +56,14 @@ export async function claimDispute(disputeIdRaw: string) {
     throw new Error("Dispute not found or already claimed.");
   }
 
-  const { error } = await supabase
+  const { data: claimedRows, error } = await supabase
     .from("financial_disputes")
     .update({ status: "under_investigation", assigned_to: actor.userId })
-    .eq("id", disputeId);
+    .eq("id", disputeId)
+    .eq("status", "submitted")
+    .select("id");
   if (error) throw new Error(error.message);
+  assertClaimed(claimedRows, "dispute");
 
   await logAudit(supabase, actor, "dispute_claimed", "financial_disputes", disputeId, {
     oldValue: { status: "submitted" },
@@ -86,11 +90,14 @@ async function finalizeDispute(status: "resolved" | "rejected", disputeIdRaw: st
     throw new Error("Dispute not found or already finalized.");
   }
 
-  const { error } = await supabase
+  const { data: resolvedRows, error } = await supabase
     .from("financial_disputes")
     .update({ status, resolved_by: actor.userId, resolved_at: new Date().toISOString(), resolution_notes: resolutionNotes })
-    .eq("id", disputeId);
+    .eq("id", disputeId)
+    .eq("status", dispute.status)
+    .select("id");
   if (error) throw new Error(error.message);
+  assertClaimed(resolvedRows, "dispute");
 
   await logAudit(supabase, actor, `dispute_${status}`, "financial_disputes", disputeId, {
     oldValue: { status: dispute.status },
