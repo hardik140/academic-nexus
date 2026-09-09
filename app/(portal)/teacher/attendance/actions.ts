@@ -7,7 +7,7 @@ import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib
 import { checkRateLimit } from "@/lib/rate-limit";
 import { PERMISSIONS } from "@/lib/permissions";
 import { verifyStudentsEnrolled } from "@/lib/course-enrollment";
-import { assertCanWriteOfferingRecords, loadOffering } from "@/lib/offerings";
+import { assertCanRecordAttendance, assertCanWriteOfferingRecords } from "@/lib/offerings";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 
@@ -53,31 +53,12 @@ export async function saveAttendanceCore(
   await checkRateLimit(`saveAttendance:${actor.userId}`, 30, 60);
 
   // Authority is derived from the OFFERING, never from anything the caller
-  // sent. assertCanWriteOfferingRecords re-reads course_offerings server-side
-  // and allows only the assigned instructor (a teaching HOD included) or an
-  // admin — a request carrying someone else's offeringId proves nothing.
-  //
-  // The one widening: a substitute assigned by the HOD (hod/substitutions)
-  // may mark THIS offering on THIS date only. That is what makes
-  // "leave -> substitution -> the substitute actually records attendance"
-  // real rather than decorative.
-  let offering;
-  try {
-    offering = await assertCanWriteOfferingRecords(supabase, actor, offeringId);
-  } catch (err) {
-    const { data: substitution } = await supabase
-      .from("substitution_assignments")
-      .select("id")
-      .eq("offering_id", offeringId)
-      .eq("date", date)
-      .eq("substitute_teacher_id", actor.userId)
-      .eq("status", "assigned")
-      .maybeSingle();
-    if (!substitution) {
-      throw err;
-    }
-    offering = await loadOffering(supabase, actor, offeringId);
-  }
+  // sent: the server re-reads course_offerings and allows only the assigned
+  // instructor (a teaching HOD included), an admin, or a substitute assigned
+  // to this offering on this date. A request carrying someone else's
+  // offeringId proves nothing. The rule itself lives in lib/offerings.ts so
+  // this Server Action and the mobile route cannot drift apart.
+  const offering = await assertCanRecordAttendance(supabase, actor, offeringId, date);
 
   if (entries.length === 0) {
     return { saved: 0 };
@@ -154,10 +135,6 @@ export async function requestAttendanceCorrection(paramsRaw: RequestCorrectionPa
   const { attendanceId, requestedStatus, reason, evidenceNote } = RequestCorrectionSchema.parse(paramsRaw);
   await checkRateLimit(`requestAttendanceCorrection:${actor.userId}`, 20, 60);
 
-  // Cast: the hand-maintained Database type declares no Relationships, so
-  // supabase-js can't infer this embedded-select shape — same workaround
-  // every other actions.ts file with an embedded select already uses (see
-  // placements/actions.ts's DriveWithCompany comment).
   const { data: attendance } = await supabase
     .from("attendance")
     .select("id, college_id, student_id, offering_id, date, status")
