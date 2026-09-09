@@ -132,9 +132,25 @@ export async function updateSession(request: NextRequest) {
     return supabaseResponse;
   }
 
-  // Enforce role-based route access
+  // Enforce role-based route access.
+  //
+  // Fails CLOSED. routePrefixFor() returns undefined for any role with no
+  // ROLE_ROUTES entry, and this check used to be `if (allowedPrefix && ...)`
+  // — so an unrecognised role skipped route enforcement entirely and fell
+  // through to `return supabaseResponse`, able to load every portal shell in
+  // the app. `parent` is exactly that case: a valid profiles.role since
+  // migration 001, given its own RLS policies in migration 009, and absent
+  // from ROLE_ROUTES. Server Actions still rejected it and RLS still filtered
+  // the data, so it was never a data breach — but the default was backwards,
+  // and every future role added to the CHECK constraint inherited it.
   const allowedPrefix = routePrefixFor(profile.role);
-  if (allowedPrefix && !pathname.startsWith(allowedPrefix)) {
+  if (!allowedPrefix) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/login";
+    url.searchParams.set("error", "unknown_role");
+    return NextResponse.redirect(url);
+  }
+  if (!pathname.startsWith(allowedPrefix)) {
     const url = request.nextUrl.clone();
     url.pathname = `${allowedPrefix}/dashboard`;
     return NextResponse.redirect(url);

@@ -87,6 +87,23 @@ async function main() {
     process.exit(1);
   }
 
+  // handle_new_user() no longer honours role/status from user_metadata
+  // (migration 043 — it was a client-forgeable path to an admin account), so
+  // every new profile lands as an inert pending student. Promote it here,
+  // through the service-role client, which migration 042's trigger exempts.
+  const { error: promoteErr } = await admin
+    .from("profiles")
+    .update({ role: "super_admin", status: "active" })
+    .eq("id", data.user.id);
+
+  if (promoteErr) {
+    console.error(
+      `\nAccount ${email} was created but could not be promoted to super_admin: ${promoteErr.message}` +
+        `\nFix it with:  UPDATE public.profiles SET role='super_admin', status='active' WHERE id='${data.user.id}';`
+    );
+    process.exit(1);
+  }
+
   console.log(`\nSuper Admin created: ${email} (${data.user.id}). Sign in at /login.`);
 }
 
