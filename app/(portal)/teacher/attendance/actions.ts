@@ -7,6 +7,7 @@ import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib
 import { checkRateLimit } from "@/lib/rate-limit";
 import { PERMISSIONS } from "@/lib/permissions";
 import { verifyStudentsEnrolled } from "@/lib/course-enrollment";
+import { assertCanWriteOfferingRecords, loadOffering } from "@/lib/offerings";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 
@@ -15,7 +16,7 @@ type AttendanceStatus = Database["public"]["Tables"]["attendance"]["Row"]["statu
 const ATTENDANCE_STATUSES = ["present", "absent", "late", "excused"] as const;
 
 const SaveAttendanceSchema = z.object({
-  courseId: z.string().guid(),
+  offeringId: z.string().guid(),
   date: z.string().min(1),
   entries: z
     .array(
@@ -33,7 +34,8 @@ export interface AttendanceEntry {
 }
 
 export interface SaveAttendanceParams {
-  courseId: string;
+  /** A course_offerings.id — semester + course + section + instructor. */
+  offeringId: string;
   date: string;
   entries: AttendanceEntry[];
 }
@@ -47,41 +49,34 @@ export async function saveAttendanceCore(
   actor: AuthorizedActor,
   params: SaveAttendanceParams
 ) {
-  const { courseId, date, entries } = SaveAttendanceSchema.parse(params);
+  const { offeringId, date, entries } = SaveAttendanceSchema.parse(params);
   await checkRateLimit(`saveAttendance:${actor.userId}`, 30, 60);
 
-  const { data: course } = await supabase
-    .from("courses")
-    .select("instructor_id")
-    .eq("id", courseId)
-    .single();
-
-  if (!course) {
-    throw new Error("Course not found.");
-  }
-
-  // A teacher may only mark attendance for their own course, UNLESS they're
-  // the substitute assigned (by their HOD, via hod/substitutions) to cover
-  // this exact course on this exact date — the mechanism that makes "leave
-  // -> substitution -> attendance records the actual substitute teacher"
-  // real instead of decorative. admin can mark any. RLS
-  // (attendance_teacher_mark) only checks role, not course ownership — this
-  // is the layer that actually closes that gap.
-  // `!== "admin"` rather than `=== "teacher"`: a HOD who teaches is subject to
-  // exactly the same course-ownership rule as any other instructor, and admin
-  // stays unrestricted as before. See the role-list widening below.
-  if (actor.role !== "admin" && course.instructor_id !== actor.userId) {
+  // Authority is derived from the OFFERING, never from anything the caller
+  // sent. assertCanWriteOfferingRecords re-reads course_offerings server-side
+  // and allows only the assigned instructor (a teaching HOD included) or an
+  // admin — a request carrying someone else's offeringId proves nothing.
+  //
+  // The one widening: a substitute assigned by the HOD (hod/substitutions)
+  // may mark THIS offering on THIS date only. That is what makes
+  // "leave -> substitution -> the substitute actually records attendance"
+  // real rather than decorative.
+  let offering;
+  try {
+    offering = await assertCanWriteOfferingRecords(supabase, actor, offeringId);
+  } catch (err) {
     const { data: substitution } = await supabase
       .from("substitution_assignments")
       .select("id")
-      .eq("course_id", courseId)
+      .eq("offering_id", offeringId)
       .eq("date", date)
       .eq("substitute_teacher_id", actor.userId)
       .eq("status", "assigned")
       .maybeSingle();
     if (!substitution) {
-      throw new Error("You can only mark attendance for courses you teach.");
+      throw err;
     }
+    offering = await loadOffering(supabase, actor, offeringId);
   }
 
   if (entries.length === 0) {
@@ -92,12 +87,12 @@ export async function saveAttendanceCore(
   // never the student_id being written — without this, any teacher could
   // write an attendance row for an arbitrary student UUID, including one in
   // a different college. See lib/course-enrollment.ts.
-  await verifyStudentsEnrolled(supabase, courseId, entries.map((e) => e.studentDbId));
+  await verifyStudentsEnrolled(supabase, offering.id, entries.map((e) => e.studentDbId));
 
   const rows = entries.map((e) => ({
     college_id: actor.collegeId,
     student_id: e.studentDbId,
-    course_id: courseId,
+    offering_id: offering.id,
     date,
     status: e.status,
     marked_by: actor.userId,
@@ -105,7 +100,7 @@ export async function saveAttendanceCore(
 
   const { error } = await supabase
     .from("attendance")
-    .upsert(rows, { onConflict: "student_id,course_id,date" });
+    .upsert(rows, { onConflict: "offering_id,student_id,date" });
 
   if (error) {
     throw new Error(error.message);
@@ -163,31 +158,27 @@ export async function requestAttendanceCorrection(paramsRaw: RequestCorrectionPa
   // supabase-js can't infer this embedded-select shape — same workaround
   // every other actions.ts file with an embedded select already uses (see
   // placements/actions.ts's DriveWithCompany comment).
-  type AttendanceWithCourse = Database["public"]["Tables"]["attendance"]["Row"] & {
-    courses: { instructor_id: string | null } | null;
-  };
-  const { data: attendanceRaw } = await supabase
+  const { data: attendance } = await supabase
     .from("attendance")
-    .select("id, college_id, student_id, course_id, date, status, courses:course_id(instructor_id)")
+    .select("id, college_id, student_id, offering_id, date, status")
     .eq("id", attendanceId)
     .single();
-  const attendance = attendanceRaw as AttendanceWithCourse | null;
 
   if (!attendance || attendance.college_id !== actor.collegeId) {
     throw new Error("Attendance record not found.");
   }
-  // A teacher may only request corrections for courses they teach — same
-  // ownership check saveAttendanceCore uses for marking in the first place.
-  const instructorId = attendance.courses?.instructor_id;
-  if (instructorId !== actor.userId) {
-    throw new Error("You can only request corrections for courses you teach.");
-  }
+
+  // Ownership resolves through the OFFERING, re-read server-side, rather than
+  // through the attendance row's old course_id -> courses.instructor_id hop.
+  // That hop asked "who owns this course institution-wide", which was the
+  // wrong question the moment two sections could have different teachers.
+  const offering = await assertCanWriteOfferingRecords(supabase, actor, attendance.offering_id);
 
   const { error } = await supabase.from("attendance_correction_requests").insert({
     college_id: actor.collegeId,
     attendance_id: attendance.id,
     student_id: attendance.student_id,
-    course_id: attendance.course_id,
+    offering_id: offering.id,
     date: attendance.date,
     current_status: attendance.status,
     requested_status: requestedStatus,
@@ -209,7 +200,7 @@ export async function listMyCorrectionRequests() {
   const supabase = await createClient();
   const { data } = await supabase
     .from("attendance_correction_requests")
-    .select("*, courses:course_id(name, code)")
+    .select("*, course_offerings:offering_id(courses:course_id(name, code), sections:section_id(name))")
     .eq("submitted_by", actor.userId)
     .order("created_at", { ascending: false });
   return data || [];

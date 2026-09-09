@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib/rbac";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { verifyStudentsEnrolled } from "@/lib/course-enrollment";
+import { assertCanWriteOfferingRecords } from "@/lib/offerings";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 
@@ -16,7 +17,7 @@ const EXAM_TYPES = [
 ] as const;
 
 const SaveMarksSchema = z.object({
-  courseId: z.string().guid(),
+  offeringId: z.string().guid(),
   examType: z.enum(EXAM_TYPES),
   maxMarks: z.number().positive({ message: "Max marks must be greater than zero." }),
   entries: z
@@ -35,7 +36,8 @@ export interface MarkEntry {
 }
 
 export interface SaveMarksParams {
-  courseId: string;
+  /** A course_offerings.id, not a courses.id. */
+  offeringId: string;
   examType: ExamType;
   maxMarks: number;
   entries: MarkEntry[];
@@ -50,40 +52,28 @@ export async function saveMarksCore(
   actor: AuthorizedActor,
   params: SaveMarksParams
 ) {
-  const { courseId, examType, maxMarks, entries } = SaveMarksSchema.parse(params);
+  const { offeringId, examType, maxMarks, entries } = SaveMarksSchema.parse(params);
   await checkRateLimit(`saveMarks:${actor.userId}`, 30, 60);
 
-  const { data: course } = await supabase
-    .from("courses")
-    .select("instructor_id")
-    .eq("id", courseId)
-    .single();
-
-  if (!course) {
-    throw new Error("Course not found.");
-  }
-
-  // A teacher may only grade their own course; admin can grade any.
-  // RLS (marks_teacher_manage) only checks role, not course ownership —
-  // this is the layer that actually closes that gap.
-  // `!== "admin"`: a teaching HOD is held to the same course-ownership rule
-  // as any other instructor; admin stays unrestricted as before.
-  if (actor.role !== "admin" && course.instructor_id !== actor.userId) {
-    throw new Error("You can only enter marks for courses you teach.");
-  }
+  // Same offering-derived authority as attendance: only the assigned
+  // instructor (teaching HOD included) or an admin may enter marks, re-read
+  // server-side. Teacher A cannot grade Teacher B's offering by changing an
+  // id in the request. No substitute path here — covering one class does not
+  // confer authority over a section's assessment record.
+  const offering = await assertCanWriteOfferingRecords(supabase, actor, offeringId);
 
   // RLS (marks_teacher_manage) only checks the actor's role + college, never
   // the student_id being written — without this, any teacher could write a
   // marks row for an arbitrary student UUID, including one in a different
   // college. See lib/course-enrollment.ts.
-  await verifyStudentsEnrolled(supabase, courseId, entries.map((e) => e.studentDbId));
+  await verifyStudentsEnrolled(supabase, offering.id, entries.map((e) => e.studentDbId));
 
   const rows = entries
     .filter((e) => Number.isFinite(e.obtainedMarks))
     .map((e) => ({
       college_id: actor.collegeId,
       student_id: e.studentDbId,
-      course_id: courseId,
+      offering_id: offering.id,
       exam_type: examType,
       max_marks: maxMarks,
       obtained_marks: Math.min(Math.max(e.obtainedMarks, 0), maxMarks),
@@ -96,7 +86,7 @@ export async function saveMarksCore(
 
   const { error } = await supabase
     .from("marks")
-    .upsert(rows, { onConflict: "student_id,course_id,exam_type" });
+    .upsert(rows, { onConflict: "offering_id,student_id,exam_type" });
 
   if (error) {
     throw new Error(error.message);

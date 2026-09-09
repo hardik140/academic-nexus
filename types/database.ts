@@ -166,6 +166,12 @@ export interface Database {
 
       courses: {
         Row: {
+          /**
+           * @deprecated (migration 047) Instructor assignment lives on
+           * course_offerings.instructor_id — a course is catalog data and can
+           * be taught by different teachers in different sections/semesters.
+           * Retained only until every consumer reads offerings; dropped in 048.
+           */
           id: string;
           college_id: string;
           department_id: string;
@@ -191,6 +197,75 @@ export interface Database {
         Relationships: [];
       };
 
+      academic_years: {
+        Row: {
+          id: string;
+          college_id: string;
+          name: string;
+          start_date: string | null;
+          end_date: string | null;
+          status: "planned" | "active" | "closed";
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: OptionalKeys<Database["public"]["Tables"]["academic_years"]["Row"], "id" | "created_at" | "updated_at" | "start_date" | "end_date" | "status">;
+        Update: Partial<Database["public"]["Tables"]["academic_years"]["Insert"]>;
+        Relationships: [];
+      };
+
+      programmes: {
+        Row: {
+          id: string;
+          college_id: string;
+          department_id: string;
+          name: string;
+          code: string;
+          degree_type: "undergraduate" | "postgraduate" | "diploma" | "doctoral" | "certificate";
+          duration_semesters: number;
+          total_credits: number | null;
+          status: "active" | "inactive";
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: OptionalKeys<Database["public"]["Tables"]["programmes"]["Row"], "id" | "created_at" | "updated_at" | "degree_type" | "duration_semesters" | "total_credits" | "status">;
+        Update: Partial<Database["public"]["Tables"]["programmes"]["Insert"]>;
+        Relationships: [];
+      };
+
+      sections: {
+        Row: {
+          id: string;
+          college_id: string;
+          programme_id: string;
+          batch_year: number;
+          name: string;
+          capacity: number | null;
+          status: "active" | "inactive";
+          created_at: string;
+        };
+        Insert: OptionalKeys<Database["public"]["Tables"]["sections"]["Row"], "id" | "created_at" | "capacity" | "status">;
+        Update: Partial<Database["public"]["Tables"]["sections"]["Insert"]>;
+        Relationships: [];
+      };
+
+      course_offerings: {
+        Row: {
+          id: string;
+          college_id: string;
+          semester_id: string;
+          course_id: string;
+          section_id: string;
+          instructor_id: string | null;
+          max_students: number | null;
+          status: "planned" | "active" | "completed" | "cancelled";
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: OptionalKeys<Database["public"]["Tables"]["course_offerings"]["Row"], "id" | "created_at" | "updated_at" | "instructor_id" | "max_students" | "status">;
+        Update: Partial<Database["public"]["Tables"]["course_offerings"]["Insert"]>;
+        Relationships: [];
+      };
+
       semesters: {
         Row: {
           id: string;
@@ -199,10 +274,18 @@ export interface Database {
           start_date: string;
           end_date: string;
           is_current: boolean;
+          /** @deprecated superseded by academic_year_id (migration 046). */
           academic_year: string;
+          academic_year_id: string | null;
+          sequence_no: number | null;
+          status: "planned" | "active" | "closed";
           created_at: string;
+          updated_at: string;
         };
-        Insert: OptionalKeys<Database["public"]["Tables"]["semesters"]["Row"], "id" | "created_at" | "is_current">;
+        Insert: OptionalKeys<
+          Database["public"]["Tables"]["semesters"]["Row"],
+          "id" | "created_at" | "updated_at" | "is_current" | "academic_year_id" | "sequence_no" | "status"
+        >;
         Update: Partial<Database["public"]["Tables"]["semesters"]["Insert"]>;
         Relationships: [];
       };
@@ -211,15 +294,15 @@ export interface Database {
         Row: {
           id: string;
           college_id: string;
+          /** references students(id) — NOT profiles(id). Corrected in 047. */
           student_id: string;
-          course_id: string;
-          semester_id: string | null;
+          offering_id: string;
           status: "enrolled" | "dropped" | "completed" | "failed";
           grade: string | null;
           grade_points: number | null;
           created_at: string;
         };
-        Insert: OptionalKeys<Database["public"]["Tables"]["course_enrollments"]["Row"], "id" | "created_at" | "semester_id" | "status" | "grade" | "grade_points">;
+        Insert: OptionalKeys<Database["public"]["Tables"]["course_enrollments"]["Row"], "id" | "created_at" | "status" | "grade" | "grade_points">;
         Update: Partial<Database["public"]["Tables"]["course_enrollments"]["Insert"]>;
         Relationships: [];
       };
@@ -228,16 +311,14 @@ export interface Database {
         Row: {
           id: string;
           college_id: string;
-          course_id: string;
+          offering_id: string;
           day_of_week: number;
           start_time: string;
           end_time: string;
           room: string | null;
-          instructor_id: string | null;
-          semester_id: string | null;
           created_at: string;
         };
-        Insert: OptionalKeys<Database["public"]["Tables"]["timetable_slots"]["Row"], "id" | "created_at" | "room" | "instructor_id" | "semester_id">;
+        Insert: OptionalKeys<Database["public"]["Tables"]["timetable_slots"]["Row"], "id" | "created_at" | "room">;
         Update: Partial<Database["public"]["Tables"]["timetable_slots"]["Insert"]>;
         Relationships: [];
       };
@@ -276,7 +357,7 @@ export interface Database {
           id: string;
           college_id: string;
           student_id: string;
-          course_id: string;
+          offering_id: string;
           date: string;
           status: "present" | "absent" | "late" | "excused";
           marked_by: string;
@@ -293,7 +374,7 @@ export interface Database {
           id: string;
           college_id: string;
           student_id: string;
-          course_id: string;
+          offering_id: string;
           exam_type: "internal_1" | "internal_2" | "midterm" | "final" | "assignment" | "lab" | "project" | "viva";
           max_marks: number;
           obtained_marks: number;
@@ -697,7 +778,7 @@ export interface Database {
           college_id: string;
           attendance_id: string;
           student_id: string;
-          course_id: string;
+          offering_id: string;
           date: string;
           current_status: "present" | "absent" | "late" | "excused";
           requested_status: "present" | "absent" | "late" | "excused";
@@ -722,7 +803,7 @@ export interface Database {
           id: string;
           college_id: string;
           leave_request_id: string;
-          course_id: string;
+          offering_id: string;
           timetable_slot_id: string | null;
           original_teacher_id: string;
           substitute_teacher_id: string | null;
