@@ -39,10 +39,20 @@ const mockSelectResolve = vi.fn();
 // (.eq(id).single()), others additionally scope by college_id
 // (.eq(id).eq(college_id).single()). Also directly thenable (awaited with
 // no .single() at all) via mockSelectResolve, for array-returning queries.
-const eqChain: { eq: () => typeof eqChain; in: () => typeof eqChain; single: typeof mockSingle; then: (resolve: (v: unknown) => unknown, reject?: (e: unknown) => unknown) => unknown } = {
+const eqChain: {
+  eq: () => typeof eqChain;
+  in: () => typeof eqChain;
+  single: typeof mockSingle;
+  maybeSingle: typeof mockSingle;
+  then: (resolve: (v: unknown) => unknown, reject?: (e: unknown) => unknown) => unknown;
+} = {
   eq: () => eqChain,
   in: () => eqChain,
   single: mockSingle,
+  // lib/offerings.ts's loadOffering uses maybeSingle rather than single —
+  // a missing offering is a denial to report, not an exception to throw.
+  // Shares mockSingle's queue so tests sequence lookups in one place.
+  maybeSingle: mockSingle,
   then: (resolve, reject) => mockSelectResolve().then(resolve, reject),
 };
 
@@ -159,6 +169,7 @@ function makeRequest(body: unknown, token?: string) {
 // "student-1" — these are what changed when Phase 0 added request
 // validation at every mutation boundary.
 const UUID_COURSE = "10000000-0000-4000-8000-000000000001";
+const UUID_OFFERING = "10000000-0000-4000-8000-0000000000f1";
 const UUID_STUDENT_ROW = "10000000-0000-4000-8000-000000000002";
 const UUID_STUDENT = "10000000-0000-4000-8000-000000000003";
 const UUID_FEE = "10000000-0000-4000-8000-000000000004";
@@ -203,7 +214,19 @@ describe("app/api/mobile/* — HTTP-boundary authorization matrix", () => {
     mockSelectResolve.mockResolvedValue({ data: [] });
     mockInsert.mockReset();
     mockUpsert.mockReset();
-    mockUpsert.mockResolvedValue({ error: null });
+    // Both thenable (callers that don't chain) and .select()-able. The
+    // select echoes one row per row written, which is what the real client
+    // returns — so assertPersisted (lib/concurrent-claim.ts) is genuinely
+    // exercised here rather than handed a canned success.
+    mockUpsert.mockImplementation((rows: unknown) => {
+      const written = Array.isArray(rows) ? rows : [rows];
+      const result = { data: written.map((_, i) => ({ id: `row-${i}` })), error: null };
+      return {
+        then: (resolve: (v: unknown) => unknown, reject?: (e: unknown) => unknown) =>
+          Promise.resolve({ error: null }).then(resolve, reject),
+        select: () => Promise.resolve(result),
+      };
+    });
     mockUpdate.mockReset();
     mockUpdate.mockReturnValue(updateChain());
     mockGenerateLink.mockReset();
@@ -221,8 +244,9 @@ describe("app/api/mobile/* — HTTP-boundary authorization matrix", () => {
   const GATEPASS_BODY = { destination: "Home", reason: "Weekend", exitTime: "2026-09-01T09:00:00Z", returnTime: "2026-09-02T18:00:00Z" };
   const COMPLAINT_BODY = { category: "plumbing", title: "Leaky tap", description: "desc", location: "Room 1", priority: "low" };
   const PUSH_BODY = { token: "ExponentPushToken[abc]", platform: "ios" };
-  const ATTENDANCE_BODY = { courseId: UUID_COURSE, date: "2026-09-01", entries: [{ studentDbId: UUID_STUDENT_ROW, status: "present" }] };
-  const GRADES_BODY = { courseId: UUID_COURSE, examType: "internal_1", maxMarks: 100, entries: [{ studentDbId: UUID_STUDENT_ROW, obtainedMarks: 80 }] };
+  // offeringId, not courseId — the API contract changed with migration 047.
+  const ATTENDANCE_BODY = { offeringId: UUID_OFFERING, date: "2026-09-01", entries: [{ studentDbId: UUID_STUDENT_ROW, status: "present" }] };
+  const GRADES_BODY = { offeringId: UUID_OFFERING, examType: "internal_1", maxMarks: 100, entries: [{ studentDbId: UUID_STUDENT_ROW, obtainedMarks: 80 }] };
   const LEAVE_BODY = { leaveType: "casual", startDate: "2026-09-01", endDate: "2026-09-02", reason: "Personal" };
   const LEAVE_ACT_BODY = { requestId: UUID_LEAVE_REQUEST, action: "approved" };
   const GATEPASS_ACT_BODY = { passId: UUID_GATEPASS, action: "approved" };
@@ -373,54 +397,98 @@ describe("app/api/mobile/* — HTTP-boundary authorization matrix", () => {
   // could previously mark attendance/grades for an arbitrary student UUID,
   // including one in a different college. Fixed via
   // lib/course-enrollment.ts's verifyStudentsEnrolled.
-  it("attendance/save — teacher owns the course and the student IS enrolled → succeeds", async () => {
+  it("attendance/save — teacher holds the offering and the student IS enrolled → succeeds", async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
     // Sequenced: (1) profile lookup, (2) course ownership check.
     mockSingle
       .mockResolvedValueOnce({ data: { role: "teacher", college_id: "c1", status: "active" } })
-      .mockResolvedValueOnce({ data: { instructor_id: "u1" } });
+      // loadOffering: this teacher IS the assigned instructor.
+      .mockResolvedValueOnce({
+        data: {
+          id: UUID_OFFERING,
+          college_id: "c1",
+          semester_id: "sem-1",
+          course_id: UUID_COURSE,
+          section_id: "sec-1",
+          instructor_id: "u1",
+          status: "active",
+          courses: { department_id: "dept-1" },
+        },
+      });
     // verifyStudentsEnrolled's chain: students -> course_enrollments.
-    mockSelectResolve
-      .mockResolvedValueOnce({ data: [{ id: UUID_STUDENT_ROW, user_id: UUID_TARGET_USER }] })
-      .mockResolvedValueOnce({ data: [{ student_id: UUID_TARGET_USER }] });
+    // verifyStudentsEnrolled is one read now: course_enrollments.student_id
+    // references students(id) directly, so the profiles bridge is gone.
+    mockSelectResolve.mockResolvedValueOnce({ data: [{ student_id: UUID_STUDENT_ROW }] });
     const res = await saveAttendance(makeRequest(ATTENDANCE_BODY, "good-token"));
     expect(res.status).toBe(200);
   });
 
-  it("attendance/save — teacher owns the course but the student is NOT enrolled → 400 (IDOR regression)", async () => {
+  it("attendance/save — teacher holds the offering but the student is NOT enrolled → 400 (IDOR regression)", async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
     mockSingle
       .mockResolvedValueOnce({ data: { role: "teacher", college_id: "c1", status: "active" } })
-      .mockResolvedValueOnce({ data: { instructor_id: "u1" } });
-    mockSelectResolve
-      .mockResolvedValueOnce({ data: [{ id: UUID_STUDENT_ROW, user_id: UUID_TARGET_USER }] })
-      .mockResolvedValueOnce({ data: [] }); // no course_enrollments row for this student
+      // loadOffering: this teacher IS the assigned instructor.
+      .mockResolvedValueOnce({
+        data: {
+          id: UUID_OFFERING,
+          college_id: "c1",
+          semester_id: "sem-1",
+          course_id: UUID_COURSE,
+          section_id: "sec-1",
+          instructor_id: "u1",
+          status: "active",
+          courses: { department_id: "dept-1" },
+        },
+      });
+    mockSelectResolve.mockResolvedValueOnce({ data: [] }); // not on this offering
     const res = await saveAttendance(makeRequest(ATTENDANCE_BODY, "good-token"));
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.error).toMatch(/not enrolled/);
   });
 
-  it("grading/save — teacher owns the course and the student IS enrolled → succeeds", async () => {
+  it("grading/save — teacher holds the offering and the student IS enrolled → succeeds", async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
     mockSingle
       .mockResolvedValueOnce({ data: { role: "teacher", college_id: "c1", status: "active" } })
-      .mockResolvedValueOnce({ data: { instructor_id: "u1" } });
-    mockSelectResolve
-      .mockResolvedValueOnce({ data: [{ id: UUID_STUDENT_ROW, user_id: UUID_TARGET_USER }] })
-      .mockResolvedValueOnce({ data: [{ student_id: UUID_TARGET_USER }] });
+      // loadOffering: this teacher IS the assigned instructor.
+      .mockResolvedValueOnce({
+        data: {
+          id: UUID_OFFERING,
+          college_id: "c1",
+          semester_id: "sem-1",
+          course_id: UUID_COURSE,
+          section_id: "sec-1",
+          instructor_id: "u1",
+          status: "active",
+          courses: { department_id: "dept-1" },
+        },
+      });
+    // verifyStudentsEnrolled is one read now: course_enrollments.student_id
+    // references students(id) directly, so the profiles bridge is gone.
+    mockSelectResolve.mockResolvedValueOnce({ data: [{ student_id: UUID_STUDENT_ROW }] });
     const res = await saveGrades(makeRequest(GRADES_BODY, "good-token"));
     expect(res.status).toBe(200);
   });
 
-  it("grading/save — teacher owns the course but the student is NOT enrolled → 400 (IDOR regression)", async () => {
+  it("grading/save — teacher holds the offering but the student is NOT enrolled → 400 (IDOR regression)", async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
     mockSingle
       .mockResolvedValueOnce({ data: { role: "teacher", college_id: "c1", status: "active" } })
-      .mockResolvedValueOnce({ data: { instructor_id: "u1" } });
-    mockSelectResolve
-      .mockResolvedValueOnce({ data: [{ id: UUID_STUDENT_ROW, user_id: UUID_TARGET_USER }] })
-      .mockResolvedValueOnce({ data: [] });
+      // loadOffering: this teacher IS the assigned instructor.
+      .mockResolvedValueOnce({
+        data: {
+          id: UUID_OFFERING,
+          college_id: "c1",
+          semester_id: "sem-1",
+          course_id: UUID_COURSE,
+          section_id: "sec-1",
+          instructor_id: "u1",
+          status: "active",
+          courses: { department_id: "dept-1" },
+        },
+      });
+    mockSelectResolve.mockResolvedValueOnce({ data: [] }); // not on this offering
     const res = await saveGrades(makeRequest(GRADES_BODY, "good-token"));
     expect(res.status).toBe(400);
     const body = await res.json();
@@ -1000,10 +1068,10 @@ describe("app/api/mobile/* — HTTP-boundary authorization matrix", () => {
     expect(body.error).toMatch(/greater than zero/);
   });
 
-  it("attendance/save — non-UUID courseId → 400", async () => {
+  it("attendance/save — non-UUID offeringId → 400", async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
     mockSingle.mockResolvedValue({ data: { role: "teacher", college_id: "c1", status: "active" } });
-    const res = await saveAttendance(makeRequest({ ...ATTENDANCE_BODY, courseId: "course-1" }, "good-token"));
+    const res = await saveAttendance(makeRequest({ ...ATTENDANCE_BODY, offeringId: "offering-1" }, "good-token"));
     expect(res.status).toBe(400);
   });
 
