@@ -32,6 +32,7 @@ INSERT INTO public.profiles (id, college_id, role, full_name) VALUES
   ('00000000-0000-4000-8000-00000000a011', '00000000-0000-4000-8000-0000000000c1', 'student',   'QA Student A'),
   ('00000000-0000-4000-8000-00000000a012', '00000000-0000-4000-8000-0000000000c1', 'student',   'QA Student B'),
   ('00000000-0000-4000-8000-00000000a013', '00000000-0000-4000-8000-0000000000c1', 'super_admin','QA Super Admin'),
+  ('00000000-0000-4000-8000-00000000a014', '00000000-0000-4000-8000-0000000000c1', 'student',   'QA Student C (enrolled nowhere)'),
   -- a different tenant entirely
   ('00000000-0000-4000-8000-00000000b001', '00000000-0000-4000-8000-0000000000c2', 'teacher',   'QA Foreign Teacher');
 
@@ -60,7 +61,12 @@ INSERT INTO public.semesters (id, college_id, name, status) VALUES
 
 INSERT INTO public.students (id, college_id, user_id, department_id, enrollment_number) VALUES
   ('00000000-0000-4000-8000-000000012001', '00000000-0000-4000-8000-0000000000c1', '00000000-0000-4000-8000-00000000a011', '00000000-0000-4000-8000-00000000d001', 'QA-A'),
-  ('00000000-0000-4000-8000-000000012002', '00000000-0000-4000-8000-0000000000c1', '00000000-0000-4000-8000-00000000a012', '00000000-0000-4000-8000-00000000d001', 'QA-B');
+  ('00000000-0000-4000-8000-000000012002', '00000000-0000-4000-8000-0000000000c1', '00000000-0000-4000-8000-00000000a012', '00000000-0000-4000-8000-00000000d001', 'QA-B'),
+  -- Student C is a real, active student of this college who is enrolled in
+  -- NO offering. Needed to tell "this student does not exist" apart from
+  -- "this student is not in this class" — the enrollment guard must reject
+  -- the second case just as firmly as the first.
+  ('00000000-0000-4000-8000-000000012003', '00000000-0000-4000-8000-0000000000c1', '00000000-0000-4000-8000-00000000a014', '00000000-0000-4000-8000-00000000d001', 'QA-C');
 
 -- OFF_A  Dept A, Teacher A          OFF_B  Dept B, Teacher B
 -- OFF_H  Dept A, Teaching HOD       OFF_X  Dept A, Teacher A, cancelled
