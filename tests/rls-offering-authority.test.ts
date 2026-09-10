@@ -847,3 +847,83 @@ describe("§16 mutation resistance", () => {
     expect(await countRows(db, ATT_COUNT)).toBe(before);
   });
 });
+
+// ===========================================================================
+// Offering identity — what actually distinguishes one delivery from another.
+// These assert the model itself, at the database, rather than any one policy.
+// ===========================================================================
+
+const OFF_PAST = "00000000-0000-4000-8000-000000013005"; // same course+section as OFF_A, earlier semester
+
+describe("offering identity", () => {
+  it("same course, different section → different offerings", async () => {
+    const db = await freshDb();
+    const res = await db.query<{ id: string; course_id: string; section_id: string }>(
+      `SELECT id, course_id, section_id FROM public.course_offerings
+        WHERE id IN ('${OFF_A}', '${OFF_H}')`
+    );
+    const [a, h] = [res.rows.find((r) => r.id === OFF_A)!, res.rows.find((r) => r.id === OFF_H)!];
+    expect(a.course_id).toBe(h.course_id);
+    expect(a.section_id).not.toBe(h.section_id);
+    expect(a.id).not.toBe(h.id);
+  });
+
+  it("same course, same section, different semester → different offerings", async () => {
+    const db = await freshDb();
+    const res = await db.query<{ id: string; course_id: string; section_id: string; semester_id: string }>(
+      `SELECT id, course_id, section_id, semester_id FROM public.course_offerings
+        WHERE id IN ('${OFF_A}', '${OFF_PAST}')`
+    );
+    const [now, past] = [res.rows.find((r) => r.id === OFF_A)!, res.rows.find((r) => r.id === OFF_PAST)!];
+    expect(now.course_id).toBe(past.course_id);
+    expect(now.section_id).toBe(past.section_id);
+    expect(now.semester_id).not.toBe(past.semester_id);
+  });
+
+  it("authority follows the offering's instructor, not the course", async () => {
+    // Teacher A holds this semester's offering; Teacher B held last
+    // semester's — same course, same section. Each may write only their own.
+    const db = await freshDb();
+
+    expect((await attempt(db, U.teacherA, insertAttendance(OFF_A))).ok).toBe(true);
+    expect((await attempt(db, U.teacherA, insertAttendance(OFF_PAST, STUDENT_A, "2026-03-02"))).ok).toBe(false);
+    expect((await attempt(db, U.teacherB, insertAttendance(OFF_PAST, STUDENT_B, "2026-03-02"))).ok).toBe(true);
+  });
+
+  it("historical records stay addressable and attributed to their own term", async () => {
+    // Taking over a course confers nothing over the predecessor's semester,
+    // and the predecessor keeps their own — a register is a record of what
+    // happened, not a function of who teaches now.
+    const db = await freshDb();
+    await db.exec(
+      `INSERT INTO public.attendance (college_id, offering_id, student_id, date, status, marked_by)
+       VALUES ('${COLLEGE}','${OFF_PAST}','${STUDENT_A}','2026-03-02','present','${U.teacherB}')`
+    );
+
+    const rows = await db.query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM public.attendance WHERE offering_id = '${OFF_PAST}'`
+    );
+    expect(Number(rows.rows[0].n)).toBe(1);
+
+    const overwrite = await attempt(
+      db,
+      U.teacherA,
+      `UPDATE public.attendance SET status = 'absent' WHERE offering_id = '${OFF_PAST}'`
+    );
+    expect(overwrite.rows).toBe(0);
+
+    const after = await db.query<{ status: string }>(
+      `SELECT status FROM public.attendance WHERE offering_id = '${OFF_PAST}'`
+    );
+    expect(after.rows[0].status).toBe("present");
+  });
+
+  it("a completed offering still accepts marks from its own instructor", async () => {
+    // Only 'cancelled' closes an offering to writes — end-of-term marks
+    // legitimately land against a completed one.
+    const db = await freshDb();
+    const res = await attempt(db, U.teacherB, insertMarks(OFF_PAST, STUDENT_A, "final"));
+    expect(res.ok).toBe(true);
+    expect(res.rows).toBe(1);
+  });
+});
