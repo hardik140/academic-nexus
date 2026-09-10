@@ -48,3 +48,60 @@ export function assertClaimed(rows: unknown[] | null, entityLabel: string): void
     );
   }
 }
+
+/**
+ * The bulk-write counterpart: confirm a write actually persisted the rows it
+ * was asked to, and return the MEASURED count.
+ *
+ * Same root cause as assertClaimed, different shape. A write whose rows are
+ * filtered out by RLS comes back as success with fewer rows than were sent —
+ * so `return { saved: rows.length }` reports what the caller *asked for*,
+ * never what the database *did*. A teacher could be told "42 saved" with an
+ * empty register behind it, which is worse than an error: it is a false
+ * receipt for a legally significant record.
+ *
+ * The counts can only be compared when the write asks for its rows back:
+ *
+ *   const { data: persisted, error } = await supabase
+ *     .from("attendance")
+ *     .upsert(rows, { onConflict: "offering_id,student_id,date" })
+ *     .select("id");
+ *   if (error) throw new Error(error.message);
+ *   return { saved: assertPersisted(persisted, rows.length, "attendance record") };
+ *
+ * ATOMIC, not partial — deliberately. These upserts are already all-or-
+ * nothing upstream (verifyStudentsEnrolled rejects the whole request if any
+ * one student is not enrolled in the offering), so a short write means
+ * something is wrong with the request, not that most of it was fine. A
+ * partial-success contract would also have to be expressed per record all
+ * the way out to the mobile client, which is a bigger change than the defect
+ * warrants. Callers with genuinely idempotent writes must NOT use this: see
+ * createSubstitutionNeeds, where ignoreDuplicates makes zero rows the
+ * expected result of a correct re-run.
+ *
+ * Zero requested is not an error. A caller with nothing to write gets zero
+ * back, which is why `expected` is compared rather than merely tested for
+ * emptiness.
+ */
+export function assertPersisted(
+  rows: unknown[] | null,
+  expected: number,
+  entityLabel: string
+): number {
+  const persisted = rows?.length ?? 0;
+  if (persisted === expected) return persisted;
+
+  if (persisted === 0) {
+    throw new Error(
+      `No ${entityLabel} rows were saved — the database accepted the request but ` +
+        `changed nothing, which usually means the write was refused. Nothing has ` +
+        `been recorded; do not treat this as saved.`
+    );
+  }
+
+  throw new Error(
+    `Only ${persisted} of ${expected} ${entityLabel} rows were saved. The write was ` +
+      `partially refused, so the records are now inconsistent with what was ` +
+      `submitted. Reload before retrying.`
+  );
+}

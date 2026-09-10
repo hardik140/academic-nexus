@@ -7,6 +7,7 @@ import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib
 import { checkRateLimit } from "@/lib/rate-limit";
 import { verifyStudentsEnrolled } from "@/lib/course-enrollment";
 import { assertCanWriteOfferingRecords } from "@/lib/offerings";
+import { assertPersisted } from "@/lib/concurrent-claim";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 
@@ -62,10 +63,10 @@ export async function saveMarksCore(
   // confer authority over a section's assessment record.
   const offering = await assertCanWriteOfferingRecords(supabase, actor, offeringId);
 
-  // RLS (marks_teacher_manage) only checks the actor's role + college, never
-  // the student_id being written — without this, any teacher could write a
-  // marks row for an arbitrary student UUID, including one in a different
-  // college. See lib/course-enrollment.ts.
+  // RLS authorizes the OFFERING, never the individual student_id in each row
+  // (marks_insert_instructor, 047 §7b). Binding every submitted row to the
+  // offering it claims to belong to is this check's job, and it rejects the
+  // whole request rather than dropping rows. See lib/course-enrollment.ts.
   await verifyStudentsEnrolled(supabase, offering.id, entries.map((e) => e.studentDbId));
 
   const rows = entries
@@ -84,15 +85,19 @@ export async function saveMarksCore(
     return { saved: 0 };
   }
 
-  const { error } = await supabase
+  // Measured, not claimed — same reasoning as saveAttendanceCore. A marks
+  // sheet is the record a degree classification is computed from; reporting
+  // it saved when it was refused is the worst possible failure mode here.
+  const { data: persisted, error } = await supabase
     .from("marks")
-    .upsert(rows, { onConflict: "offering_id,student_id,exam_type" });
+    .upsert(rows, { onConflict: "offering_id,student_id,exam_type" })
+    .select("id");
 
   if (error) {
     throw new Error(error.message);
   }
 
-  return { saved: rows.length };
+  return { saved: assertPersisted(persisted, rows.length, "marks") };
 }
 
 export async function saveMarks(params: SaveMarksParams) {

@@ -8,6 +8,7 @@ import { checkRateLimit } from "@/lib/rate-limit";
 import { PERMISSIONS } from "@/lib/permissions";
 import { verifyStudentsEnrolled } from "@/lib/course-enrollment";
 import { assertCanRecordAttendance, assertCanWriteOfferingRecords } from "@/lib/offerings";
+import { assertPersisted } from "@/lib/concurrent-claim";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 
@@ -64,10 +65,13 @@ export async function saveAttendanceCore(
     return { saved: 0 };
   }
 
-  // RLS (attendance_teacher_mark) only checks the actor's role + college,
-  // never the student_id being written — without this, any teacher could
-  // write an attendance row for an arbitrary student UUID, including one in
-  // a different college. See lib/course-enrollment.ts.
+  // RLS authorizes the OFFERING, never the individual student_id in each row
+  // (attendance_insert_offering_authority, 047 §7b). So a caller with genuine
+  // authority over this offering could still submit an arbitrary student
+  // UUID, including one from another college or another section. This is the
+  // check that binds every row to the offering it claims to belong to, and
+  // it rejects the whole request rather than silently dropping rows — see
+  // lib/course-enrollment.ts.
   await verifyStudentsEnrolled(supabase, offering.id, entries.map((e) => e.studentDbId));
 
   const rows = entries.map((e) => ({
@@ -79,15 +83,21 @@ export async function saveAttendanceCore(
     marked_by: actor.userId,
   }));
 
-  const { error } = await supabase
+  // .select("id") is what makes `saved` a measurement rather than a claim.
+  // Without it this returned rows.length — the number the CALLER asked for —
+  // even when RLS filtered every row out and the register stayed empty. A
+  // teacher marking a class they no longer instruct got "42 saved" and no
+  // attendance. See lib/concurrent-claim.ts.
+  const { data: persisted, error } = await supabase
     .from("attendance")
-    .upsert(rows, { onConflict: "offering_id,student_id,date" });
+    .upsert(rows, { onConflict: "offering_id,student_id,date" })
+    .select("id");
 
   if (error) {
     throw new Error(error.message);
   }
 
-  return { saved: rows.length };
+  return { saved: assertPersisted(persisted, rows.length, "attendance") };
 }
 
 export async function saveAttendance(params: SaveAttendanceParams) {
@@ -124,10 +134,14 @@ export interface RequestCorrectionParams {
 }
 
 /**
- * Purely additive to the teacher's existing same-day direct-edit ability
- * (attendance_teacher_update RLS) — this is the request/approve path for
- * correcting an already-past record, reviewed by hod/admin in
- * hod/approvals rather than silently re-editable by the teacher alone.
+ * The request/approve path for correcting an already-recorded attendance
+ * row, reviewed in hod/approvals.
+ *
+ * Additive to the instructor's own direct-edit ability
+ * (attendance_update_offering_authority, 047 §7b), which stays available to
+ * whoever currently holds the offering. What this exists for is the case
+ * where the record should change but the person noticing should not be the
+ * person deciding.
  */
 export async function requestAttendanceCorrection(paramsRaw: RequestCorrectionParams) {
   const actor = await requireRole(PERMISSIONS.attendance_correction_create);
@@ -151,22 +165,28 @@ export async function requestAttendanceCorrection(paramsRaw: RequestCorrectionPa
   // wrong question the moment two sections could have different teachers.
   const offering = await assertCanWriteOfferingRecords(supabase, actor, attendance.offering_id);
 
-  const { error } = await supabase.from("attendance_correction_requests").insert({
-    college_id: actor.collegeId,
-    attendance_id: attendance.id,
-    student_id: attendance.student_id,
-    offering_id: offering.id,
-    date: attendance.date,
-    current_status: attendance.status,
-    requested_status: requestedStatus,
-    reason,
-    evidence_note: evidenceNote || null,
-    submitted_by: actor.userId,
-  });
+  const { data: inserted, error } = await supabase
+    .from("attendance_correction_requests")
+    .insert({
+      college_id: actor.collegeId,
+      attendance_id: attendance.id,
+      student_id: attendance.student_id,
+      offering_id: offering.id,
+      date: attendance.date,
+      current_status: attendance.status,
+      requested_status: requestedStatus,
+      reason,
+      evidence_note: evidenceNote || null,
+      submitted_by: actor.userId,
+    })
+    .select("id");
 
   if (error) {
     throw new Error(error.message);
   }
+  // Telling a teacher their correction was filed when no row exists means
+  // they stop chasing it and the record stays wrong.
+  assertPersisted(inserted, 1, "attendance correction request");
 
   revalidatePath("/teacher/attendance");
 }

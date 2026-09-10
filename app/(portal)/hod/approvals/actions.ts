@@ -7,7 +7,7 @@ import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib
 import { checkRateLimit } from "@/lib/rate-limit";
 import { getCached, invalidateCache } from "@/lib/cache";
 import { logAudit } from "@/lib/audit";
-import { assertClaimed } from "@/lib/concurrent-claim";
+import { assertClaimed, assertPersisted } from "@/lib/concurrent-claim";
 import { assertNotSelfApproval } from "@/lib/segregation-of-duties";
 import { PERMISSIONS } from "@/lib/permissions";
 import { computeAffectedClasses } from "@/lib/leave-impact";
@@ -370,13 +370,25 @@ export async function actOnAttendanceCorrectionCore(
   assertClaimed(claimed, "correction request");
 
   if (action === "approved") {
-    const { error: updateAttendanceError } = await supabase
+    // ORDER IS FORCED, not incidental: 047's attendance_update_approved_correction
+    // policy authorizes this write only while an APPROVED request pointing at
+    // this row exists, naming this actor as reviewer. So the request must be
+    // claimed above before the attendance row can be touched.
+    //
+    // And the result must be measured. This exact statement is why migration
+    // 038 exists — RLS silently matched zero rows, the request was marked
+    // approved, the audit log recorded the change, and the attendance status
+    // never moved. Everything downstream said the correction had been applied.
+    // Only counting the affected rows catches that.
+    const { data: corrected, error: updateAttendanceError } = await supabase
       .from("attendance")
       .update({ status: request.requested_status })
-      .eq("id", request.attendance_id);
+      .eq("id", request.attendance_id)
+      .select("id");
     if (updateAttendanceError) {
       throw new Error(updateAttendanceError.message);
     }
+    assertPersisted(corrected, 1, "attendance");
     await logAudit(supabase, actor, "attendance_correction_approved", "attendance", request.attendance_id, {
       oldValue: request.current_status,
       newValue: request.requested_status,
