@@ -335,11 +335,32 @@ export async function getActiveSemesterId(
  * - Inactive staff. requireRole already rejects a non-active profile at the
  *   door, so an offering left pointing at a deactivated instructor denies
  *   that person by session, not by assignment.
- * - Database-level assignment enforcement. RLS on `attendance` and `marks` is
- *   role-only (migrations 006/038) — it never checks the offering's
- *   instructor. Everything above is therefore the ONLY layer enforcing
- *   assignment scope for those two tables, and it protects the Server Action
- *   and mobile route paths, not a raw PostgREST call with a valid session.
- *   Closing that gap belongs in 047's RLS section while it is still
- *   unapplied; see the PR discussion.
+ * - Offering MANAGEMENT — creating an offering, or changing its instructor,
+ *   section, course or semester. Nothing in this repository writes
+ *   `course_offerings`: not a Server Action, not an API route, not the React
+ *   Native app. The same is true of sections, programmes, semesters and
+ *   academic_years. That master data is expected to arrive by another route,
+ *   so there is no application authorization to mirror here yet.
+ *
+ *   When that screen is built, the rule it must enforce is already in the
+ *   database (047 §7d, `course_offerings_manage`): admin and director act
+ *   college-wide; a HOD acts only on offerings whose COURSE belongs to a
+ *   department they head, both before and after the change. Use
+ *   resolveHodDepartmentIds against the offering's departmentId — the same
+ *   pair assertOfferingInReviewScope already uses — rather than inventing a
+ *   second notion of an HOD's scope.
+ *
+ * WHAT THE DATABASE NOW ENFORCES ON ITS OWN
+ *
+ * An earlier version of this note said RLS on `attendance` and `marks` was
+ * role-only and that these helpers were the only layer checking assignment.
+ * That stopped being true when 047 §7 was written: `can_write_offering_records`
+ * and `can_record_attendance` are SECURITY DEFINER functions carrying the same
+ * rule as canWriteOfferingRecords / assertCanRecordAttendance above, and the
+ * policies on both tables call them. A raw PostgREST call with a valid session
+ * is now refused by the database, not merely by this file.
+ *
+ * The two layers are deliberately redundant, and they must be changed
+ * together: if you weaken one, nothing here will tell you the other is now
+ * the only thing standing.
  */

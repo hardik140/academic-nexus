@@ -252,6 +252,61 @@ ALTER TABLE public.attendance_correction_requests
 CREATE INDEX IF NOT EXISTS idx_attendance_correction_offering
   ON public.attendance_correction_requests(offering_id);
 
+-- ---------------------------------------------------------------
+-- 5a. F2 — make the correction request's copied context provably match the
+--     attendance row it names.
+--
+-- A correction request duplicates five columns that already exist on the
+-- attendance row it points at: college_id, offering_id, student_id and date,
+-- alongside attendance_id itself. The duplication is deliberate and stays —
+-- every review policy filters on offering_id, and resolving it through a
+-- join on each evaluation would put `attendance` inside the policy for
+-- `attendance_correction_requests`, where that table's own RLS then applies
+-- to the lookup. Denormalising it is what keeps the review predicate
+-- self-contained.
+--
+-- What was missing is that nothing tied the copy to the original. The insert
+-- policy checks `submitted_by = auth.uid()` and nothing else, so a request
+-- could name attendance row X while declaring the offering, student and date
+-- of row Y. All five values are client-supplied.
+--
+-- That state is not directly exploitable today: applying a correction is
+-- authorised against the ATTENDANCE row's own offering
+-- (attendance_update_approved_correction), not against the request's copy,
+-- so a mismatched request fails closed at the last step. But it lets the
+-- wrong HOD hold a reviewable request in their queue, and it makes the
+-- audit trail disagree with itself about which class was corrected.
+--
+-- A composite foreign key rather than a trigger: this is a referential
+-- statement, PostgreSQL expresses it natively, and a declarative constraint
+-- cannot be bypassed by a path that forgets to fire it. It needs a matching
+-- unique key on the parent — `id` alone is already unique, so widening it to
+-- the four context columns adds no new restriction to `attendance`, only a
+-- referencable target.
+-- ---------------------------------------------------------------
+ALTER TABLE public.attendance
+  DROP CONSTRAINT IF EXISTS attendance_correction_target_key;
+ALTER TABLE public.attendance
+  ADD CONSTRAINT attendance_correction_target_key
+  UNIQUE (id, college_id, offering_id, student_id, date);
+
+-- Supersedes 037's single-column FK. attendance_id is still covered, because
+-- it leads the composite.
+ALTER TABLE public.attendance_correction_requests
+  DROP CONSTRAINT IF EXISTS attendance_correction_requests_attendance_id_fkey;
+ALTER TABLE public.attendance_correction_requests
+  DROP CONSTRAINT IF EXISTS attendance_correction_requests_attendance_context_fkey;
+ALTER TABLE public.attendance_correction_requests
+  ADD CONSTRAINT attendance_correction_requests_attendance_context_fkey
+  FOREIGN KEY (attendance_id, college_id, offering_id, student_id, date)
+  REFERENCES public.attendance (id, college_id, offering_id, student_id, date)
+  ON DELETE CASCADE;
+
+-- ON DELETE CASCADE has to find the children by the referenced key; without
+-- this the cascade degrades to a sequential scan as the table grows.
+CREATE INDEX IF NOT EXISTS idx_attendance_correction_attendance
+  ON public.attendance_correction_requests(attendance_id);
+
 ALTER TABLE public.substitution_assignments
   DROP CONSTRAINT IF EXISTS substitution_assignments_course_id_date_key;
 
@@ -373,9 +428,48 @@ RETURNS BOOLEAN AS $$
     );
 $$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public, pg_catalog;
 
+-- Department standing, asked of a COURSE.
+--
+-- WHICH DEPARTMENT OWNS AN OFFERING — there are two candidate answers and
+-- they disagree for service courses:
+--
+--   courses.department_id                        the TEACHING department
+--   section -> programme -> programmes.dept_id   the RECEIVING department
+--
+-- Engineering Mathematics owned by Mathematics and delivered to a CSE
+-- section has Mathematics as the first and CSE as the second. This codebase
+-- uses the TEACHING department, and that is the right choice for an
+-- authority predicate: what an HOD supervises is their own staff's academic
+-- work. The instructor of that class is a Mathematics lecturer, reviewed by
+-- the Mathematics HOD. Handing the CSE HOD approval rights over another
+-- department's lecturer because the students happen to be theirs would
+-- invert the reporting line.
+--
+-- Stated here rather than left implicit because 046's own comment names
+-- "the course's department_id" and this is the only place the alternative is
+-- ruled out on the record.
+--
+-- Takes the course id rather than the offering id so it can be applied to a
+-- row's own column. That matters for WITH CHECK on course_offerings, where
+-- the question is about the row being written, not a row already stored.
+CREATE OR REPLACE FUNCTION public.heads_course_department(p_course_id UUID)
+RETURNS BOOLEAN AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.courses c
+    JOIN public.departments d ON d.id = c.department_id
+    WHERE c.id = p_course_id
+      AND d.hod_id = auth.uid()
+  );
+$$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public, pg_catalog;
+
 -- Department REVIEW standing: does the caller head the department that owns
 -- this offering's course? Grants no write authority by itself — it appears
 -- only in review/approval policies.
+--
+-- Delegates to heads_course_department so there is ONE definition of "an
+-- HOD's department scope". Two copies of this join is how the offering-
+-- management policy and the review policies would drift apart.
 --
 -- EXISTS over the join rather than a scalar lookup, because departments.hod_id
 -- carries no unique constraint (002) and one person heading two departments
@@ -386,10 +480,8 @@ RETURNS BOOLEAN AS $$
   SELECT EXISTS (
     SELECT 1
     FROM public.course_offerings o
-    JOIN public.courses c     ON c.id = o.course_id
-    JOIN public.departments d ON d.id = c.department_id
     WHERE o.id = p_offering_id
-      AND d.hod_id = auth.uid()
+      AND public.heads_course_department(o.course_id)
   );
 $$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public, pg_catalog;
 
@@ -612,6 +704,90 @@ CREATE POLICY "course_enrollments_manage_staff" ON public.course_enrollments
       public.get_my_role() = 'admin'
       OR public.can_write_offering_records(offering_id)
       OR public.heads_offering_department(offering_id)
+    )
+  );
+
+-- ---------------------------------------------------------------
+-- 7d. F1 — offering management, scoped to the department an HOD heads
+--
+-- 046 created course_offerings_manage as role + tenancy:
+--
+--   college_id = get_my_college_id() AND get_my_role() IN ('admin','director','hod')
+--
+-- with the comment "Department ownership for hod is enforced app-side ...
+-- RLS here is the role + tenancy backstop." There is no app side. A repo-wide
+-- scan finds ZERO writes to course_offerings — no insert, no update, no
+-- upsert, no delete, in the web app, the API routes or the React Native app.
+-- The same is true of sections, programmes, semesters and academic_years.
+-- So the "app-side" half of that split was never written, and the database
+-- half was the only half there was.
+--
+-- What that permitted:
+--
+--   HOD of CSE
+--     -> UPDATE course_offerings SET instructor_id = auth.uid()
+--        WHERE id = <an ECE offering>          -- one PostgREST call
+--     -> can_write_offering_records() now returns true for them
+--     -> attendance and marks on another department's class
+--
+-- This is the exact shape section 7b exists to prevent, arriving through the
+-- master-data table instead of the transaction tables. An authority check is
+-- worth nothing if the subject can edit the record the check reads. That is
+-- the invariant: a user must not be able to manufacture stronger authority
+-- by modifying the row that subsequently authorises them.
+--
+-- Two properties are needed, and they are different questions:
+--   the offering as it STANDS must be in the HOD's scope — blocks reaching
+--     into another department at all;
+--   the offering as it WILL STAND must also be in scope — blocks moving one
+--     of their own offerings out of their department, and blocks creating
+--     one outside it.
+--
+-- WITH CHECK is written out for the second, but it should not be read as
+-- adding enforcement that would otherwise be missing: Postgres applies USING
+-- to the new row as well when WITH CHECK is omitted, so deleting the clause
+-- below changes nothing. Verified by mutation — removing it entirely leaves
+-- the walk-out-of-scope update still refused, which is why the mutation test
+-- replaces it with WITH CHECK (true) instead. It is here because the two
+-- questions are genuinely distinct and the next reader should not have to
+-- know that fallback rule to see that both are covered.
+--
+-- heads_course_department(course_id) takes the row's own column rather than
+-- looking the offering up by id. A lookup-by-id function does resolve to the
+-- new row inside WITH CHECK — verified, not assumed — but relying on
+-- intra-statement visibility to get an authorization decision right is a
+-- fragile thing to leave for the next reader.
+--
+-- admin and director keep college-wide management, unchanged from 046. That
+-- is deliberate: 046 named both explicitly, and narrowing them would be
+-- inventing a rule rather than enforcing the one that exists. It leaves a
+-- smaller residual — a director, who otherwise holds read-only oversight of
+-- academic records, can still name themselves instructor and gain write.
+-- That is recorded as a test in tests/staging-security-f1-f2.test.ts and
+-- reported rather than silently changed.
+-- ---------------------------------------------------------------
+DROP POLICY IF EXISTS "course_offerings_manage" ON public.course_offerings;
+
+CREATE POLICY "course_offerings_manage" ON public.course_offerings
+  FOR ALL
+  USING (
+    college_id = public.get_my_college_id()
+    AND (
+      public.get_my_role() IN ('admin', 'director')
+      OR (
+        public.get_my_role() = 'hod'
+        AND public.heads_course_department(course_id)
+      )
+    )
+  )
+  WITH CHECK (
+    college_id = public.get_my_college_id()
+    AND (
+      public.get_my_role() IN ('admin', 'director')
+      OR (
+        public.get_my_role() = 'hod'
+        AND public.heads_course_department(course_id)
+      )
     )
   );
 
