@@ -26,11 +26,21 @@ export default async function HodReports() {
       ]);
       const courseIds = (coursesRes.data || []).map((c) => c.id);
 
-      const { data: backlogs } = courseIds.length
+      // Enrollment hangs off the offering (047), and its student_id points at
+      // students(id) rather than profiles(id) — the old profiles join silently
+      // matched nothing.
+      const { data: deptOfferings } = courseIds.length
+        ? await supabase.from("course_offerings").select("id").in("course_id", courseIds)
+        : { data: [] };
+      const offeringIds = ((deptOfferings as { id: string }[] | null) || []).map((o) => o.id);
+
+      const { data: backlogs } = offeringIds.length
         ? await supabase
             .from("course_enrollments")
-            .select("*, courses(name, code), profiles:student_id(full_name)")
-            .in("course_id", courseIds)
+            .select(
+              "*, course_offerings:offering_id(courses:course_id(name, code), sections:section_id(name)), students:student_id(profiles:user_id(full_name))"
+            )
+            .in("offering_id", offeringIds)
             .eq("status", "failed")
         : { data: [] };
 

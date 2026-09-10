@@ -10,17 +10,27 @@ export default async function StudentGrades() {
 
   const { data: marks } = await supabase
     .from("marks")
-    .select("*, courses(name, code, credits)")
+    // marks.semester and marks.course_id were both dropped by 047 — the
+    // academic period and the course now come from the offering.
+    .select(
+      "*, course_offerings:offering_id(courses:course_id(name, code, credits), sections:section_id(name), semesters:semester_id(name, start_date))"
+    )
     .eq("student_id", student?.id || "")
-    .order("semester", { ascending: false });
+    .order("created_at", { ascending: false });
 
-  // Group marks by course
-  const courseMarks: Record<string, { course: any; exams: any[] }> = {};
+  // Keyed by OFFERING so a retake is its own result block rather than
+  // overwriting the earlier attempt.
+  const courseMarks: Record<string, { course: any; section?: string; semester?: string; exams: any[] }> = {};
   (marks || []).forEach((m: any) => {
-    if (!courseMarks[m.course_id]) {
-      courseMarks[m.course_id] = { course: m.courses, exams: [] };
+    if (!courseMarks[m.offering_id]) {
+      courseMarks[m.offering_id] = {
+        course: m.course_offerings?.courses,
+        section: m.course_offerings?.sections?.name,
+        semester: m.course_offerings?.semesters?.name,
+        exams: [],
+      };
     }
-    courseMarks[m.course_id].exams.push(m);
+    courseMarks[m.offering_id].exams.push(m);
   });
 
   return (

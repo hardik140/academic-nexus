@@ -42,11 +42,13 @@ export default async function StudentSchedule() {
   // mutating the underlying timetable_slots row.
   const { data: todaySubs } = await supabase
     .from("substitution_assignments")
-    .select("course_id, substitute:substitute_teacher_id(full_name)")
+    .select("offering_id, substitute:substitute_teacher_id(full_name)")
     .eq("date", todayDate)
     .eq("status", "assigned");
-  const substituteByCourse = new Map(
-    (todaySubs || []).map((s: any) => [s.course_id, s.substitute?.full_name])
+  // Keyed by offering: a substitute covers one section's class, not every
+  // section of the course.
+  const substituteByOffering = new Map(
+    (todaySubs || []).map((s: any) => [s.offering_id, s.substitute?.full_name])
   );
 
   return (
@@ -81,7 +83,7 @@ export default async function StudentSchedule() {
                 {groupedSlots[day] && groupedSlots[day].length > 0 ? (
                   <div className="flex flex-wrap gap-sm">
                     {groupedSlots[day].map((slot: any) => {
-                      const substituteName = isToday ? substituteByCourse.get(slot.course_id) : undefined;
+                      const substituteName = isToday ? substituteByOffering.get(slot.offering_id) : undefined;
                       return (
                         <div
                           key={slot.id}

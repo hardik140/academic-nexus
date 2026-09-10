@@ -20,8 +20,11 @@ async function resolveHodDepartmentId(supabase: Awaited<ReturnType<typeof create
   return data?.id ?? null;
 }
 
+// The course, section and semester all hang off the OFFERING now —
+// substitution_assignments.course_id was dropped by 047, and a substitution
+// covers one delivery of a course, not the catalog entry.
 const SELECT_COLS =
-  "*, courses:course_id(name, code), original:original_teacher_id(full_name), substitute:substitute_teacher_id(full_name)";
+  "*, course_offerings:offering_id(id, courses:course_id(name, code, department_id), sections:section_id(name), semesters:semester_id(name)), original:original_teacher_id(full_name), substitute:substitute_teacher_id(full_name)";
 
 /**
  * Department-scoped by the *course's* department, same as
@@ -46,11 +49,17 @@ export async function listSubstitutionNeeds() {
     const departmentId = await resolveHodDepartmentId(supabase, actor.userId);
     if (!departmentId) return { needed: [], assigned: [] };
 
-    const { data: deptCourses } = await supabase.from("courses").select("id").eq("department_id", departmentId);
-    const courseIds = (deptCourses || []).map((c) => c.id);
-    if (courseIds.length === 0) return { needed: [], assigned: [] };
+    // Department scope resolves through the offering's course. Two hops now
+    // (offerings of this department's courses, then substitutions on those
+    // offerings) because substitution_assignments no longer carries a course.
+    const { data: deptOfferings } = await supabase
+      .from("course_offerings")
+      .select("id, courses:course_id!inner(department_id)")
+      .eq("courses.department_id", departmentId);
+    const offeringIds = ((deptOfferings as unknown as { id: string }[]) || []).map((o) => o.id);
+    if (offeringIds.length === 0) return { needed: [], assigned: [] };
 
-    const baseQuery = () => supabase.from("substitution_assignments").select(SELECT_COLS).in("course_id", courseIds);
+    const baseQuery = () => supabase.from("substitution_assignments").select(SELECT_COLS).in("offering_id", offeringIds);
     const [neededRes, assignedRes] = await Promise.all([
       baseQuery().eq("status", "needed").order("date", { ascending: true }),
       baseQuery().eq("status", "assigned").order("date", { ascending: true }),
@@ -91,10 +100,19 @@ export async function assignSubstitute(idRaw: string, substituteTeacherIdRaw: st
   await checkRateLimit(`assignSubstitute:${actor.userId}`, 30, 60);
   const supabase = await createClient();
 
-  type RowWithCourse = { status: string; course_id: string; date: string; original_teacher_id: string; courses: { department_id: string; name: string; code: string } | null };
+  type RowWithCourse = {
+    status: string;
+    offering_id: string;
+    date: string;
+    original_teacher_id: string;
+    course_offerings: {
+      courses: { department_id: string; name: string; code: string } | null;
+      sections: { name: string } | null;
+    } | null;
+  };
   const { data: rowRaw } = await supabase
     .from("substitution_assignments")
-    .select("status, course_id, date, original_teacher_id, courses:course_id(department_id, name, code)")
+    .select("status, offering_id, date, original_teacher_id, course_offerings:offering_id(courses:course_id(department_id, name, code), sections:section_id(name))")
     .eq("id", id)
     .eq("college_id", actor.collegeId)
     .single();
@@ -109,7 +127,7 @@ export async function assignSubstitute(idRaw: string, substituteTeacherIdRaw: st
 
   if (actor.role === "hod") {
     const departmentId = await resolveHodDepartmentId(supabase, actor.userId);
-    if (!departmentId || row.courses?.department_id !== departmentId) {
+    if (!departmentId || row.course_offerings?.courses?.department_id !== departmentId) {
       throw new Error("You can only assign substitutes for courses in your own department.");
     }
   }
@@ -137,11 +155,15 @@ export async function assignSubstitute(idRaw: string, substituteTeacherIdRaw: st
   await supabase.from("notifications").insert({
     college_id: actor.collegeId,
     title: "Substitution assigned to you",
-    message: `Cover ${row.courses?.code || "a class"} — ${row.courses?.name || ""} on ${new Date(row.date).toLocaleDateString()}.`,
+    // Names the SECTION too: "cover CS201" is ambiguous when a course runs
+    // in three sections, and the substitute needs to know which class.
+    message: `Cover ${row.course_offerings?.courses?.code || "a class"}${
+      row.course_offerings?.sections?.name ? ` (${row.course_offerings.sections.name})` : ""
+    } — ${row.course_offerings?.courses?.name || ""} on ${new Date(row.date).toLocaleDateString()}.`,
     receiver_id: substituteTeacherId,
     sender_id: actor.userId,
     type: "action_required",
-    link: `/teacher/attendance?course=${row.course_id}`,
+    link: `/teacher/attendance?offering=${row.offering_id}`,
   });
 
   await invalidateCache(substitutionsCacheKey(actor.userId));

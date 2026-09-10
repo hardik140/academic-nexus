@@ -397,12 +397,17 @@ export async function listCorrectionApprovals() {
     const { data: department } = await supabase.from("departments").select("id").eq("hod_id", actor.userId).single();
     if (!department) return { pending: [], processed: [] };
 
-    const { data: deptCourses } = await supabase.from("courses").select("id").eq("department_id", department.id);
-    const courseIds = (deptCourses || []).map((c) => c.id);
-    if (courseIds.length === 0) return { pending: [], processed: [] };
+    // 047 dropped attendance_correction_requests.course_id; the request names
+    // the OFFERING, so department scope resolves through the offering's course.
+    const { data: deptOfferings } = await supabase
+      .from("course_offerings")
+      .select("id, courses:course_id!inner(department_id)")
+      .eq("courses.department_id", department.id);
+    const offeringIds = ((deptOfferings as unknown as { id: string }[]) || []).map((o) => o.id);
+    if (offeringIds.length === 0) return { pending: [], processed: [] };
 
     const baseQuery = () =>
-      supabase.from("attendance_correction_requests").select(selectCols).in("course_id", courseIds);
+      supabase.from("attendance_correction_requests").select(selectCols).in("offering_id", offeringIds);
     const [pendingRes, processedRes] = await Promise.all([
       baseQuery().eq("status", "pending").order("created_at", { ascending: false }),
       baseQuery().neq("status", "pending").order("created_at", { ascending: false }).limit(CORRECTIONS_PROCESSED_LIMIT),
@@ -427,11 +432,11 @@ export async function actOnAttendanceCorrectionCore(
 
   // Cast: same embedded-select workaround as requestAttendanceCorrection.
   type CorrectionWithCourse = Database["public"]["Tables"]["attendance_correction_requests"]["Row"] & {
-    courses: { department_id: string } | null;
+    course_offerings: { courses: { department_id: string } | null } | null;
   };
   const { data: requestRaw } = await supabase
     .from("attendance_correction_requests")
-    .select("*, courses:course_id(department_id)")
+    .select("*, course_offerings:offering_id(courses:course_id(department_id))")
     .eq("id", requestId)
     .eq("college_id", actor.collegeId)
     .single();
@@ -444,7 +449,7 @@ export async function actOnAttendanceCorrectionCore(
 
   if (actor.role === "hod") {
     const { data: department } = await supabase.from("departments").select("id").eq("hod_id", actor.userId).single();
-    const courseDeptId = request.courses?.department_id;
+    const courseDeptId = request.course_offerings?.courses?.department_id;
     if (!department?.id || courseDeptId !== department.id) {
       throw new Error("You can only act on correction requests for courses in your own department.");
     }

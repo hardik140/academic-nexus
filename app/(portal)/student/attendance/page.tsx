@@ -13,17 +13,26 @@ export default async function StudentAttendance() {
 
   const { data: records } = await supabase
     .from("attendance")
-    .select("*, courses(name, code)")
+    .select("*, course_offerings:offering_id(courses:course_id(name, code), sections:section_id(name))")
     .eq("student_id", student?.id || "")
     .order("date", { ascending: false })
     .limit(DEFAULT_QUERY_LIMIT);
 
-  // Group by course for summary
+  // Grouped per CLASS, not per course: a student retaking a course, or
+  // taking two sections of one, has separate attendance in each and merging
+  // them reports a percentage belonging to neither.
   const courseSummary: Record<string, { name: string; code: string; present: number; total: number }> = {};
   (records || []).forEach((r: any) => {
-    const key = r.course_id;
+    const key = r.offering_id;
+    const course = r.course_offerings?.courses;
+    const section = r.course_offerings?.sections?.name;
     if (!courseSummary[key]) {
-      courseSummary[key] = { name: r.courses?.name || "", code: r.courses?.code || "", present: 0, total: 0 };
+      courseSummary[key] = {
+        name: section ? `${course?.name || ""} (${section})` : course?.name || "",
+        code: course?.code || "",
+        present: 0,
+        total: 0,
+      };
     }
     courseSummary[key].total++;
     if (r.status === "present" || r.status === "late") courseSummary[key].present++;
