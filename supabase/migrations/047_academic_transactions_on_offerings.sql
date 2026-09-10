@@ -792,6 +792,192 @@ CREATE POLICY "course_offerings_manage" ON public.course_offerings
   );
 
 -- ---------------------------------------------------------------
+-- 7e. The two remaining ways to reach academic write without being assigned
+--
+-- 7d scoped course_offerings, but the authority graph has a node on either
+-- side of it and both were still writable at role + tenancy:
+--
+--   departments.hod_id
+--        |
+--        v
+--   courses.department_id   <-- 7e (i): decides heads_course_department()
+--        |
+--        v
+--   course_offerings.instructor_id   <-- 7d
+--        |
+--        v
+--   substitution_assignments   <-- 7e (ii): decides can_record_attendance()
+--        |
+--        v
+--   attendance / marks
+--
+-- (i) COURSES. courses_manage (006) is role + tenancy, and courses.department_id
+-- is the input to the predicate 7d relies on. So:
+--
+--   HOD of CSE -> UPDATE courses SET department_id = <CSE>
+--                 WHERE id = <an ECE course>
+--              -> heads_course_department() now returns true
+--              -> 7d's check passes, offering reassigned, attendance written
+--
+-- Scoping the offering while leaving its department pointer editable moves
+-- the hole rather than closing it. Both sides are needed, for the same
+-- reason: USING keeps a HOD out of another department's course, WITH CHECK
+-- stops them dragging one into their own.
+--
+-- (ii) SUBSTITUTIONS. substitution_insert_staff (039) is role + tenancy, and
+-- can_record_attendance() grants attendance write to whoever holds an
+-- 'assigned' row. So a HOD could mint one from nothing:
+--
+--   INSERT INTO substitution_assignments
+--     (offering_id, substitute_teacher_id, date, status)
+--   VALUES (<any offering in the college>, auth.uid(), <any date>, 'assigned')
+--
+-- and write attendance on any class in the institution. That is the widest
+-- of the three, because it needs no master-data edit at all.
+--
+-- The rule below is not invented — it is what the application already does.
+-- The only INSERT in the codebase is createSubstitutionNeeds (hod/approvals),
+-- which writes status='needed' with no substitute as a consequence of
+-- approving leave; assignment happens exclusively through assignSubstitute,
+-- which claims an existing 'needed' row. Requiring the same shape here means
+-- a substitution can only ever be a consequence of an approved absence, and
+-- never a self-service grant.
+-- ---------------------------------------------------------------
+DROP POLICY IF EXISTS "courses_manage" ON public.courses;
+
+CREATE POLICY "courses_manage" ON public.courses
+  FOR ALL
+  USING (
+    college_id = public.get_my_college_id()
+    AND (
+      public.get_my_role() IN ('admin', 'director')
+      OR (public.get_my_role() = 'hod' AND public.heads_course_department(id))
+    )
+  )
+  WITH CHECK (
+    college_id = public.get_my_college_id()
+    AND (
+      public.get_my_role() IN ('admin', 'director')
+      OR (
+        public.get_my_role() = 'hod'
+        -- On the NEW row, department_id is what it is being set to, so this
+        -- reads "the course must land in a department I head".
+        AND EXISTS (
+          SELECT 1 FROM public.departments d
+          WHERE d.id = courses.department_id AND d.hod_id = auth.uid()
+        )
+      )
+    )
+  );
+
+DROP POLICY IF EXISTS "substitution_insert_staff" ON public.substitution_assignments;
+
+CREATE POLICY "substitution_insert_staff" ON public.substitution_assignments
+  FOR INSERT WITH CHECK (
+    college_id = public.get_my_college_id()
+    AND (
+      public.get_my_role() = 'admin'
+      OR (public.get_my_role() = 'hod' AND public.heads_offering_department(offering_id))
+    )
+    -- A substitution is a consequence of an approved absence, never a grant
+    -- somebody writes for themselves. Creating one already assigned is the
+    -- escalation; creating one that still has to be assigned is the workflow.
+    AND status = 'needed'
+    AND substitute_teacher_id IS NULL
+  );
+
+DROP POLICY IF EXISTS "substitution_update_staff" ON public.substitution_assignments;
+
+CREATE POLICY "substitution_update_staff" ON public.substitution_assignments
+  FOR UPDATE
+  USING (
+    college_id = public.get_my_college_id()
+    AND (
+      public.get_my_role() = 'admin'
+      OR (public.get_my_role() = 'hod' AND public.heads_offering_department(offering_id))
+    )
+  )
+  WITH CHECK (
+    college_id = public.get_my_college_id()
+    AND (
+      public.get_my_role() = 'admin'
+      OR (public.get_my_role() = 'hod' AND public.heads_offering_department(offering_id))
+    )
+  );
+
+-- ---------------------------------------------------------------
+-- 7f. Two more places the database was weaker than the application
+--
+-- Neither is reachable through the app, and both are reachable through
+-- PostgREST with a valid session, which is the same thing as reachable.
+--
+-- (i) LEAVE APPROVAL. leave_requests_update_hod_admin (006) is role +
+-- tenancy. actOnLeaveRequestCore enforces two further rules that the
+-- database did not:
+--
+--     assertNotSelfApproval(actor, request.requested_by, ...)
+--     a HOD may act only on requests from their own department
+--
+-- and its own comment says so: "leave_requests_read (RLS) is college-wide
+-- for hod, not department-scoped, so this app-layer check is what actually
+-- closes it". This makes the database say the same thing. It matters more
+-- than an ordinary defence-in-depth gap because approving leave is what
+-- creates substitution requirements, so an unauthorised approval reaches
+-- into the academic tables by a second hop.
+--
+-- Self-approval is checked with `requested_by <> auth.uid()` rather than a
+-- role test, because a HOD's own leave request legitimately appears in their
+-- own department queue — being unable to see it is not the protection;
+-- being unable to decide it is.
+--
+-- (ii) NOTIFICATION SENDER. notifications_admin_send (006/025) checks the
+-- sender's ROLE but never that sender_id is actually them, so any staff
+-- account could post a notification attributed to the Director. Every one of
+-- the 15 notification inserts in the codebase sets sender_id = actor.userId,
+-- so requiring it takes nothing away.
+-- ---------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.heads_user_department(p_user_id UUID)
+RETURNS BOOLEAN AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.profiles p
+    JOIN public.departments d ON d.id = p.department_id
+    WHERE p.id = p_user_id
+      AND d.hod_id = auth.uid()
+  );
+$$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public, pg_catalog;
+
+DROP POLICY IF EXISTS "leave_requests_update_hod_admin" ON public.leave_requests;
+
+CREATE POLICY "leave_requests_update_hod_admin" ON public.leave_requests
+  FOR UPDATE
+  USING (
+    college_id = public.get_my_college_id()
+    AND requested_by <> auth.uid()
+    AND (
+      public.get_my_role() = 'admin'
+      OR (public.get_my_role() = 'hod' AND public.heads_user_department(requested_by))
+    )
+  )
+  WITH CHECK (
+    college_id = public.get_my_college_id()
+    AND requested_by <> auth.uid()
+    AND (
+      public.get_my_role() = 'admin'
+      OR (public.get_my_role() = 'hod' AND public.heads_user_department(requested_by))
+    )
+  );
+
+DROP POLICY IF EXISTS "notifications_admin_send" ON public.notifications;
+
+CREATE POLICY "notifications_admin_send" ON public.notifications
+  FOR INSERT WITH CHECK (
+    college_id = public.get_my_college_id()
+    AND public.get_my_role() IN ('admin', 'teacher', 'hod', 'finance', 'director', 'warden', 'placement_cell')
+    AND sender_id = auth.uid()
+  );
+
+-- ---------------------------------------------------------------
 -- 8. Rebuild the analytics views against the offering model.
 --
 -- Output columns are preserved exactly — director/analytics, hod/reports and

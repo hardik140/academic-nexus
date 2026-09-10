@@ -39,7 +39,10 @@ CREATE TABLE public.profiles (
   college_id UUID NOT NULL REFERENCES public.colleges(id),
   role TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'active',
-  full_name TEXT
+  full_name TEXT,
+  -- 001. Needed by heads_user_department() (047 §7f); a HOD's leave-approval
+  -- scope is the requester's department, read from here.
+  department_id UUID
 );
 
 CREATE TABLE public.departments (
@@ -167,6 +170,62 @@ $$ LANGUAGE sql SECURITY DEFINER STABLE;
 CREATE OR REPLACE FUNCTION public.get_my_role() RETURNS TEXT AS $$
   SELECT role FROM public.profiles WHERE id = auth.uid();
 $$ LANGUAGE sql SECURITY DEFINER STABLE;
+
+-- --------------------------------------------------- 005 / 006
+-- leave_requests and notifications.
+--
+-- Added because migration 047 §7f now replaces policies on both. A fixture
+-- that omits a table the migration touches makes the migration fail here
+-- while applying perfectly to a real database — which is the divergence this
+-- whole hand-written-fixture approach is prone to, and why
+-- tests/staging-migration-chain.test.ts applies the REAL 001-047 chain as
+-- the authority. Keep these in step with supabase/migrations/005 + 006.
+CREATE TABLE IF NOT EXISTS public.leave_requests (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  college_id UUID NOT NULL REFERENCES public.colleges(id),
+  requested_by UUID NOT NULL REFERENCES public.profiles(id),
+  leave_type TEXT NOT NULL DEFAULT 'casual',
+  start_date DATE NOT NULL,
+  end_date DATE NOT NULL,
+  reason TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  approved_by UUID REFERENCES public.profiles(id),
+  approved_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.notifications (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  college_id UUID NOT NULL REFERENCES public.colleges(id),
+  title TEXT NOT NULL,
+  message TEXT NOT NULL,
+  receiver_id UUID NOT NULL REFERENCES public.profiles(id),
+  sender_id UUID REFERENCES public.profiles(id),
+  read BOOLEAN NOT NULL DEFAULT false,
+  type TEXT NOT NULL DEFAULT 'info',
+  link TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE public.leave_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.notifications  ENABLE ROW LEVEL SECURITY;
+
+-- The pre-047 shapes, so the migration's DROP POLICY statements have
+-- something to drop and the mutation tests see a real "before".
+DROP POLICY IF EXISTS "leave_requests_update_hod_admin" ON public.leave_requests;
+CREATE POLICY "leave_requests_update_hod_admin" ON public.leave_requests
+  FOR UPDATE USING (
+    college_id = public.get_my_college_id()
+    AND public.get_my_role() IN ('hod', 'admin')
+  );
+
+DROP POLICY IF EXISTS "notifications_admin_send" ON public.notifications;
+CREATE POLICY "notifications_admin_send" ON public.notifications
+  FOR INSERT WITH CHECK (
+    college_id = public.get_my_college_id()
+    AND public.get_my_role() IN ('admin', 'teacher', 'hod', 'finance', 'director', 'warden', 'placement_cell')
+  );
+
 
 -- ------------------------------------------------------------------ RLS
 
