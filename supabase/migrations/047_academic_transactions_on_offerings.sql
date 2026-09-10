@@ -11,6 +11,12 @@
 -- Apply only together with the application changes in the same PR, on a
 -- branch database first. 046 was safe to apply immediately because it was
 -- purely additive; this is not.
+--
+-- Section 7 additionally NARROWS academic write authorization (C1). Any
+-- integration that writes attendance or marks with a user token while not
+-- being the offering's assigned instructor will start being refused by the
+-- database. That is the intent, but it is a behaviour change beyond the
+-- column moves, so it needs the same sign-off.
 -- ============================================================
 
 -- ============================================================
@@ -86,7 +92,7 @@
 -- ============================================================
 
 -- ---------------------------------------------------------------
--- 0. Drop the dependent analytics views FIRST.
+-- 0. Drop dependent objects FIRST.
 --
 -- Not optional and not cosmetic: mv_attendance_summary_raw selects
 -- attendance.course_id, so `ALTER TABLE attendance DROP COLUMN course_id`
@@ -102,11 +108,30 @@
 -- rebuilt here for that reason, not because Postgres forced it.
 --
 -- Both are recreated in section 8 against the offering model.
+--
+-- AN RLS POLICY IS A DEPENDENT OBJECT TOO. This is the same class of
+-- failure as the matview above and is easy to miss, because policies are
+-- not what comes to mind when Postgres says "other objects depend on it":
+--
+--   substitution_read_enrolled_student (039) reads ce.course_id and
+--   substitution_assignments.course_id, so section 1's
+--   `ALTER TABLE course_enrollments DROP COLUMN course_id` is refused
+--   outright while it exists. Found by running this migration against a
+--   disposable database rather than by reading it -- the first attempt
+--   aborted here (tests/migration-047-applies.test.ts now runs the whole
+--   file on every test run so this cannot regress silently).
+--
+-- It is dropped here and rebuilt on offering_id in section 7c. Nothing
+-- else in the schema references a column this migration drops: the other
+-- matviews (007) read only students/departments/placements, and function
+-- bodies are not tracked as dependencies.
 -- ---------------------------------------------------------------
 DROP VIEW IF EXISTS public.mv_attendance_summary;
 DROP MATERIALIZED VIEW IF EXISTS public.mv_attendance_summary_raw;
 DROP VIEW IF EXISTS public.mv_department_health;
 DROP MATERIALIZED VIEW IF EXISTS public.mv_department_health_raw;
+
+DROP POLICY IF EXISTS "substitution_read_enrolled_student" ON public.substitution_assignments;
 
 -- ---------------------------------------------------------------
 -- 1. course_enrollments — offering-scoped, and the id-space bug fixed
@@ -254,12 +279,297 @@ COMMENT ON COLUMN public.courses.instructor_id IS
   'Migration 048 drops it.';
 
 -- ---------------------------------------------------------------
--- 7. RLS — the policies that referenced the dropped columns
+-- 7. RLS — offering-derived authority, enforced in the database
+--
+-- Two separate jobs in this section:
+--
+--   7a-7b  Authority functions + the academic write policies. This is the
+--          C1 fix: until now the database enforced only ROLE, so the
+--          instructor-assignment boundary existed solely in application
+--          code and any teacher with a valid session could write any
+--          offering's attendance and marks in their college by calling
+--          PostgREST directly. The application layer was right; the
+--          database was not enforcing the same model.
+--
+--   7c     The policies that referenced columns this migration drops.
+--
+-- THE INVARIANT THIS SECTION ESTABLISHES
+--
+--   A user denied by the application must also be denied when targeting
+--   the database directly. lib/offerings.ts and this section are two
+--   implementations of one rule, and they are named after each other so a
+--   future reader can see they must move together:
+--
+--     canWriteOfferingRecords   <->  public.can_write_offering_records()
+--     assertCanRecordAttendance <->  public.can_record_attendance()
+--     assertOfferingInReviewScope <-> public.heads_offering_department()
+--
+-- WHY FUNCTIONS RATHER THAN INLINE EXISTS SUBQUERIES
+--
+-- A subquery inside an RLS policy is itself subject to the referenced
+-- table's RLS. An inline `EXISTS (SELECT 1 FROM course_offerings ...)`
+-- would therefore work only while course_offerings_read stays college-wide
+-- for every role — narrowing that policy later would silently start
+-- failing attendance writes for reasons unrelated to attendance. These are
+-- SECURITY DEFINER so the authority question is answered independently of
+-- who may read the offering table, which is the same reasoning that made
+-- get_my_role()/get_my_college_id() SECURITY DEFINER in 006.
+--
+-- search_path is pinned on each one. The 006 helpers predate that habit;
+-- a SECURITY DEFINER function without it resolves unqualified names — and
+-- operators — through the caller's search_path.
+-- ---------------------------------------------------------------
+
+-- ---------------------------------------------------------------
+-- 7a. Authority functions
+-- ---------------------------------------------------------------
+
+-- The database half of canWriteOfferingRecords(): admin anywhere in their
+-- own college, or the assigned instructor, and never a cancelled offering.
+--
+-- Note what is absent: no branch for 'hod'. A HOD who teaches matches the
+-- instructor_id test like any other teacher; a HOD who does not teach the
+-- section gets nothing here. Department standing is review authority and is
+-- answered by heads_offering_department() below, never by this function.
+CREATE OR REPLACE FUNCTION public.can_write_offering_records(p_offering_id UUID)
+RETURNS BOOLEAN AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.course_offerings o
+    WHERE o.id = p_offering_id
+      AND o.college_id = public.get_my_college_id()
+      AND o.status <> 'cancelled'
+      AND (
+        public.get_my_role() = 'admin'
+        OR o.instructor_id = auth.uid()
+      )
+  );
+$$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public, pg_catalog;
+
+-- The database half of assertCanRecordAttendance(): everything above, plus
+-- the one legitimate widening — a substitute assigned to THIS offering on
+-- THIS date.
+--
+-- Every clause is load-bearing. Dropping sa.date makes a single cover
+-- assignment permanent access to the offering; dropping the status test
+-- lets the 'needed' placeholder written at leave-approval time (before
+-- anyone has agreed to cover) authorize writes; dropping the cancelled test
+-- lets a stale assignment reopen a cancelled offering. This function is
+-- attendance-only and is deliberately not referenced by any marks policy:
+-- covering one class is not authority over a section's assessment record.
+CREATE OR REPLACE FUNCTION public.can_record_attendance(p_offering_id UUID, p_date DATE)
+RETURNS BOOLEAN AS $$
+  SELECT public.can_write_offering_records(p_offering_id)
+    OR EXISTS (
+      SELECT 1
+      FROM public.substitution_assignments sa
+      JOIN public.course_offerings o ON o.id = sa.offering_id
+      WHERE sa.offering_id = p_offering_id
+        AND sa.date = p_date
+        AND sa.substitute_teacher_id = auth.uid()
+        AND sa.status = 'assigned'
+        AND o.college_id = public.get_my_college_id()
+        AND o.status <> 'cancelled'
+    );
+$$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public, pg_catalog;
+
+-- Department REVIEW standing: does the caller head the department that owns
+-- this offering's course? Grants no write authority by itself — it appears
+-- only in review/approval policies.
+--
+-- EXISTS over the join rather than a scalar lookup, because departments.hod_id
+-- carries no unique constraint (002) and one person heading two departments
+-- is ordinary. The single-row form of this question resolves such a HOD to
+-- NULL and silently denies them everything.
+CREATE OR REPLACE FUNCTION public.heads_offering_department(p_offering_id UUID)
+RETURNS BOOLEAN AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.course_offerings o
+    JOIN public.courses c     ON c.id = o.course_id
+    JOIN public.departments d ON d.id = c.department_id
+    WHERE o.id = p_offering_id
+      AND d.hod_id = auth.uid()
+  );
+$$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public, pg_catalog;
+
+-- ---------------------------------------------------------------
+-- 7b. Academic write policies — the C1 fix
+--
+-- READ policies are NOT touched anywhere in this section. attendance_read_student
+-- and marks_read_student already derive student ownership from
+-- students.user_id = auth.uid(), which is correct and stays exactly as it is;
+-- attendance_read_staff / marks_read_staff keep their college-wide staff read.
+-- Read, write and review stay three separate policies on purpose.
+-- ---------------------------------------------------------------
+
+-- attendance: replaces attendance_teacher_mark + attendance_teacher_update
+-- (006) and attendance_hod_update (038).
+--
+-- What 006 enforced was `role IN ('teacher','admin')` — any teacher, any
+-- offering. What 038 added was worse: role = 'hod' with no further
+-- qualification, i.e. every HOD could UPDATE every attendance row in the
+-- institution, including departments they do not head, bypassing the
+-- correction workflow entirely.
+DROP POLICY IF EXISTS "attendance_teacher_mark"   ON public.attendance;
+DROP POLICY IF EXISTS "attendance_teacher_update" ON public.attendance;
+DROP POLICY IF EXISTS "attendance_hod_update"     ON public.attendance;
+
+DROP POLICY IF EXISTS "attendance_insert_offering_authority" ON public.attendance;
+CREATE POLICY "attendance_insert_offering_authority" ON public.attendance
+  FOR INSERT WITH CHECK (
+    college_id = public.get_my_college_id()
+    AND public.can_record_attendance(offering_id, date)
+  );
+
+-- WITH CHECK is spelled out rather than left implicit. Postgres already
+-- falls back to the USING expression when an UPDATE policy omits WITH CHECK,
+-- so for a policy whose two halves are identical this changes no behaviour --
+-- it states the post-image rule at the point a reader looks for it, and it
+-- makes an accidental future divergence between the two visible in the diff
+-- instead of silent. The post-image test is what stops an actor who may
+-- update a row from rewriting its offering_id to an offering they hold no
+-- authority over.
+DROP POLICY IF EXISTS "attendance_update_offering_authority" ON public.attendance;
+CREATE POLICY "attendance_update_offering_authority" ON public.attendance
+  FOR UPDATE
+  USING (
+    college_id = public.get_my_college_id()
+    AND public.can_record_attendance(offering_id, date)
+  )
+  WITH CHECK (
+    college_id = public.get_my_college_id()
+    AND public.can_record_attendance(offering_id, date)
+  );
+
+-- The correction workflow, expressed as authority derived from the workflow
+-- artifact rather than from a role.
+--
+-- Removing attendance_hod_update leaves actOnAttendanceCorrectionCore unable
+-- to apply an approved correction, so that capability has to come back — but
+-- NOT as "hod may update attendance in their department", which is the
+-- generic policy that would collapse request -> review -> approve back into
+-- one actor. Instead: a reviewer may write exactly the attendance row that
+-- an approved correction request points at, only where they are the recorded
+-- reviewer, and only where they are not the submitter.
+--
+-- That last clause puts separation of duties in the DATABASE rather than
+-- relying solely on assertNotSelfApproval in application code. A HOD who
+-- teaches can raise a correction on their own record and cannot approve it,
+-- at either layer.
+--
+-- The app updates the request to 'approved' before updating the attendance
+-- row (see actOnAttendanceCorrectionCore's compare-and-swap ordering), so
+-- the approved request exists by the time this policy is evaluated.
+--
+-- Residual, stated rather than papered over: RLS cannot see OLD vs NEW, so
+-- no policy here can express "you may change status but not offering_id".
+-- A reviewer applying a correction could in principle move the row to
+-- another offering IN A DEPARTMENT THEY ALREADY HEAD -- the post-image test
+-- confines it to that. Forbidding the column change itself needs a trigger,
+-- which is a separate decision from this migration.
+DROP POLICY IF EXISTS "attendance_update_approved_correction" ON public.attendance;
+CREATE POLICY "attendance_update_approved_correction" ON public.attendance
+  FOR UPDATE
+  USING (
+    college_id = public.get_my_college_id()
+    AND public.heads_offering_department(offering_id)
+    AND EXISTS (
+      SELECT 1
+      FROM public.attendance_correction_requests r
+      WHERE r.attendance_id  = attendance.id
+        AND r.status         = 'approved'
+        AND r.reviewed_by    = auth.uid()
+        AND r.submitted_by  <> auth.uid()
+    )
+  )
+  WITH CHECK (
+    college_id = public.get_my_college_id()
+    AND public.heads_offering_department(offering_id)
+    AND EXISTS (
+      SELECT 1
+      FROM public.attendance_correction_requests r
+      WHERE r.attendance_id  = attendance.id
+        AND r.status         = 'approved'
+        AND r.reviewed_by    = auth.uid()
+        AND r.submitted_by  <> auth.uid()
+    )
+  );
+
+-- marks: replaces marks_teacher_manage (006), which was FOR ALL with
+-- `role IN ('teacher','admin')` — one broad policy covering SELECT, INSERT,
+-- UPDATE and DELETE for every teacher in the college. Split per command so
+-- read authority and write authority stop sharing a definition, and so a
+-- future change to one cannot silently widen the others.
+--
+-- No substitute clause anywhere here. That is the intended asymmetry with
+-- attendance.
+DROP POLICY IF EXISTS "marks_teacher_manage" ON public.marks;
+
+DROP POLICY IF EXISTS "marks_insert_instructor" ON public.marks;
+CREATE POLICY "marks_insert_instructor" ON public.marks
+  FOR INSERT WITH CHECK (
+    college_id = public.get_my_college_id()
+    AND public.can_write_offering_records(offering_id)
+  );
+
+DROP POLICY IF EXISTS "marks_update_instructor" ON public.marks;
+CREATE POLICY "marks_update_instructor" ON public.marks
+  FOR UPDATE
+  USING (
+    college_id = public.get_my_college_id()
+    AND public.can_write_offering_records(offering_id)
+  )
+  WITH CHECK (
+    college_id = public.get_my_college_id()
+    AND public.can_write_offering_records(offering_id)
+  );
+
+DROP POLICY IF EXISTS "marks_delete_instructor" ON public.marks;
+CREATE POLICY "marks_delete_instructor" ON public.marks
+  FOR DELETE USING (
+    college_id = public.get_my_college_id()
+    AND public.can_write_offering_records(offering_id)
+  );
+
+-- attendance_correction_requests: the review side of the same defect.
+--
+-- attendance_correction_update_staff (037) was `role IN ('hod','admin')`,
+-- college-wide — any HOD could decide any other department's correction
+-- request. Department scope was checked in application code only, so the
+-- cross-department review path was open at the database exactly as the
+-- cross-offering write path was.
+DROP POLICY IF EXISTS "attendance_correction_update_staff" ON public.attendance_correction_requests;
+
+DROP POLICY IF EXISTS "attendance_correction_review_scope" ON public.attendance_correction_requests;
+CREATE POLICY "attendance_correction_review_scope" ON public.attendance_correction_requests
+  FOR UPDATE
+  USING (
+    college_id = public.get_my_college_id()
+    AND (
+      public.get_my_role() = 'admin'
+      OR public.heads_offering_department(offering_id)
+    )
+  )
+  WITH CHECK (
+    college_id = public.get_my_college_id()
+    AND (
+      public.get_my_role() = 'admin'
+      OR public.heads_offering_department(offering_id)
+    )
+  );
+
+-- ---------------------------------------------------------------
+-- 7c. Policies that referenced columns this migration drops
 --
 -- substitution_read_enrolled_student (039) joined course_enrollments on
 -- course_id AND compared ce.student_id to auth.uid() — which only worked
 -- because student_id pointed at profiles. Both halves are now wrong, so the
 -- policy is rebuilt on offering_id with the students(id) hop.
+--
+-- Already dropped in section 0 — it had to go before the columns it reads
+-- could be dropped. The redundant DROP is kept so this block still reads as
+-- a complete definition of the policy.
 -- ---------------------------------------------------------------
 DROP POLICY IF EXISTS "substitution_read_enrolled_student" ON public.substitution_assignments;
 
@@ -289,18 +599,19 @@ CREATE POLICY "course_enrollments_read_own" ON public.course_enrollments
     )
   );
 
--- Teachers need to enrol/adjust students on offerings they own; hod/admin
--- college-wide with department ownership enforced app-side, matching the
--- split used by 037/039/040.
+-- Enrollment is administrative rather than an academic record, so a HOD does
+-- act on it directly — but scoped to a department they actually head, not
+-- college-wide. An earlier draft of this policy granted every HOD every
+-- offering's enrollments, which is the same cross-department hole 7b closes
+-- for attendance and marks.
+DROP POLICY IF EXISTS "course_enrollments_manage_staff" ON public.course_enrollments;
 CREATE POLICY "course_enrollments_manage_staff" ON public.course_enrollments
   FOR ALL USING (
     college_id = public.get_my_college_id()
     AND (
-      public.get_my_role() IN ('admin', 'hod')
-      OR EXISTS (
-        SELECT 1 FROM public.course_offerings o
-        WHERE o.id = course_enrollments.offering_id AND o.instructor_id = auth.uid()
-      )
+      public.get_my_role() = 'admin'
+      OR public.can_write_offering_records(offering_id)
+      OR public.heads_offering_department(offering_id)
     )
   );
 
@@ -458,6 +769,43 @@ REFRESH MATERIALIZED VIEW public.mv_department_health_raw;
 --   SELECT count(*) FROM public.mv_attendance_summary;   -- 0 until offerings exist
 --   SELECT count(*) FROM public.mv_department_health;    -- one row per department
 --
+--   -- ---- C1: the database now enforces offering authority ----
+--
+--   -- the role-only academic write policies are gone
+--   SELECT policyname FROM pg_policies
+--    WHERE tablename IN ('attendance','marks')
+--      AND policyname IN ('attendance_teacher_mark','attendance_teacher_update',
+--                         'attendance_hod_update','marks_teacher_manage');
+--     -- expect zero rows
+--
+--   -- and the offering-derived ones exist, split by command
+--   SELECT policyname, cmd, qual IS NOT NULL AS has_using,
+--          with_check IS NOT NULL AS has_with_check
+--     FROM pg_policies WHERE tablename IN ('attendance','marks')
+--    ORDER BY cmd, policyname;
+--     -- every UPDATE policy must show has_with_check = true, or offering_id
+--     -- can be rewritten to an offering the actor has no authority over
+--
+--   -- READ policies are untouched by this migration
+--   SELECT policyname FROM pg_policies
+--    WHERE tablename IN ('attendance','marks') AND cmd = 'SELECT';
+--     -- expect attendance_read_student, attendance_read_staff,
+--     --        marks_read_student, marks_read_staff
+--
+--   -- the authority functions are SECURITY DEFINER with a pinned search_path
+--   SELECT proname, prosecdef, proconfig FROM pg_proc
+--    WHERE proname IN ('can_write_offering_records','can_record_attendance',
+--                      'heads_offering_department');
+--     -- expect prosecdef = true and proconfig = {search_path=public, pg_catalog}
+--
+--   -- and the whole point, as the actual roles (run in a disposable DB):
+--   --   SET LOCAL ROLE authenticated;
+--   --   SET LOCAL request.jwt.claims = '{"sub":"<teacher-b-uuid>"}';
+--   --   INSERT INTO attendance (..., offering_id = <teacher A's offering>);
+--   --     -- expect: new row violates row-level security policy
+--   -- Automated as tests/rls-offering-authority.test.ts, which runs this
+--   -- migration's own SQL rather than a paraphrase of it.
+--
 -- ============================================================
 -- Rollback (apply manually if reverting this migration)
 -- ============================================================
@@ -466,3 +814,24 @@ REFRESH MATERIALIZED VIEW public.mv_department_health_raw;
 -- course_enrollments.student_id at profiles(id), and drop the offering_id
 -- columns. Safe to do bluntly ONLY while these tables remain empty — once
 -- real attendance/marks exist, a rollback needs its own data migration.
+--
+-- The RLS half of a rollback, if it is ever needed independently. Note that
+-- reverting these RESTORES the C1 defect: any teacher may write any
+-- offering's records, and any HOD may update any attendance row in the
+-- institution. Do not revert 7a/7b to work around a permission problem —
+-- fix the policy instead.
+--
+--   DROP POLICY IF EXISTS "attendance_insert_offering_authority"  ON public.attendance;
+--   DROP POLICY IF EXISTS "attendance_update_offering_authority"  ON public.attendance;
+--   DROP POLICY IF EXISTS "attendance_update_approved_correction" ON public.attendance;
+--   DROP POLICY IF EXISTS "marks_insert_instructor" ON public.marks;
+--   DROP POLICY IF EXISTS "marks_update_instructor" ON public.marks;
+--   DROP POLICY IF EXISTS "marks_delete_instructor" ON public.marks;
+--   DROP POLICY IF EXISTS "attendance_correction_review_scope"
+--     ON public.attendance_correction_requests;
+--   DROP FUNCTION IF EXISTS public.can_record_attendance(UUID, DATE);
+--   DROP FUNCTION IF EXISTS public.can_write_offering_records(UUID);
+--   DROP FUNCTION IF EXISTS public.heads_offering_department(UUID);
+--   -- then re-create attendance_teacher_mark / attendance_teacher_update from
+--   -- migration 006, attendance_hod_update from 038, marks_teacher_manage from
+--   -- 006, and attendance_correction_update_staff from 037.
