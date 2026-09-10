@@ -28,7 +28,7 @@ export async function listFaculty(q: DataTableQuery) {
   const cacheKey = listCacheKey(FACULTY_CACHE_PREFIX, actor.collegeId, q, column);
 
   return getCached(cacheKey, 30, async () => {
-    const [facultyRes, coursesRes, slotsRes] = await Promise.all([
+    const [facultyRes, offeringsRes, slotsRes] = await Promise.all([
       (() => {
         let dbQuery = supabase
           .from("profiles")
@@ -39,23 +39,35 @@ export async function listFaculty(q: DataTableQuery) {
         const from = q.page * FACULTY_PAGE_SIZE;
         return dbQuery.range(from, from + FACULTY_PAGE_SIZE - 1);
       })(),
-      // Course catalog, not a per-transaction table — 2x the default cap is
-      // ample headroom while still keeping this tally from silently
-      // undercounting under normal growth.
-      supabase.from("courses").select("id, instructor_id").limit(DEFAULT_QUERY_LIMIT * 2),
-      supabase.from("timetable_slots").select("instructor_id").limit(DEFAULT_QUERY_LIMIT * 2),
+      // Offerings for the whole college. Deliveries outnumber catalog rows
+      // (one course, several sections), so the cap matters more than it did
+      // — 2x the default keeps the tally honest under normal growth.
+      supabase.from("course_offerings").select("id, instructor_id, status").limit(DEFAULT_QUERY_LIMIT * 2),
+      supabase.from("timetable_slots").select("offering_id").limit(DEFAULT_QUERY_LIMIT * 2),
     ]);
 
+    // Workload is measured in OFFERINGS delivered, not catalog rows owned.
+    // Under courses.instructor_id a teacher taking three sections of one
+    // course counted as teaching "1 course", and two teachers splitting a
+    // course could not both be counted at all. Weekly periods likewise come
+    // from the slots of those offerings, since timetable_slots no longer
+    // carries its own instructor_id (047) — it belongs to the offering.
+    // Cancelled offerings are excluded: nobody is teaching them.
+    const liveOfferings = ((offeringsRes.data as { id: string; instructor_id: string | null; status: string }[]) || [])
+      .filter((o) => o.status !== "cancelled");
+
     const courseCounts: Record<string, number> = {};
-    (coursesRes.data || []).forEach((c: any) => {
-      if (!c.instructor_id) return;
-      courseCounts[c.instructor_id] = (courseCounts[c.instructor_id] || 0) + 1;
+    liveOfferings.forEach((o) => {
+      if (!o.instructor_id) return;
+      courseCounts[o.instructor_id] = (courseCounts[o.instructor_id] || 0) + 1;
     });
 
+    const instructorByOffering = new Map(liveOfferings.map((o) => [o.id, o.instructor_id]));
     const weeklyPeriods: Record<string, number> = {};
-    (slotsRes.data || []).forEach((s: any) => {
-      if (!s.instructor_id) return;
-      weeklyPeriods[s.instructor_id] = (weeklyPeriods[s.instructor_id] || 0) + 1;
+    ((slotsRes.data as { offering_id: string }[]) || []).forEach((s) => {
+      const instructorId = instructorByOffering.get(s.offering_id);
+      if (!instructorId) return;
+      weeklyPeriods[instructorId] = (weeklyPeriods[instructorId] || 0) + 1;
     });
 
     // Attendance/marks entry counts are only fetched for the faculty rows on

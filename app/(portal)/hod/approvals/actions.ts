@@ -10,7 +10,7 @@ import { logAudit } from "@/lib/audit";
 import { assertClaimed, assertPersisted } from "@/lib/concurrent-claim";
 import { assertNotSelfApproval } from "@/lib/segregation-of-duties";
 import { PERMISSIONS } from "@/lib/permissions";
-import { computeAffectedClasses } from "@/lib/leave-impact";
+import { computeAffectedClasses, type AffectedClass } from "@/lib/leave-impact";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 
@@ -65,6 +65,105 @@ export async function listHodApprovals() {
   });
 }
 
+
+/**
+ * The scheduled sessions a teacher delivers during a given date window.
+ *
+ * timetable_slots no longer carries instructor_id (047) — a slot belongs to
+ * an offering, and the offering names the instructor, the section and the
+ * semester. So "this teacher's classes" is now a two-hop question, and that
+ * is an improvement rather than an inconvenience: the old column could
+ * disagree with the offering it belonged to, and a teacher who took over a
+ * section mid-year left the slot pointing at their predecessor.
+ *
+ * Each offering's sessions are clamped to ITS OWN semester window before
+ * dates are enumerated. Leave spanning a semester boundary therefore
+ * generates cover only for the classes that were actually running, instead
+ * of projecting the current timetable across dates it never applied to.
+ * Cancelled offerings are excluded — there is no class to cover.
+ */
+type SlotWithOffering = {
+  id: string;
+  offering_id: string;
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+};
+
+interface DeliveredSession extends AffectedClass {
+  courseCode: string;
+  courseName: string;
+  sectionName: string;
+}
+
+async function resolveAffectedSessions(
+  supabase: SupabaseClient<Database>,
+  instructorId: string,
+  startDate: string,
+  endDate: string
+): Promise<DeliveredSession[]> {
+  type OfferingWithContext = {
+    id: string;
+    status: string;
+    semester_id: string;
+    courses: { name: string; code: string } | null;
+    sections: { name: string } | null;
+    semesters: { start_date: string; end_date: string } | null;
+  };
+
+  const { data: offeringsRaw } = await supabase
+    .from("course_offerings")
+    .select(
+      "id, status, semester_id, courses:course_id(name, code), sections:section_id(name), semesters:semester_id(start_date, end_date)"
+    )
+    .eq("instructor_id", instructorId);
+
+  // Cast: the hand-maintained Database type declares no Relationships, so
+  // embedded selects can't be inferred — the workaround used throughout.
+  const offerings = (offeringsRaw as unknown as OfferingWithContext[] | null) || [];
+  const live = offerings.filter((o) => o.status !== "cancelled");
+  if (live.length === 0) return [];
+
+  const { data: slotsRaw } = await supabase
+    .from("timetable_slots")
+    .select("id, offering_id, day_of_week, start_time, end_time")
+    .in("offering_id", live.map((o) => o.id));
+
+  const slots = (slotsRaw as SlotWithOffering[] | null) || [];
+  if (slots.length === 0) return [];
+
+  const sessions: DeliveredSession[] = [];
+  for (const offering of live) {
+    const mine = slots.filter((s) => s.offering_id === offering.id);
+    if (mine.length === 0) continue;
+
+    // Intersect the leave window with the semester this offering runs in.
+    const from = offering.semesters?.start_date
+      ? maxDate(startDate, offering.semesters.start_date)
+      : startDate;
+    const to = offering.semesters?.end_date ? minDate(endDate, offering.semesters.end_date) : endDate;
+    if (from > to) continue;
+
+    for (const affected of computeAffectedClasses(from, to, mine)) {
+      sessions.push({
+        ...affected,
+        courseCode: offering.courses?.code || "",
+        courseName: offering.courses?.name || "",
+        sectionName: offering.sections?.name || "",
+      });
+    }
+  }
+  return sessions;
+}
+
+/** YYYY-MM-DD strings compare correctly lexicographically. */
+function maxDate(a: string, b: string) {
+  return a > b ? a : b;
+}
+function minDate(a: string, b: string) {
+  return a < b ? a : b;
+}
+
 /**
  * Read-only — shows affected classes BEFORE the HOD clicks Approve, per the
  * spec's "Leave Impact Preview." Same department-ownership rule as
@@ -93,21 +192,16 @@ export async function previewLeaveImpact(requestId: string) {
     }
   }
 
-  const { data: slots } = await supabase
-    .from("timetable_slots")
-    .select("id, course_id, day_of_week, start_time, end_time, courses:course_id(name, code)")
-    .eq("instructor_id", request.requested_by);
-
-  const affected = computeAffectedClasses(request.start_date, request.end_date, (slots as any[]) || []);
-  const courseById = new Map(((slots as any[]) || []).map((s) => [s.course_id, s.courses]));
+  const affectedClasses = await resolveAffectedSessions(
+    supabase,
+    request.requested_by,
+    request.start_date,
+    request.end_date
+  );
 
   return {
     teacherName: request.profiles?.full_name || "Unknown",
-    affectedClasses: affected.map((c) => ({
-      ...c,
-      courseCode: courseById.get(c.courseId)?.code || "",
-      courseName: courseById.get(c.courseId)?.name || "",
-    })),
+    affectedClasses,
   };
 }
 
@@ -195,12 +289,13 @@ export async function actOnLeaveRequestCore(
 }
 
 /**
- * Called after a leave request is approved — computes affected classes from
- * the requester's own timetable_slots (lib/leave-impact.ts, same function
- * previewLeaveImpact uses) and creates one 'needed' substitution_assignments
- * row per affected class. Purely additive: teachers keep marking their own
- * attendance as before, this only opens a new avenue for a HOD-assigned
- * substitute to cover specific already-identified classes.
+ * Called after a leave request is approved — resolves the classes the
+ * teacher actually delivers over the leave window (same resolver
+ * previewLeaveImpact uses, so the preview can never disagree with what
+ * approval creates) and opens one 'needed' substitution row per session.
+ *
+ * Purely additive: teachers keep marking their own attendance, this only
+ * lets a HOD assign someone to cover specific already-identified classes.
  */
 async function createSubstitutionNeeds(
   supabase: SupabaseClient<Database>,
@@ -210,32 +305,32 @@ async function createSubstitutionNeeds(
   startDate: string,
   endDate: string
 ) {
-  const { data: slots } = await supabase
-    .from("timetable_slots")
-    .select("id, course_id, day_of_week, start_time, end_time")
-    .eq("instructor_id", requestedBy);
-  if (!slots || slots.length === 0) return;
-
-  const affected = computeAffectedClasses(startDate, endDate, slots);
+  const affected = await resolveAffectedSessions(supabase, requestedBy, startDate, endDate);
   if (affected.length === 0) return;
 
   const rows = affected.map((c) => ({
     college_id: actor.collegeId,
     leave_request_id: leaveRequestId,
-    course_id: c.courseId,
+    offering_id: c.offeringId,
     timetable_slot_id: c.slotId,
     original_teacher_id: requestedBy,
     date: c.date,
     status: "needed" as const,
   }));
 
-  // ON CONFLICT DO NOTHING via ignoreDuplicates — the same (course_id, date)
-  // pair can't get two 'needed' rows even if this ran twice. Non-fatal: the
-  // leave approval itself (the primary effect, already committed above) is
-  // more important than substitution tracking — but a failure here must not
-  // be silent, or a HOD would see leave approved with no visible reason
-  // "Substitution Management" then shows nothing for it.
-  const { error } = await supabase.from("substitution_assignments").upsert(rows, { onConflict: "course_id,date", ignoreDuplicates: true });
+  // ON CONFLICT DO NOTHING via ignoreDuplicates, now on (offering_id, date)
+  // to match the constraint 047 installed — the same offering can't get two
+  // 'needed' rows for one day even if this runs twice.
+  //
+  // Zero affected rows is the CORRECT outcome of a re-run here, which is why
+  // this deliberately does not use assertPersisted (see lib/concurrent-claim).
+  // Non-fatal: the leave approval itself is already committed and matters
+  // more than substitution tracking — but a failure must not be silent, or a
+  // HOD sees leave approved and "Substitution Management" empty with no
+  // explanation.
+  const { error } = await supabase
+    .from("substitution_assignments")
+    .upsert(rows, { onConflict: "offering_id,date", ignoreDuplicates: true });
   if (error) {
     console.error(`createSubstitutionNeeds failed for leave request ${leaveRequestId}:`, error.message);
   }

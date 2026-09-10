@@ -409,7 +409,13 @@ describe("segregation of duties", () => {
         };
       }
       if (table === "departments") return { select: () => selectSingle({ data: { id: "dept-1" } }) };
-      if (table === "timetable_slots") return { select: () => ({ eq: () => Promise.resolve({ data: [] }) }) };
+      // The leave -> substitution path resolves the teacher's classes through
+      // course_offerings now: timetable_slots carries no instructor_id after
+      // 047. No offerings here means no cover is needed, which is what this
+      // test wants — it is about separation of duties on the approval, not
+      // about substitution.
+      if (table === "course_offerings") return { select: () => ({ eq: () => Promise.resolve({ data: [] }) }) };
+      if (table === "timetable_slots") return { select: () => ({ eq: () => Promise.resolve({ data: [] }), in: () => Promise.resolve({ data: [] }) }) };
       if (table === "audit_logs") return { insert: insertOk("audit_logs") };
       throw new Error(`unexpected table: ${table}`);
     };
