@@ -378,12 +378,11 @@ export interface Database {
           exam_type: "internal_1" | "internal_2" | "midterm" | "final" | "assignment" | "lab" | "project" | "viva";
           max_marks: number;
           obtained_marks: number;
-          semester: number | null;
           remarks: string | null;
           entered_by: string | null;
           created_at: string;
         };
-        Insert: OptionalKeys<Database["public"]["Tables"]["marks"]["Row"], "id" | "created_at" | "semester" | "remarks" | "entered_by">;
+        Insert: OptionalKeys<Database["public"]["Tables"]["marks"]["Row"], "id" | "created_at" | "remarks" | "entered_by">;
         Update: Partial<Database["public"]["Tables"]["marks"]["Insert"]>;
         Relationships: [];
       };

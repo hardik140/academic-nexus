@@ -4,7 +4,7 @@ import { computeAffectedClasses, type TimetableSlotForImpact } from "@/lib/leave
 function slot(overrides: Partial<TimetableSlotForImpact> = {}): TimetableSlotForImpact {
   return {
     id: "slot-1",
-    course_id: "course-1",
+    offering_id: "offering-1",
     day_of_week: 1, // Monday
     start_time: "09:00:00",
     end_time: "10:00:00",
@@ -17,7 +17,7 @@ describe("computeAffectedClasses", () => {
     // 2026-03-02 is a Monday
     const result = computeAffectedClasses("2026-03-02", "2026-03-02", [slot()]);
     expect(result).toHaveLength(1);
-    expect(result[0]).toMatchObject({ date: "2026-03-02", slotId: "slot-1", courseId: "course-1" });
+    expect(result[0]).toMatchObject({ date: "2026-03-02", slotId: "slot-1", offeringId: "offering-1" });
   });
 
   it("matches every occurrence of the slot's day-of-week across a multi-week range", () => {
@@ -39,11 +39,11 @@ describe("computeAffectedClasses", () => {
 
   it("includes multiple slots on the same matching day", () => {
     const result = computeAffectedClasses("2026-03-02", "2026-03-02", [
-      slot({ id: "slot-1", course_id: "course-1" }),
-      slot({ id: "slot-2", course_id: "course-2", start_time: "11:00:00", end_time: "12:00:00" }),
+      slot({ id: "slot-1", offering_id: "offering-1" }),
+      slot({ id: "slot-2", offering_id: "offering-2", start_time: "11:00:00", end_time: "12:00:00" }),
     ]);
     expect(result).toHaveLength(2);
-    expect(result.map((r) => r.courseId).sort()).toEqual(["course-1", "course-2"]);
+    expect(result.map((r) => r.offeringId).sort()).toEqual(["offering-1", "offering-2"]);
   });
 
   it("is inclusive of both the start and end date", () => {

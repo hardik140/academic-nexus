@@ -96,7 +96,8 @@ export const RISK_THRESHOLDS = {
 export type RiskLevel = "high" | "medium" | "low";
 
 export interface SubjectRiskResult {
-  courseId: string;
+  /** The offering the risk was computed over, not the catalog course. */
+  offeringId: string;
   level: RiskLevel;
   reasons: string[];
 }
@@ -116,7 +117,13 @@ const EXAM_LABELS: Record<MarksRow["exam_type"], string> = {
 const LATEST_EXAM_PRIORITY: MarksRow["exam_type"][] = ["final", "midterm", "internal_2", "internal_1"];
 
 export function computeSubjectRisk(input: {
-  course: Pick<CourseRow, "id">;
+  /**
+   * The delivery being assessed, not the catalog entry. Risk is a statement
+   * about how a student is doing in a class they actually sit in — and a
+   * student who retakes a course has two of those, each with its own
+   * attendance and marks, which the course id alone cannot tell apart.
+   */
+  offering: { id: string };
   attendanceRows: AttendanceRow[];
   marksRows: MarksRow[];
 }): SubjectRiskResult {
@@ -162,7 +169,7 @@ export function computeSubjectRisk(input: {
     }
   }
 
-  return { courseId: input.course.id, level, reasons };
+  return { offeringId: input.offering.id, level, reasons };
 }
 
 // Shared by the dashboard's Attention Required panel and the Insights
@@ -170,23 +177,46 @@ export function computeSubjectRisk(input: {
 // currently-enrolled courses only (a "failed"/"dropped" enrollment is a
 // degree-progress concern, not an in-progress risk to react to today).
 export interface EnrolledSubjectRisk {
+  offeringId: string;
+  /** Catalog details for display, resolved through the offering. */
   course: { id: string; name: string; code: string } | null;
+  /** Which section and semester this delivery is, when the caller has them. */
+  section: { name: string } | null;
   risk: SubjectRiskResult;
 }
 
+/**
+ * One risk row per ENROLLED OFFERING.
+ *
+ * Keyed on offering_id rather than course_id, which is what makes two
+ * simultaneous sections of the same course, and a retake in a later
+ * semester, distinct rows instead of one row silently pooling both sets of
+ * attendance. The course is carried alongside purely as the label a student
+ * recognises.
+ */
 export function buildSubjectRisks(input: {
-  enrollments: Array<{ course_id: string; status: CourseEnrollmentRow["status"]; courses?: { id: string; name: string; code: string } | null }>;
+  enrollments: Array<{
+    offering_id: string;
+    status: CourseEnrollmentRow["status"];
+    course_offerings?: {
+      id: string;
+      courses?: { id: string; name: string; code: string } | null;
+      sections?: { name: string } | null;
+    } | null;
+  }>;
   attendance: AttendanceRow[];
   marks: MarksRow[];
 }): EnrolledSubjectRisk[] {
   return input.enrollments
     .filter((e) => e.status === "enrolled")
     .map((e) => ({
-      course: e.courses ?? null,
+      offeringId: e.offering_id,
+      course: e.course_offerings?.courses ?? null,
+      section: e.course_offerings?.sections ?? null,
       risk: computeSubjectRisk({
-        course: { id: e.course_id },
-        attendanceRows: input.attendance.filter((a) => a.course_id === e.course_id),
-        marksRows: input.marks.filter((m) => m.course_id === e.course_id),
+        offering: { id: e.offering_id },
+        attendanceRows: input.attendance.filter((a) => a.offering_id === e.offering_id),
+        marksRows: input.marks.filter((m) => m.offering_id === e.offering_id),
       }),
     }));
 }
@@ -204,8 +234,18 @@ export interface DegreeProgressResult {
 }
 
 export function computeDegreeProgress(input: {
-  enrollments: CourseEnrollmentRow[];
-  coursesById: Map<string, CourseRow>;
+  enrollments: Array<Pick<CourseEnrollmentRow, "offering_id" | "status">>;
+  /**
+   * offering id -> the course being delivered. Keyed by OFFERING because an
+   * enrollment now names one; the caller resolves the hop once rather than
+   * every consumer re-deriving it.
+   *
+   * A retake therefore counts its credits once per attempt, in whichever
+   * bucket that attempt landed in — the failed one under `blocked`, the
+   * later pass under `completed`. Under the old course-keyed shape the two
+   * attempts collapsed into a single entry and one of them vanished.
+   */
+  coursesByOfferingId: Map<string, CourseRow>;
   creditsCompleted: number;
   creditsRequired: number;
 }): DegreeProgressResult {
@@ -214,7 +254,7 @@ export function computeDegreeProgress(input: {
   ) as DegreeProgressResult["byCategory"];
 
   for (const enrollment of input.enrollments) {
-    const course = input.coursesById.get(enrollment.course_id);
+    const course = input.coursesByOfferingId.get(enrollment.offering_id);
     if (!course) continue;
     const bucket = byCategory[course.type];
     if (enrollment.status === "completed") bucket.completed += course.credits;

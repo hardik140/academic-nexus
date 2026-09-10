@@ -18,7 +18,7 @@ function attendance(status: AttendanceRow["status"], overrides: Partial<Attendan
     id: "a1",
     college_id: "c1",
     student_id: "s1",
-    course_id: "course-1",
+    offering_id: "offering-1",
     date: "2026-01-01",
     status,
     marked_by: "t1",
@@ -33,8 +33,7 @@ function enrollment(status: CourseEnrollmentRow["status"], overrides: Partial<Co
     id: "e1",
     college_id: "c1",
     student_id: "s1",
-    course_id: "course-1",
-    semester_id: null,
+    offering_id: "offering-1",
     status,
     grade: null,
     grade_points: null,
@@ -70,11 +69,10 @@ function marks(exam_type: MarksRow["exam_type"], obtained_marks: number, max_mar
     id: "m1",
     college_id: "c1",
     student_id: "s1",
-    course_id: "course-1",
+    offering_id: "offering-1",
     exam_type,
     max_marks,
     obtained_marks,
-    semester: 3,
     remarks: null,
     entered_by: null,
     created_at: "2026-01-01T00:00:00Z",
@@ -105,7 +103,7 @@ describe("computeAcademicHealth", () => {
   it("combines all three signals with the documented weights", () => {
     const result = computeAcademicHealth({
       attendance: [attendance("present"), attendance("present"), attendance("present"), attendance("absent")],
-      enrollments: [enrollment("completed"), enrollment("failed", { id: "e2", course_id: "course-2" })],
+      enrollments: [enrollment("completed"), enrollment("failed", { id: "e2", offering_id: "offering-2" })],
       cgpa: 8,
     });
     // attendance 75%, backlog inverse 50% (1 of 2 failed), cgpa 80%
@@ -136,7 +134,7 @@ describe("computeAcademicHealth", () => {
 describe("computeSubjectRisk", () => {
   it("flags high risk on low attendance", () => {
     const rows = [attendance("absent"), attendance("absent"), attendance("present")];
-    const result = computeSubjectRisk({ course: { id: "course-1" }, attendanceRows: rows, marksRows: [] });
+    const result = computeSubjectRisk({ offering: { id: "offering-1" }, attendanceRows: rows, marksRows: [] });
     expect(result.level).toBe("high");
     expect(result.reasons[0]).toContain("Attendance");
   });
@@ -144,7 +142,7 @@ describe("computeSubjectRisk", () => {
   it("is low risk when attendance and marks are healthy", () => {
     const rows = Array.from({ length: 10 }, () => attendance("present"));
     const result = computeSubjectRisk({
-      course: { id: "course-1" },
+      offering: { id: "offering-1" },
       attendanceRows: rows,
       marksRows: [marks("internal_1", 80)],
     });
@@ -155,7 +153,7 @@ describe("computeSubjectRisk", () => {
   it("flags medium risk on a declining internal trend even with fine attendance", () => {
     const rows = Array.from({ length: 10 }, () => attendance("present"));
     const result = computeSubjectRisk({
-      course: { id: "course-1" },
+      offering: { id: "offering-1" },
       attendanceRows: rows,
       marksRows: [marks("internal_1", 80), marks("internal_2", 60, 100, { id: "m2" })],
     });
@@ -169,7 +167,7 @@ describe("computeSubjectRisk", () => {
     const present = Array.from({ length: RISK_THRESHOLDS.attendanceMedium }, () => attendance("present"));
     const absent = Array.from({ length: 100 - RISK_THRESHOLDS.attendanceMedium }, () => attendance("absent"));
     const result = computeSubjectRisk({
-      course: { id: "course-1" },
+      offering: { id: "offering-1" },
       attendanceRows: [...present, ...absent],
       marksRows: [],
     });
@@ -183,14 +181,21 @@ describe("computeDegreeProgress", () => {
       course({ id: "core-1", type: "core", credits: 4 }),
       course({ id: "elective-1", type: "elective", credits: 3 }),
     ];
+    // Three enrollments across three OFFERINGS. The two core ones are two
+    // attempts at the same course — a pass and a fail — which the old
+    // course-keyed map collapsed into one entry, losing an attempt.
     const enrollments = [
-      enrollment("completed", { course_id: "core-1" }),
-      enrollment("enrolled", { course_id: "elective-1", id: "e2" }),
-      enrollment("failed", { course_id: "core-1", id: "e3" }),
+      enrollment("completed", { offering_id: "off-core-a" }),
+      enrollment("enrolled", { offering_id: "off-elective", id: "e2" }),
+      enrollment("failed", { offering_id: "off-core-b", id: "e3" }),
     ];
     const result = computeDegreeProgress({
       enrollments,
-      coursesById: new Map(courses.map((c) => [c.id, c])),
+      coursesByOfferingId: new Map([
+        ["off-core-a", courses[0]],
+        ["off-core-b", courses[0]],
+        ["off-elective", courses[1]],
+      ]),
       creditsCompleted: 4,
       creditsRequired: 160,
     });

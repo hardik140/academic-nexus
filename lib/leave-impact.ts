@@ -1,6 +1,11 @@
 export interface TimetableSlotForImpact {
   id: string;
-  course_id: string;
+  /**
+   * The offering this scheduled session delivers. timetable_slots no longer
+   * carries course_id or instructor_id (047) — both belong to the offering,
+   * which is also what ties the slot to a specific semester and section.
+   */
+  offering_id: string;
   day_of_week: number;
   start_time: string;
   end_time: string;
@@ -9,7 +14,7 @@ export interface TimetableSlotForImpact {
 export interface AffectedClass {
   date: string;
   slotId: string;
-  courseId: string;
+  offeringId: string;
   dayOfWeek: number;
   startTime: string;
   endTime: string;
@@ -45,7 +50,7 @@ export function computeAffectedClasses(
       affected.push({
         date: dateStr,
         slotId: slot.id,
-        courseId: slot.course_id,
+        offeringId: slot.offering_id,
         dayOfWeek,
         startTime: slot.start_time,
         endTime: slot.end_time,
