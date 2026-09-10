@@ -209,6 +209,23 @@ CREATE TABLE public.substitution_assignments (
   UNIQUE (course_id, date)
 );
 
+-- ------------------------------------- indexes on to-be-dropped columns
+--
+-- Postgres drops an index automatically when its column goes, so these do
+-- not block the migration -- but a fixture without them cannot prove that.
+-- They are here so the harness exercises the real object graph rather than
+-- a convenient subset.
+
+CREATE INDEX idx_course_enrollments_student ON public.course_enrollments(student_id);
+CREATE INDEX idx_course_enrollments_course  ON public.course_enrollments(course_id);
+CREATE INDEX idx_attendance_student ON public.attendance(student_id);
+CREATE INDEX idx_attendance_course  ON public.attendance(course_id);
+CREATE INDEX idx_attendance_date    ON public.attendance(date);
+CREATE INDEX idx_marks_student ON public.marks(student_id);
+CREATE INDEX idx_timetable_course ON public.timetable_slots(course_id);
+CREATE INDEX idx_substitution_assignments_substitute
+  ON public.substitution_assignments(substitute_teacher_id);
+
 -- ---------------------------------------------------- helpers + RLS
 
 CREATE OR REPLACE FUNCTION public.get_my_college_id() RETURNS UUID AS $$
@@ -256,6 +273,35 @@ CREATE POLICY "substitution_read_enrolled_student" ON public.substitution_assign
         AND ce.status = 'enrolled'
     )
   );
+
+-- The rest of the pre-047 policy set on these tables. None reference a
+-- dropped column, so 047 leaves them alone -- which is exactly what the
+-- final policy-inventory assertion needs to be able to see.
+CREATE POLICY "course_enrollments_read_staff" ON public.course_enrollments
+  FOR SELECT USING (college_id = public.get_my_college_id()
+                    AND public.get_my_role() IN ('teacher','hod','director','admin'));
+CREATE POLICY "timetable_read" ON public.timetable_slots
+  FOR SELECT USING (college_id = public.get_my_college_id());
+CREATE POLICY "substitution_read_own" ON public.substitution_assignments
+  FOR SELECT USING (original_teacher_id = auth.uid() OR substitute_teacher_id = auth.uid());
+CREATE POLICY "substitution_read_staff" ON public.substitution_assignments
+  FOR SELECT USING (college_id = public.get_my_college_id()
+                    AND public.get_my_role() IN ('hod','admin'));
+CREATE POLICY "substitution_insert_staff" ON public.substitution_assignments
+  FOR INSERT WITH CHECK (college_id = public.get_my_college_id()
+                         AND public.get_my_role() IN ('hod','admin'));
+CREATE POLICY "substitution_update_staff" ON public.substitution_assignments
+  FOR UPDATE USING (college_id = public.get_my_college_id()
+                    AND public.get_my_role() IN ('hod','admin'));
+CREATE POLICY "attendance_correction_read_own" ON public.attendance_correction_requests
+  FOR SELECT USING (submitted_by = auth.uid());
+CREATE POLICY "attendance_correction_read_staff" ON public.attendance_correction_requests
+  FOR SELECT USING (college_id = public.get_my_college_id()
+                    AND public.get_my_role() IN ('hod','admin'));
+CREATE POLICY "attendance_correction_insert_own" ON public.attendance_correction_requests
+  FOR INSERT WITH CHECK (submitted_by = auth.uid());
+
+ALTER TABLE public.timetable_slots ENABLE ROW LEVEL SECURITY;
 
 -- ------------------------------------------- pre-047 analytics views
 --
@@ -331,5 +377,55 @@ INSERT INTO public.course_offerings VALUES
   ('00000000-0000-4000-8000-000000013001', '00000000-0000-4000-8000-0000000000c1', '00000000-0000-4000-8000-000000011001',
    '00000000-0000-4000-8000-00000000e001', '00000000-0000-4000-8000-000000010001', '00000000-0000-4000-8000-00000000a001', 'active');
 
+-- The analytics objects 047 does NOT touch. They matter because
+-- refresh_analytics() names all six, and it uses REFRESH ... CONCURRENTLY,
+-- which requires every one of them to carry a unique index and to have been
+-- populated at least once. If 047 rebuilt a matview without its unique
+-- index, nothing would fail during the migration -- the next scheduled
+-- refresh would fail instead, in a cron job, where nobody is watching.
+
+CREATE MATERIALIZED VIEW public.mv_department_enrollment_raw AS
+SELECT s.college_id, s.department_id, d.name AS department_name,
+       COUNT(*) AS total_students
+FROM public.students s JOIN public.departments d ON s.department_id = d.id
+GROUP BY s.college_id, s.department_id, d.name;
+CREATE UNIQUE INDEX idx_mv_department_enrollment
+  ON public.mv_department_enrollment_raw(college_id, department_id);
+
+CREATE MATERIALIZED VIEW public.mv_fee_summary_raw AS
+SELECT f.college_id, SUM(f.amount) AS total_billed, SUM(f.paid_amount) AS total_collected
+FROM public.fees f GROUP BY f.college_id;
+CREATE UNIQUE INDEX idx_mv_fee_summary ON public.mv_fee_summary_raw(college_id);
+
+CREATE MATERIALIZED VIEW public.mv_placement_summary_raw AS
+SELECT spp.college_id, COUNT(*) FILTER (WHERE spp.placement_status = 'placed') AS total_placed
+FROM public.student_placement_profiles spp GROUP BY spp.college_id;
+CREATE UNIQUE INDEX idx_mv_placement_summary ON public.mv_placement_summary_raw(college_id);
+
+CREATE MATERIALIZED VIEW public.mv_placement_funnel_raw AS
+SELECT s.college_id, s.department_id, COUNT(*) AS total_students
+FROM public.students s
+LEFT JOIN public.student_placement_profiles spp ON spp.student_id = s.id
+GROUP BY s.college_id, s.department_id;
+CREATE UNIQUE INDEX idx_mv_placement_funnel
+  ON public.mv_placement_funnel_raw(college_id, department_id);
+
+-- Verbatim from migration 033 -- the current definition.
+CREATE OR REPLACE FUNCTION public.refresh_analytics()
+RETURNS void AS $$
+BEGIN
+  REFRESH MATERIALIZED VIEW CONCURRENTLY public.mv_attendance_summary_raw;
+  REFRESH MATERIALIZED VIEW CONCURRENTLY public.mv_fee_summary_raw;
+  REFRESH MATERIALIZED VIEW CONCURRENTLY public.mv_department_enrollment_raw;
+  REFRESH MATERIALIZED VIEW CONCURRENTLY public.mv_placement_summary_raw;
+  REFRESH MATERIALIZED VIEW CONCURRENTLY public.mv_department_health_raw;
+  REFRESH MATERIALIZED VIEW CONCURRENTLY public.mv_placement_funnel_raw;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
 REFRESH MATERIALIZED VIEW public.mv_attendance_summary_raw;
 REFRESH MATERIALIZED VIEW public.mv_department_health_raw;
+REFRESH MATERIALIZED VIEW public.mv_department_enrollment_raw;
+REFRESH MATERIALIZED VIEW public.mv_fee_summary_raw;
+REFRESH MATERIALIZED VIEW public.mv_placement_summary_raw;
+REFRESH MATERIALIZED VIEW public.mv_placement_funnel_raw;

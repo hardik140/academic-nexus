@@ -150,6 +150,74 @@ describe("migration 047 applies to a post-046 database", () => {
     await db.exec("REFRESH MATERIALIZED VIEW public.mv_department_health_raw;");
   });
 
+  it("leaves refresh_analytics() working — CONCURRENTLY needs a unique index", async () => {
+    // The scheduled refresh names all six matviews and uses
+    // REFRESH ... CONCURRENTLY, which Postgres rejects unless the matview
+    // carries a unique index and has been populated at least once. A rebuild
+    // that dropped either property would not fail during the migration; it
+    // would fail later, in a cron job, where nobody is watching.
+    await expect(db.exec("SELECT public.refresh_analytics();")).resolves.toBeDefined();
+  });
+
+  it("keeps a unique index on each rebuilt matview", async () => {
+    const res = await db.query<{ relname: string; n: number }>(
+      `SELECT c.relname, count(*)::int AS n
+         FROM pg_class c
+         JOIN pg_index i ON i.indrelid = c.oid AND i.indisunique
+        WHERE c.relname IN ('mv_attendance_summary_raw','mv_department_health_raw')
+        GROUP BY c.relname ORDER BY c.relname`
+    );
+    expect(res.rows.map((r) => r.relname)).toEqual([
+      "mv_attendance_summary_raw",
+      "mv_department_health_raw",
+    ]);
+  });
+
+  it("drops the indexes that sat on removed columns, and adds offering ones", async () => {
+    const res = await db.query<{ indexname: string }>(
+      `SELECT indexname FROM pg_indexes
+        WHERE schemaname = 'public'
+          AND indexname IN ('idx_attendance_course','idx_timetable_course',
+                            'idx_course_enrollments_course','idx_attendance_offering',
+                            'idx_marks_offering','idx_timetable_offering',
+                            'idx_course_enrollments_offering','idx_substitution_offering')
+        ORDER BY indexname`
+    );
+    const names = res.rows.map((r) => r.indexname);
+    // Postgres removes an index with its column; these must be gone.
+    expect(names).not.toContain("idx_attendance_course");
+    expect(names).not.toContain("idx_timetable_course");
+    expect(names).not.toContain("idx_course_enrollments_course");
+    // and the offering-scoped replacements exist
+    for (const idx of [
+      "idx_attendance_offering",
+      "idx_marks_offering",
+      "idx_timetable_offering",
+      "idx_course_enrollments_offering",
+      "idx_substitution_offering",
+    ]) {
+      expect(names, `missing ${idx}`).toContain(idx);
+    }
+  });
+
+  it("rebuilds the dependent substitution policy against the new model", async () => {
+    // Section 0 drops it so the columns can go; 7c must put back a working
+    // equivalent, not just leave the hole. A migration that dropped it and
+    // forgot to recreate it would still "apply cleanly".
+    const res = await db.query<{ qual: string }>(
+      `SELECT qual FROM pg_policies
+        WHERE tablename = 'substitution_assignments'
+          AND policyname = 'substitution_read_enrolled_student'`
+    );
+    expect(res.rows.length).toBe(1);
+    const qual = res.rows[0].qual;
+    expect(qual).toContain("offering_id");
+    expect(qual).not.toContain("course_id");
+    // and it hops through students.user_id rather than comparing the old
+    // profiles-space student_id to auth.uid()
+    expect(qual).toMatch(/students/);
+  });
+
   it("leaves the transaction tables empty — no data was invented", async () => {
     const res = await db.query<{ n: number }>(
       `SELECT (SELECT count(*) FROM public.attendance)
