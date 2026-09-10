@@ -24,7 +24,9 @@ export default function HodCourses() {
 
     const { data } = await supabase
       .from("courses")
-      .select("*, profiles:instructor_id(full_name)")
+      // A catalog course has no single instructor after 047 — teaching
+      // assignment belongs to each offering, so this no longer joins one.
+      .select("*, departments:department_id(name)")
       .eq("department_id", department.id)
       .order("code");
     setCourses(data || []);
@@ -34,7 +36,7 @@ export default function HodCourses() {
     !search ||
     c.code?.toLowerCase().includes(search.toLowerCase()) ||
     c.name?.toLowerCase().includes(search.toLowerCase()) ||
-    (c.profiles as any)?.full_name?.toLowerCase().includes(search.toLowerCase())
+    (c.departments as any)?.name?.toLowerCase().includes(search.toLowerCase())
   );
 
   return (
@@ -50,7 +52,7 @@ export default function HodCourses() {
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search by code, name, or instructor..."
+          placeholder="Search by code, name, or department..."
           className="w-full bg-surface-container-lowest border border-outline-variant rounded-xl pl-xl pr-md py-sm text-sm text-on-surface focus:ring-2 focus:ring-secondary outline-none"
         />
       </div>
@@ -62,7 +64,7 @@ export default function HodCourses() {
               <tr className="bg-surface-container-low text-on-surface-variant">
                 <th className="text-left px-lg py-sm font-semibold text-xs uppercase tracking-wider">Code</th>
                 <th className="text-left px-lg py-sm font-semibold text-xs uppercase tracking-wider">Course</th>
-                <th className="text-left px-lg py-sm font-semibold text-xs uppercase tracking-wider">Instructor</th>
+                <th className="text-left px-lg py-sm font-semibold text-xs uppercase tracking-wider">Department</th>
                 <th className="text-left px-lg py-sm font-semibold text-xs uppercase tracking-wider">Credits</th>
                 <th className="text-left px-lg py-sm font-semibold text-xs uppercase tracking-wider">Sem</th>
                 <th className="text-left px-lg py-sm font-semibold text-xs uppercase tracking-wider">Type</th>
@@ -74,7 +76,7 @@ export default function HodCourses() {
                 <tr key={c.id} className="hover:bg-surface-container-low transition-colors">
                   <td className="px-lg py-md font-mono text-secondary font-semibold">{c.code}</td>
                   <td className="px-lg py-md font-medium text-on-surface">{c.name}</td>
-                  <td className="px-lg py-md text-on-surface-variant">{(c.profiles as any)?.full_name || "TBA"}</td>
+                  <td className="px-lg py-md text-on-surface-variant">{(c.departments as any)?.name || "—"}</td>
                   <td className="px-lg py-md">{c.credits}</td>
                   <td className="px-lg py-md">{c.semester}</td>
                   <td className="px-lg py-md capitalize text-on-surface-variant">{c.type}</td>

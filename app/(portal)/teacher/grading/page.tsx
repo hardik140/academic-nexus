@@ -10,8 +10,8 @@ type ExamType = Database["public"]["Tables"]["marks"]["Row"]["exam_type"];
 
 export default function TeacherGrading() {
   const supabase = createClient();
-  const [courses, setCourses] = useState<any[]>([]);
-  const [selectedCourse, setSelectedCourse] = useState("");
+  const [offerings, setOfferings] = useState<any[]>([]);
+  const [selectedOffering, setSelectedOffering] = useState("");
   const [students, setStudents] = useState<any[]>([]);
   const [examType, setExamType] = useState<ExamType>("internal_1");
   const [maxMarks, setMaxMarks] = useState("100");
@@ -20,48 +20,65 @@ export default function TeacherGrading() {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => { loadCourses(); }, []);
+  useEffect(() => { loadOfferings(); }, []);
 
-  const loadCourses = async () => {
+  const loadOfferings = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    const { data } = await supabase.from("courses").select("id, name, code").eq("instructor_id", user.id);
-    setCourses(data || []);
+    // Marks belong to a delivery, so the picker lists offerings. No
+    // substitute path here, unlike attendance — covering one class does not
+    // confer authority over a section's assessment record.
+    const { data } = await supabase
+      .from("course_offerings")
+      .select("id, status, courses:course_id(id, name, code), sections:section_id(name), semesters:semester_id(name)")
+      .eq("instructor_id", user.id);
+    setOfferings(((data as any[]) || []).filter((o) => o.status !== "cancelled"));
   };
 
-  const loadStudents = async (courseId: string) => {
-    setSelectedCourse(courseId);
+  /** "CS301 — Data Structures · Section A · Fall 2026". */
+  const offeringLabel = (o: any) =>
+    [
+      `${o.courses?.code || ""} — ${o.courses?.name || "Unknown course"}`.trim(),
+      o.sections?.name ? `Section ${o.sections.name}` : null,
+      o.semesters?.name || null,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+
+  const loadStudents = async (offeringId: string) => {
+    setSelectedOffering(offeringId);
+    if (!offeringId) {
+      setStudents([]);
+      setMarks({});
+      return;
+    }
+
+    // Keyed by students.id end to end — course_enrollments.student_id now
+    // references students(id) directly (047), so the profiles<->students
+    // round trip this page used to make twice is gone.
     const { data: enrollments } = await supabase
       .from("course_enrollments")
-      .select("student_id, profiles:student_id(id, full_name)")
-      .eq("course_id", courseId)
+      .select("student_id, students:student_id(id, enrollment_number, profiles:user_id(full_name))")
+      .eq("offering_id", offeringId)
       .eq("status", "enrolled");
 
-    const list = (enrollments || []).map((e: any) => ({
+    const list = ((enrollments as any[]) || []).map((e) => ({
       id: e.student_id,
-      full_name: (e.profiles as any)?.full_name || "Unknown",
+      full_name: e.students?.profiles?.full_name || "Unknown",
+      enrollment_number: e.students?.enrollment_number || "",
     }));
     setStudents(list);
 
-    // Load existing marks
-    const studentUserIds = list.map((s: any) => s.id);
-    const { data: studentRecords } = await supabase
-      .from("students")
-      .select("id, user_id")
-      .in("user_id", studentUserIds);
-
-    const studentDbIds = (studentRecords || []).map(s => s.id);
     const { data: existingMarks } = await supabase
       .from("marks")
       .select("student_id, obtained_marks")
-      .eq("course_id", courseId)
+      .eq("offering_id", offeringId)
       .eq("exam_type", examType)
-      .in("student_id", studentDbIds);
+      .in("student_id", list.map((s) => s.id));
 
     const m: Record<string, string> = {};
-    (existingMarks || []).forEach((em: any) => {
-      const userRec = (studentRecords || []).find(s => s.id === em.student_id);
-      if (userRec) m[userRec.user_id] = String(em.obtained_marks);
+    ((existingMarks as any[]) || []).forEach((em) => {
+      m[em.student_id] = String(em.obtained_marks);
     });
     setMarks(m);
   };
@@ -70,18 +87,12 @@ export default function TeacherGrading() {
     setLoading(true);
     setError(null);
     try {
-      const studentUserIds = Object.keys(marks);
-      const { data: studentRecords } = await supabase
-        .from("students")
-        .select("id, user_id")
-        .in("user_id", studentUserIds);
-
-      const entries = (studentRecords || [])
-        .map((s) => ({ studentDbId: s.id, obtainedMarks: parseFloat(marks[s.user_id] || "0") }))
+      const entries = students
+        .map((s) => ({ studentDbId: s.id, obtainedMarks: parseFloat(marks[s.id] ?? "") }))
         .filter((e) => !isNaN(e.obtainedMarks));
 
       await saveMarksAction({
-        courseId: selectedCourse,
+        offeringId: selectedOffering,
         examType,
         maxMarks: parseFloat(maxMarks),
         entries,
@@ -127,11 +138,11 @@ export default function TeacherGrading() {
       {/* Controls */}
       <div className="flex flex-wrap gap-md items-end">
         <div className="space-y-xs">
-          <label htmlFor="grading-course" className="text-xs font-semibold text-outline uppercase tracking-wider">Course</label>
-          <select id="grading-course" value={selectedCourse} onChange={(e) => loadStudents(e.target.value)}
-            className="bg-surface-container-low border border-outline-variant rounded-xl px-md py-sm text-sm text-on-surface focus:ring-2 focus:ring-secondary outline-none min-w-[200px]">
-            <option value="">Select course...</option>
-            {courses.map((c) => (<option key={c.id} value={c.id}>{c.code} — {c.name}</option>))}
+          <label htmlFor="grading-offering" className="text-xs font-semibold text-outline uppercase tracking-wider">Class</label>
+          <select id="grading-offering" value={selectedOffering} onChange={(e) => loadStudents(e.target.value)}
+            className="bg-surface-container-low border border-outline-variant rounded-xl px-md py-sm text-sm text-on-surface focus:ring-2 focus:ring-secondary outline-none min-w-[280px]">
+            <option value="">Select class...</option>
+            {offerings.map((o) => (<option key={o.id} value={o.id}>{offeringLabel(o)}</option>))}
           </select>
         </div>
         <div className="space-y-xs">
@@ -146,13 +157,13 @@ export default function TeacherGrading() {
           <input id="grading-max-marks" type="number" value={maxMarks} onChange={(e) => setMaxMarks(e.target.value)}
             className="bg-surface-container-low border border-outline-variant rounded-xl px-md py-sm text-sm text-on-surface focus:ring-2 focus:ring-secondary outline-none w-24" />
         </div>
-        {selectedCourse && students.length > 0 && (
+        {selectedOffering && students.length > 0 && (
           <Button onClick={saveMarks} disabled={loading}>{loading ? "Saving..." : "Save Marks"}</Button>
         )}
       </div>
 
       {/* Marks Entry */}
-      {selectedCourse && (
+      {selectedOffering && (
         <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-sm overflow-hidden">
           <div className="px-lg py-md border-b border-outline-variant">
             <h2 className="text-sm font-bold text-on-surface flex items-center gap-sm">

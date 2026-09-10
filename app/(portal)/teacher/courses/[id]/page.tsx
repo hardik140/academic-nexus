@@ -9,53 +9,71 @@ import type { Database } from "@/types/database";
 // Embedded-select casts throughout this file: the hand-maintained Database
 // type declares no Relationships, so supabase-js can't infer these shapes
 // (same workaround as placements/actions.ts's DriveWithCompany).
-type CourseRow = Database["public"]["Tables"]["courses"]["Row"];
-type CourseWithDepartment = CourseRow & { departments: { name: string } | null };
-type EnrollmentWithProfile = { student_id: string; profiles: { id: string; full_name: string; email: string } | null };
+type OfferingWithContext = {
+  id: string;
+  status: string;
+  instructor_id: string | null;
+  courses: { id: string; name: string; code: string; credits: number; departments: { name: string } | null } | null;
+  sections: { name: string; batch_year: number } | null;
+  semesters: { name: string } | null;
+};
+type EnrollmentWithStudent = {
+  student_id: string;
+  students: { id: string; enrollment_number: string | null; profiles: { full_name: string; email: string } | null } | null;
+};
 
 export default async function TeacherCoursePulse({ params }: { params: Promise<{ id: string }> }) {
-  const { id: courseId } = await params;
+  // The route parameter is an OFFERING id — this page is the pulse of one
+  // class (course + section + semester), not of a catalog entry. A course
+  // taught to three sections has three pulses, and averaging them into one
+  // was the old page's central inaccuracy.
+  const { id: offeringId } = await params;
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: courseRaw } = await supabase.from("courses").select("*, departments:department_id(name)").eq("id", courseId).single();
-  const course = courseRaw as CourseWithDepartment | null;
-  if (!course) notFound();
-  // A teacher may only view Class Pulse for a course they teach — same
-  // ownership rule enforced server-side for marking attendance/grading.
-  if (course.instructor_id !== user.id) {
+  const { data: offeringRaw } = await supabase
+    .from("course_offerings")
+    .select(
+      "id, status, instructor_id, courses:course_id(id, name, code, credits, departments:department_id(name)), sections:section_id(name, batch_year), semesters:semester_id(name)"
+    )
+    .eq("id", offeringId)
+    .single();
+  const offering = offeringRaw as unknown as OfferingWithContext | null;
+  if (!offering) notFound();
+
+  // Authority comes from the OFFERING's instructor assignment, never from
+  // courses.instructor_id — which asked "who owns this course institution-
+  // wide" and answered wrongly the moment two teachers split a course.
+  if (offering.instructor_id !== user.id) {
     redirect("/teacher/courses");
   }
+
+  const course = offering.courses;
 
   const [enrollmentsRes, attendanceRes, marksRes] = await Promise.all([
     supabase
       .from("course_enrollments")
-      .select("student_id, profiles:student_id(id, full_name, email)")
-      .eq("course_id", courseId)
+      .select("student_id, students:student_id(id, enrollment_number, profiles:user_id(full_name, email))")
+      .eq("offering_id", offeringId)
       .eq("status", "enrolled"),
-    supabase.from("attendance").select("*").eq("course_id", courseId),
-    supabase.from("marks").select("*").eq("course_id", courseId),
+    supabase.from("attendance").select("*").eq("offering_id", offeringId),
+    supabase.from("marks").select("*").eq("offering_id", offeringId),
   ]);
 
-  const enrollments = (enrollmentsRes.data || []) as unknown as EnrollmentWithProfile[];
+  const enrollments = (enrollmentsRes.data || []) as unknown as EnrollmentWithStudent[];
+  // student_id is a students(id) on every one of these tables now (047), so
+  // the profiles<->students bridge this page used to build is gone.
   const enrolledStudents = enrollments.map((e) => ({
-    profileId: e.student_id,
-    fullName: e.profiles?.full_name || "Unknown",
-    email: e.profiles?.email || "",
+    studentId: e.student_id,
+    fullName: e.students?.profiles?.full_name || "Unknown",
+    email: e.students?.profiles?.email || "",
+    enrollmentNumber: e.students?.enrollment_number || "",
   }));
   const attendance = attendanceRes.data || [];
   const marks = marksRes.data || [];
-
-  // attendance/marks.student_id reference students(id); enrollments'
-  // student_id references profiles(id) — same bridge used on the dashboard.
-  const profileIds = enrolledStudents.map((s) => s.profileId);
-  const { data: studentRows } = profileIds.length
-    ? await supabase.from("students").select("id, user_id").in("user_id", profileIds)
-    : { data: [] };
-  const profileIdToStudentDbId = new Map((studentRows || []).map((s) => [s.user_id, s.id]));
 
   const totalAttendanceRows = attendance.length;
   const presentOrLate = attendance.filter((a) => a.status === "present" || a.status === "late").length;
@@ -65,11 +83,10 @@ export default async function TeacherCoursePulse({ params }: { params: Promise<{
   const avgMarksPct = marks.length > 0 ? Math.round((totalMarksPct / marks.length) * 10) / 10 : null;
 
   const studentsWithRisk = enrolledStudents.map((s) => {
-    const studentDbId = profileIdToStudentDbId.get(s.profileId);
     const risk = computeSubjectRisk({
-      course: { id: courseId },
-      attendanceRows: studentDbId ? attendance.filter((a) => a.student_id === studentDbId) : [],
-      marksRows: studentDbId ? marks.filter((m) => m.student_id === studentDbId) : [],
+      offering: { id: offeringId },
+      attendanceRows: attendance.filter((a) => a.student_id === s.studentId),
+      marksRows: marks.filter((m) => m.student_id === s.studentId),
     });
     return { ...s, risk };
   });
@@ -78,17 +95,22 @@ export default async function TeacherCoursePulse({ params }: { params: Promise<{
   return (
     <div className="space-y-lg animate-[fade-in_0.3s_ease-out]">
       <div>
-        <Link href="/teacher/courses" className="text-xs font-semibold text-secondary hover:underline">← My Courses</Link>
-        <h1 className="text-2xl font-extrabold text-on-surface tracking-tight mt-xs">{course.code} — {course.name}</h1>
+        <Link href="/teacher/courses" className="text-xs font-semibold text-secondary hover:underline">← My Classes</Link>
+        <h1 className="text-2xl font-extrabold text-on-surface tracking-tight mt-xs">{course?.code} — {course?.name}</h1>
+        {/* The delivery context spelled out: which section, which term, which
+            department. The course code alone does not identify this class. */}
         <p className="text-sm text-on-surface-variant mt-xs">
-          {course.departments?.name || "—"} • {course.credits} credits • Semester {course.semester}
+          {offering.sections?.name ? `Section ${offering.sections.name}` : "Section —"}
+          {offering.semesters?.name ? ` • ${offering.semesters.name}` : ""}
+          {` • ${course?.departments?.name || "—"}`}
+          {` • ${course?.credits ?? "—"} credits`}
         </p>
       </div>
 
       <div className="flex gap-sm">
-        <Link href={`/teacher/attendance?course=${courseId}`} className="text-xs font-semibold text-secondary hover:underline">Mark Attendance →</Link>
+        <Link href={`/teacher/attendance?offering=${offeringId}`} className="text-xs font-semibold text-secondary hover:underline">Mark Attendance →</Link>
         <span className="text-outline">·</span>
-        <Link href={`/teacher/grading?course=${courseId}`} className="text-xs font-semibold text-secondary hover:underline">Enter Marks →</Link>
+        <Link href={`/teacher/grading?offering=${offeringId}`} className="text-xs font-semibold text-secondary hover:underline">Enter Marks →</Link>
       </div>
 
       {/* Class Pulse stats */}
@@ -127,7 +149,7 @@ export default async function TeacherCoursePulse({ params }: { params: Promise<{
             <div className="p-xl text-center text-sm text-outline">No risk signals for this class right now.</div>
           ) : (
             needsAttention.map((s) => (
-              <div key={s.profileId} className="px-lg py-md">
+              <div key={s.studentId} className="px-lg py-md">
                 <div className="flex items-center gap-sm mb-xs">
                   <StatusBadge status={s.risk.level} />
                   <span className="text-sm font-semibold text-on-surface">{s.fullName}</span>
@@ -149,7 +171,7 @@ export default async function TeacherCoursePulse({ params }: { params: Promise<{
         </div>
         <div className="divide-y divide-outline-variant">
           {studentsWithRisk.map((s) => (
-            <div key={s.profileId} className="flex items-center justify-between px-lg py-md">
+            <div key={s.studentId} className="flex items-center justify-between px-lg py-md">
               <div>
                 <div className="text-sm font-medium text-on-surface">{s.fullName}</div>
                 <div className="text-xs text-outline">{s.email}</div>

@@ -8,13 +8,24 @@ export default async function TeacherTimetable() {
 
   const { data: profile } = await supabase.from("profiles").select("college_id").eq("id", user.id).single();
 
-  const { data: slots } = await supabase
-    .from("timetable_slots")
-    .select("*, courses(name, code)")
-    .eq("college_id", profile?.college_id || "")
-    .eq("instructor_id", user.id)
-    .order("day_of_week")
-    .order("start_time");
+  // timetable_slots has no instructor_id after 047 — a slot belongs to an
+  // offering, and the offering names the instructor. Read-only page: this
+  // phase deliberately adds no timetable WRITE policy.
+  const { data: myOfferings } = await supabase
+    .from("course_offerings")
+    .select("id")
+    .eq("instructor_id", user.id);
+  const myOfferingIds = ((myOfferings as any[]) || []).map((o) => o.id);
+
+  const { data: slots } = myOfferingIds.length
+    ? await supabase
+        .from("timetable_slots")
+        .select("*, course_offerings:offering_id(courses:course_id(name, code), sections:section_id(name))")
+        .eq("college_id", profile?.college_id || "")
+        .in("offering_id", myOfferingIds)
+        .order("day_of_week")
+        .order("start_time")
+    : { data: [] };
 
   const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
   const todayIndex = new Date().getDay();
@@ -54,7 +65,12 @@ export default async function TeacherTimetable() {
                           isToday ? "bg-surface-container-lowest border-secondary/30 shadow-sm" : "bg-surface-container-low border-outline-variant"
                         }`}
                       >
-                        <div className="text-sm font-semibold text-on-surface">📚 {slot.courses?.code} — {slot.courses?.name}</div>
+                        <div className="text-sm font-semibold text-on-surface">
+                          📚 {slot.course_offerings?.courses?.code} — {slot.course_offerings?.courses?.name}
+                          {slot.course_offerings?.sections?.name && (
+                            <span className="text-outline font-medium"> · {slot.course_offerings.sections.name}</span>
+                          )}
+                        </div>
                         <div className="text-xs text-outline mt-xs">
                           🕐 {slot.start_time?.slice(0, 5)} – {slot.end_time?.slice(0, 5)}
                           {slot.room && ` • 📍 Room ${slot.room}`}

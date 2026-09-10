@@ -10,7 +10,14 @@ import type { Database } from "@/types/database";
 type CourseEnrollmentRow = Database["public"]["Tables"]["course_enrollments"]["Row"];
 type CourseRow = Database["public"]["Tables"]["courses"]["Row"];
 type AttendanceRow = Database["public"]["Tables"]["attendance"]["Row"];
-type EnrollmentWithCourse = CourseEnrollmentRow & { courses: CourseRow | null };
+type EnrollmentWithOffering = CourseEnrollmentRow & {
+  course_offerings: {
+    id: string;
+    courses: CourseRow | null;
+    sections: { name: string } | null;
+    semesters: { name: string } | null;
+  } | null;
+};
 
 export default async function StudentDashboard() {
   const supabase = await createClient();
@@ -39,7 +46,7 @@ export default async function StudentDashboard() {
   const [attendanceRes, marksRes, enrollmentsRes, feesRes, notificationsRes] = await Promise.all([
     supabase
       .from("attendance")
-      .select("*, courses(name, code)")
+      .select("*, course_offerings:offering_id(courses:course_id(name, code), sections:section_id(name))")
       .eq("student_id", student?.id || "")
       .order("date", { ascending: false }),
     supabase
@@ -48,8 +55,12 @@ export default async function StudentDashboard() {
       .eq("student_id", student?.id || ""),
     supabase
       .from("course_enrollments")
-      .select("*, courses(id, name, code, credits, type)")
-      .eq("student_id", user.id),
+      .select(
+        "*, course_offerings:offering_id(id, courses:course_id(id, name, code, credits, type), sections:section_id(name), semesters:semester_id(name))"
+      )
+      // students(id), not the profile id — 047 repointed this column, and
+      // comparing it to user.id silently matched nothing.
+      .eq("student_id", student?.id || ""),
     supabase
       .from("fees")
       .select("*")
@@ -67,7 +78,7 @@ export default async function StudentDashboard() {
 
   const attendance = (attendanceRes.data || []) as AttendanceRow[];
   const marks = marksRes.data || [];
-  const enrollments = (enrollmentsRes.data || []) as EnrollmentWithCourse[];
+  const enrollments = (enrollmentsRes.data || []) as unknown as EnrollmentWithOffering[];
   const fees = feesRes.data || [];
   const notifications = notificationsRes.data || [];
 

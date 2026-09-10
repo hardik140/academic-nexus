@@ -9,7 +9,20 @@ const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Frid
 // Relationships, so supabase-js can't infer this shape (same workaround as
 // placements/actions.ts's DriveWithCompany).
 type TimetableSlotRow = Database["public"]["Tables"]["timetable_slots"]["Row"];
-type SlotWithCourse = TimetableSlotRow & { courses: { name: string; code: string } | null };
+type SlotWithCourse = TimetableSlotRow & {
+  course_offerings: {
+    id: string;
+    courses: { name: string; code: string } | null;
+    sections: { name: string } | null;
+  } | null;
+};
+
+type OfferingSummary = {
+  id: string;
+  status: string;
+  courses: { id: string; name: string; code: string } | null;
+  sections: { name: string } | null;
+};
 
 export default async function TeacherDashboard() {
   const supabase = await createClient();
@@ -25,33 +38,41 @@ export default async function TeacherDashboard() {
     .eq("id", user.id)
     .single();
 
-  const { data: coursesData } = await supabase
-    .from("courses")
-    .select("*")
+  // The teacher's DELIVERIES this term, not the catalog rows they own. Two
+  // sections of one course are two entries here, each with its own roll,
+  // register and marks sheet — which is the whole point of the offering
+  // model and was inexpressible before it.
+  const { data: offeringsData } = await supabase
+    .from("course_offerings")
+    .select("id, status, courses:course_id(id, name, code), sections:section_id(name)")
     .eq("instructor_id", user.id);
-  const courses = coursesData || [];
-  const courseIds = courses.map((c) => c.id);
+  const offerings = ((offeringsData as unknown as OfferingSummary[]) || []).filter(
+    (o) => o.status !== "cancelled"
+  );
+  const offeringIds = offerings.map((o) => o.id);
 
   const todayIndex = new Date().getDay();
   const today = new Date().toISOString().split("T")[0];
 
   const [enrollmentsRes, attendanceRes, marksRes, todaySlotsRes, leaveRes, correctionsRes, notificationsRes] =
     await Promise.all([
-      courseIds.length
-        ? supabase.from("course_enrollments").select("student_id, course_id").in("course_id", courseIds).eq("status", "enrolled")
+      offeringIds.length
+        ? supabase.from("course_enrollments").select("student_id, offering_id").in("offering_id", offeringIds).eq("status", "enrolled")
         : Promise.resolve({ data: [] }),
-      courseIds.length
-        ? supabase.from("attendance").select("course_id, date, status").in("course_id", courseIds)
+      offeringIds.length
+        ? supabase.from("attendance").select("offering_id, date, status").in("offering_id", offeringIds)
         : Promise.resolve({ data: [] }),
-      courseIds.length
-        ? supabase.from("marks").select("course_id, student_id, exam_type").in("course_id", courseIds)
+      offeringIds.length
+        ? supabase.from("marks").select("offering_id, student_id, exam_type").in("offering_id", offeringIds)
         : Promise.resolve({ data: [] }),
-      supabase
-        .from("timetable_slots")
-        .select("*, courses(name, code)")
-        .eq("instructor_id", user.id)
-        .eq("day_of_week", todayIndex)
-        .order("start_time"),
+      offeringIds.length
+        ? supabase
+            .from("timetable_slots")
+            .select("*, course_offerings:offering_id(id, courses:course_id(name, code), sections:section_id(name))")
+            .in("offering_id", offeringIds)
+            .eq("day_of_week", todayIndex)
+            .order("start_time")
+        : Promise.resolve({ data: [] }),
       supabase.from("leave_requests").select("id").eq("requested_by", user.id).eq("status", "pending"),
       supabase.from("attendance_correction_requests").select("id").eq("submitted_by", user.id).eq("status", "pending"),
       supabase
@@ -71,17 +92,13 @@ export default async function TeacherDashboard() {
   const pendingCorrectionCount = correctionsRes.data?.length || 0;
   const notifications = notificationsRes.data || [];
 
-  // course_enrollments.student_id references profiles(id), marks.student_id
-  // references students(id) — bridge the two id spaces once here (same
-  // quirk documented in migration 002/032, and the same fix already applied
-  // to teacher/attendance/page.tsx's own student-list loading).
-  const enrolledProfileIds = Array.from(new Set(enrollments.map((e) => e.student_id)));
-  const { data: studentRows } = enrolledProfileIds.length
-    ? await supabase.from("students").select("id, user_id").in("user_id", enrolledProfileIds)
-    : { data: [] };
-  const profileIdToStudentDbId = new Map((studentRows || []).map((s) => [s.user_id, s.id]));
+  // No id-space bridge any more: course_enrollments.student_id and
+  // marks.student_id both reference students(id) after 047, so these
+  // compare directly. The extra round trip this page used to make, and the
+  // class of silent wrong-join bug it existed to work around, are both gone.
+  const enrolledStudentIds = Array.from(new Set(enrollments.map((e) => e.student_id)));
 
-  const totalStudents = enrolledProfileIds.length;
+  const totalStudents = enrolledStudentIds.length;
   const totalAttendanceRows = attendance.length;
   const presentOrLate = attendance.filter((a) => a.status === "present" || a.status === "late").length;
   const avgAttendancePct = totalAttendanceRows > 0 ? Math.round((presentOrLate / totalAttendanceRows) * 1000) / 10 : null;
@@ -89,47 +106,50 @@ export default async function TeacherDashboard() {
   const actions: PriorityAction[] = [];
 
   // Today's classes with no attendance submitted yet for today.
-  const attendanceTodayCourseIds = new Set(attendance.filter((a) => a.date === today).map((a) => a.course_id));
+  const attendanceTodayOfferingIds = new Set(
+    attendance.filter((a) => a.date === today).map((a) => a.offering_id)
+  );
   for (const slot of todaySlots) {
-    if (!attendanceTodayCourseIds.has(slot.course_id)) {
-      const course = slot.courses;
-      actions.push({
-        source: "Attendance",
-        title: `Attendance not submitted — ${course?.code || "class"} at ${slot.start_time?.slice(0, 5)}`,
-        priority: "high",
-        href: `/teacher/attendance?course=${slot.course_id}`,
-      });
-    }
+    if (!slot.course_offerings || attendanceTodayOfferingIds.has(slot.course_offerings.id)) continue;
+    const course = slot.course_offerings.courses;
+    const section = slot.course_offerings.sections?.name;
+    actions.push({
+      source: "Attendance",
+      title: `Attendance not submitted — ${course?.code || "class"}${section ? ` (${section})` : ""} at ${slot.start_time?.slice(0, 5)}`,
+      priority: "high",
+      href: `/teacher/attendance?offering=${slot.course_offerings.id}`,
+    });
   }
 
   // Marks entry started-but-incomplete per course/exam type — only flags
   // exam types the teacher has actually begun entering, never one never
   // started, so this can't be misread as "grade everything right now."
-  const enrolledStudentDbIdsByCourse = new Map<string, Set<string>>();
+  const enrolledByOffering = new Map<string, Set<string>>();
   for (const e of enrollments) {
-    const studentDbId = profileIdToStudentDbId.get(e.student_id);
-    if (!studentDbId) continue;
-    if (!enrolledStudentDbIdsByCourse.has(e.course_id)) enrolledStudentDbIdsByCourse.set(e.course_id, new Set());
-    enrolledStudentDbIdsByCourse.get(e.course_id)!.add(studentDbId);
+    if (!enrolledByOffering.has(e.offering_id)) enrolledByOffering.set(e.offering_id, new Set());
+    enrolledByOffering.get(e.offering_id)!.add(e.student_id);
   }
-  const markedByCoursExam = new Map<string, Set<string>>();
+  const markedByOfferingExam = new Map<string, Set<string>>();
   for (const m of marks) {
-    const key = `${m.course_id}::${m.exam_type}`;
-    if (!markedByCoursExam.has(key)) markedByCoursExam.set(key, new Set());
-    markedByCoursExam.get(key)!.add(m.student_id);
+    const key = `${m.offering_id}::${m.exam_type}`;
+    if (!markedByOfferingExam.has(key)) markedByOfferingExam.set(key, new Set());
+    markedByOfferingExam.get(key)!.add(m.student_id);
   }
-  for (const [key, markedStudentIds] of markedByCoursExam) {
-    const [courseId, examType] = key.split("::");
-    const enrolledSet = enrolledStudentDbIdsByCourse.get(courseId);
+  for (const [key, markedStudentIds] of markedByOfferingExam) {
+    const [offeringId, examType] = key.split("::");
+    const enrolledSet = enrolledByOffering.get(offeringId);
     if (!enrolledSet) continue;
     const missing = enrolledSet.size - [...enrolledSet].filter((id) => markedStudentIds.has(id)).length;
     if (missing > 0) {
-      const course = courses.find((c) => c.id === courseId);
+      const offering = offerings.find((o) => o.id === offeringId);
+      const label = offering?.sections?.name
+        ? `${offering.courses?.code || "a course"} (${offering.sections.name})`
+        : offering?.courses?.code || "a course";
       actions.push({
         source: "Marks",
-        title: `${missing} of ${enrolledSet.size} students missing ${examType.replace(/_/g, " ")} marks in ${course?.code || "a course"}`,
+        title: `${missing} of ${enrolledSet.size} students missing ${examType.replace(/_/g, " ")} marks in ${label}`,
         priority: "medium",
-        href: `/teacher/grading?course=${courseId}`,
+        href: `/teacher/grading?offering=${offeringId}`,
       });
     }
   }
@@ -157,7 +177,7 @@ export default async function TeacherDashboard() {
   return (
     <TeacherDashboardClient
       profile={profile}
-      courses={courses}
+      courses={offerings}
       todaySlots={todaySlots}
       totalStudents={totalStudents}
       avgAttendancePct={avgAttendancePct}

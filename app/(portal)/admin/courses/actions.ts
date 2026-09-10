@@ -29,7 +29,9 @@ export async function listCourses(q: DataTableQuery) {
   return getCached(cacheKey, 30, async () => {
     let dbQuery = supabase
       .from("courses")
-      .select("*, departments:department_id(name), profiles:instructor_id(full_name)", { count: "exact" });
+      // No instructor join: courses.instructor_id is deprecated (047) and a
+      // course is taught by whoever holds each of its offerings.
+      .select("*, departments:department_id(name)", { count: "exact" });
 
     if (q.search) dbQuery = dbQuery.ilike("name", `%${q.search}%`);
     dbQuery = dbQuery.order(column, { ascending });

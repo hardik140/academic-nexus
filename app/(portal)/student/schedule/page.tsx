@@ -7,17 +7,23 @@ export default async function StudentSchedule() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  // Fetch enrolled courses with timetable
+  const { data: student } = await supabase
+    .from("students")
+    .select("id")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
   const { data: enrollments } = await supabase
     .from("course_enrollments")
-    .select("*, courses(id, name, code, credits, instructor_id, profiles:instructor_id(full_name))")
-    .eq("student_id", user.id)
+    .select("*, course_offerings:offering_id(id, courses:course_id(id, name, code, credits, type, department_id, departments:department_id(name)), sections:section_id(name), semesters:semester_id(name), profiles:instructor_id(full_name))")
+    .eq("student_id", student?.id || "")
     .eq("status", "enrolled");
 
-  // Fetch timetable slots
+  // Sessions carry their offering, which is what names the course, the
+  // section and the teacher — timetable_slots holds none of those now.
   const { data: slots } = await supabase
     .from("timetable_slots")
-    .select("*, courses(name, code)")
+    .select("*, course_offerings:offering_id(id, courses:course_id(name, code), sections:section_id(name))")
     .eq("college_id", (await supabase.from("profiles").select("college_id").eq("id", user.id).single()).data?.college_id || "")
     .order("day_of_week")
     .order("start_time");
@@ -84,7 +90,8 @@ export default async function StudentSchedule() {
                           }`}
                         >
                           <div className="text-sm font-semibold text-on-surface">
-                            {slot.courses?.code} — {slot.courses?.name}
+                            {slot.course_offerings?.courses?.code} — {slot.course_offerings?.courses?.name}
+                            {slot.course_offerings?.sections?.name ? ` · ${slot.course_offerings.sections.name}` : ""}
                           </div>
                           <div className="text-xs text-outline mt-xs">
                             🕐 {slot.start_time?.slice(0, 5)} – {slot.end_time?.slice(0, 5)}
@@ -127,10 +134,15 @@ export default async function StudentSchedule() {
             <tbody className="divide-y divide-outline-variant">
               {enrollments && enrollments.length > 0 ? enrollments.map((e: any) => (
                 <tr key={e.id} className="hover:bg-surface-container-low transition-colors">
-                  <td className="px-lg py-md font-mono text-secondary font-semibold">{e.courses?.code}</td>
-                  <td className="px-lg py-md font-medium text-on-surface">{e.courses?.name}</td>
-                  <td className="px-lg py-md text-on-surface-variant">{e.courses?.credits}</td>
-                  <td className="px-lg py-md text-on-surface-variant">{(e.courses?.profiles as any)?.full_name || "TBA"}</td>
+                  <td className="px-lg py-md font-mono text-secondary font-semibold">{e.course_offerings?.courses?.code}</td>
+                  <td className="px-lg py-md font-medium text-on-surface">
+                    {e.course_offerings?.courses?.name}
+                    {e.course_offerings?.sections?.name && (
+                      <span className="text-outline"> · {e.course_offerings.sections.name}</span>
+                    )}
+                  </td>
+                  <td className="px-lg py-md text-on-surface-variant">{e.course_offerings?.courses?.credits}</td>
+                  <td className="px-lg py-md text-on-surface-variant">{(e.course_offerings?.profiles as any)?.full_name || "TBA"}</td>
                   <td className="px-lg py-md"><StatusBadge status={e.status} /></td>
                 </tr>
               )) : (

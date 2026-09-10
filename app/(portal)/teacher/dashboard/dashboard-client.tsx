@@ -56,7 +56,7 @@ export function TeacherDashboardClient({
         <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-lg shadow-sm">
           <div className="text-xs font-semibold text-outline uppercase tracking-wider mb-sm">Total Students</div>
           <div className="text-3xl font-extrabold text-on-surface">{totalStudents}</div>
-          <div className="text-[11px] text-outline mt-xs">across all courses</div>
+          <div className="text-[11px] text-outline mt-xs">across all classes</div>
         </div>
         <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-lg shadow-sm">
           <div className="text-xs font-semibold text-outline uppercase tracking-wider mb-sm">Avg Attendance</div>
@@ -103,13 +103,18 @@ export function TeacherDashboardClient({
             {todaySlots.map((slot: any) => (
               <div key={slot.id} className="flex items-center justify-between px-lg py-md">
                 <div>
-                  <div className="text-sm font-semibold text-on-surface">📚 {slot.courses?.code} — {slot.courses?.name}</div>
+                  <div className="text-sm font-semibold text-on-surface">
+                    📚 {slot.course_offerings?.courses?.code} — {slot.course_offerings?.courses?.name}
+                    {slot.course_offerings?.sections?.name && (
+                      <span className="text-outline font-medium"> · {slot.course_offerings.sections.name}</span>
+                    )}
+                  </div>
                   <div className="text-xs text-outline mt-xs">
                     🕐 {slot.start_time?.slice(0, 5)} – {slot.end_time?.slice(0, 5)}
                     {slot.room && ` • 📍 Room ${slot.room}`}
                   </div>
                 </div>
-                <Link href={`/teacher/attendance?course=${slot.course_id}`} className="text-xs font-semibold text-secondary hover:underline">
+                <Link href={`/teacher/attendance?offering=${slot.course_offerings?.id}`} className="text-xs font-semibold text-secondary hover:underline">
                   Mark Attendance →
                 </Link>
               </div>
@@ -121,29 +126,32 @@ export function TeacherDashboardClient({
       {/* Courses Grid */}
       <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-sm">
         <div className="px-lg py-md border-b border-outline-variant flex items-center justify-between">
-          <h2 className="text-sm font-bold text-on-surface">My Courses</h2>
+          <h2 className="text-sm font-bold text-on-surface">My Classes</h2>
           <Link href="/teacher/courses" className="text-xs font-medium text-secondary hover:underline">
             View All →
           </Link>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-md p-lg">
           {courses.length > 0 ? (
-            courses.map((course: any) => (
+            // One card per DELIVERY. Two sections of the same course are two
+            // cards, distinguished by section — under the old model they
+            // were one card and one of the two registers was unreachable.
+            courses.map((offering: any) => (
               <Link
-                key={course.id}
-                href={`/teacher/courses/${course.id}`}
+                key={offering.id}
+                href={`/teacher/courses/${offering.id}`}
                 className="bg-surface-container-low border border-outline-variant rounded-xl p-md hover:shadow-md transition-shadow block"
               >
                 <div className="flex items-center gap-sm mb-sm">
                   <span className="text-xl">📚</span>
                   <div>
-                    <div className="text-sm font-bold text-on-surface">{course.code}</div>
-                    <div className="text-xs text-outline">{course.name}</div>
+                    <div className="text-sm font-bold text-on-surface">{offering.courses?.code}</div>
+                    <div className="text-xs text-outline">{offering.courses?.name}</div>
                   </div>
                 </div>
                 <div className="flex items-center justify-between mt-md pt-sm border-t border-outline-variant">
                   <span className="text-xs text-outline">
-                    {course.credits} credits • Sem {course.semester}
+                    {offering.sections?.name ? `Section ${offering.sections.name}` : "Section —"}
                   </span>
                   <span className="text-xs font-semibold text-secondary">Class Pulse →</span>
                 </div>
@@ -151,7 +159,7 @@ export function TeacherDashboardClient({
             ))
           ) : (
             <div className="col-span-full p-xl text-center text-sm text-outline">
-              No courses assigned yet.
+              No classes assigned yet.
             </div>
           )}
         </div>

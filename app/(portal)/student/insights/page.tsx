@@ -11,7 +11,14 @@ import type { Database } from "@/types/database";
 type CourseRow = Database["public"]["Tables"]["courses"]["Row"];
 type CourseEnrollmentRow = Database["public"]["Tables"]["course_enrollments"]["Row"];
 type AttendanceRow = Database["public"]["Tables"]["attendance"]["Row"];
-type EnrollmentWithCourse = CourseEnrollmentRow & { courses: CourseRow | null };
+type EnrollmentWithOffering = CourseEnrollmentRow & {
+  course_offerings: {
+    id: string;
+    courses: CourseRow | null;
+    sections: { name: string } | null;
+    semesters: { name: string } | null;
+  } | null;
+};
 
 export default async function StudentInsights() {
   const supabase = await createClient();
@@ -30,7 +37,7 @@ export default async function StudentInsights() {
   const [attendanceRes, marksRes, enrollmentsRes] = await Promise.all([
     supabase
       .from("attendance")
-      .select("*, courses(name, code)")
+      .select("*")
       .eq("student_id", student?.id || ""),
     supabase
       .from("marks")
@@ -38,36 +45,54 @@ export default async function StudentInsights() {
       .eq("student_id", student?.id || ""),
     supabase
       .from("course_enrollments")
-      .select("*, courses(id, name, code, credits, type)")
-      .eq("student_id", user.id),
+      .select(
+        "*, course_offerings:offering_id(id, courses:course_id(id, name, code, credits, type), sections:section_id(name), semesters:semester_id(name))"
+      )
+      // students(id), not the profile id. course_enrollments.student_id was
+      // repointed by 047; comparing it to user.id used to match nothing and
+      // returned an empty insights page rather than an error.
+      .eq("student_id", student?.id || ""),
   ]);
 
   const attendance = (attendanceRes.data || []) as AttendanceRow[];
   const marks = marksRes.data || [];
-  const enrollments = (enrollmentsRes.data || []) as EnrollmentWithCourse[];
+  const enrollments = (enrollmentsRes.data || []) as unknown as EnrollmentWithOffering[];
 
   const subjectRisks = buildSubjectRisks({ enrollments, attendance, marks });
 
-  const coursesById = new Map<string, CourseRow>();
+  // Keyed by OFFERING: a retake is a second enrollment on a second offering
+  // of the same course, and each attempt carries its own credits outcome.
+  const coursesByOfferingId = new Map<string, CourseRow>();
   for (const e of enrollments) {
-    if (e.courses) coursesById.set(e.courses.id, e.courses);
+    const course = e.course_offerings?.courses;
+    if (course) coursesByOfferingId.set(e.offering_id, course);
   }
   const degreeProgress = computeDegreeProgress({
     enrollments,
-    coursesById,
+    coursesByOfferingId,
     creditsCompleted: student?.credits_completed || 0,
     creditsRequired: student?.credits_required || 160,
   });
 
-  // Per-course present/total for the Attendance Forecast tab's course
-  // selector, plus an "All courses" aggregate as the default.
-  const attendanceByCourse = Array.from(coursesById.values())
-    .map((course) => {
-      const rows = attendance.filter((a) => a.course_id === course.id);
+  // Per-CLASS present/total for the Attendance Forecast selector. Labelled
+  // with the section so two sections of one course stay distinguishable.
+  const attendanceByCourse = enrollments
+    .map((e) => {
+      const course = e.course_offerings?.courses;
+      if (!course) return null;
+      const rows = attendance.filter((a) => a.offering_id === e.offering_id);
+      const section = e.course_offerings?.sections?.name;
       const present = rows.filter((a) => a.status === "present" || a.status === "late").length;
-      return { courseId: course.id, courseName: course.name, present, total: rows.length };
+      return {
+        courseId: e.offering_id,
+        courseName: section ? `${course.name} (${section})` : course.name,
+        present,
+        total: rows.length,
+      };
     })
-    .filter((c) => c.total > 0);
+    .filter((c): c is { courseId: string; courseName: string; present: number; total: number } =>
+      c !== null && c.total > 0
+    );
   const overallAttendance = {
     present: attendance.filter((a) => a.status === "present" || a.status === "late").length,
     total: attendance.length,

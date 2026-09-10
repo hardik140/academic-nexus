@@ -12,16 +12,20 @@ const CORRECTABLE_STATUSES: AttendanceStatus[] = ["present", "absent", "late", "
 
 export default function TeacherAttendance() {
   const supabase = createClient();
-  const [courses, setCourses] = useState<any[]>([]);
-  // Course ids this teacher covers as a HOD-assigned substitute, not as the
-  // course's own instructor — used only to label the dropdown option.
-  const [substituteCourseIds, setSubstituteCourseIds] = useState<Set<string>>(new Set());
-  const [selectedCourse, setSelectedCourse] = useState<string>("");
+  // Offerings, not courses: a teacher can hold two sections of one course,
+  // and the register belongs to the section — see lib/offerings.ts.
+  const [offerings, setOfferings] = useState<any[]>([]);
+  // Offering ids this teacher covers as a HOD-assigned substitute rather
+  // than as the assigned instructor — used only to label the option.
+  const [substituteOfferingIds, setSubstituteOfferingIds] = useState<Set<string>>(new Set());
+  const [selectedOffering, setSelectedOffering] = useState<string>("");
   const [students, setStudents] = useState<any[]>([]);
+  // Keyed by students.id throughout. course_enrollments.student_id now
+  // references students(id) directly (047), so the profiles->students bridge
+  // this page used to maintain in three places is gone — along with the bug
+  // where it wrote the map under one id space and read it back under the
+  // other, silently re-defaulting every student to "present".
   const [attendance, setAttendance] = useState<Record<string, string>>({});
-  // Attendance row id per student (profiles id) — only present once a row
-  // has actually been saved to the DB; that id is what a correction request
-  // must reference, distinct from the in-progress toggle state above.
   const [attendanceRecordIds, setAttendanceRecordIds] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -35,29 +39,48 @@ export default function TeacherAttendance() {
   const [correctionError, setCorrectionError] = useState<string | null>(null);
 
   useEffect(() => {
-    loadCourses();
+    loadOfferings();
     loadMyCorrections();
   }, []);
 
-  const loadCourses = async () => {
+  const OFFERING_LABEL_COLS =
+    "id, status, courses:course_id(id, name, code), sections:section_id(name), semesters:semester_id(name)";
+
+  const loadOfferings = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    const [ownCoursesRes, substitutionsRes] = await Promise.all([
-      supabase.from("courses").select("id, name, code").eq("instructor_id", user.id),
+    const [ownRes, substitutionsRes] = await Promise.all([
+      supabase.from("course_offerings").select(OFFERING_LABEL_COLS).eq("instructor_id", user.id),
       supabase
         .from("substitution_assignments")
-        .select("courses:course_id(id, name, code)")
+        .select(`course_offerings:offering_id(${OFFERING_LABEL_COLS})`)
         .eq("substitute_teacher_id", user.id)
         .eq("status", "assigned"),
     ]);
 
-    const ownCourses = ownCoursesRes.data || [];
-    const substituteCourses = (substitutionsRes.data || [])
-      .map((s: any) => s.courses)
-      .filter((c: any) => c && !ownCourses.some((oc) => oc.id === c.id));
+    // A cancelled offering has no class to mark; the server refuses the write
+    // anyway, so keeping it in the picker would only produce a dead option.
+    const own = ((ownRes.data as any[]) || []).filter((o) => o.status !== "cancelled");
+    const covered = ((substitutionsRes.data as any[]) || [])
+      .map((s) => s.course_offerings)
+      .filter((o: any) => o && o.status !== "cancelled" && !own.some((mine) => mine.id === o.id));
 
-    setSubstituteCourseIds(new Set(substituteCourses.map((c: any) => c.id)));
-    setCourses([...ownCourses, ...substituteCourses]);
+    setSubstituteOfferingIds(new Set(covered.map((o: any) => o.id)));
+    setOfferings([...own, ...covered]);
+  };
+
+  /**
+   * "Data Structures · CSE-A · Fall 2026" rather than a bare course name.
+   * The teacher may hold two sections of the same course, so the course name
+   * alone cannot identify which register is open.
+   */
+  const offeringLabel = (o: any) => {
+    const parts = [
+      `${o.courses?.code || ""} — ${o.courses?.name || "Unknown course"}`.trim(),
+      o.sections?.name ? `Section ${o.sections.name}` : null,
+      o.semesters?.name || null,
+    ].filter(Boolean);
+    return parts.join(" · ");
   };
 
   const loadMyCorrections = async () => {
@@ -65,49 +88,42 @@ export default function TeacherAttendance() {
     setMyCorrections(data);
   };
 
-  const loadStudents = async (courseId: string, forDate: string = date) => {
-    setSelectedCourse(courseId);
+  const loadStudents = async (offeringId: string, forDate: string = date) => {
+    setSelectedOffering(offeringId);
+    if (!offeringId) {
+      setStudents([]);
+      setAttendance({});
+      setAttendanceRecordIds({});
+      return;
+    }
+
+    // Enrollment is per OFFERING, so this is the roll for this section in
+    // this semester — not everyone who has ever taken the course.
     const { data: enrollments } = await supabase
       .from("course_enrollments")
-      .select("student_id, profiles:student_id(id, full_name, email)")
-      .eq("course_id", courseId)
+      .select("student_id, students:student_id(id, enrollment_number, profiles:user_id(full_name, email))")
+      .eq("offering_id", offeringId)
       .eq("status", "enrolled");
 
-    const studentList = (enrollments || []).map((e: any) => ({
+    const studentList = ((enrollments as any[]) || []).map((e) => ({
       id: e.student_id,
-      full_name: (e.profiles as any)?.full_name || "Unknown",
-      email: (e.profiles as any)?.email || "",
+      full_name: e.students?.profiles?.full_name || "Unknown",
+      email: e.students?.profiles?.email || "",
+      enrollment_number: e.students?.enrollment_number || "",
     }));
 
     setStudents(studentList);
 
-    // attendance.student_id references students(id), not profiles(id) —
-    // bridge through the students table (same lookup handleSaveAttendance
-    // below needs) so existing records line up with studentList by the
-    // right key. Fixes a pre-existing mismatch: this used to index the
-    // loaded attendance map by students.id while reading it back by
-    // profiles.id, so a class's already-saved attendance never actually
-    // showed as saved — it silently redefaulted every student to "present".
-    const { data: studentRecords } = await supabase
-      .from("students")
-      .select("id, user_id")
-      .in("user_id", studentList.map((s: any) => s.id));
-    const profileIdToStudentDbId: Record<string, string> = {};
-    (studentRecords || []).forEach((r: any) => {
-      profileIdToStudentDbId[r.user_id] = r.id;
-    });
-
     const { data: existing } = await supabase
       .from("attendance")
       .select("id, student_id, status")
-      .eq("course_id", courseId)
+      .eq("offering_id", offeringId)
       .eq("date", forDate);
 
     const att: Record<string, string> = {};
     const recIds: Record<string, string> = {};
-    studentList.forEach((s: any) => {
-      const studentDbId = profileIdToStudentDbId[s.id];
-      const record = (existing || []).find((a: any) => a.student_id === studentDbId);
+    studentList.forEach((s) => {
+      const record = ((existing as any[]) || []).find((a) => a.student_id === s.id);
       att[s.id] = record?.status || "present";
       if (record) recIds[s.id] = record.id;
     });
@@ -126,22 +142,17 @@ export default function TeacherAttendance() {
     setLoading(true);
     setError(null);
     try {
-      // Get student records (need student.id, not user_id)
-      const studentIds = Object.keys(attendance);
-      const { data: studentRecords } = await supabase
-        .from("students")
-        .select("id, user_id")
-        .in("user_id", studentIds);
-
-      const entries = (studentRecords || []).map((s: any) => ({
+      // The map is already keyed by students.id, which is what the server
+      // expects — no id-space translation left to get wrong.
+      const entries = students.map((s) => ({
         studentDbId: s.id,
-        status: (attendance[s.user_id] || "present") as AttendanceStatus,
+        status: (attendance[s.id] || "present") as AttendanceStatus,
       }));
 
-      await saveAttendance({ courseId: selectedCourse, date, entries });
+      await saveAttendance({ offeringId: selectedOffering, date, entries });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
-      await loadStudents(selectedCourse);
+      await loadStudents(selectedOffering);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to save attendance.");
     } finally {
@@ -192,7 +203,7 @@ export default function TeacherAttendance() {
     <div className="space-y-lg animate-[fade-in_0.3s_ease-out]">
       <div>
         <h1 className="text-2xl font-extrabold text-on-surface tracking-tight">Mark Attendance</h1>
-        <p className="text-sm text-on-surface-variant mt-xs">Select a course and mark student attendance</p>
+        <p className="text-sm text-on-surface-variant mt-xs">Select a class and mark student attendance</p>
       </div>
 
       {saved && (
@@ -206,7 +217,7 @@ export default function TeacherAttendance() {
       )}
 
       {/* Live Counts */}
-      {selectedCourse && students.length > 0 && (
+      {selectedOffering && students.length > 0 && (
         <div className="grid grid-cols-3 gap-md">
           <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-lg shadow-sm text-center">
             <div className="text-2xl font-extrabold text-success">{Object.values(attendance).filter(v => v === "present").length}</div>
@@ -226,17 +237,17 @@ export default function TeacherAttendance() {
       {/* Controls */}
       <div className="flex flex-wrap gap-md items-end">
         <div className="space-y-xs">
-          <label htmlFor="attendance-course" className="text-xs font-semibold text-outline uppercase tracking-wider">Course</label>
+          <label htmlFor="attendance-offering" className="text-xs font-semibold text-outline uppercase tracking-wider">Class</label>
           <select
-            id="attendance-course"
-            value={selectedCourse}
+            id="attendance-offering"
+            value={selectedOffering}
             onChange={(e) => loadStudents(e.target.value)}
-            className="bg-surface-container-low border border-outline-variant rounded-xl px-md py-sm text-sm text-on-surface focus:ring-2 focus:ring-secondary outline-none min-w-[200px]"
+            className="bg-surface-container-low border border-outline-variant rounded-xl px-md py-sm text-sm text-on-surface focus:ring-2 focus:ring-secondary outline-none min-w-[280px]"
           >
-            <option value="">Select course...</option>
-            {courses.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.code} — {c.name}{substituteCourseIds.has(c.id) ? " (Substitute)" : ""}
+            <option value="">Select class...</option>
+            {offerings.map((o) => (
+              <option key={o.id} value={o.id}>
+                {offeringLabel(o)}{substituteOfferingIds.has(o.id) ? " (Substitute)" : ""}
               </option>
             ))}
           </select>
@@ -249,12 +260,12 @@ export default function TeacherAttendance() {
             value={date}
             onChange={(e) => {
               setDate(e.target.value);
-              if (selectedCourse) loadStudents(selectedCourse, e.target.value);
+              if (selectedOffering) loadStudents(selectedOffering, e.target.value);
             }}
             className="bg-surface-container-low border border-outline-variant rounded-xl px-md py-sm text-sm text-on-surface focus:ring-2 focus:ring-secondary outline-none"
           />
         </div>
-        {selectedCourse && students.length > 0 && (
+        {selectedOffering && students.length > 0 && (
           <Button onClick={handleSaveAttendance} disabled={loading}>
             {loading ? "Saving..." : "Save Attendance"}
           </Button>
@@ -262,7 +273,7 @@ export default function TeacherAttendance() {
       </div>
 
       {/* Status Legend */}
-      {selectedCourse && (
+      {selectedOffering && (
         <div className="flex gap-sm text-xs">
           <span className="text-outline">Click to toggle:</span>
           {["present", "absent", "late", "excused"].map((s) => (
@@ -272,7 +283,7 @@ export default function TeacherAttendance() {
       )}
 
       {/* Student List */}
-      {selectedCourse && (
+      {selectedOffering && (
         <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-sm overflow-hidden">
           <div className="px-lg py-md border-b border-outline-variant flex items-center justify-between">
             <h2 className="text-sm font-bold text-on-surface flex items-center gap-sm">
@@ -328,7 +339,7 @@ export default function TeacherAttendance() {
             })}
             {students.length === 0 && (
               <div className="p-xl text-center text-sm text-outline">
-                {selectedCourse ? "No students enrolled in this course." : "Select a course to view students."}
+                {selectedOffering ? "No students enrolled in this class." : "Select a class to view students."}
               </div>
             )}
           </div>

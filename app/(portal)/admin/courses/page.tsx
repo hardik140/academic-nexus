@@ -86,7 +86,10 @@ function AdminCoursesInner() {
           { key: "credits", header: "Credits", sortable: true },
           { key: "semester", header: "Sem", sortable: true },
           { key: "type", header: "Type", render: (row: any) => <span className="capitalize text-on-surface-variant">{row.type}</span> },
-          { key: "instructor", header: "Instructor", render: (row: any) => <span className="text-on-surface-variant">{(row.profiles as any)?.full_name || "TBA"}</span> },
+          // The Instructor column is gone rather than repointed: a catalog
+          // course has no single teacher after 047, each offering names its
+          // own, and showing one invited the exact confusion the offering
+          // model exists to remove.
           { key: "status", header: "Status", render: (row: any) => <StatusBadge status={row.status} /> },
         ]}
         data={courses}

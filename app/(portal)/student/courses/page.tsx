@@ -21,13 +21,23 @@ export default async function StudentCourses({
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
+  const { data: student } = await supabase
+    .from("students")
+    .select("id")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
   const { status } = await searchParams;
   const activeFilter: "all" | EnrollmentStatus = FILTERS.find((f) => f.value === status)?.value ?? "all";
 
   let query = supabase
     .from("course_enrollments")
-    .select("*, courses(id, name, code, credits, semester, type, department_id, departments:department_id(name), profiles:instructor_id(full_name))")
-    .eq("student_id", user.id)
+    // Enrollment names an OFFERING, so the instructor shown is the person
+    // teaching this student's section — not whoever owns the catalog row.
+    .select("*, course_offerings:offering_id(id, courses:course_id(id, name, code, credits, type, department_id, departments:department_id(name)), sections:section_id(name), semesters:semester_id(name), profiles:instructor_id(full_name))")
+    // students(id): 047 repointed course_enrollments.student_id, and
+    // comparing it to the profile id silently matched nothing.
+    .eq("student_id", student?.id || "")
     .order("status");
 
   if (activeFilter !== "all") {
@@ -62,7 +72,8 @@ export default async function StudentCourses({
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-md">
         {(enrollments || []).map((e: any) => {
-          const course = e.courses;
+          const offering = e.course_offerings;
+          const course = offering?.courses;
           return (
             <div key={e.id} className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-lg shadow-sm hover:shadow-md transition-all">
               <div className="flex items-center justify-between mb-sm">
