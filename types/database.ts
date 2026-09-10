@@ -166,12 +166,6 @@ export interface Database {
 
       courses: {
         Row: {
-          /**
-           * @deprecated (migration 047) Instructor assignment lives on
-           * course_offerings.instructor_id — a course is catalog data and can
-           * be taught by different teachers in different sections/semesters.
-           * Retained only until every consumer reads offerings; dropped in 048.
-           */
           id: string;
           college_id: string;
           department_id: string;
@@ -181,6 +175,12 @@ export interface Database {
           semester: number | null;
           year: number | null;
           type: "core" | "elective" | "lab" | "project" | "seminar";
+          /**
+           * @deprecated (migration 047) Instructor assignment lives on
+           * course_offerings.instructor_id — a course is catalog data and can
+           * be taught by different teachers in different sections/semesters.
+           * Retained only until every consumer reads offerings; dropped in 048.
+           */
           instructor_id: string | null;
           max_students: number | null;
           description: string | null;
