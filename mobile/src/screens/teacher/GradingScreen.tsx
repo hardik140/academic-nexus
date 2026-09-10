@@ -21,8 +21,8 @@ const EXAM_TYPES: { value: ExamType; label: string }[] = [
 
 export default function GradingScreen() {
   const { session } = useAuth();
-  const [courses, setCourses] = useState<any[]>([]);
-  const [selectedCourse, setSelectedCourse] = useState("");
+  const [offerings, setOfferings] = useState<any[]>([]);
+  const [selectedOffering, setSelectedOffering] = useState("");
   const [students, setStudents] = useState<any[]>([]);
   const [examType, setExamType] = useState<ExamType>("internal_1");
   const [maxMarks, setMaxMarks] = useState("100");
@@ -34,60 +34,62 @@ export default function GradingScreen() {
 
   useEffect(() => {
     if (!session?.user.id) return;
-    supabase.from("courses").select("id, name, code").eq("instructor_id", session.user.id).then(({ data }) => {
-      setCourses(data || []);
-      setLoading(false);
-    });
+    supabase
+      .from("course_offerings")
+      .select("id, status, courses:course_id(id, name, code), sections:section_id(name), semesters:semester_id(name)")
+      .eq("instructor_id", session.user.id)
+      .then(({ data }) => {
+        setOfferings(((data as any[]) || []).filter((o) => o.status !== "cancelled"));
+        setLoading(false);
+      });
   }, [session?.user.id]);
 
-  const loadStudents = async (courseId: string, exam: ExamType = examType) => {
-    setSelectedCourse(courseId);
+  const loadStudents = async (offeringId: string, exam: ExamType = examType) => {
+    setSelectedOffering(offeringId);
+    // students.id end to end — the two extra round trips this screen used
+    // to make, translating between profiles ids and students ids, are gone
+    // now that course_enrollments.student_id references students(id).
     const { data: enrollments } = await supabase
       .from("course_enrollments")
-      .select("student_id, profiles:student_id(id, full_name)")
-      .eq("course_id", courseId)
+      .select("student_id, students:student_id(id, enrollment_number, profiles:user_id(full_name))")
+      .eq("offering_id", offeringId)
       .eq("status", "enrolled");
 
-    const list = (enrollments || []).map((e: any) => ({ id: e.student_id, full_name: e.profiles?.full_name || "Unknown" }));
+    const list = ((enrollments as any[]) || []).map((e) => ({
+      id: e.student_id,
+      full_name: e.students?.profiles?.full_name || "Unknown",
+    }));
     setStudents(list);
-
-    const studentUserIds = list.map((s: any) => s.id);
-    const { data: studentRecords } = await supabase.from("students").select("id, user_id").in("user_id", studentUserIds);
-    const studentDbIds = (studentRecords || []).map((s) => s.id);
 
     const { data: existingMarks } = await supabase
       .from("marks")
       .select("student_id, obtained_marks")
-      .eq("course_id", courseId)
+      .eq("offering_id", offeringId)
       .eq("exam_type", exam)
-      .in("student_id", studentDbIds);
+      .in("student_id", list.map((s) => s.id));
 
     const m: Record<string, string> = {};
-    (existingMarks || []).forEach((em: any) => {
-      const userRec = (studentRecords || []).find((s) => s.id === em.student_id);
-      if (userRec) m[userRec.user_id] = String(em.obtained_marks);
+    ((existingMarks as any[]) || []).forEach((em) => {
+      m[em.student_id] = String(em.obtained_marks);
     });
     setMarks(m);
   };
 
   const handleExamTypeChange = (value: ExamType) => {
     setExamType(value);
-    if (selectedCourse) loadStudents(selectedCourse, value);
+    if (selectedOffering) loadStudents(selectedOffering, value);
   };
 
   const handleSave = async () => {
     setSaving(true);
     setError(null);
     try {
-      const studentUserIds = Object.keys(marks);
-      const { data: studentRecords } = await supabase.from("students").select("id, user_id").in("user_id", studentUserIds);
-
-      const entries = (studentRecords || [])
-        .map((s) => ({ studentDbId: s.id, obtainedMarks: parseFloat(marks[s.user_id] || "0") }))
+      const entries = students
+        .map((s: any) => ({ studentDbId: s.id, obtainedMarks: parseFloat(marks[s.id] ?? "") }))
         .filter((e) => !isNaN(e.obtainedMarks));
 
       await apiPost("/api/mobile/grading/save", {
-        courseId: selectedCourse,
+        offeringId: selectedOffering,
         examType,
         maxMarks: parseFloat(maxMarks),
         entries,
@@ -113,13 +115,15 @@ export default function GradingScreen() {
       <Card>
         <Text style={styles.fieldLabel}>Course</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
-          {courses.map((c) => (
+          {offerings.map((o) => (
             <Pressable
-              key={c.id}
-              style={[styles.chip, selectedCourse === c.id && styles.chipActive]}
-              onPress={() => loadStudents(c.id)}
+              key={o.id}
+              style={[styles.chip, selectedOffering === o.id && styles.chipActive]}
+              onPress={() => loadStudents(o.id)}
             >
-              <Text style={[styles.chipText, selectedCourse === c.id && styles.chipTextActive]}>{c.code}</Text>
+              <Text style={[styles.chipText, selectedOffering === o.id && styles.chipTextActive]}>
+                {o.courses?.code}{o.sections?.name ? ` · ${o.sections.name}` : ""}
+              </Text>
             </Pressable>
           ))}
         </ScrollView>
@@ -141,7 +145,7 @@ export default function GradingScreen() {
         <TextInput style={styles.input} value={maxMarks} onChangeText={setMaxMarks} keyboardType="numeric" />
       </Card>
 
-      {selectedCourse && students.length > 0 && (
+      {selectedOffering && students.length > 0 && (
         <>
           <Card>
             <Text style={styles.fieldLabel}>
@@ -183,7 +187,7 @@ export default function GradingScreen() {
         </>
       )}
 
-      {selectedCourse && students.length === 0 && (
+      {selectedOffering && students.length === 0 && (
         <Card>
           <EmptyState>Select a course to view enrolled students.</EmptyState>
         </Card>

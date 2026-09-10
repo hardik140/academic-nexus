@@ -84,7 +84,7 @@ export default function AnalyticsScreen() {
         <Text style={styles.title}>Attendance Rates by Course</Text>
         {attendance.length > 0 ? (
           attendance.map((a: any) => (
-            <View key={a.course_id} style={styles.rowItem}>
+            <View key={a.offering_id} style={styles.rowItem}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.rowTitle}>{a.course_code}</Text>
                 <Text style={styles.rowSub}>{a.course_name}</Text>

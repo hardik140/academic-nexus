@@ -2,26 +2,36 @@ import { useEffect, useState } from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
+import { useStudent } from "@/hooks/useStudent";
 import { Screen, Card, EmptyState, colors } from "@/components/ui";
 
 export default function CoursesScreen() {
   const { session } = useAuth();
+  // course_enrollments.student_id references students(id) after 047,
+  // so this screen needs the student record, not just the session.
+  const { student, loading: studentLoading } = useStudent();
   const [enrollments, setEnrollments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = async () => {
-    if (!session?.user.id) return;
+    if (!session?.user.id || !student?.id) return;
     const { data } = await supabase
       .from("course_enrollments")
-      .select("*, courses(id, name, code, credits, semester, type, department_id, departments:department_id(name), profiles:instructor_id(full_name))")
-      .eq("student_id", session.user.id)
+      // Enrollment names an offering, and the instructor is the person
+      // teaching THIS section — not whoever owns the catalog row.
+      .select("*, course_offerings:offering_id(id, courses:course_id(id, name, code, credits, type), sections:section_id(name), semesters:semester_id(name), profiles:instructor_id(full_name))")
+      // students(id): course_enrollments.student_id was repointed by 047,
+      // so comparing it to the profile id matched nothing.
+      .eq("student_id", student?.id || "")
       .order("status");
     setEnrollments(data || []);
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, [session?.user.id]);
+  useEffect(() => {
+    if (!studentLoading) load();
+  }, [studentLoading, student?.id]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -30,12 +40,13 @@ export default function CoursesScreen() {
   };
 
   return (
-    <Screen loading={loading} refreshing={refreshing} onRefresh={onRefresh}>
+    <Screen loading={loading || studentLoading} refreshing={refreshing} onRefresh={onRefresh}>
       {enrollments.length === 0 && (
         <EmptyState>No course enrollments found. Contact your department admin.</EmptyState>
       )}
       {enrollments.map((e: any) => {
-        const course = e.courses;
+        const offering = e.course_offerings;
+        const course = offering?.courses;
         return (
           <Card key={e.id}>
             <View style={styles.headerRow}>
@@ -45,9 +56,13 @@ export default function CoursesScreen() {
               </View>
             </View>
             <Text style={styles.name}>{course?.name}</Text>
-            <Text style={styles.meta}>📚 {course?.credits} credits • {course?.type} • Sem {course?.semester}</Text>
-            <Text style={styles.meta}>🏢 {course?.departments?.name || "—"}</Text>
-            <Text style={styles.meta}>👨‍🏫 {course?.profiles?.full_name || "TBA"}</Text>
+            <Text style={styles.meta}>
+              👥 {offering?.sections?.name ? `Section ${offering.sections.name}` : "Section —"} • {offering?.semesters?.name || "—"}
+            </Text>
+            <Text style={styles.meta}>📚 {course?.credits} credits • {course?.type}</Text>
+            {/* The instructor of THIS section, from the offering — not
+                whoever happens to own the catalog row. */}
+            <Text style={styles.meta}>👨‍🏫 {offering?.profiles?.full_name || "TBA"}</Text>
             {e.grade && (
               <View style={styles.gradeRow}>
                 <Text style={styles.gradeLabel}>Final Grade</Text>

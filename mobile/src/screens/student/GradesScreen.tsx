@@ -14,9 +14,11 @@ export default function GradesScreen() {
     if (!student?.id) return;
     const { data } = await supabase
       .from("marks")
-      .select("*, courses(name, code, credits)")
+      .select("*, course_offerings:offering_id(courses:course_id(name, code, credits), sections:section_id(name), semesters:semester_id(name, start_date))")
       .eq("student_id", student.id)
-      .order("semester", { ascending: false });
+      // marks.semester is gone (047) — the academic period is the
+      // offering's semester now.
+      .order("created_at", { ascending: false });
     setMarks(data || []);
     setLoading(false);
   };
@@ -31,10 +33,17 @@ export default function GradesScreen() {
     setRefreshing(false);
   };
 
-  const courseMarks: Record<string, { course: any; exams: any[] }> = {};
+  // Keyed by OFFERING so a retake shows as its own result block rather
+  // than overwriting the earlier attempt.
+  const courseMarks: Record<string, { course: any; section?: string; exams: any[] }> = {};
   marks.forEach((m: any) => {
-    if (!courseMarks[m.course_id]) courseMarks[m.course_id] = { course: m.courses, exams: [] };
-    courseMarks[m.course_id].exams.push(m);
+    if (!courseMarks[m.offering_id])
+      courseMarks[m.offering_id] = {
+        course: m.course_offerings?.courses,
+        section: m.course_offerings?.sections?.name,
+        exams: [],
+      };
+    courseMarks[m.offering_id].exams.push(m);
   });
   const grouped = Object.values(courseMarks);
 

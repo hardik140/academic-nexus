@@ -15,13 +15,23 @@ export default function TimetableScreen() {
   const load = async () => {
     if (!session?.user.id) return;
     const { data: profile } = await supabase.from("profiles").select("college_id").eq("id", session.user.id).single();
-    const { data } = await supabase
-      .from("timetable_slots")
-      .select("*, courses(name, code)")
-      .eq("college_id", profile?.college_id || "")
-      .eq("instructor_id", session.user.id)
-      .order("day_of_week")
-      .order("start_time");
+    // timetable_slots has no instructor_id after 047 — resolve this
+    // teacher's offerings first, then their scheduled sessions.
+    const { data: myOfferings } = await supabase
+      .from("course_offerings")
+      .select("id")
+      .eq("instructor_id", session.user.id);
+    const offeringIds = ((myOfferings as any[]) || []).map((o) => o.id);
+
+    const { data } = offeringIds.length
+      ? await supabase
+          .from("timetable_slots")
+          .select("*, course_offerings:offering_id(courses:course_id(name, code), sections:section_id(name))")
+          .eq("college_id", profile?.college_id || "")
+          .in("offering_id", offeringIds)
+          .order("day_of_week")
+          .order("start_time")
+      : { data: [] };
     setSlots(data || []);
     setLoading(false);
   };
@@ -56,7 +66,10 @@ export default function TimetableScreen() {
               {grouped[day]?.length > 0 ? (
                 grouped[day].map((slot: any) => (
                   <View key={slot.id} style={styles.slotCard}>
-                    <Text style={styles.slotTitle}>📚 {slot.courses?.code} — {slot.courses?.name}</Text>
+                    <Text style={styles.slotTitle}>
+                      📚 {slot.course_offerings?.courses?.code} — {slot.course_offerings?.courses?.name}
+                      {slot.course_offerings?.sections?.name ? ` · ${slot.course_offerings.sections.name}` : ""}
+                    </Text>
                     <Text style={styles.slotTime}>
                       🕐 {slot.start_time?.slice(0, 5)} – {slot.end_time?.slice(0, 5)}{slot.room ? ` • 📍 Room ${slot.room}` : ""}
                     </Text>

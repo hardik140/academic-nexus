@@ -20,17 +20,24 @@ export default function ReportsScreen() {
     const [enrollRes, attendanceRes, coursesRes] = await Promise.all([
       supabase.from("mv_department_enrollment").select("*").eq("department_id", department.id).maybeSingle(),
       supabase.from("mv_attendance_summary").select("*").eq("department_id", department.id),
-      supabase.from("courses").select("id").eq("department_id", department.id),
+      // Backlogs hang off offerings now, so the department's offerings are
+      // what this needs — resolved through their courses' department.
+      supabase
+        .from("course_offerings")
+        .select("id, courses:course_id!inner(id, department_id)")
+        .eq("courses.department_id", department.id),
     ]);
     setEnrollment(enrollRes.data);
     setAttendance(attendanceRes.data || []);
 
-    const courseIds = (coursesRes.data || []).map((c) => c.id);
-    if (courseIds.length > 0) {
+    const offeringIds = ((coursesRes.data as any[]) || []).map((o) => o.id);
+    if (offeringIds.length > 0) {
       const { data: backlogRows } = await supabase
         .from("course_enrollments")
-        .select("*, courses(name, code), profiles:student_id(full_name)")
-        .in("course_id", courseIds)
+        .select(
+          "*, course_offerings:offering_id(courses:course_id(name, code), sections:section_id(name)), students:student_id(profiles:user_id(full_name))"
+        )
+        .in("offering_id", offeringIds)
         .eq("status", "failed");
       setBacklogs(backlogRows || []);
     } else {
@@ -76,7 +83,7 @@ export default function ReportsScreen() {
         <Text style={styles.title}>📊 Attendance Audit — By Course</Text>
         {attendance.length > 0 ? (
           attendance.map((a: any) => (
-            <View key={a.course_id} style={styles.rowItem}>
+            <View key={a.offering_id} style={styles.rowItem}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.rowTitle}>{a.course_code}</Text>
                 <Text style={styles.rowSub}>{a.course_name}</Text>
@@ -98,8 +105,11 @@ export default function ReportsScreen() {
           backlogs.map((b: any) => (
             <View key={b.id} style={styles.rowItem}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.rowTitle}>{b.profiles?.full_name}</Text>
-                <Text style={styles.rowSub}>{b.courses?.code} — {b.courses?.name}</Text>
+                <Text style={styles.rowTitle}>{b.students?.profiles?.full_name}</Text>
+                <Text style={styles.rowSub}>
+                  {b.course_offerings?.courses?.code} — {b.course_offerings?.courses?.name}
+                  {b.course_offerings?.sections?.name ? ` · ${b.course_offerings.sections.name}` : ""}
+                </Text>
               </View>
               <View style={styles.failedPill}>
                 <Text style={styles.failedPillText}>Failed</Text>

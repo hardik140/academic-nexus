@@ -6,6 +6,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { apiPost } from "@/lib/api";
 import { Screen, Card, EmptyState, ErrorBanner, colors } from "@/components/ui";
 
+
 const STATUS_CYCLE = ["present", "absent", "late", "excused"];
 const STATUS_COLORS: Record<string, string> = {
   present: colors.success,
@@ -20,8 +21,8 @@ function toDateString(d: Date) {
 
 export default function AttendanceScreen() {
   const { session } = useAuth();
-  const [courses, setCourses] = useState<any[]>([]);
-  const [selectedCourse, setSelectedCourse] = useState("");
+  const [offerings, setOfferings] = useState<any[]>([]);
+  const [selectedOffering, setSelectedOffering] = useState("");
   const [students, setStudents] = useState<any[]>([]);
   const [attendance, setAttendance] = useState<Record<string, string>>({});
   const [date, setDate] = useState(new Date());
@@ -33,37 +34,46 @@ export default function AttendanceScreen() {
 
   useEffect(() => {
     if (!session?.user.id) return;
-    supabase.from("courses").select("id, name, code").eq("instructor_id", session.user.id).then(({ data }) => {
-      setCourses(data || []);
-      setLoading(false);
-    });
+    // Offerings, not courses — the register belongs to a section in a
+    // semester, which courses.instructor_id could never identify.
+    supabase
+      .from("course_offerings")
+      .select("id, status, courses:course_id(id, name, code), sections:section_id(name), semesters:semester_id(name)")
+      .eq("instructor_id", session.user.id)
+      .then(({ data }) => {
+        setOfferings(((data as any[]) || []).filter((o) => o.status !== "cancelled"));
+        setLoading(false);
+      });
   }, [session?.user.id]);
 
-  const loadStudents = async (courseId: string) => {
-    setSelectedCourse(courseId);
+  const loadStudents = async (offeringId: string) => {
+    setSelectedOffering(offeringId);
     const dateStr = toDateString(date);
+    // Keyed by students.id throughout: course_enrollments.student_id
+    // references students(id) after 047, so the map written here and the
+    // map read at save time are finally the same id space.
     const { data: enrollments } = await supabase
       .from("course_enrollments")
-      .select("student_id, profiles:student_id(id, full_name, email)")
-      .eq("course_id", courseId)
+      .select("student_id, students:student_id(id, enrollment_number, profiles:user_id(full_name, email))")
+      .eq("offering_id", offeringId)
       .eq("status", "enrolled");
 
-    const studentList = (enrollments || []).map((e: any) => ({
+    const studentList = ((enrollments as any[]) || []).map((e) => ({
       id: e.student_id,
-      full_name: e.profiles?.full_name || "Unknown",
-      email: e.profiles?.email || "",
+      full_name: e.students?.profiles?.full_name || "Unknown",
+      email: e.students?.profiles?.email || "",
     }));
     setStudents(studentList);
 
     const { data: existing } = await supabase
       .from("attendance")
       .select("student_id, status")
-      .eq("course_id", courseId)
+      .eq("offering_id", offeringId)
       .eq("date", dateStr);
 
     const att: Record<string, string> = {};
-    (existing || []).forEach((a: any) => { att[a.student_id] = a.status; });
-    studentList.forEach((s: any) => { if (!att[s.id]) att[s.id] = "present"; });
+    ((existing as any[]) || []).forEach((a) => { att[a.student_id] = a.status; });
+    studentList.forEach((s) => { if (!att[s.id]) att[s.id] = "present"; });
     setAttendance(att);
   };
 
@@ -77,18 +87,18 @@ export default function AttendanceScreen() {
     setSaving(true);
     setError(null);
     try {
-      const studentIds = Object.keys(attendance);
-      const { data: studentRecords } = await supabase
-        .from("students")
-        .select("id, user_id")
-        .in("user_id", studentIds);
-
-      const entries = (studentRecords || []).map((s: any) => ({
+      // No students lookup needed any more — the map is already keyed by
+      // students.id, which is what the API expects.
+      const entries = students.map((s: any) => ({
         studentDbId: s.id,
-        status: attendance[s.user_id] || "present",
+        status: attendance[s.id] || "present",
       }));
 
-      await apiPost("/api/mobile/attendance/save", { courseId: selectedCourse, date: toDateString(date), entries });
+      await apiPost("/api/mobile/attendance/save", {
+        offeringId: selectedOffering,
+        date: toDateString(date),
+        entries,
+      });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (e) {
@@ -116,13 +126,15 @@ export default function AttendanceScreen() {
       <Card>
         <Text style={styles.fieldLabel}>Course</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
-          {courses.map((c) => (
+          {offerings.map((o) => (
             <Pressable
-              key={c.id}
-              style={[styles.chip, selectedCourse === c.id && styles.chipActive]}
-              onPress={() => loadStudents(c.id)}
+              key={o.id}
+              style={[styles.chip, selectedOffering === o.id && styles.chipActive]}
+              onPress={() => loadStudents(o.id)}
             >
-              <Text style={[styles.chipText, selectedCourse === c.id && styles.chipTextActive]}>{c.code}</Text>
+              <Text style={[styles.chipText, selectedOffering === o.id && styles.chipTextActive]}>
+                {o.courses?.code}{o.sections?.name ? ` · ${o.sections.name}` : ""}
+              </Text>
             </Pressable>
           ))}
         </ScrollView>
@@ -139,14 +151,14 @@ export default function AttendanceScreen() {
               setShowDatePicker(Platform.OS === "ios");
               if (d) {
                 setDate(d);
-                if (selectedCourse) loadStudents(selectedCourse);
+                if (selectedOffering) loadStudents(selectedOffering);
               }
             }}
           />
         )}
       </Card>
 
-      {selectedCourse && students.length > 0 && (
+      {selectedOffering && students.length > 0 && (
         <>
           <View style={styles.summaryRow}>
             <Card style={styles.summaryCard}>
@@ -187,7 +199,7 @@ export default function AttendanceScreen() {
         </>
       )}
 
-      {selectedCourse && students.length === 0 && (
+      {selectedOffering && students.length === 0 && (
         <Card>
           <EmptyState>No students enrolled in this course.</EmptyState>
         </Card>

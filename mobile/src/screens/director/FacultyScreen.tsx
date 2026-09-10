@@ -12,11 +12,13 @@ export default function FacultyScreen() {
   const load = async () => {
     const [facultyRes, coursesRes] = await Promise.all([
       supabase.from("profiles").select("*, departments:department_id(name, code)").in("role", ["teacher", "hod"]).order("full_name"),
-      supabase.from("courses").select("id, instructor_id"),
+      // Workload counts DELIVERIES. courses.instructor_id counted a
+      // three-section teacher as teaching one course.
+      supabase.from("course_offerings").select("id, instructor_id, status"),
     ]);
     const courseCounts: Record<string, number> = {};
     (coursesRes.data || []).forEach((c: any) => {
-      if (!c.instructor_id) return;
+      if (!c.instructor_id || c.status === "cancelled") return;
       courseCounts[c.instructor_id] = (courseCounts[c.instructor_id] || 0) + 1;
     });
     setFaculty((facultyRes.data || []).map((f: any) => ({ ...f, course_count: courseCounts[f.id] || 0 })));

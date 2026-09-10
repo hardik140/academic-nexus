@@ -2,30 +2,45 @@ import { useEffect, useState } from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
+import { useStudent } from "@/hooks/useStudent";
 import { Screen, Card, StatusBadge, colors } from "@/components/ui";
 
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 export default function ScheduleScreen() {
   const { session } = useAuth();
+  // course_enrollments.student_id references students(id) after 047,
+  // so this screen needs the student record, not just the session.
+  const { student, loading: studentLoading } = useStudent();
   const [enrollments, setEnrollments] = useState<any[]>([]);
   const [slots, setSlots] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = async () => {
-    if (!session?.user.id) return;
+    if (!session?.user.id || !student?.id) return;
     const { data: profile } = await supabase.from("profiles").select("college_id").eq("id", session.user.id).single();
     const [enrollRes, slotsRes] = await Promise.all([
-      supabase.from("course_enrollments").select("*, courses(id, name, code, credits, instructor_id, profiles:instructor_id(full_name))").eq("student_id", session.user.id).eq("status", "enrolled"),
-      supabase.from("timetable_slots").select("*, courses(name, code)").eq("college_id", profile?.college_id || "").order("day_of_week").order("start_time"),
+      supabase
+        .from("course_enrollments")
+        .select("*, course_offerings:offering_id(id, courses:course_id(id, name, code, credits, type), sections:section_id(name), semesters:semester_id(name), profiles:instructor_id(full_name))")
+        .eq("student_id", student?.id || "")
+        .eq("status", "enrolled"),
+      supabase
+        .from("timetable_slots")
+        .select("*, course_offerings:offering_id(id, courses:course_id(name, code), sections:section_id(name))")
+        .eq("college_id", profile?.college_id || "")
+        .order("day_of_week")
+        .order("start_time"),
     ]);
     setEnrollments(enrollRes.data || []);
     setSlots(slotsRes.data || []);
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, [session?.user.id]);
+  useEffect(() => {
+    if (!studentLoading) load();
+  }, [studentLoading, student?.id]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -41,7 +56,7 @@ export default function ScheduleScreen() {
   });
 
   return (
-    <Screen loading={loading} refreshing={refreshing} onRefresh={onRefresh}>
+    <Screen loading={loading || studentLoading} refreshing={refreshing} onRefresh={onRefresh}>
       <Card>
         <Text style={styles.title}>📅 Weekly Timetable</Text>
         {[1, 2, 3, 4, 5, 6].map((day) => {
@@ -55,7 +70,10 @@ export default function ScheduleScreen() {
               {grouped[day]?.length > 0 ? (
                 grouped[day].map((slot: any) => (
                   <View key={slot.id} style={styles.slotCard}>
-                    <Text style={styles.slotTitle}>{slot.courses?.code} — {slot.courses?.name}</Text>
+                    <Text style={styles.slotTitle}>
+                      {slot.course_offerings?.courses?.code} — {slot.course_offerings?.courses?.name}
+                      {slot.course_offerings?.sections?.name ? ` · ${slot.course_offerings.sections.name}` : ""}
+                    </Text>
                     <Text style={styles.slotTime}>
                       🕐 {slot.start_time?.slice(0, 5)} – {slot.end_time?.slice(0, 5)}{slot.room ? ` • 📍 Room ${slot.room}` : ""}
                     </Text>
@@ -75,8 +93,13 @@ export default function ScheduleScreen() {
           enrollments.map((e: any) => (
             <View key={e.id} style={styles.rowItem}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.rowTitle}>{e.courses?.code} — {e.courses?.name}</Text>
-                <Text style={styles.rowSub}>{e.courses?.credits} credits • {e.courses?.profiles?.full_name || "TBA"}</Text>
+                <Text style={styles.rowTitle}>
+                  {e.course_offerings?.courses?.code} — {e.course_offerings?.courses?.name}
+                  {e.course_offerings?.sections?.name ? ` · ${e.course_offerings.sections.name}` : ""}
+                </Text>
+                <Text style={styles.rowSub}>
+                  {e.course_offerings?.courses?.credits} credits • {e.course_offerings?.profiles?.full_name || "TBA"}
+                </Text>
               </View>
               <StatusBadge status={e.status} />
             </View>

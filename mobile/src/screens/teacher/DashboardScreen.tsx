@@ -9,7 +9,16 @@ import type { Tables } from "@shared/types/database";
 export default function DashboardScreen() {
   const { session } = useAuth();
   const { profile } = useProfile();
-  const [courses, setCourses] = useState<Tables<"courses">[]>([]);
+  // Offerings with their course/section joined — the embedded shape can't be
+  // inferred from the generated Tables<> type, which declares no
+  // relationships, so it is spelled out here.
+  type TeachingOffering = {
+    id: string;
+    status: string;
+    courses: { id: string; name: string; code: string } | null;
+    sections: { name: string } | null;
+  };
+  const [courses, setCourses] = useState<TeachingOffering[]>([]);
   const [todayCount, setTodayCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -19,10 +28,15 @@ export default function DashboardScreen() {
   const load = useCallback(async () => {
     if (!session?.user.id) return;
     const [coursesRes, attendanceRes] = await Promise.all([
-      supabase.from("courses").select("*").eq("instructor_id", session.user.id),
+      // Deliveries, not catalog rows — "3 classes" rather than "1 course"
+      // for a teacher holding three sections.
+      supabase
+        .from("course_offerings")
+        .select("id, status, courses:course_id(id, name, code), sections:section_id(name)")
+        .eq("instructor_id", session.user.id),
       supabase.from("attendance").select("id", { count: "exact", head: true }).eq("marked_by", session.user.id).eq("date", today),
     ]);
-    setCourses(coursesRes.data || []);
+    setCourses(((coursesRes.data as any[]) || []).filter((o) => o.status !== "cancelled"));
     setTodayCount(attendanceRes.count || 0);
     setLoading(false);
   }, [session?.user.id, today]);
@@ -57,8 +71,8 @@ export default function DashboardScreen() {
           courses.map((c) => (
             <View key={c.id} style={styles.rowItem}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.rowTitle}>{c.code} — {c.name}</Text>
-                <Text style={styles.rowSub}>{c.credits} credits • Sem {c.semester}</Text>
+                <Text style={styles.rowTitle}>{c.courses?.code} — {c.courses?.name}</Text>
+                <Text style={styles.rowSub}>{c.sections?.name ? `Section ${c.sections.name}` : "Section —"}</Text>
               </View>
             </View>
           ))

@@ -19,7 +19,9 @@ export default function CoursesScreen() {
     }
     const { data } = await supabase
       .from("courses")
-      .select("*, profiles:instructor_id(full_name)")
+      // No instructor join: a course is catalog data, and its teachers
+      // are named per offering.
+      .select("*, departments:department_id(name)")
       .eq("department_id", department.id)
       .order("code");
     setCourses(data || []);

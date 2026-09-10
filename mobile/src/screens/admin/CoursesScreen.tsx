@@ -36,7 +36,10 @@ export default function CoursesScreen() {
 
   const load = async () => {
     const [coursesRes, deptsRes] = await Promise.all([
-      supabase.from("courses").select("*, departments:department_id(name), profiles:instructor_id(full_name)").order("code"),
+      // A catalog course has no single instructor after 047 — teaching
+      // assignment lives on each offering, so the join is dropped rather
+      // than left showing a stale name.
+      supabase.from("courses").select("*, departments:department_id(name)").order("code"),
       supabase.from("departments").select("id, name, code").order("name"),
     ]);
     setCourses(coursesRes.data || []);

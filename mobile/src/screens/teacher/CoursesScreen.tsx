@@ -13,23 +13,30 @@ export default function CoursesScreen() {
 
   const load = async () => {
     if (!session?.user.id) return;
-    const { data: courseRows } = await supabase
-      .from("courses")
-      .select("*, departments:department_id(name, code)")
-      .eq("instructor_id", session.user.id)
-      .order("code");
-    setCourses(courseRows || []);
+    // One row per DELIVERY, so two sections of one course are two rows
+    // with two rosters.
+    const { data: offeringRows } = await supabase
+      .from("course_offerings")
+      .select(
+        "id, status, courses:course_id(id, name, code, credits, departments:department_id(name, code)), sections:section_id(name), semesters:semester_id(name)"
+      )
+      .eq("instructor_id", session.user.id);
 
-    const courseIds = (courseRows || []).map((c: any) => c.id);
-    if (courseIds.length > 0) {
+    const offerings = ((offeringRows as any[]) || [])
+      .filter((o) => o.status !== "cancelled")
+      .sort((a, b) => `${a.courses?.code}${a.sections?.name}`.localeCompare(`${b.courses?.code}${b.sections?.name}`));
+    setCourses(offerings);
+
+    const offeringIds = offerings.map((o) => o.id);
+    if (offeringIds.length > 0) {
       const { data: enrollments } = await supabase
         .from("course_enrollments")
-        .select("course_id")
-        .in("course_id", courseIds)
+        .select("offering_id")
+        .in("offering_id", offeringIds)
         .eq("status", "enrolled");
       const counts: Record<string, number> = {};
-      (enrollments || []).forEach((e: any) => {
-        counts[e.course_id] = (counts[e.course_id] || 0) + 1;
+      ((enrollments as any[]) || []).forEach((e) => {
+        counts[e.offering_id] = (counts[e.offering_id] || 0) + 1;
       });
       setEnrollCounts(counts);
     }
@@ -49,14 +56,15 @@ export default function CoursesScreen() {
       {courses.map((c: any) => (
         <Card key={c.id}>
           <View style={styles.headerRow}>
-            <Text style={styles.code}>{c.code}</Text>
+            <Text style={styles.code}>{c.courses?.code}</Text>
             <View style={[styles.statusPill, c.status === "active" ? styles.statusActive : styles.statusOther]}>
               <Text style={[styles.statusPillText, { color: c.status === "active" ? colors.success : colors.warning }]}>{c.status}</Text>
             </View>
           </View>
-          <Text style={styles.name}>{c.name}</Text>
-          <Text style={styles.meta}>🏢 {c.departments?.name || "—"}</Text>
-          <Text style={styles.meta}>📚 {c.credits} credits • Semester {c.semester} • {c.type}</Text>
+          <Text style={styles.name}>{c.courses?.name}</Text>
+          <Text style={styles.meta}>👥 {c.sections?.name ? `Section ${c.sections.name}` : "Section —"} • {c.semesters?.name || "—"}</Text>
+          <Text style={styles.meta}>🏢 {c.courses?.departments?.name || "—"}</Text>
+          <Text style={styles.meta}>📚 {c.courses?.credits} credits</Text>
           <Text style={styles.enrolled}>👥 {enrollCounts[c.id] || 0} enrolled</Text>
         </Card>
       ))}

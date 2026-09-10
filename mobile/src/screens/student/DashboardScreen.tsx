@@ -20,7 +20,7 @@ export default function DashboardScreen() {
   const load = useCallback(async () => {
     if (!session?.user.id) return;
     const [attendanceRes, feesRes, notifRes] = await Promise.all([
-      supabase.from("attendance").select("*, courses(name, code)").eq("student_id", student?.id || "").order("date", { ascending: false }).limit(10),
+      supabase.from("attendance").select("*, course_offerings:offering_id(courses:course_id(name, code), sections:section_id(name))").eq("student_id", student?.id || "").order("date", { ascending: false }).limit(10),
       supabase.from("fees").select("*").eq("student_id", student?.id || "").in("status", ["pending", "overdue"]).order("due_date", { ascending: true }),
       supabase.from("notifications").select("*").eq("receiver_id", session.user.id).eq("read", false).order("created_at", { ascending: false }).limit(5),
     ]);
@@ -88,8 +88,12 @@ export default function DashboardScreen() {
           attendance.slice(0, 6).map((r: any) => (
             <View key={r.id} style={styles.rowItem}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.rowTitle}>{r.courses?.name || "Course"}</Text>
-                <Text style={styles.rowSub}>{r.courses?.code} • {formatDate(r.date)}</Text>
+                <Text style={styles.rowTitle}>{r.course_offerings?.courses?.name || "Class"}</Text>
+                <Text style={styles.rowSub}>
+                  {r.course_offerings?.courses?.code}
+                  {r.course_offerings?.sections?.name ? ` · ${r.course_offerings.sections.name}` : ""}
+                  {` • ${formatDate(r.date)}`}
+                </Text>
               </View>
               <StatusBadge status={r.status} />
             </View>
