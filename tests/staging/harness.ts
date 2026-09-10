@@ -129,6 +129,7 @@ export const U = {
   warden: "00000003-0000-4000-8000-00000000000e",
   admin: "00000003-0000-4000-8000-00000000000f",
   superAdmin: "00000003-0000-4000-8000-000000000010",
+  hodMech: "00000003-0000-4000-8000-000000000014",
   bTeacher: "00000003-0000-4000-8000-000000000011",
   bStudent: "00000003-0000-4000-8000-000000000012",
   bHod: "00000003-0000-4000-8000-000000000013",
@@ -162,6 +163,12 @@ export const OFF = {
   historical: "0000000a-0000-4000-8000-000000000008",
   /** Cancelled, Teacher A still named as instructor */
   cancelled: "0000000a-0000-4000-8000-000000000009",
+  /**
+   * A SERVICE COURSE: Engineering Mathematics, owned by Mechanical, taught
+   * to a CSE section. Teaching department and receiving department disagree,
+   * which is what makes the authority predicate falsifiable.
+   */
+  service: "0000000a-0000-4000-8000-00000000000b",
   /** College B */
   collegeB: "0000000a-0000-4000-8000-00000000000a",
 } as const;
@@ -170,6 +177,9 @@ export const COLLEGE_A = "00000001-0000-4000-8000-000000000001";
 export const COLLEGE_B = "00000001-0000-4000-8000-000000000002";
 export const DEPT_CSE = "00000002-0000-4000-8000-000000000001";
 export const DEPT_ECE = "00000002-0000-4000-8000-000000000002";
+export const DEPT_MECH = "00000002-0000-4000-8000-000000000003";
+/** Engineering Mathematics — owned by Mechanical. */
+export const COURSE_MATHS = "00000009-0000-4000-8000-000000000005";
 export const SEM_3 = "00000006-0000-4000-8000-000000000003";
 export const SEM_5 = "00000006-0000-4000-8000-000000000005";
 export const SEM_PAST = "00000006-0000-4000-8000-000000000009";

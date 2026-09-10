@@ -66,7 +66,8 @@ INSERT INTO auth.users (id, email, raw_user_meta_data) VALUES
   ('00000003-0000-4000-8000-000000000010', 'qa.super@qa.test',     jsonb_build_object('full_name','QA Super Admin','college_id','00000001-0000-4000-8000-000000000001')),
   ('00000003-0000-4000-8000-000000000011', 'qa.b.teacher@qa.test', jsonb_build_object('full_name','QA-B Teacher','college_id','00000001-0000-4000-8000-000000000002')),
   ('00000003-0000-4000-8000-000000000012', 'qa.b.student@qa.test', jsonb_build_object('full_name','QA-B Student','college_id','00000001-0000-4000-8000-000000000002')),
-  ('00000003-0000-4000-8000-000000000013', 'qa.b.hod@qa.test',     jsonb_build_object('full_name','QA-B HOD','college_id','00000001-0000-4000-8000-000000000002'));
+  ('00000003-0000-4000-8000-000000000013', 'qa.b.hod@qa.test',     jsonb_build_object('full_name','QA-B HOD','college_id','00000001-0000-4000-8000-000000000002')),
+  ('00000003-0000-4000-8000-000000000014', 'qa.hod.mech@qa.test',  jsonb_build_object('full_name','QA HOD MECH','college_id','00000001-0000-4000-8000-000000000001'));
 
 UPDATE public.profiles SET role = 'hod', status = 'active', department_id = '00000002-0000-4000-8000-000000000001' WHERE id = '00000003-0000-4000-8000-000000000001';
 UPDATE public.profiles SET role = 'hod', status = 'active', department_id = '00000002-0000-4000-8000-000000000002' WHERE id = '00000003-0000-4000-8000-000000000002';
@@ -83,12 +84,14 @@ UPDATE public.profiles SET role = 'super_admin', status = 'active' WHERE id = '0
 UPDATE public.profiles SET role = 'teacher', status = 'active', department_id = '00000002-0000-4000-8000-000000000004' WHERE id = '00000003-0000-4000-8000-000000000011';
 UPDATE public.profiles SET role = 'student', status = 'active', department_id = '00000002-0000-4000-8000-000000000004' WHERE id = '00000003-0000-4000-8000-000000000012';
 UPDATE public.profiles SET role = 'hod',     status = 'active', department_id = '00000002-0000-4000-8000-000000000004' WHERE id = '00000003-0000-4000-8000-000000000013';
+UPDATE public.profiles SET role = 'hod',     status = 'active', department_id = '00000002-0000-4000-8000-000000000003' WHERE id = '00000003-0000-4000-8000-000000000014';
 
 -- departments.hod_id is the ONLY source of HOD review scope
 -- (resolveHodDepartmentIds reads exactly this).
 UPDATE public.departments SET hod_id = '00000003-0000-4000-8000-000000000001' WHERE id = '00000002-0000-4000-8000-000000000001';
 UPDATE public.departments SET hod_id = '00000003-0000-4000-8000-000000000002' WHERE id = '00000002-0000-4000-8000-000000000002';
 UPDATE public.departments SET hod_id = '00000003-0000-4000-8000-000000000013' WHERE id = '00000002-0000-4000-8000-000000000004';
+UPDATE public.departments SET hod_id = '00000003-0000-4000-8000-000000000014' WHERE id = '00000002-0000-4000-8000-000000000003';
 
 -- --- Student records ---
 INSERT INTO public.students (id, college_id, user_id, department_id, enrollment_number, batch_year, semester) VALUES
@@ -165,6 +168,11 @@ INSERT INTO public.course_offerings (id, college_id, semester_id, course_id, sec
   -- Cancelled, with Teacher A STILL named as instructor: cancellation must
   -- be what stops the write, not the absence of an assignment.
   ('0000000a-0000-4000-8000-000000000009', '00000001-0000-4000-8000-000000000001', '00000006-0000-4000-8000-000000000003', '00000009-0000-4000-8000-000000000005', '00000008-0000-4000-8000-000000000004', '00000003-0000-4000-8000-000000000003', 'cancelled', 60),
+  -- A SERVICE COURSE: owned by Mechanical, delivered to a CSE section. The
+  -- teaching department (MECH, via courses.department_id) and the receiving
+  -- department (CSE, via section -> programme) disagree, which is the only
+  -- way to test which one the authority predicate actually uses.
+  ('0000000a-0000-4000-8000-00000000000b', '00000001-0000-4000-8000-000000000001', '00000006-0000-4000-8000-000000000005', '00000009-0000-4000-8000-000000000005', '00000008-0000-4000-8000-000000000001', '00000003-0000-4000-8000-000000000005', 'active', 60),
   -- College B.
   ('0000000a-0000-4000-8000-00000000000a', '00000001-0000-4000-8000-000000000002', '00000006-0000-4000-8000-00000000000b', '00000009-0000-4000-8000-000000000006', '00000008-0000-4000-8000-000000000006', '00000003-0000-4000-8000-000000000011', 'active', 60);
 

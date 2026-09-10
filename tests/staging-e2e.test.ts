@@ -569,41 +569,32 @@ describe("Phase 18 — correction workflow", () => {
     }
   });
 
-  it("FINDING: the request table accepts an offering_id unrelated to the attendance row", async () => {
+  it("F2 FIXED: a request whose offering contradicts its attendance row is refused", async () => {
     const d = await fresh();
     try {
       await as(d, U.teacherA, insertAttendance(OFF.dsA3, S.a, DATE, "absent"));
       const attendanceId = String(
         await scalar(d, `SELECT id FROM public.attendance WHERE offering_id=$1`, [OFF.dsA3])
       );
-      // A CSE attendance row, declared against an ECE offering. Nothing in
-      // attendance_correction_insert_own cross-checks the two.
+      // A CSE attendance row, declared against an ECE offering. This used to
+      // be accepted, which put a reviewable request in the wrong HOD's queue
+      // and left the audit trail disagreeing with itself about which class
+      // was corrected. 047 §5a now ties the request's copied context to the
+      // attendance row with a composite foreign key.
       const ins = await as(
         d,
         U.teacherA,
         `INSERT INTO public.attendance_correction_requests
            (college_id, attendance_id, student_id, offering_id, date, current_status, requested_status, reason, submitted_by)
          VALUES ('${COLLEGE_A}','${attendanceId}','${S.a}','${OFF.ece}','${DATE}',
-                 'absent','present','QA: mismatched offering', auth.uid())
-         RETURNING id`
+                 'absent','present','QA: mismatched offering', auth.uid())`
       );
-      expect(ins.error).toBeNull();
-      const requestId = String(ins.data[0].id);
+      expect(ins.ok).toBe(false);
+      expect(ins.error).toMatch(/foreign key|violates/i);
+      expect(await scalar(d, `SELECT count(*)::int FROM public.attendance_correction_requests`)).toBe(0);
 
-      // HOD-ECE can now review it, because the REQUEST claims to be theirs.
-      const approve = await as(
-        d,
-        U.hodEce,
-        `UPDATE public.attendance_correction_requests
-            SET status='approved', reviewed_by=auth.uid() WHERE id='${requestId}'`
-      );
-      expect(approve.rows).toBe(1);
-
-      // But applying it is checked against the ATTENDANCE row's own offering,
-      // so the escalation stops here. Fail-closed by a second, independent
-      // check rather than by input validation.
-      const applied = await as(d, U.hodEce, `UPDATE public.attendance SET status='present' WHERE id='${attendanceId}'`);
-      expect(applied.rows).toBe(0);
+      // The defence that used to catch this at the last step is still in
+      // place — nothing was traded away for the new constraint.
       expect(await scalar(d, `SELECT status FROM public.attendance WHERE id=$1`, [attendanceId])).toBe("absent");
     } finally {
       await d.close();
@@ -980,28 +971,29 @@ describe("Phase 25 — non-academic roles", () => {
     }
   });
 
-  it("FINDING: hod and director can reassign any offering's instructor college-wide", async () => {
+  it("F1 FIXED: an HOD cannot reassign an offering outside their department", async () => {
     const d = await fresh();
     try {
-      // course_offerings_manage (046) is role + tenancy only — it is NOT
-      // scoped by heads_offering_department. So an HOD can name themselves
-      // instructor of an offering in a department they do not head, and
-      // can_write_offering_records then grants them attendance and marks.
+      // 046's course_offerings_manage was role + tenancy only, so an HOD
+      // could name themselves instructor of any offering in the college and
+      // can_write_offering_records would then hand them attendance and marks.
+      // 047 §7d scopes it to the department that owns the offering's course.
+      //
+      // The full matrix lives in tests/staging-security-f1-f2.test.ts; this
+      // is the regression anchor in the scenario suite.
       const grab = await as(
         d,
         U.hodCse,
         `UPDATE public.course_offerings SET instructor_id = auth.uid() WHERE id='${OFF.ece}'`
       );
-      expect(grab.rows).toBe(1);
+      expect(grab.rows).toBe(0);
+      expect(
+        await scalar(d, `SELECT instructor_id FROM public.course_offerings WHERE id=$1`, [OFF.ece])
+      ).toBe(U.teacherC);
 
       const write = await as(d, U.hodCse, insertAttendance(OFF.ece, S.a));
-      expect(write.error).toBeNull();
-
-      // Recorded as the reachable consequence it is. 046's own comment says
-      // department ownership for hod is "enforced app-side", so this is a
-      // known split rather than an oversight — but the escalation is real
-      // and it is one PostgREST call, not a UI flow.
-      expect(await scalar(d, `SELECT count(*)::int FROM public.attendance WHERE offering_id=$1`, [OFF.ece])).toBe(1);
+      expect(write.ok).toBe(false);
+      expect(await scalar(d, `SELECT count(*)::int FROM public.attendance WHERE offering_id=$1`, [OFF.ece])).toBe(0);
     } finally {
       await d.close();
     }
