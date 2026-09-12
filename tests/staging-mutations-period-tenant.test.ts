@@ -176,3 +176,58 @@ describe("tenant-consistency mutations", () => {
     } finally { await d.close(); }
   });
 });
+
+describe("gate pass state machine mutations (§7m)", () => {
+  const S_A = "00000004-0000-4000-8000-000000000001";
+  const pending = async (d: Awaited<ReturnType<typeof mutated>>) => {
+    const r = await as(d, U.studentA,
+      `INSERT INTO public.gate_passes (college_id, student_id, destination, exit_time, return_time)
+         VALUES ('${COLLEGE_A}','${S_A}','x',now()+interval '1 day',now()+interval '2 days') RETURNING id`);
+    return r.data[0].id as string;
+  };
+
+  it("detects: the catch-all refusal removed — pending jumps straight to returned", async () => {
+    const d = await mutated("gate transitions", (sql) =>
+      sql.replace(
+        "  ELSE\n    RAISE EXCEPTION 'gate_passes: status may not move from % to %', OLD.status, NEW.status\n      USING ERRCODE = 'check_violation';\n  END IF;\n\n  RETURN NEW;\nEND;\n$$;\n\nDROP TRIGGER IF EXISTS guard_gate_pass_update",
+        // function form: a string replacement would collapse the $$ delimiter
+        () => "  END IF;\n\n  RETURN NEW;\nEND;\n$$;\n\nDROP TRIGGER IF EXISTS guard_gate_pass_update"
+      )
+    );
+    try {
+      const id = await pending(d);
+      const r = await as(d, U.warden, `UPDATE public.gate_passes SET status='returned', actual_return=now() WHERE id='${id}' RETURNING id`);
+      expect(r.rows, "mutation not detected").toBe(1);
+    } finally { await d.close(); }
+  });
+
+  it("detects: approver identity check removed — a decision can be signed as someone else", async () => {
+    const d = await mutated("gate approver", (sql) =>
+      sql.replace(
+        "    IF auth.uid() IS NOT NULL AND NEW.approved_by <> auth.uid() THEN\n      RAISE EXCEPTION 'gate_passes: approved_by must be the approver'\n        USING ERRCODE = 'check_violation';\n    END IF;\n",
+        ""
+      )
+    );
+    try {
+      const id = await pending(d);
+      const r = await as(d, U.warden, `UPDATE public.gate_passes SET status='approved', approved_by='${U.wardenB}', approved_at=now() WHERE id='${id}' RETURNING id`);
+      expect(r.rows, "mutation not detected").toBe(1);
+      expect(await scalar(d, `SELECT approved_by FROM gate_passes WHERE id=$1`, [id])).toBe(U.wardenB);
+    } finally { await d.close(); }
+  });
+
+  it("detects: delete guard removed — a decided pass can be erased", async () => {
+    const d = await mutated("gate delete", (sql) =>
+      sql.replace(
+        "    IF OLD.status <> 'pending' THEN\n      RAISE EXCEPTION 'gate_passes: a % pass is history and cannot be deleted', OLD.status\n        USING ERRCODE = 'check_violation';\n    END IF;\n",
+        ""
+      )
+    );
+    try {
+      const id = await pending(d);
+      await as(d, U.warden, `UPDATE public.gate_passes SET status='rejected', approved_by=auth.uid(), approved_at=now() WHERE id='${id}'`);
+      const r = await as(d, U.warden, `DELETE FROM public.gate_passes WHERE id='${id}' RETURNING id`);
+      expect(r.rows, "mutation not detected").toBe(1);
+    } finally { await d.close(); }
+  });
+});

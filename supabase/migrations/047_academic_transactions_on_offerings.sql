@@ -1653,6 +1653,138 @@ ALTER TABLE public.substitution_assignments
     FOREIGN KEY (substitute_teacher_id, college_id) REFERENCES public.profiles (id, college_id);
 
 -- ---------------------------------------------------------------
+-- 7m. Gate pass — the state machine lives in the database, not only in
+--     the action that usually drives it
+--
+-- warden/gatepasses/actions.ts implements a clean machine — pending ->
+-- approved|rejected on decision, approved -> active on exit, active ->
+-- returned on return, each a compare-and-swap. gate_passes_staff (§7g) is
+-- FOR ALL, so the same warden could reach the table directly and, probed:
+--
+--   pending  -> returned          skip every step
+--   approved -> pending           reopen a decision
+--   returned -> active            replay an exit
+--   approved_by = <other warden>  forge the approver
+--   student_id = <other student>  retarget an approved pass
+--   destination / times           rewrite the request after approval
+--   DELETE a returned pass        erase the record of an absence
+--
+-- A gate pass is the institution's record of who is outside the hostel and
+-- on whose authority. Like a closed semester (§7k) or a ledger entry
+-- (§7i), that record may advance but must not be editable into a different
+-- history. Every rule below is one the application already follows; the
+-- trigger makes the console and PostgREST follow it too.
+--
+--   transitions   pending -> approved | rejected   (approver = auth.uid())
+--                 approved -> active               (actual_exit stamped)
+--                 approved -> expired              (no actor today; reserved
+--                                                   for a scheduled job)
+--                 active -> returned               (actual_return stamped)
+--                 rejected / returned / expired    terminal
+--   identity      college_id, student_id           immutable
+--   the request   destination, reason, exit_time, return_time
+--                                                  editable only while pending
+--   the stamps    approved_by/approved_at only set on the decision;
+--                 actual_exit only on exit; actual_return only on return;
+--                 none of them rewritten afterwards
+--   DELETE        pending only — a decided pass is history
+--
+-- approved_by = auth.uid() is required only when there IS an auth.uid():
+-- a migration or console session carries none, and the identity check is
+-- about a caller not being able to sign as someone else.
+-- ---------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.guard_gate_pass()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = public, pg_catalog
+AS $$
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    IF OLD.status <> 'pending' THEN
+      RAISE EXCEPTION 'gate_passes: a % pass is history and cannot be deleted', OLD.status
+        USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN OLD;
+  END IF;
+
+  IF NEW.college_id IS DISTINCT FROM OLD.college_id OR NEW.student_id IS DISTINCT FROM OLD.student_id THEN
+    RAISE EXCEPTION 'gate_passes: college_id and student_id are immutable'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF OLD.status <> 'pending' AND (
+       NEW.destination IS DISTINCT FROM OLD.destination
+    OR NEW.reason      IS DISTINCT FROM OLD.reason
+    OR NEW.exit_time   IS DISTINCT FROM OLD.exit_time
+    OR NEW.return_time IS DISTINCT FROM OLD.return_time
+  ) THEN
+    RAISE EXCEPTION 'gate_passes: the request cannot change once it has been decided'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF NEW.status IS NOT DISTINCT FROM OLD.status THEN
+    -- No transition: the stamps must not move either.
+    IF NEW.approved_by   IS DISTINCT FROM OLD.approved_by
+    OR NEW.approved_at   IS DISTINCT FROM OLD.approved_at
+    OR NEW.actual_exit   IS DISTINCT FROM OLD.actual_exit
+    OR NEW.actual_return IS DISTINCT FROM OLD.actual_return THEN
+      RAISE EXCEPTION 'gate_passes: approval and movement stamps only change with their transition'
+        USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  IF OLD.status = 'pending' AND NEW.status IN ('approved', 'rejected') THEN
+    IF NEW.approved_by IS NULL OR NEW.approved_at IS NULL THEN
+      RAISE EXCEPTION 'gate_passes: a decision must carry approved_by and approved_at'
+        USING ERRCODE = 'check_violation';
+    END IF;
+    IF auth.uid() IS NOT NULL AND NEW.approved_by <> auth.uid() THEN
+      RAISE EXCEPTION 'gate_passes: approved_by must be the approver'
+        USING ERRCODE = 'check_violation';
+    END IF;
+    IF NEW.actual_exit IS NOT NULL OR NEW.actual_return IS NOT NULL THEN
+      RAISE EXCEPTION 'gate_passes: a decision carries no movement stamps'
+        USING ERRCODE = 'check_violation';
+    END IF;
+  ELSIF OLD.status = 'approved' AND NEW.status = 'active' THEN
+    IF NEW.actual_exit IS NULL OR NEW.actual_return IS NOT NULL
+    OR NEW.approved_by IS DISTINCT FROM OLD.approved_by OR NEW.approved_at IS DISTINCT FROM OLD.approved_at THEN
+      RAISE EXCEPTION 'gate_passes: exit stamps actual_exit and nothing else'
+        USING ERRCODE = 'check_violation';
+    END IF;
+  ELSIF OLD.status = 'approved' AND NEW.status = 'expired' THEN
+    IF NEW.actual_exit IS NOT NULL OR NEW.actual_return IS NOT NULL THEN
+      RAISE EXCEPTION 'gate_passes: an expired pass was never used'
+        USING ERRCODE = 'check_violation';
+    END IF;
+  ELSIF OLD.status = 'active' AND NEW.status = 'returned' THEN
+    IF NEW.actual_return IS NULL
+    OR NEW.actual_exit IS DISTINCT FROM OLD.actual_exit
+    OR NEW.approved_by IS DISTINCT FROM OLD.approved_by OR NEW.approved_at IS DISTINCT FROM OLD.approved_at THEN
+      RAISE EXCEPTION 'gate_passes: return stamps actual_return and nothing else'
+        USING ERRCODE = 'check_violation';
+    END IF;
+  ELSE
+    RAISE EXCEPTION 'gate_passes: status may not move from % to %', OLD.status, NEW.status
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS guard_gate_pass_update ON public.gate_passes;
+CREATE TRIGGER guard_gate_pass_update
+  BEFORE UPDATE ON public.gate_passes
+  FOR EACH ROW EXECUTE FUNCTION public.guard_gate_pass();
+
+DROP TRIGGER IF EXISTS guard_gate_pass_delete ON public.gate_passes;
+CREATE TRIGGER guard_gate_pass_delete
+  BEFORE DELETE ON public.gate_passes
+  FOR EACH ROW EXECUTE FUNCTION public.guard_gate_pass();
+
+-- ---------------------------------------------------------------
 -- 8. Rebuild the analytics views against the offering model.
 --
 -- Output columns are preserved exactly — director/analytics, hod/reports and

@@ -19,7 +19,7 @@ describe("hostel mutations", () => {
       )
     );
     try {
-      const r = await as(d, U.warden, `UPDATE public.gate_passes SET status='approved' WHERE id='${PASS_C}'`);
+      const r = await as(d, U.warden, `UPDATE public.gate_passes SET status='approved', approved_by=auth.uid(), approved_at=now() WHERE id='${PASS_C}'`);
       expect(r.rows, "mutation not detected — Warden A reached Block B").toBe(1);
     } finally { await d.close(); }
   });

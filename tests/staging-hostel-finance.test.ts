@@ -44,7 +44,7 @@ describe("warden block scope", () => {
   it("Warden A cannot approve a Block-B student's gate pass", async () => {
     const d = await fresh();
     try {
-      const r = await as(d, U.warden, `UPDATE public.gate_passes SET status='approved', approved_by=auth.uid() WHERE id='${PASS_C}'`);
+      const r = await as(d, U.warden, `UPDATE public.gate_passes SET status='approved', approved_by=auth.uid(), approved_at=now() WHERE id='${PASS_C}'`);
       expect(r.rows).toBe(0);
       expect(await scalar(d, `SELECT status FROM gate_passes WHERE id=$1`, [PASS_C])).toBe("pending");
     } finally { await d.close(); }
@@ -53,8 +53,8 @@ describe("warden block scope", () => {
   it("Warden A CAN approve their own block's pass — and Warden B theirs", async () => {
     const d = await fresh();
     try {
-      expect((await as(d, U.warden, `UPDATE public.gate_passes SET status='approved', approved_by=auth.uid() WHERE id='${PASS_A}'`)).rows).toBe(1);
-      expect((await as(d, U.wardenB, `UPDATE public.gate_passes SET status='approved', approved_by=auth.uid() WHERE id='${PASS_C}'`)).rows).toBe(1);
+      expect((await as(d, U.warden, `UPDATE public.gate_passes SET status='approved', approved_by=auth.uid(), approved_at=now() WHERE id='${PASS_A}'`)).rows).toBe(1);
+      expect((await as(d, U.wardenB, `UPDATE public.gate_passes SET status='approved', approved_by=auth.uid(), approved_at=now() WHERE id='${PASS_C}'`)).rows).toBe(1);
     } finally { await d.close(); }
   });
 
@@ -88,7 +88,7 @@ describe("warden block scope", () => {
   it("a greedy UPDATE by Warden A narrows to Block A, never fails outright", async () => {
     const d = await fresh();
     try {
-      const r = await as(d, U.warden, `UPDATE public.gate_passes SET status='rejected'`);
+      const r = await as(d, U.warden, `UPDATE public.gate_passes SET status='rejected', approved_by=auth.uid(), approved_at=now()`);
       expect(r.ok).toBe(true);
       expect(await scalar(d, `SELECT status FROM gate_passes WHERE id=$1`, [PASS_A])).toBe("rejected");
       expect(await scalar(d, `SELECT status FROM gate_passes WHERE id=$1`, [PASS_C])).toBe("pending");
@@ -106,12 +106,13 @@ describe("warden block scope", () => {
   it("PROPAGATION: reassigning a block moves warden authority immediately", async () => {
     const d = await fresh();
     try {
-      // Before: Warden A cannot act on Block B.
-      expect((await as(d, U.warden, `UPDATE public.gate_passes SET status='approved' WHERE id='${PASS_C}'`)).rows).toBe(0);
+      // Before: Warden A cannot act on Block B. (A complete, legal decision —
+      // so the only thing that can zero it is scope, not the state machine.)
+      expect((await as(d, U.warden, `UPDATE public.gate_passes SET status='approved', approved_by=auth.uid(), approved_at=now() WHERE id='${PASS_C}'`)).rows).toBe(0);
       // Admin reassigns Block B to Warden A.
       await verify(d, `UPDATE public.hostel_blocks SET warden_id=$1 WHERE id=$2`, [U.warden, BLOCK_B]);
       // Same session, no refresh: authority follows the row.
-      expect((await as(d, U.warden, `UPDATE public.gate_passes SET status='approved', approved_by=auth.uid() WHERE id='${PASS_C}'`)).rows).toBe(1);
+      expect((await as(d, U.warden, `UPDATE public.gate_passes SET status='approved', approved_by=auth.uid(), approved_at=now() WHERE id='${PASS_C}'`)).rows).toBe(1);
       // And Warden B has lost it.
       expect((await as(d, U.wardenB, `UPDATE public.hostel_rooms SET status='maintenance' WHERE id='${ROOM_B201}'`)).rows).toBe(0);
     } finally { await d.close(); }
@@ -121,7 +122,7 @@ describe("warden block scope", () => {
     const d = await fresh();
     try {
       await verify(d, `UPDATE public.hostel_allocations SET status='vacated' WHERE id=$1`, [ALLOC_A]);
-      expect((await as(d, U.warden, `UPDATE public.gate_passes SET status='approved' WHERE id='${PASS_A}'`)).rows).toBe(0);
+      expect((await as(d, U.warden, `UPDATE public.gate_passes SET status='approved', approved_by=auth.uid(), approved_at=now() WHERE id='${PASS_A}'`)).rows).toBe(0);
     } finally { await d.close(); }
   });
 
@@ -196,28 +197,34 @@ describe("gate pass workflow", () => {
     } finally { await d.close(); }
   });
 
+  /** Walks a pending pass to 'returned' along the only legal path (as owner). */
+  const walkToReturned = async (d: PGlite, id: string) => {
+    await verify(d, `UPDATE public.gate_passes SET status='approved', approved_by=$2, approved_at=now() WHERE id=$1`, [id, U.warden]);
+    await verify(d, `UPDATE public.gate_passes SET status='active', actual_exit=now() WHERE id=$1`, [id]);
+    await verify(d, `UPDATE public.gate_passes SET status='returned', actual_return=now() WHERE id=$1`, [id]);
+  };
+
   it("REPLAY: a returned pass cannot be re-activated by a status-guarded update", async () => {
     const d = await fresh();
     try {
-      await verify(d, `UPDATE public.gate_passes SET status='returned', actual_return=now() WHERE id=$1`, [PASS_A]);
-      // The application's verifyMovement path guards on the expected prior
-      // status. RLS alone does NOT forbid warden → any status transition; this
-      // is recorded honestly below as a design decision, not asserted away.
+      await walkToReturned(d, PASS_A);
       const guarded = await as(d, U.warden, `UPDATE public.gate_passes SET status='active' WHERE id='${PASS_A}' AND status='approved'`);
       expect(guarded.rows).toBe(0);
     } finally { await d.close(); }
   });
 
-  it("DESIGN DECISION: RLS permits a warden to set any status on an in-scope pass", async () => {
+  it("the database itself refuses a raw returned -> active jump (047 §7m)", async () => {
+    // Formerly recorded here as a DESIGN DECISION — RLS let a warden set any
+    // status on an in-scope pass and only the app's compare-and-swap stood
+    // in the way. The state machine now lives in the database; the full
+    // matrix is in tests/staging-gate-pass-machine.test.ts.
     const d = await fresh();
     try {
-      // No state machine exists at the database. The application enforces
-      // transitions via compare-and-swap on the expected prior status; a raw
-      // request can jump from 'returned' straight to 'active'. Whether the
-      // database should carry a transition trigger is a product decision.
-      await verify(d, `UPDATE public.gate_passes SET status='returned' WHERE id=$1`, [PASS_A]);
+      await walkToReturned(d, PASS_A);
       const jump = await as(d, U.warden, `UPDATE public.gate_passes SET status='active' WHERE id='${PASS_A}'`);
-      expect(jump.rows).toBe(1);
+      expect(jump.ok).toBe(false);
+      expect(jump.error).toMatch(/may not move from returned to active/);
+      expect(await scalar(d, `SELECT status FROM gate_passes WHERE id=$1`, [PASS_A])).toBe("returned");
     } finally { await d.close(); }
   });
 });
