@@ -48,7 +48,10 @@ function loadSql(path: string): string {
 function migrationRlsSection(): string {
   const sql = loadSql(MIGRATION);
   const start = sql.indexOf("-- 7a. Authority functions");
-  const end = sql.indexOf("-- 8. Rebuild the analytics views");
+  // Ends at 7g: sections 7g-7i (hostel, gate pass, finance) reference tables
+  // the academic fixture does not model, and they are exercised against the
+  // real chain by tests/staging-*.test.ts instead.
+  const end = sql.indexOf("-- 7g. Hostel");
   if (start < 0 || end < 0) throw new Error("Could not locate section 7 in migration 047.");
   return sql.slice(start, end);
 }

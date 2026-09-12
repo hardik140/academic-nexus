@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, vi } from "vitest";
 import { PGlite } from "@electric-sql/pglite";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { applyFullChain } from "./staging/harness";
 
 /**
  * Runs the WHOLE of migration 047 against a post-046 schema, in a disposable
@@ -28,7 +29,17 @@ import { join } from "node:path";
 vi.setConfig({ testTimeout: 120_000, hookTimeout: 180_000 });
 
 const MIGRATION = join(process.cwd(), "supabase/migrations/047_academic_transactions_on_offerings.sql");
-const PRE047 = join(process.cwd(), "tests/rls/pre047.sql");
+/**
+ * The last migration applied before 047 runs. The database this test starts
+ * from is the real product of 001..046 — tests/rls/pre047.sql, the
+ * hand-written approximation that used to stand in for it, drifted from the
+ * schema three times in one week (leave_requests, notifications,
+ * profiles.department_id, then the hostel and finance tables), each time
+ * making this test fail on a migration that applied cleanly to the real
+ * chain. A fixture that has to be edited whenever the migration grows is
+ * measuring the fixture.
+ */
+const UP_TO = "046_academic_period_foundation.sql";
 
 function loadSql(path: string): string {
   return readFileSync(path, "utf8").replace(/\r\n/g, "\n");
@@ -40,7 +51,11 @@ describe("migration 047 applies to a post-046 database", () => {
 
   beforeAll(async () => {
     db = new PGlite();
-    await db.exec(loadSql(PRE047));
+    const chain = await applyFullChain(db, UP_TO);
+    const broken = chain.find((step) => step.error);
+    if (broken) {
+      throw new Error(`chain failed before 047 at ${broken.file}: ${broken.error}`);
+    }
     try {
       // The real file, whole, unedited.
       await db.exec(loadSql(MIGRATION));
@@ -267,6 +282,8 @@ describe("migration 047 applies to a post-046 database", () => {
     // the functions are CREATE OR REPLACE, so a re-run is a no-op rather
     // than a duplicate-object failure. Migrations get re-run by accident.
     const sql = loadSql(MIGRATION);
+    // The whole of section 7 — this database carries the real chain, so the
+    // hostel and finance sections have their tables.
     const start = sql.indexOf("-- 7a. Authority functions");
     const end = sql.indexOf("-- 8. Rebuild the analytics views");
     await expect(db.exec(sql.slice(start, end))).resolves.toBeDefined();

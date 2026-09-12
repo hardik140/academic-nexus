@@ -212,3 +212,42 @@ INSERT INTO public.marks (id, college_id, offering_id, student_id, exam_type, ma
 -- --- A leave request, so substitution_assignments has a valid parent ---
 INSERT INTO public.leave_requests (id, college_id, requested_by, leave_type, start_date, end_date, reason, status, approved_by, approved_at) VALUES
   ('0000000f-0000-4000-8000-000000000001', '00000001-0000-4000-8000-000000000001', '00000003-0000-4000-8000-000000000003', 'sick', '2026-09-14', '2026-09-14', 'QA fixture: single-day sick leave', 'approved', '00000003-0000-4000-8000-000000000001', now());
+
+-- ============================================================
+-- Hostel and finance fixtures (Phase 10).
+--
+-- Two wardens, two blocks, and students allocated across them — the shape
+-- needed to ask whether block ownership is a real boundary or a comment.
+-- ============================================================
+INSERT INTO auth.users (id, email, raw_user_meta_data) VALUES
+  ('00000003-0000-4000-8000-000000000015', 'qa.warden.b@qa.test', jsonb_build_object('full_name','QA Warden B','college_id','00000001-0000-4000-8000-000000000001'));
+UPDATE public.profiles SET role = 'warden', status = 'active' WHERE id = '00000003-0000-4000-8000-000000000015';
+
+INSERT INTO public.hostel_blocks (id, college_id, name, type, warden_id, total_rooms) VALUES
+  ('00000010-0000-4000-8000-000000000001', '00000001-0000-4000-8000-000000000001', 'QA Block A', 'boys', '00000003-0000-4000-8000-00000000000e', 2),
+  ('00000010-0000-4000-8000-000000000002', '00000001-0000-4000-8000-000000000001', 'QA Block B', 'boys', '00000003-0000-4000-8000-000000000015', 2),
+  ('00000010-0000-4000-8000-000000000003', '00000001-0000-4000-8000-000000000002', 'QA-B Block', 'boys', NULL, 1);
+
+INSERT INTO public.hostel_rooms (id, college_id, block_id, block_name, room_number, capacity, occupancy, monthly_rent) VALUES
+  ('00000011-0000-4000-8000-000000000001', '00000001-0000-4000-8000-000000000001', '00000010-0000-4000-8000-000000000001', 'QA Block A', 'A-101', 2, 1, 5000),
+  ('00000011-0000-4000-8000-000000000002', '00000001-0000-4000-8000-000000000001', '00000010-0000-4000-8000-000000000001', 'QA Block A', 'A-102', 2, 0, 5000),
+  ('00000011-0000-4000-8000-000000000003', '00000001-0000-4000-8000-000000000001', '00000010-0000-4000-8000-000000000002', 'QA Block B', 'B-201', 2, 1, 5000),
+  ('00000011-0000-4000-8000-000000000004', '00000001-0000-4000-8000-000000000001', '00000010-0000-4000-8000-000000000002', 'QA Block B', 'B-202', 1, 0, 6000),
+  ('00000011-0000-4000-8000-000000000005', '00000001-0000-4000-8000-000000000002', '00000010-0000-4000-8000-000000000003', 'QA-B Block', 'X-1', 2, 1, 4000);
+
+-- Student A lives in Block A (Warden A); Student C lives in Block B (Warden B).
+INSERT INTO public.hostel_allocations (id, college_id, student_id, room_id, status) VALUES
+  ('00000012-0000-4000-8000-000000000001', '00000001-0000-4000-8000-000000000001', '00000004-0000-4000-8000-000000000001', '00000011-0000-4000-8000-000000000001', 'active'),
+  ('00000012-0000-4000-8000-000000000002', '00000001-0000-4000-8000-000000000001', '00000004-0000-4000-8000-000000000003', '00000011-0000-4000-8000-000000000003', 'active'),
+  ('00000012-0000-4000-8000-000000000003', '00000001-0000-4000-8000-000000000002', '00000004-0000-4000-8000-000000000007', '00000011-0000-4000-8000-000000000005', 'active');
+
+-- Pending gate passes, one per block.
+INSERT INTO public.gate_passes (id, college_id, student_id, destination, reason, exit_time, return_time, status) VALUES
+  ('00000013-0000-4000-8000-000000000001', '00000001-0000-4000-8000-000000000001', '00000004-0000-4000-8000-000000000001', 'Home', 'QA', '2026-09-13 08:00+00', '2026-09-13 20:00+00', 'pending'),
+  ('00000013-0000-4000-8000-000000000002', '00000001-0000-4000-8000-000000000001', '00000004-0000-4000-8000-000000000003', 'Market', 'QA', '2026-09-13 09:00+00', '2026-09-13 18:00+00', 'pending');
+
+-- Fees: Student A owes 10,000 with nothing paid; Student C owes 8,000.
+INSERT INTO public.fees (id, college_id, student_id, type, amount, due_date, status, paid_amount, semester, academic_year) VALUES
+  ('00000014-0000-4000-8000-000000000001', '00000001-0000-4000-8000-000000000001', '00000004-0000-4000-8000-000000000001', 'tuition', 10000, '2026-10-01', 'pending', 0, 3, 'QA 2026-27'),
+  ('00000014-0000-4000-8000-000000000002', '00000001-0000-4000-8000-000000000001', '00000004-0000-4000-8000-000000000003', 'tuition', 8000,  '2026-10-01', 'pending', 0, 3, 'QA 2026-27'),
+  ('00000014-0000-4000-8000-000000000003', '00000001-0000-4000-8000-000000000002', '00000004-0000-4000-8000-000000000007', 'tuition', 9000,  '2026-10-01', 'pending', 0, 3, 'QA-B 2026-27');

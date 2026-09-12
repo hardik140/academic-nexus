@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { PGlite } from "@electric-sql/pglite";
+import { join } from "node:path";
 import { applyFullChain, migrationFiles, type ApplyStep } from "./staging/harness";
 
 /**
@@ -117,24 +118,31 @@ describe("the real migration chain applies to an empty database", () => {
     expect(res.rows.map((r) => r.policyname)).toEqual([]);
   });
 
-  it("is re-runnable — applying 047 a second time changes nothing", async () => {
-    const before = await db.query<{ n: number }>(
-      `SELECT count(*)::int AS n FROM pg_policies WHERE schemaname='public'`
-    );
-    const second = new PGlite();
-    try {
-      const rerun = await applyFullChain(second);
-      // Same chain, same outcome. The guard that matters is 047's own
-      // DROP POLICY IF EXISTS blocks; without them a second apply raises
-      // "policy already exists" and a redeploy becomes a manual repair.
-      expect(rerun.filter((s) => s.error)).toEqual([]);
-      const after = await second.query<{ n: number }>(
-        `SELECT count(*)::int AS n FROM pg_policies WHERE schemaname='public'`
-      );
-      expect(after.rows[0].n).toBe(before.rows[0].n);
-    } finally {
-      await second.close();
-    }
+  it("is re-runnable — applying 047 a second time to the SAME database changes nothing", async () => {
+    // An earlier version of this test applied the chain twice to two fresh
+    // databases and compared them, which proves the chain is deterministic
+    // and nothing about idempotency. It passed while 047 contained a DROP
+    // CONSTRAINT that fails on re-application because a foreign key still
+    // depended on it. Re-applying to the database that already carries 047
+    // is the only thing that catches that.
+    const snapshot = async () =>
+      (
+        await db.query<{ policies: number; constraints: number; functions: number; triggers: number }>(
+          `SELECT
+             (SELECT count(*)::int FROM pg_policies WHERE schemaname='public') AS policies,
+             (SELECT count(*)::int FROM pg_constraint WHERE connamespace='public'::regnamespace) AS constraints,
+             (SELECT count(*)::int FROM pg_proc WHERE pronamespace='public'::regnamespace) AS functions,
+             (SELECT count(*)::int FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid
+               WHERE NOT t.tgisinternal AND c.relnamespace='public'::regnamespace) AS triggers`
+        )
+      ).rows[0];
+
+    const before = await snapshot();
+    const sql = (await import("node:fs"))
+      .readFileSync(join(process.cwd(), "supabase/migrations/047_academic_transactions_on_offerings.sql"), "utf8")
+      .replace(/\r\n/g, "\n");
+    await expect(db.exec(sql)).resolves.toBeDefined();
+    expect(await snapshot()).toEqual(before);
   });
 
   it("rebuilds the analytics views and leaves them queryable", async () => {

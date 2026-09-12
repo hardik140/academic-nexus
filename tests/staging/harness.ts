@@ -62,11 +62,15 @@ export interface ApplyStep {
  * migration test whose only output is a stack trace makes the reader guess
  * how far it got.
  */
-export async function applyFullChain(db: PGlite): Promise<ApplyStep[]> {
+export async function applyFullChain(db: PGlite, upTo?: string): Promise<ApplyStep[]> {
   const steps: ApplyStep[] = [];
   await db.exec(loadSql(join(ROOT, "tests/staging/platform.sql")));
 
   for (const file of migrationFiles()) {
+    // `upTo` lets a test stand exactly where the real history stood before a
+    // given migration — "the database after 046" is then the actual product
+    // of 001..046, not a hand-written approximation of it.
+    if (upTo && file > upTo) break;
     const started = Date.now();
     try {
       await db.exec(loadSql(join(MIGRATIONS_DIR, file)));
@@ -130,6 +134,7 @@ export const U = {
   admin: "00000003-0000-4000-8000-00000000000f",
   superAdmin: "00000003-0000-4000-8000-000000000010",
   hodMech: "00000003-0000-4000-8000-000000000014",
+  wardenB: "00000003-0000-4000-8000-000000000015",
   bTeacher: "00000003-0000-4000-8000-000000000011",
   bStudent: "00000003-0000-4000-8000-000000000012",
   bHod: "00000003-0000-4000-8000-000000000013",
@@ -173,6 +178,21 @@ export const OFF = {
   collegeB: "0000000a-0000-4000-8000-00000000000a",
 } as const;
 
+export const BLOCK_A = "00000010-0000-4000-8000-000000000001"; // Warden A
+export const BLOCK_B = "00000010-0000-4000-8000-000000000002"; // Warden B
+export const ROOM_A101 = "00000011-0000-4000-8000-000000000001";
+export const ROOM_A102 = "00000011-0000-4000-8000-000000000002";
+export const ROOM_B201 = "00000011-0000-4000-8000-000000000003";
+export const ROOM_B202 = "00000011-0000-4000-8000-000000000004";
+/** Student A's allocation, in Block A. */
+export const ALLOC_A = "00000012-0000-4000-8000-000000000001";
+/** Student C's allocation, in Block B. */
+export const ALLOC_C = "00000012-0000-4000-8000-000000000002";
+export const PASS_A = "00000013-0000-4000-8000-000000000001"; // Student A, Block A
+export const PASS_C = "00000013-0000-4000-8000-000000000002"; // Student C, Block B
+export const FEE_A = "00000014-0000-4000-8000-000000000001";  // 10,000 owed
+export const FEE_C = "00000014-0000-4000-8000-000000000002";  // 8,000 owed
+export const FEE_B_COLLEGE = "00000014-0000-4000-8000-000000000003";
 export const COLLEGE_A = "00000001-0000-4000-8000-000000000001";
 export const COLLEGE_B = "00000001-0000-4000-8000-000000000002";
 export const DEPT_CSE = "00000002-0000-4000-8000-000000000001";
