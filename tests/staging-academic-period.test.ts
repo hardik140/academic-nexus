@@ -344,7 +344,7 @@ describe("tenant consistency across the academic structure", () => {
     expect(await scalar(db, `SELECT count(*)::int FROM substitution_assignments WHERE substitute_teacher_id=$1`, [U.bTeacher])).toBe(0);
   });
 
-  it("every academic-structure key now carries college_id", async () => {
+  it("every tenant key in the schema is accounted for here", async () => {
     const rows = await verify<{ conname: string }>(db, `
       SELECT conname FROM pg_constraint WHERE contype='f' AND connamespace='public'::regnamespace
         AND conname LIKE '%_tenant_fkey' ORDER BY conname`);
@@ -354,10 +354,58 @@ describe("tenant consistency across the academic structure", () => {
       "course_offerings_course_tenant_fkey", "course_offerings_instructor_tenant_fkey",
       "course_offerings_section_tenant_fkey", "course_offerings_semester_tenant_fkey",
       "courses_department_tenant_fkey", "marks_offering_tenant_fkey", "marks_student_tenant_fkey",
+      "placement_applications_drive_tenant_fkey",
       "programmes_department_tenant_fkey", "sections_programme_tenant_fkey",
       "semesters_academic_year_tenant_fkey",
       "substitution_assignments_offering_tenant_fkey", "substitution_assignments_substitute_tenant_fkey",
       "timetable_slots_offering_tenant_fkey",
     ]);
+  });
+});
+
+// ══════════════════════════════════════════════════════════════
+// S6 — sections are scoped to the HOD's department (§7q)
+// ══════════════════════════════════════════════════════════════
+
+describe("S6: an HOD's section writes stop at their department", () => {
+  const PROG_CSE = "00000007-0000-4000-8000-000000000001";
+  const PROG_ECE = "00000007-0000-4000-8000-000000000002";
+  const SECTION_ECE_A = "00000008-0000-4000-8000-000000000003";
+  const SECTION_CSE_A = "00000008-0000-4000-8000-000000000001";
+
+  it("cannot touch another department's section, nor create one under its programme", async () => {
+    const d = await fresh();
+    try {
+      expect((await as(d, U.hodCse, `UPDATE public.sections SET name='Hijacked' WHERE id='${SECTION_ECE_A}'`)).rows).toBe(0);
+      expect((await as(d, U.hodCse, `DELETE FROM public.sections WHERE id='${SECTION_ECE_A}'`)).rows).toBe(0);
+      const ins = await as(d, U.hodCse, `INSERT INTO public.sections (college_id, programme_id, batch_year, name) VALUES ('${COLLEGE_A}','${PROG_ECE}',2026,'QA-ECE-X')`);
+      expect(ins.ok).toBe(false);
+      expect(await scalar(d, `SELECT name FROM sections WHERE id=$1`, [SECTION_ECE_A])).toBe("ECE-A");
+    } finally { await d.close(); }
+  });
+
+  it("can manage its own department's sections, but cannot walk one out of the department", async () => {
+    const d = await fresh();
+    try {
+      const ins = await as(d, U.hodCse, `INSERT INTO public.sections (college_id, programme_id, batch_year, name) VALUES ('${COLLEGE_A}','${PROG_CSE}',2026,'QA-CSE-X') RETURNING id`);
+      expect(ins.ok, ins.error ?? "").toBe(true);
+      expect((await as(d, U.hodCse, `UPDATE public.sections SET capacity=70 WHERE id='${SECTION_CSE_A}' RETURNING id`)).rows).toBe(1);
+      const walkOut = await as(d, U.hodCse, `UPDATE public.sections SET programme_id='${PROG_ECE}' WHERE id='${SECTION_CSE_A}'`);
+      expect(walkOut.ok).toBe(false);
+      expect(await scalar(d, `SELECT programme_id FROM sections WHERE id=$1`, [SECTION_CSE_A])).toBe(PROG_CSE);
+    } finally { await d.close(); }
+  });
+
+  it("MODEL: students are not members of sections — re-parenting a section changes no enrollment, attendance or authority", async () => {
+    const d = await fresh();
+    try {
+      const cols = await verify<{ column_name: string }>(d, `SELECT column_name FROM information_schema.columns WHERE table_name='students' AND column_name IN ('section_id','programme_id')`);
+      expect(cols).toEqual([]);
+      const before = await verify(d, `SELECT count(*)::int n, md5(string_agg(e::text,'|' ORDER BY e.id)) h FROM course_enrollments e JOIN course_offerings o ON o.id=e.offering_id WHERE o.section_id=$1`, [SECTION_CSE_A]);
+      await verify(d, `UPDATE sections SET programme_id=$2 WHERE id=$1`, [SECTION_CSE_A, PROG_ECE]); // as admin/console
+      expect(await verify(d, `SELECT count(*)::int n, md5(string_agg(e::text,'|' ORDER BY e.id)) h FROM course_enrollments e JOIN course_offerings o ON o.id=e.offering_id WHERE o.section_id=$1`, [SECTION_CSE_A])).toEqual(before);
+      // and the CSE HOD still heads the offering, because scope follows the COURSE's department
+      expect(await scalar(d, `SELECT count(*)::int FROM course_offerings o WHERE o.section_id=$1 AND EXISTS (SELECT 1 FROM courses c JOIN departments dd ON dd.id=c.department_id WHERE c.id=o.course_id AND dd.hod_id=$2)`, [SECTION_CSE_A, U.hodCse]).then(Number)).toBeGreaterThan(0);
+    } finally { await d.close(); }
   });
 });

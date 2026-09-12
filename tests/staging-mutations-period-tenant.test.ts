@@ -231,3 +231,89 @@ describe("gate pass state machine mutations (§7m)", () => {
     } finally { await d.close(); }
   });
 });
+
+describe("request-integrity mutations (§7n)", () => {
+  it("detects: audit user_id pin removed — a student writes the log in the admin's name", async () => {
+    const d = await mutated("audit user_id", (sql) =>
+      sql.replace(
+        "  FOR INSERT WITH CHECK (\n    college_id = public.get_my_college_id()\n    AND user_id = auth.uid()\n  );",
+        "  FOR INSERT WITH CHECK (\n    college_id = public.get_my_college_id()\n  );"
+      )
+    );
+    try {
+      // No RETURNING: a student holds no SELECT policy on audit_logs, and
+      // RETURNING would be refused for that reason alone. Count as owner.
+      const r = await as(d, U.studentA, `INSERT INTO public.audit_logs (college_id, user_id, action, table_name, record_id) VALUES ('${COLLEGE_A}','${U.admin}','forged','x','x')`);
+      expect(r.ok, "mutation not detected").toBe(true);
+      expect(await scalar(d, `SELECT count(*)::int FROM audit_logs WHERE action='forged' AND user_id=$1`, [U.admin])).toBe(1);
+    } finally { await d.close(); }
+  });
+
+  it("detects: refund composite key removed — a refund of another student's payment lands", async () => {
+    const d = await mutated("refund fk", (sql) =>
+      sql.replace(
+        "ALTER TABLE public.refund_requests\n  ADD CONSTRAINT refund_requests_payment_student_fkey\n    FOREIGN KEY (payment_id, student_id) REFERENCES public.payments (id, student_id) ON DELETE CASCADE;\n",
+        ""
+      )
+    );
+    try {
+      const pay = await as(d, U.finance,
+        `INSERT INTO public.payments (college_id, fee_id, student_id, amount, method, status, processed_by)
+           VALUES ('${COLLEGE_A}','00000014-0000-4000-8000-000000000002','00000004-0000-4000-8000-000000000003',500,'cash','cleared',auth.uid()) RETURNING id`);
+      const r = await as(d, U.studentA,
+        `INSERT INTO public.refund_requests (college_id, student_id, payment_id, amount, reason)
+           VALUES ('${COLLEGE_A}','00000004-0000-4000-8000-000000000001','${pay.data[0].id}',100,'x') RETURNING id`);
+      expect(r.ok, "mutation not detected").toBe(true);
+    } finally { await d.close(); }
+  });
+
+  it("detects: leave initial-status pin removed — a teacher files an approved leave", async () => {
+    const d = await mutated("leave status", (sql) =>
+      sql.replace(
+        "    AND requested_by = auth.uid()\n    AND status = 'pending'\n    AND approved_by IS NULL\n    AND approved_at IS NULL\n  );",
+        "    AND requested_by = auth.uid()\n  );"
+      )
+    );
+    try {
+      const r = await as(d, U.teacherA,
+        `INSERT INTO public.leave_requests (college_id, requested_by, leave_type, start_date, end_date, reason, status, approved_by, approved_at)
+           VALUES ('${COLLEGE_A}', auth.uid(), 'casual', '2026-10-01', '2026-10-02', 'x', 'approved', '${U.hodCse}', now()) RETURNING id`);
+      expect(r.ok, "mutation not detected").toBe(true);
+    } finally { await d.close(); }
+  });
+});
+
+describe("refund atomicity mutations (§7o)", () => {
+  it("detects: refundable-balance check removed — refunds exceed the payment", async () => {
+    const d = await mutated("refundable", (sql) =>
+      sql.replace(
+        "  IF v_req.amount > v_pay.amount - v_refunded THEN\n    RAISE EXCEPTION 'This refund (%) exceeds the refundable balance of %.',\n      v_req.amount, v_pay.amount - v_refunded USING ERRCODE = 'check_violation';\n  END IF;\n",
+        ""
+      )
+    );
+    try {
+      const S_A = "00000004-0000-4000-8000-000000000001", FEE = "00000014-0000-4000-8000-000000000001";
+      const pay = await as(d, U.finance, `INSERT INTO public.payments (college_id, fee_id, student_id, amount, method, status, processed_by) VALUES ('${COLLEGE_A}','${FEE}','${S_A}',3000,'cash','cleared',auth.uid()) RETURNING id`);
+      const req = async () => (await as(d, U.studentA, `INSERT INTO public.refund_requests (college_id, student_id, payment_id, amount, reason) VALUES ('${COLLEGE_A}','${S_A}','${pay.data[0].id}',2000,'x') RETURNING id`)).data[0].id;
+      expect((await as(d, U.finance, `SELECT public.approve_refund('${await req()}')`)).ok).toBe(true);
+      const over = await as(d, U.finance, `SELECT public.approve_refund('${await req()}')`);
+      expect(over.ok, "mutation not detected").toBe(true);
+      expect(await scalar(d, `SELECT sum(amount)::numeric FROM refund_requests WHERE payment_id=$1 AND status='approved'`, [pay.data[0].id]).then(Number)).toBe(4000);
+    } finally { await d.close(); }
+  });
+});
+
+describe("function grant mutations (§7r)", () => {
+  it("detects: the REVOKE on refresh_analytics removed — a student can rebuild every analytics view", async () => {
+    const d = await mutated("refresh grant", (sql) =>
+      sql.replace(
+        "REVOKE ALL ON FUNCTION public.refresh_analytics() FROM PUBLIC, anon, authenticated;\nGRANT EXECUTE ON FUNCTION public.refresh_analytics() TO service_role;\n",
+        ""
+      )
+    );
+    try {
+      const r = await as(d, U.studentA, `SELECT public.refresh_analytics()`);
+      expect(r.ok, "mutation not detected — PostgreSQL's default EXECUTE-to-PUBLIC is exactly the defect").toBe(true);
+    } finally { await d.close(); }
+  });
+});

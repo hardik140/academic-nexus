@@ -87,14 +87,35 @@ export async function rejectRefund(requestIdRaw: string, reviewNotesRaw: string)
 
 const ApproveSchema = z.object({ requestId: z.string().guid() });
 
+type ApproveRefundRow = {
+  fee_id: string;
+  payment_id: string;
+  refund_amount: number;
+  fee_paid_before: number;
+  fee_paid_after: number;
+  fee_status_before: string;
+  fee_status_after: string;
+  payment_fully_refunded: boolean;
+  student_id: string;
+};
+
 /**
- * Deliberately does NOT insert a negative-amount row into `payments` to let
- * update_fee_on_payment() (migration 003) do the arithmetic — that trigger's
- * status branch leaves a fully-zeroed fee's status incorrectly as 'paid'
- * (see migration 041's header comment). Instead this directly and safely
- * adjusts fees.paid_amount/status via a concurrency-safe compare-and-swap
- * (same optimistic-locking shape as the Warden increment's room-occupancy
- * check), and the refund_requests row itself is the reversal ledger.
+ * One call, one transaction: approve_refund() (migration 047 §7o) locks the
+ * request and the payment, re-checks the refundable balance against every
+ * refund already approved on that payment, reduces fees.paid_amount, marks
+ * the payment refunded once its refunds reach its amount, and claims the
+ * request — or does none of it.
+ *
+ * This replaced three separate statements (fee compare-and-swap, payment
+ * flag, request claim) whose documented "balance just changed — retry"
+ * path let a second approver's retry debit the fee a second time before
+ * losing the claim. tests/staging-refund-atomicity.test.ts replays that
+ * interleaving against the old sequence and drives the function directly.
+ *
+ * SECURITY INVOKER: the same RLS that governed the three statements governs
+ * the function; requireRole above is the application gate, exactly as before.
+ * Audit and notification stay here, after the money has moved, where a
+ * failure in either cannot undo a legitimate refund.
  */
 export async function approveRefund(requestIdRaw: string) {
   const actor = await requireRole(PERMISSIONS.refund_review);
@@ -102,107 +123,42 @@ export async function approveRefund(requestIdRaw: string) {
   await checkRateLimit(`approveRefund:${actor.userId}`, 30, 60);
   const supabase = await createClient();
 
-  const { data: request } = await supabase
-    .from("refund_requests")
-    .select("status, amount, payment_id, students:student_id(profiles:user_id(id))")
-    .eq("id", requestId)
-    .eq("college_id", actor.collegeId)
-    .single();
-  const req = request as unknown as {
-    status: string;
-    amount: number;
-    payment_id: string;
-    students: { profiles: { id: string } | null } | null;
-  } | null;
-  if (!req || req.status !== "pending") {
-    throw new Error("Refund request not found or already processed.");
-  }
-
-  const { data: payment } = await supabase
-    .from("payments")
-    .select("id, fee_id, amount, status")
-    .eq("id", req.payment_id)
-    .single();
-  if (!payment) {
-    throw new Error("Original payment not found.");
-  }
-
-  // Re-validate refundable amount — another refund could have been approved
-  // against the same payment since this request was submitted.
-  const { data: approvedRefunds } = await supabase
-    .from("refund_requests")
-    .select("amount")
-    .eq("payment_id", req.payment_id)
-    .eq("status", "approved");
-  const alreadyRefunded = (approvedRefunds || []).reduce((s, r) => s + r.amount, 0);
-  const refundable = payment.amount - alreadyRefunded;
-  if (req.amount > refundable) {
-    throw new Error(`This refund (${req.amount.toFixed(2)}) now exceeds the refundable balance of ${refundable.toFixed(2)}.`);
-  }
-
-  const { data: fee } = await supabase.from("fees").select("id, amount, paid_amount, status").eq("id", payment.fee_id).single();
-  if (!fee) {
-    throw new Error("Original fee not found.");
-  }
-
-  const newPaidAmount = Math.max(fee.paid_amount - req.amount, 0);
-  const newStatus = newPaidAmount <= 0 ? "refunded" : newPaidAmount < fee.amount ? "partial" : fee.status;
-
-  // Concurrency-safe compare-and-swap on the exact paid_amount just read —
-  // if a concurrent payment/refund raced it, zero rows match and .select()
-  // returns nothing, caught below instead of silently corrupting the
-  // balance (same pattern as the Warden increment's room-occupancy check).
-  const { data: casResult, error: casError } = await supabase
-    .from("fees")
-    .update({ paid_amount: newPaidAmount, status: newStatus })
-    .eq("id", fee.id)
-    .eq("paid_amount", fee.paid_amount)
-    .select("id");
-  if (casError) throw new Error(casError.message);
-  if (!casResult || casResult.length === 0) {
-    throw new Error("This fee's balance just changed — please retry the refund.");
-  }
-
-  // If the refunded amount now fully covers the original payment, mark that
-  // payment itself as refunded (a queryable, real signal — not the same
-  // thing as the fee's own status, since a fee can have multiple payments).
-  if (alreadyRefunded + req.amount >= payment.amount) {
-    await supabase.from("payments").update({ status: "refunded" }).eq("id", payment.id);
-  }
-
-  // The fee compare-and-swap above is what actually protects the money (and
-  // its "balance just changed - please retry" path is why the request is NOT
-  // claimed before it: claiming first would mark this approved and make the
-  // documented retry impossible). This predicate is the second line: it stops
-  // a racing approver from re-auditing and re-notifying an already-approved
-  // refund. See lib/concurrent-claim.ts.
-  const { data: approved, error: updateRequestError } = await supabase
-    .from("refund_requests")
-    .update({ status: "approved", reviewed_by: actor.userId, reviewed_at: new Date().toISOString() })
-    .eq("id", requestId)
-    .eq("status", "pending")
-    .select("id");
-  if (updateRequestError) throw new Error(updateRequestError.message);
-  assertClaimed(approved, "refund request");
+  // The hand-maintained Database type declares no Functions, so the row
+  // shape is stated here; it mirrors the RETURNS TABLE in 047 §7o.
+  const { data, error } = await (supabase.rpc as unknown as (fn: string, args: Record<string, unknown>) => PromiseLike<{ data: unknown; error: { message: string } | null }>)(
+    "approve_refund",
+    { p_request_id: requestId }
+  );
+  if (error) throw new Error(error.message);
+  const result = (data as unknown as ApproveRefundRow[] | null)?.[0];
+  if (!result) throw new Error("Refund request not found or already processed.");
 
   await logAudit(supabase, actor, "refund_approved", "refund_requests", requestId, {
-    oldValue: { fee_paid_amount: fee.paid_amount, fee_status: fee.status },
-    newValue: { fee_paid_amount: newPaidAmount, fee_status: newStatus, refund_amount: req.amount },
+    oldValue: { fee_paid_amount: result.fee_paid_before, fee_status: result.fee_status_before },
+    newValue: {
+      fee_paid_amount: result.fee_paid_after,
+      fee_status: result.fee_status_after,
+      refund_amount: result.refund_amount,
+      payment_fully_refunded: result.payment_fully_refunded,
+    },
   });
 
-  const studentUserId = req.students?.profiles?.id;
-  if (studentUserId) {
+  const { data: student } = await supabase
+    .from("students")
+    .select("user_id")
+    .eq("id", result.student_id)
+    .single();
+  if (student?.user_id) {
     await supabase.from("notifications").insert({
       college_id: actor.collegeId,
       title: "Refund approved",
-      message: `Your refund of ${req.amount.toFixed(2)} has been approved and processed.`,
-      receiver_id: studentUserId,
+      message: `Your refund of ${Number(result.refund_amount).toFixed(2)} has been approved and processed.`,
+      receiver_id: student.user_id,
       sender_id: actor.userId,
       type: "success",
       link: "/student/fees",
     });
   }
-
   await invalidateCache(refundsCacheKey(actor.collegeId));
   revalidatePath("/finance/refunds");
   revalidatePath("/finance/dashboard");

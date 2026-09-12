@@ -1785,6 +1785,410 @@ CREATE TRIGGER guard_gate_pass_delete
   FOR EACH ROW EXECUTE FUNCTION public.guard_gate_pass();
 
 -- ---------------------------------------------------------------
+-- 7n. A request enters as a request — the G1 class, closed everywhere
+--
+-- §7h fixed one instance: a student could INSERT a gate pass already
+-- 'approved' with a warden's id as approver, because the insert policy
+-- pinned WHO was asking and nothing else. Reading every other requester-
+-- side INSERT policy in the schema finds the same shape eight more times.
+-- None pins the request's initial status, none pins the reviewer stamps to
+-- NULL, five do not even pin college_id, and two do not tie the request to
+-- the record it targets. Probed as the requester, each of these landed:
+--
+--   leave_requests            teacher files a leave already 'approved'
+--   placement_applications    student applies already 'selected'
+--   refund_requests           student requests a refund of ANOTHER
+--                             student's payment (payment_id unchecked) —
+--                             approval then debits that student's fee
+--   financial_disputes        student opens a dispute already 'resolved'
+--   room_transfer_requests    student files a transfer already 'approved',
+--                             naming any allocation and any new room
+--   complaints                student files a complaint 'resolved'
+--   decisions                 hod submits a decision already 'approved'
+--   attendance_correction_requests
+--                             teacher files a correction already 'approved'
+--                             (the attendance write itself stays closed by
+--                             the separation-of-duties clause in
+--                             attendance_update_approved_correction — but the
+--                             queue and the audit trail disagree)
+--   audit_logs                ANY user inserts a row with ANY user_id: the
+--                             audit trail can be written in someone else's
+--                             name by anyone with a session
+--
+-- Each policy below is the original with three things added: the request
+-- is in the requester's college, it starts in its initial status, and the
+-- columns only a reviewer sets are NULL. Where a request names a record
+-- that belongs to a student, a composite key ties the two together, in the
+-- same shape as 5a and 7i. audit_logs additionally pins user_id to the
+-- session — lib/audit.ts's logAudit is the only writer and already does.
+-- ---------------------------------------------------------------
+
+-- leave_requests (010): requested_by only.
+DROP POLICY IF EXISTS "leave_requests_insert_self" ON public.leave_requests;
+CREATE POLICY "leave_requests_insert_self" ON public.leave_requests
+  FOR INSERT WITH CHECK (
+    college_id = public.get_my_college_id()
+    AND requested_by = auth.uid()
+    AND status = 'pending'
+    AND approved_by IS NULL
+    AND approved_at IS NULL
+  );
+
+-- placement_applications (025): the drive must be one of this college's.
+ALTER TABLE public.placement_applications DROP CONSTRAINT IF EXISTS placement_applications_drive_tenant_fkey;
+ALTER TABLE public.placement_drives DROP CONSTRAINT IF EXISTS placement_drives_tenant_key;
+ALTER TABLE public.placement_drives ADD CONSTRAINT placement_drives_tenant_key UNIQUE (id, college_id);
+ALTER TABLE public.placement_applications
+  ADD CONSTRAINT placement_applications_drive_tenant_fkey
+    FOREIGN KEY (drive_id, college_id) REFERENCES public.placement_drives (id, college_id) ON DELETE CASCADE;
+
+DROP POLICY IF EXISTS "placement_applications_insert_own" ON public.placement_applications;
+CREATE POLICY "placement_applications_insert_own" ON public.placement_applications
+  FOR INSERT WITH CHECK (
+    college_id = public.get_my_college_id()
+    AND public.get_my_role() = 'student'
+    AND EXISTS (
+      SELECT 1 FROM public.students s
+      WHERE s.id = student_id AND s.user_id = auth.uid()
+    )
+    AND status = 'applied'
+  );
+
+-- refund_requests (041): the payment must be the requesting student's own.
+ALTER TABLE public.refund_requests DROP CONSTRAINT IF EXISTS refund_requests_payment_student_fkey;
+ALTER TABLE public.financial_disputes DROP CONSTRAINT IF EXISTS financial_disputes_payment_student_fkey;
+ALTER TABLE public.financial_disputes DROP CONSTRAINT IF EXISTS financial_disputes_fee_student_fkey;
+ALTER TABLE public.payments DROP CONSTRAINT IF EXISTS payments_student_key;
+ALTER TABLE public.fees DROP CONSTRAINT IF EXISTS fees_student_key;
+ALTER TABLE public.payments ADD CONSTRAINT payments_student_key UNIQUE (id, student_id);
+ALTER TABLE public.fees ADD CONSTRAINT fees_student_key UNIQUE (id, student_id);
+ALTER TABLE public.refund_requests
+  ADD CONSTRAINT refund_requests_payment_student_fkey
+    FOREIGN KEY (payment_id, student_id) REFERENCES public.payments (id, student_id) ON DELETE CASCADE;
+
+DROP POLICY IF EXISTS "refund_insert_own" ON public.refund_requests;
+CREATE POLICY "refund_insert_own" ON public.refund_requests
+  FOR INSERT WITH CHECK (
+    college_id = public.get_my_college_id()
+    AND EXISTS (
+      SELECT 1 FROM public.students
+      WHERE students.id = refund_requests.student_id
+        AND students.user_id = auth.uid()
+    )
+    AND status = 'pending'
+    AND reviewed_by IS NULL
+    AND reviewed_at IS NULL
+    AND review_notes IS NULL
+  );
+
+-- financial_disputes (041): a disputed fee or payment must be the student's own.
+ALTER TABLE public.financial_disputes
+  ADD CONSTRAINT financial_disputes_fee_student_fkey
+    FOREIGN KEY (fee_id, student_id) REFERENCES public.fees (id, student_id) ON DELETE SET NULL (fee_id),
+  ADD CONSTRAINT financial_disputes_payment_student_fkey
+    FOREIGN KEY (payment_id, student_id) REFERENCES public.payments (id, student_id) ON DELETE SET NULL (payment_id);
+
+DROP POLICY IF EXISTS "dispute_insert_own" ON public.financial_disputes;
+CREATE POLICY "dispute_insert_own" ON public.financial_disputes
+  FOR INSERT WITH CHECK (
+    college_id = public.get_my_college_id()
+    AND EXISTS (
+      SELECT 1 FROM public.students
+      WHERE students.id = financial_disputes.student_id
+        AND students.user_id = auth.uid()
+    )
+    AND status = 'submitted'
+    AND assigned_to IS NULL
+    AND resolved_by IS NULL
+    AND resolved_at IS NULL
+    AND resolution_notes IS NULL
+  );
+
+-- room_transfer_requests (040): the allocation being left must be the
+-- student's own, and the new allocation is created by the warden's approval.
+ALTER TABLE public.room_transfer_requests DROP CONSTRAINT IF EXISTS room_transfer_requests_current_allocation_student_fkey;
+ALTER TABLE public.hostel_allocations DROP CONSTRAINT IF EXISTS hostel_allocations_student_key;
+ALTER TABLE public.hostel_allocations ADD CONSTRAINT hostel_allocations_student_key UNIQUE (id, student_id);
+ALTER TABLE public.room_transfer_requests
+  ADD CONSTRAINT room_transfer_requests_current_allocation_student_fkey
+    FOREIGN KEY (current_allocation_id, student_id) REFERENCES public.hostel_allocations (id, student_id)
+    ON DELETE SET NULL (current_allocation_id);
+
+DROP POLICY IF EXISTS "room_transfer_insert_own" ON public.room_transfer_requests;
+CREATE POLICY "room_transfer_insert_own" ON public.room_transfer_requests
+  FOR INSERT WITH CHECK (
+    college_id = public.get_my_college_id()
+    AND EXISTS (
+      SELECT 1 FROM public.students
+      WHERE students.id = room_transfer_requests.student_id
+        AND students.user_id = auth.uid()
+    )
+    AND status = 'pending'
+    AND reviewed_by IS NULL
+    AND reviewed_at IS NULL
+    AND new_allocation_id IS NULL
+  );
+
+-- complaints (006)
+DROP POLICY IF EXISTS "complaints_create" ON public.complaints;
+CREATE POLICY "complaints_create" ON public.complaints
+  FOR INSERT WITH CHECK (
+    college_id = public.get_my_college_id()
+    AND submitted_by = auth.uid()
+    AND status = 'open'
+    AND assigned_to IS NULL
+    AND resolved_at IS NULL
+  );
+
+-- decisions (026)
+DROP POLICY IF EXISTS "decisions_submit" ON public.decisions;
+CREATE POLICY "decisions_submit" ON public.decisions
+  FOR INSERT WITH CHECK (
+    college_id = public.get_my_college_id()
+    AND requested_by = auth.uid()
+    AND public.get_my_role() IN ('hod', 'warden', 'placement_cell')
+    AND status = 'pending'
+    AND decided_by IS NULL
+    AND decided_at IS NULL
+    AND delegated_to IS NULL
+  );
+
+-- attendance_correction_requests (037)
+DROP POLICY IF EXISTS "attendance_correction_insert_own" ON public.attendance_correction_requests;
+CREATE POLICY "attendance_correction_insert_own" ON public.attendance_correction_requests
+  FOR INSERT WITH CHECK (
+    college_id = public.get_my_college_id()
+    AND submitted_by = auth.uid()
+    AND status = 'pending'
+    AND reviewed_by IS NULL
+    AND reviewed_at IS NULL
+  );
+
+-- audit_logs (006): written in the session's own name, or not at all.
+DROP POLICY IF EXISTS "audit_logs_insert" ON public.audit_logs;
+CREATE POLICY "audit_logs_insert" ON public.audit_logs
+  FOR INSERT WITH CHECK (
+    college_id = public.get_my_college_id()
+    AND user_id = auth.uid()
+  );
+
+-- ---------------------------------------------------------------
+-- 7o. Refund approval is one transaction
+--
+-- finance/refunds/actions.ts approved a refund in three statements from
+-- the application: a compare-and-swap on fees.paid_amount, an optional
+-- flip of payments.status, and a compare-and-swap claim on the request —
+-- with "balance just changed, please retry" as the documented response to
+-- losing the first. Replayed statement by statement (the test does this),
+-- two approvers on the same request interleave so that the second one's
+-- RETRY debits the fee a second time and then loses the claim: one approved
+-- refund, the fee short by twice its amount. §7i closed the same race on
+-- the payment side with a trigger; the refund side needs the same thing —
+-- the whole approval as one unit of work under one row lock.
+--
+-- SECURITY INVOKER, deliberately. Every statement inside runs under the
+-- caller's own RLS: refund_staff_manage, fees and payments policies decide
+-- who may reach which rows, exactly as they did for the three separate
+-- statements. The function adds atomicity and ordering, not authority.
+-- A student or a teacher calling it finds no request they may update and
+-- gets the same "not found" a finance user of another college gets.
+--
+-- Locking order: the request row (FOR UPDATE) then the payment row (FOR
+-- UPDATE). Every approval takes the payment lock, so concurrent approvals
+-- of two different requests against the same payment serialise there and
+-- the refundable-balance check sees the earlier one's result. The fee row
+-- is locked by its own UPDATE.
+--
+-- The accounting model is unchanged: paid_amount is reduced by the refund,
+-- fee status follows the new balance, and the payment is marked refunded
+-- only once refunds against it reach its full amount. What the caller does
+-- afterwards — audit row, notification — stays in the application, where
+-- a failure there does not undo money that has legitimately moved.
+-- ---------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.approve_refund(p_request_id UUID)
+RETURNS TABLE (
+  fee_id UUID,
+  payment_id UUID,
+  refund_amount NUMERIC,
+  fee_paid_before NUMERIC,
+  fee_paid_after NUMERIC,
+  fee_status_before TEXT,
+  fee_status_after TEXT,
+  payment_fully_refunded BOOLEAN,
+  student_id UUID
+)
+LANGUAGE plpgsql
+SET search_path = public, pg_catalog
+AS $$
+DECLARE
+  v_req       public.refund_requests%ROWTYPE;
+  v_pay       public.payments%ROWTYPE;
+  v_fee       public.fees%ROWTYPE;
+  v_refunded  NUMERIC;
+  v_new_paid  NUMERIC;
+  v_new_state TEXT;
+BEGIN
+  SELECT * INTO v_req FROM public.refund_requests r
+   WHERE r.id = p_request_id
+   FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Refund request not found.' USING ERRCODE = 'no_data_found';
+  END IF;
+  IF v_req.status <> 'pending' THEN
+    RAISE EXCEPTION 'Refund request already %.', v_req.status USING ERRCODE = 'check_violation';
+  END IF;
+
+  SELECT * INTO v_pay FROM public.payments p
+   WHERE p.id = v_req.payment_id
+   FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Original payment not found.' USING ERRCODE = 'no_data_found';
+  END IF;
+
+  SELECT COALESCE(SUM(r.amount), 0) INTO v_refunded
+    FROM public.refund_requests r
+   WHERE r.payment_id = v_pay.id AND r.status = 'approved';
+  IF v_req.amount > v_pay.amount - v_refunded THEN
+    RAISE EXCEPTION 'This refund (%) exceeds the refundable balance of %.',
+      v_req.amount, v_pay.amount - v_refunded USING ERRCODE = 'check_violation';
+  END IF;
+
+  SELECT * INTO v_fee FROM public.fees f WHERE f.id = v_pay.fee_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Original fee not found.' USING ERRCODE = 'no_data_found';
+  END IF;
+
+  v_new_paid  := GREATEST(v_fee.paid_amount - v_req.amount, 0);
+  v_new_state := CASE
+    WHEN v_new_paid <= 0 THEN 'refunded'
+    WHEN v_new_paid < v_fee.amount THEN 'partial'
+    ELSE v_fee.status
+  END;
+
+  UPDATE public.fees f
+     SET paid_amount = v_new_paid,
+         status      = v_new_state
+   WHERE f.id = v_fee.id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Fee could not be updated.' USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  payment_fully_refunded := (v_refunded + v_req.amount) >= v_pay.amount;
+  IF payment_fully_refunded THEN
+    UPDATE public.payments p SET status = 'refunded' WHERE p.id = v_pay.id;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'Payment could not be updated.' USING ERRCODE = 'insufficient_privilege';
+    END IF;
+  END IF;
+
+  UPDATE public.refund_requests r
+     SET status = 'approved', reviewed_by = auth.uid(), reviewed_at = now()
+   WHERE r.id = v_req.id AND r.status = 'pending';
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Refund request could not be updated.' USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  fee_id            := v_fee.id;
+  payment_id        := v_pay.id;
+  refund_amount     := v_req.amount;
+  fee_paid_before   := v_fee.paid_amount;
+  fee_paid_after    := v_new_paid;
+  fee_status_before := v_fee.status;
+  fee_status_after  := v_new_state;
+  student_id        := v_req.student_id;
+  RETURN NEXT;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.approve_refund(UUID) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.approve_refund(UUID) TO authenticated, service_role;
+
+-- ---------------------------------------------------------------
+-- 7p. Payment idempotency — a transaction reference is recorded once
+--
+-- recordPaymentCore carries no idempotency key. The same request sent five
+-- times lands five payments as long as the fee's outstanding balance
+-- absorbs them (probed: five rapid 2,000 payments against a 10,000 fee all
+-- clear; the overpayment guard only refuses the sixth). A bank, UPI or
+-- cheque reference identifies one settlement, so recording it twice in one
+-- college is by definition the duplicate the guard cannot see.
+--
+-- Partial unique index rather than a constraint: cash and other unreferenced
+-- payments carry NULL and are legitimately repeatable. Whether THOSE need a
+-- client-generated idempotency key is a product decision recorded in the
+-- register, not decided here. The uniqueness is per college — two colleges
+-- may see the same bank reference format.
+-- ---------------------------------------------------------------
+CREATE UNIQUE INDEX IF NOT EXISTS idx_payments_transaction_ref_once
+  ON public.payments (college_id, transaction_ref)
+  WHERE transaction_ref IS NOT NULL;
+
+-- ---------------------------------------------------------------
+-- 7q. Sections — the one structure table an HOD could still write
+--     outside their department
+--
+-- 046's sections_manage is role + tenancy (admin, director, hod). §7d and
+-- §7e scoped offerings and courses to the department the HOD heads; sections
+-- were left at college-wide, so a CSE HOD could re-parent an ECE section
+-- under a CSE programme, rename it, or retire it. Traced through the model,
+-- that changes no authority — students are not members of sections (there
+-- is no students.section_id; enrollment is per offering), offerings scope
+-- by the COURSE's department, and nothing else reads programme_id — so
+-- this is integrity, not escalation. It is closed for the same reason the
+-- courses rule was: an HOD's structural writes stop at their department,
+-- before and after the change.
+--
+-- The section's department is its programme's. USING binds the row as it
+-- stands; WITH CHECK binds where it will stand.
+-- ---------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.heads_programme_department(p_programme_id UUID)
+RETURNS BOOLEAN AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.programmes p
+    JOIN public.departments d ON d.id = p.department_id
+    WHERE p.id = p_programme_id
+      AND d.hod_id = auth.uid()
+  );
+$$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public, pg_catalog;
+
+DROP POLICY IF EXISTS "sections_manage" ON public.sections;
+CREATE POLICY "sections_manage" ON public.sections
+  FOR ALL
+  USING (
+    college_id = public.get_my_college_id()
+    AND (
+      public.get_my_role() IN ('admin', 'director')
+      OR (public.get_my_role() = 'hod' AND public.heads_programme_department(programme_id))
+    )
+  )
+  WITH CHECK (
+    college_id = public.get_my_college_id()
+    AND (
+      public.get_my_role() IN ('admin', 'director')
+      OR (public.get_my_role() = 'hod' AND public.heads_programme_department(programme_id))
+    )
+  );
+
+-- ---------------------------------------------------------------
+-- 7r. refresh_analytics() is not a public endpoint
+--
+-- PostgreSQL grants EXECUTE on a new function to PUBLIC, and nothing in
+-- 007/011/032/033 revoked it, so `POST /rest/v1/rpc/refresh_analytics`
+-- with nothing more than the anon key rebuilds six materialized views
+-- CONCURRENTLY — every call, from anyone, as often as they like. It returns
+-- void and leaks nothing; what it costs is the database. The only
+-- legitimate caller is the QStash-signed cron route, which uses the
+-- service-role client.
+--
+-- The authority helpers (get_my_role, can_write_offering_records,
+-- wardens_student, ...) stay executable by authenticated: each answers a
+-- question about the CALLER and is exactly what a policy evaluates.
+-- ---------------------------------------------------------------
+REVOKE ALL ON FUNCTION public.refresh_analytics() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.refresh_analytics() TO service_role;
+
+-- ---------------------------------------------------------------
 -- 8. Rebuild the analytics views against the offering model.
 --
 -- Output columns are preserved exactly — director/analytics, hod/reports and
