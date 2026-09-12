@@ -55,6 +55,10 @@ export const ACTION_ALLOWED_ROLES: Record<string, UserRole[]> = {
   sendPlacementNotification: ["placement_cell", "admin"],
   readPlacementCellData: ["placement_cell", "director", "admin"],
   applyToPlacementDrive: ["student"],
+  // Academic period lifecycle — mirrors semesters_*_manage (047 §7k) and the
+  // grant 046 gave academic_years_manage. hod is deliberately absent.
+  createSemester: ["admin", "director"],
+  transitionSemester: ["admin", "director"],
 };
 
 export interface RbacMatrixRow {

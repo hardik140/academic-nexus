@@ -177,6 +177,16 @@ const ACTION_INVOKERS: Record<string, () => Promise<unknown>> = {
     (await import("@/app/(portal)/placement-cell/reports/actions")).getPlacementReports(),
   applyToPlacementDrive: async () =>
     (await import("@/app/(portal)/student/placements/actions")).applyToDrive(UUID_RECORD),
+  createSemester: async () =>
+    (await import("@/app/(portal)/admin/academic-periods/actions")).createSemester({
+      academicYearId: UUID_RECORD,
+      name: "Odd",
+      sequenceNo: 1,
+      startDate: "2027-06-01",
+      endDate: "2027-11-30",
+    }),
+  transitionSemester: async () =>
+    (await import("@/app/(portal)/admin/academic-periods/actions")).transitionSemester(UUID_RECORD, "activate"),
 };
 
 function isForbidden(err: unknown): boolean {

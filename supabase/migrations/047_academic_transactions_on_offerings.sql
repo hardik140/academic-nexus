@@ -1307,6 +1307,352 @@ ALTER FUNCTION public.handle_new_user()   SET search_path = public, pg_catalog;
 ALTER FUNCTION public.refresh_analytics() SET search_path = public, pg_catalog;
 
 -- ---------------------------------------------------------------
+-- 7k. Academic period lifecycle — the model 046 built could not be operated
+--
+-- 046 gave semesters a status vocabulary (planned/active/closed), a
+-- one-active-per-college index and a parent academic_year, and every
+-- academic transaction in this migration hangs off an offering that hangs
+-- off a semester. But `semesters` carried exactly one policy — semesters_read
+-- from 006 — and no Server Action, API route or mobile screen writes it.
+-- Under RLS that is a table nobody can create a row in: a college that
+-- finishes its current term has no way, through the product, to begin the
+-- next one. That is a production blocker, not a missing convenience.
+--
+-- WHAT A SEMESTER IS HERE. An institutional TERM ("Fall 2026"), sequenced
+-- inside an academic year — not a programme's semester number. "1st, 3rd and
+-- 5th semester running concurrently" is one term with three sections of
+-- different batch_year, each carrying its own offerings, so the one-active
+-- index is the right invariant for this model. What it cannot represent is
+-- two programmes on DIFFERENT calendars (a trimester MBA beside a semester
+-- B.Tech) — recorded as a design decision, not changed here.
+--
+-- WHO. admin and director, college-wide — the same grant 046 gave the parent
+-- table (academic_years_manage) and programmes; not hod, whose management
+-- rights stop at sections and their own department's offerings.
+--
+-- LIFECYCLE, enforced by the database for every caller, console included:
+--
+--   INSERT            planned only (RLS WITH CHECK, authenticated callers)
+--   planned -> active allowed; the parent academic year must itself be
+--                     active, which is the invariant 046's backfill encoded
+--                     ("active iff it contains the current semester")
+--   active  -> closed allowed; for an academic year, only once none of its
+--                     semesters is still active
+--   anything else     refused: no reopening, no skipping planned -> closed
+--   closed            immutable — it is history that attendance, marks and
+--                     enrollments now point at (045's rule, applied here)
+--   college_id        immutable always; academic_year_id immutable once the
+--                     semester has left 'planned', because moving a live
+--                     term to another year re-parents every offering in it
+--   DELETE            planned only (RLS); anything referenced by an offering
+--                     is already refused by 046's ON DELETE RESTRICT
+--
+-- Dates and name stay editable while planned or active — a term whose end
+-- date is extended is routine, and nothing downstream keys on them.
+-- is_current (deprecated) is kept truthful from status so the legacy flag
+-- can never disagree with the column that replaced it.
+--
+-- The trigger is SECURITY INVOKER on purpose: its lookups run under the
+-- caller's own RLS, and both tables are readable college-wide, so it needs
+-- no elevated context and adds none.
+-- ---------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.guard_academic_period()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = public, pg_catalog
+AS $$
+BEGIN
+  IF NEW.college_id IS DISTINCT FROM OLD.college_id THEN
+    RAISE EXCEPTION '%: college_id is immutable', TG_TABLE_NAME
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF OLD.status = 'closed' THEN
+    RAISE EXCEPTION '%: a closed period is immutable', TG_TABLE_NAME
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF NEW.status IS DISTINCT FROM OLD.status THEN
+    IF NOT (
+      (OLD.status = 'planned' AND NEW.status = 'active')
+      OR (OLD.status = 'active' AND NEW.status = 'closed')
+    ) THEN
+      RAISE EXCEPTION '%: status may not move from % to %', TG_TABLE_NAME, OLD.status, NEW.status
+        USING ERRCODE = 'check_violation';
+    END IF;
+  END IF;
+
+  IF TG_TABLE_NAME = 'semesters' THEN
+    IF OLD.status <> 'planned' AND NEW.academic_year_id IS DISTINCT FROM OLD.academic_year_id THEN
+      RAISE EXCEPTION 'semesters: academic_year_id is immutable once the semester is active'
+        USING ERRCODE = 'check_violation';
+    END IF;
+
+    IF NEW.status = 'active' AND OLD.status = 'planned' THEN
+      IF NEW.academic_year_id IS NULL OR NOT EXISTS (
+        SELECT 1 FROM public.academic_years ay
+        WHERE ay.id = NEW.academic_year_id AND ay.status = 'active'
+      ) THEN
+        RAISE EXCEPTION 'semesters: the academic year must be active before a semester in it can be'
+          USING ERRCODE = 'check_violation';
+      END IF;
+    END IF;
+
+    NEW.is_current := (NEW.status = 'active');
+  ELSIF TG_TABLE_NAME = 'academic_years' THEN
+    IF NEW.status = 'closed' AND OLD.status = 'active' AND EXISTS (
+      SELECT 1 FROM public.semesters s
+      WHERE s.academic_year_id = NEW.id AND s.status = 'active'
+    ) THEN
+      RAISE EXCEPTION 'academic_years: close the active semester before closing the year'
+        USING ERRCODE = 'check_violation';
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS guard_academic_period_semesters ON public.semesters;
+CREATE TRIGGER guard_academic_period_semesters
+  BEFORE UPDATE ON public.semesters
+  FOR EACH ROW EXECUTE FUNCTION public.guard_academic_period();
+
+DROP TRIGGER IF EXISTS guard_academic_period_academic_years ON public.academic_years;
+CREATE TRIGGER guard_academic_period_academic_years
+  BEFORE UPDATE ON public.academic_years
+  FOR EACH ROW EXECUTE FUNCTION public.guard_academic_period();
+
+-- A new semester mirrors its legacy flag from status — for INSERT this is a
+-- separate trigger because there is no OLD row to compare against.
+CREATE OR REPLACE FUNCTION public.semesters_mirror_is_current()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = public, pg_catalog
+AS $$
+BEGIN
+  NEW.is_current := (NEW.status = 'active');
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS semesters_mirror_is_current ON public.semesters;
+CREATE TRIGGER semesters_mirror_is_current
+  BEFORE INSERT ON public.semesters
+  FOR EACH ROW EXECUTE FUNCTION public.semesters_mirror_is_current();
+
+DROP POLICY IF EXISTS "semesters_insert_manage" ON public.semesters;
+CREATE POLICY "semesters_insert_manage" ON public.semesters
+  FOR INSERT WITH CHECK (
+    college_id = public.get_my_college_id()
+    AND public.get_my_role() IN ('admin', 'director')
+    AND status = 'planned'
+    AND academic_year_id IS NOT NULL
+  );
+
+DROP POLICY IF EXISTS "semesters_update_manage" ON public.semesters;
+CREATE POLICY "semesters_update_manage" ON public.semesters
+  FOR UPDATE USING (
+    college_id = public.get_my_college_id()
+    AND public.get_my_role() IN ('admin', 'director')
+    AND status <> 'closed'
+  )
+  WITH CHECK (
+    college_id = public.get_my_college_id()
+    AND public.get_my_role() IN ('admin', 'director')
+  );
+
+DROP POLICY IF EXISTS "semesters_delete_manage" ON public.semesters;
+CREATE POLICY "semesters_delete_manage" ON public.semesters
+  FOR DELETE USING (
+    college_id = public.get_my_college_id()
+    AND public.get_my_role() IN ('admin', 'director')
+    AND status = 'planned'
+  );
+
+-- academic_years_manage (046) is FOR ALL with USING only, so an admin could
+-- insert a year straight in as 'active' or delete a closed one. Split it the
+-- same way as semesters: created planned, deleted only while planned.
+DROP POLICY IF EXISTS "academic_years_manage" ON public.academic_years;
+DROP POLICY IF EXISTS "academic_years_insert_manage" ON public.academic_years;
+CREATE POLICY "academic_years_insert_manage" ON public.academic_years
+  FOR INSERT WITH CHECK (
+    college_id = public.get_my_college_id()
+    AND public.get_my_role() IN ('admin', 'director')
+    AND status = 'planned'
+  );
+
+DROP POLICY IF EXISTS "academic_years_update_manage" ON public.academic_years;
+CREATE POLICY "academic_years_update_manage" ON public.academic_years
+  FOR UPDATE USING (
+    college_id = public.get_my_college_id()
+    AND public.get_my_role() IN ('admin', 'director')
+    AND status <> 'closed'
+  )
+  WITH CHECK (
+    college_id = public.get_my_college_id()
+    AND public.get_my_role() IN ('admin', 'director')
+  );
+
+DROP POLICY IF EXISTS "academic_years_delete_manage" ON public.academic_years;
+CREATE POLICY "academic_years_delete_manage" ON public.academic_years
+  FOR DELETE USING (
+    college_id = public.get_my_college_id()
+    AND public.get_my_role() IN ('admin', 'director')
+    AND status = 'planned'
+  );
+
+-- ---------------------------------------------------------------
+-- 7l. Tenant consistency across the academic structure
+--
+-- Every policy in this database scopes the ROW to a college
+-- (college_id = get_my_college_id()). None of the 96 foreign keys between
+-- college-scoped tables scopes the RELATIONSHIP, so as college A's admin,
+-- through nothing more than PostgREST:
+--
+--   INSERT INTO semesters        (college_id=A, academic_year_id=<B's year>)
+--   INSERT INTO sections         (college_id=A, programme_id=<B's programme>)
+--   INSERT INTO course_offerings (college_id=A, semester_id=<B's term>, ...)
+--   INSERT INTO course_enrollments (college_id=A, offering_id=<A>, student_id=<B's student>)
+--   INSERT INTO attendance       (college_id=A, ..., student_id=<B's student>)
+--
+-- all succeed (probed, not assumed). The B row's owner cannot see the A
+-- record — RLS on the A row hides it — and A's staff hold full authority
+-- over A already, so this is not an escalation; it is a college holding
+-- attendance about a student it does not have, and a term hanging off a
+-- year that belongs to someone else. The application never does this (every
+-- *Core reads the referenced row back and compares college_id), which is
+-- exactly the kind of assumption a future code path or a console session
+-- silently breaks.
+--
+-- The mechanism is the one 5a and 7i already use: a UNIQUE (id, college_id)
+-- key on each parent and a composite foreign key carrying college_id from
+-- each child, so a reference can only ever land inside the same tenant. The
+-- single-column keys stay — they own the ON DELETE semantics — and the
+-- composite ones sit beside them with the default NO ACTION, which adds no
+-- restriction the original key did not already impose.
+--
+-- SCOPE, deliberately: the tables this migration owns or repoints
+-- (academic_years, semesters, programmes, sections, course_offerings,
+-- course_enrollments, attendance, marks, timetable_slots,
+-- substitution_assignments) plus the four parents they reference
+-- (departments, courses, profiles, students). The transaction tables are
+-- empty in production (046 header, verified by count) and the structure
+-- tables have at most the two backfilled semesters, so these constraints
+-- validate against nothing and take their ACCESS EXCLUSIVE lock on empty
+-- relations. The remaining ~70 keys — hostel, finance, placements, leave,
+-- notifications — sit on populated tables and are recorded as a follow-up
+-- with the same shape, to be applied in a window once a staging exists.
+--
+-- Nullable child columns (course_offerings.instructor_id,
+-- substitution_assignments.substitute_teacher_id) use MATCH SIMPLE: a NULL
+-- leaves the key unchecked, exactly as the single-column key behaves.
+--
+-- PRE-APPLY CHECK on the live database — every query must return 0:
+--   SELECT count(*) FROM courses c JOIN departments d ON d.id=c.department_id
+--     WHERE d.college_id <> c.college_id;
+--   SELECT count(*) FROM semesters s JOIN academic_years ay ON ay.id=s.academic_year_id
+--     WHERE ay.college_id <> s.college_id;
+-- ---------------------------------------------------------------
+
+-- Re-runnable: every child key is dropped before any parent key it depends
+-- on (the I1 ordering rule), then everything is added in dependency order.
+ALTER TABLE public.courses
+  DROP CONSTRAINT IF EXISTS courses_department_tenant_fkey;
+ALTER TABLE public.semesters
+  DROP CONSTRAINT IF EXISTS semesters_academic_year_tenant_fkey;
+ALTER TABLE public.programmes
+  DROP CONSTRAINT IF EXISTS programmes_department_tenant_fkey;
+ALTER TABLE public.sections
+  DROP CONSTRAINT IF EXISTS sections_programme_tenant_fkey;
+ALTER TABLE public.course_offerings
+  DROP CONSTRAINT IF EXISTS course_offerings_semester_tenant_fkey,
+  DROP CONSTRAINT IF EXISTS course_offerings_course_tenant_fkey,
+  DROP CONSTRAINT IF EXISTS course_offerings_section_tenant_fkey,
+  DROP CONSTRAINT IF EXISTS course_offerings_instructor_tenant_fkey;
+ALTER TABLE public.course_enrollments
+  DROP CONSTRAINT IF EXISTS course_enrollments_offering_tenant_fkey,
+  DROP CONSTRAINT IF EXISTS course_enrollments_student_tenant_fkey;
+ALTER TABLE public.attendance
+  DROP CONSTRAINT IF EXISTS attendance_offering_tenant_fkey,
+  DROP CONSTRAINT IF EXISTS attendance_student_tenant_fkey;
+ALTER TABLE public.marks
+  DROP CONSTRAINT IF EXISTS marks_offering_tenant_fkey,
+  DROP CONSTRAINT IF EXISTS marks_student_tenant_fkey;
+ALTER TABLE public.timetable_slots
+  DROP CONSTRAINT IF EXISTS timetable_slots_offering_tenant_fkey;
+ALTER TABLE public.substitution_assignments
+  DROP CONSTRAINT IF EXISTS substitution_assignments_offering_tenant_fkey,
+  DROP CONSTRAINT IF EXISTS substitution_assignments_substitute_tenant_fkey;
+
+ALTER TABLE public.departments DROP CONSTRAINT IF EXISTS departments_tenant_key;
+ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS profiles_tenant_key;
+ALTER TABLE public.students DROP CONSTRAINT IF EXISTS students_tenant_key;
+ALTER TABLE public.courses DROP CONSTRAINT IF EXISTS courses_tenant_key;
+ALTER TABLE public.academic_years DROP CONSTRAINT IF EXISTS academic_years_tenant_key;
+ALTER TABLE public.semesters DROP CONSTRAINT IF EXISTS semesters_tenant_key;
+ALTER TABLE public.programmes DROP CONSTRAINT IF EXISTS programmes_tenant_key;
+ALTER TABLE public.sections DROP CONSTRAINT IF EXISTS sections_tenant_key;
+ALTER TABLE public.course_offerings DROP CONSTRAINT IF EXISTS course_offerings_tenant_key;
+
+-- Parents: a tenant-qualified identity for each.
+ALTER TABLE public.departments ADD CONSTRAINT departments_tenant_key UNIQUE (id, college_id);
+ALTER TABLE public.profiles ADD CONSTRAINT profiles_tenant_key UNIQUE (id, college_id);
+ALTER TABLE public.students ADD CONSTRAINT students_tenant_key UNIQUE (id, college_id);
+ALTER TABLE public.courses ADD CONSTRAINT courses_tenant_key UNIQUE (id, college_id);
+ALTER TABLE public.academic_years ADD CONSTRAINT academic_years_tenant_key UNIQUE (id, college_id);
+ALTER TABLE public.semesters ADD CONSTRAINT semesters_tenant_key UNIQUE (id, college_id);
+ALTER TABLE public.programmes ADD CONSTRAINT programmes_tenant_key UNIQUE (id, college_id);
+ALTER TABLE public.sections ADD CONSTRAINT sections_tenant_key UNIQUE (id, college_id);
+ALTER TABLE public.course_offerings ADD CONSTRAINT course_offerings_tenant_key UNIQUE (id, college_id);
+
+-- Children: every structural reference must stay inside the tenant.
+ALTER TABLE public.courses
+  ADD CONSTRAINT courses_department_tenant_fkey
+    FOREIGN KEY (department_id, college_id) REFERENCES public.departments (id, college_id);
+ALTER TABLE public.semesters
+  ADD CONSTRAINT semesters_academic_year_tenant_fkey
+    FOREIGN KEY (academic_year_id, college_id) REFERENCES public.academic_years (id, college_id);
+ALTER TABLE public.programmes
+  ADD CONSTRAINT programmes_department_tenant_fkey
+    FOREIGN KEY (department_id, college_id) REFERENCES public.departments (id, college_id);
+ALTER TABLE public.sections
+  ADD CONSTRAINT sections_programme_tenant_fkey
+    FOREIGN KEY (programme_id, college_id) REFERENCES public.programmes (id, college_id);
+ALTER TABLE public.course_offerings
+  ADD CONSTRAINT course_offerings_semester_tenant_fkey
+    FOREIGN KEY (semester_id, college_id) REFERENCES public.semesters (id, college_id),
+  ADD CONSTRAINT course_offerings_course_tenant_fkey
+    FOREIGN KEY (course_id, college_id) REFERENCES public.courses (id, college_id),
+  ADD CONSTRAINT course_offerings_section_tenant_fkey
+    FOREIGN KEY (section_id, college_id) REFERENCES public.sections (id, college_id),
+  ADD CONSTRAINT course_offerings_instructor_tenant_fkey
+    FOREIGN KEY (instructor_id, college_id) REFERENCES public.profiles (id, college_id);
+ALTER TABLE public.course_enrollments
+  ADD CONSTRAINT course_enrollments_offering_tenant_fkey
+    FOREIGN KEY (offering_id, college_id) REFERENCES public.course_offerings (id, college_id),
+  ADD CONSTRAINT course_enrollments_student_tenant_fkey
+    FOREIGN KEY (student_id, college_id) REFERENCES public.students (id, college_id);
+ALTER TABLE public.attendance
+  ADD CONSTRAINT attendance_offering_tenant_fkey
+    FOREIGN KEY (offering_id, college_id) REFERENCES public.course_offerings (id, college_id),
+  ADD CONSTRAINT attendance_student_tenant_fkey
+    FOREIGN KEY (student_id, college_id) REFERENCES public.students (id, college_id);
+ALTER TABLE public.marks
+  ADD CONSTRAINT marks_offering_tenant_fkey
+    FOREIGN KEY (offering_id, college_id) REFERENCES public.course_offerings (id, college_id),
+  ADD CONSTRAINT marks_student_tenant_fkey
+    FOREIGN KEY (student_id, college_id) REFERENCES public.students (id, college_id);
+ALTER TABLE public.timetable_slots
+  ADD CONSTRAINT timetable_slots_offering_tenant_fkey
+    FOREIGN KEY (offering_id, college_id) REFERENCES public.course_offerings (id, college_id);
+ALTER TABLE public.substitution_assignments
+  ADD CONSTRAINT substitution_assignments_offering_tenant_fkey
+    FOREIGN KEY (offering_id, college_id) REFERENCES public.course_offerings (id, college_id),
+  ADD CONSTRAINT substitution_assignments_substitute_tenant_fkey
+    FOREIGN KEY (substitute_teacher_id, college_id) REFERENCES public.profiles (id, college_id);
+
+-- ---------------------------------------------------------------
 -- 8. Rebuild the analytics views against the offering model.
 --
 -- Output columns are preserved exactly — director/analytics, hod/reports and

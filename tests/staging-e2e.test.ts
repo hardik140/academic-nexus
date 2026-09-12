@@ -1186,9 +1186,13 @@ describe("model observations", () => {
       );
       expect(String(idx)).toContain("WHERE (status = 'active'::text)");
 
-      // So an institution running Semesters 1/3/5 concurrently cannot mark
-      // them all active. Nothing in the application reads semester status
-      // today (getActiveSemesterId has no callers), so this is latent.
+      // A semester row is an institutional TERM; sections of different
+      // batch_year carry the 1st/3rd/5th-semester cohorts inside one term,
+      // so one active term per college is the intended invariant, and 047
+      // §7k now operates it (create -> activate -> close). What the index
+      // cannot express is two programmes on different calendars — a
+      // trimester course beside a semester one — which is a design decision,
+      // not a defect. (An earlier comment here called this a finding.)
       let failed = false;
       try {
         await verify(d, `UPDATE public.semesters SET status='active' WHERE id='00000006-0000-4000-8000-000000000005'`);

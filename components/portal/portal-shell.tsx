@@ -81,6 +81,7 @@ const NAV_MAP: Record<
     { label: "Departments", href: "/admin/departments", icon: "🏢" },
     { label: "Hostel", href: "/admin/hostel", icon: "🏠" },
     { label: "Courses", href: "/admin/courses", icon: "📚" },
+    { label: "Academic Periods", href: "/admin/academic-periods", icon: "📅" },
     { label: "Web Forms", href: "/admin/forms", icon: "📋" },
     { label: "Audit Log", href: "/admin/audit", icon: "📜" },
     { label: "Settings", href: "/admin/settings", icon: "⚙️" },

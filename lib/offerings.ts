@@ -338,9 +338,12 @@ export async function getActiveSemesterId(
  * - Offering MANAGEMENT — creating an offering, or changing its instructor,
  *   section, course or semester. Nothing in this repository writes
  *   `course_offerings`: not a Server Action, not an API route, not the React
- *   Native app. The same is true of sections, programmes, semesters and
- *   academic_years. That master data is expected to arrive by another route,
- *   so there is no application authorization to mirror here yet.
+ *   Native app. The same is true of sections, programmes and enrollments.
+ *   Semesters and academic years DO have one now —
+ *   app/(portal)/admin/academic-periods — so a term can be opened and closed
+ *   through the product; but with no way to create the offerings inside it,
+ *   the academic module still cannot be operated end to end. That is a
+ *   missing feature, recorded as such, not something to paper over here.
  *
  *   When that screen is built, the rule it must enforce is already in the
  *   database (047 §7d, `course_offerings_manage`): admin and director act

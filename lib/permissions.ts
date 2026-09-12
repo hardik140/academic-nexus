@@ -89,6 +89,12 @@ export const PERMISSIONS = {
   dispute_submit: ["student"],
   dispute_manage: ["finance", "admin"],
   finance_exceptions_read: ["finance", "admin"],
+
+  // Academic period lifecycle (academic years and the semesters inside
+  // them) — the same grant 046 gave academic_years_manage and programmes,
+  // mirrored by the semesters_*_manage policies in 047 §7k. Not hod: their
+  // management rights stop at sections and their own department's offerings.
+  academic_period_manage: ["admin", "director"],
 } as const satisfies Record<string, readonly UserRole[]>;
 
 export type Permission = keyof typeof PERMISSIONS;

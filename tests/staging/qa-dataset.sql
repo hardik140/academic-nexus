@@ -111,10 +111,13 @@ INSERT INTO public.academic_years (id, college_id, name, start_date, end_date, s
 
 -- --- Semesters ---
 INSERT INTO public.semesters (id, college_id, name, start_date, end_date, academic_year, academic_year_id, sequence_no, status, is_current) VALUES
-  -- NOTE: idx_semesters_one_active (046) permits exactly ONE active semester
-  -- per college, so Semesters 1 and 5 are 'planned' even though a real
-  -- institution runs 1/3/5 concurrently in the odd term. That is a finding,
-  -- not a fixture convenience -- see the semester-model test below.
+  -- NOTE: a row here is an institutional TERM (046: 'Fall 2026'), not a
+  -- programme's semester number. "1st, 3rd and 5th semester running at
+  -- once" is ONE active term with three sections of different batch_year,
+  -- so idx_semesters_one_active is the right invariant. These rows are named
+  -- "Semester N" for readability of the tests that reference them; only one
+  -- is active because only one term is. (An earlier note here called the
+  -- index a finding -- that was a misread of the model, corrected in Phase 11.)
   ('00000006-0000-4000-8000-000000000001', '00000001-0000-4000-8000-000000000001', 'QA Semester 1', '2026-06-01', '2026-11-30', 'QA 2026-27', '00000005-0000-4000-8000-000000000001', 1, 'planned', false),
   ('00000006-0000-4000-8000-000000000003', '00000001-0000-4000-8000-000000000001', 'QA Semester 3', '2026-06-01', '2026-11-30', 'QA 2026-27', '00000005-0000-4000-8000-000000000001', 3, 'active', true),
   ('00000006-0000-4000-8000-000000000005', '00000001-0000-4000-8000-000000000001', 'QA Semester 5', '2026-06-01', '2026-11-30', 'QA 2026-27', '00000005-0000-4000-8000-000000000001', 5, 'planned', false),
