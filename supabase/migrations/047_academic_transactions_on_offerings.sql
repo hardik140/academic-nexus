@@ -164,6 +164,8 @@ ALTER TABLE public.course_enrollments
   DROP COLUMN IF EXISTS semester_id;
 
 ALTER TABLE public.course_enrollments
+  DROP CONSTRAINT IF EXISTS course_enrollments_offering_student_key;
+ALTER TABLE public.course_enrollments
   ADD CONSTRAINT course_enrollments_offering_student_key UNIQUE (offering_id, student_id);
 
 CREATE INDEX IF NOT EXISTS idx_course_enrollments_offering ON public.course_enrollments(offering_id);
@@ -181,6 +183,8 @@ ALTER TABLE public.attendance
 ALTER TABLE public.attendance
   DROP COLUMN IF EXISTS course_id;
 
+ALTER TABLE public.attendance
+  DROP CONSTRAINT IF EXISTS attendance_offering_student_date_key;
 ALTER TABLE public.attendance
   ADD CONSTRAINT attendance_offering_student_date_key UNIQUE (offering_id, student_id, date);
 
@@ -205,6 +209,8 @@ ALTER TABLE public.marks
   DROP COLUMN IF EXISTS course_id,
   DROP COLUMN IF EXISTS semester;
 
+ALTER TABLE public.marks
+  DROP CONSTRAINT IF EXISTS marks_offering_student_exam_key;
 ALTER TABLE public.marks
   ADD CONSTRAINT marks_offering_student_exam_key UNIQUE (offering_id, student_id, exam_type);
 
@@ -284,6 +290,10 @@ CREATE INDEX IF NOT EXISTS idx_attendance_correction_offering
 -- the four context columns adds no new restriction to `attendance`, only a
 -- referencable target.
 -- ---------------------------------------------------------------
+-- Dependent FK first, then the key it references — the other order refuses
+-- on a re-run ("cannot drop constraint ... other objects depend on it").
+ALTER TABLE public.attendance_correction_requests
+  DROP CONSTRAINT IF EXISTS attendance_correction_requests_attendance_context_fkey;
 ALTER TABLE public.attendance
   DROP CONSTRAINT IF EXISTS attendance_correction_target_key;
 ALTER TABLE public.attendance
@@ -294,8 +304,6 @@ ALTER TABLE public.attendance
 -- it leads the composite.
 ALTER TABLE public.attendance_correction_requests
   DROP CONSTRAINT IF EXISTS attendance_correction_requests_attendance_id_fkey;
-ALTER TABLE public.attendance_correction_requests
-  DROP CONSTRAINT IF EXISTS attendance_correction_requests_attendance_context_fkey;
 ALTER TABLE public.attendance_correction_requests
   ADD CONSTRAINT attendance_correction_requests_attendance_context_fkey
   FOREIGN KEY (attendance_id, college_id, offering_id, student_id, date)
@@ -317,6 +325,8 @@ ALTER TABLE public.substitution_assignments
 ALTER TABLE public.substitution_assignments
   DROP COLUMN IF EXISTS course_id;
 
+ALTER TABLE public.substitution_assignments
+  DROP CONSTRAINT IF EXISTS substitution_assignments_offering_date_key;
 ALTER TABLE public.substitution_assignments
   ADD CONSTRAINT substitution_assignments_offering_date_key UNIQUE (offering_id, date);
 
@@ -976,6 +986,325 @@ CREATE POLICY "notifications_admin_send" ON public.notifications
     AND public.get_my_role() IN ('admin', 'teacher', 'hod', 'finance', 'director', 'warden', 'placement_cell')
     AND sender_id = auth.uid()
   );
+
+-- ---------------------------------------------------------------
+-- 7g. Hostel — block ownership is a boundary, not a comment
+--
+-- warden/gatepasses/actions.ts says it plainly: "This is the app-layer close
+-- of a real, pre-existing IDOR-class gap: gate_passes_staff RLS is
+-- college-wide FOR ALL for any warden, with no block restriction at all."
+-- The same is true of hostel_rooms, hostel_allocations,
+-- room_transfer_requests and complaints. Reproduced before fixing: Warden A
+-- approved a Block-B student's gate pass, put a Block-B room into
+-- maintenance, vacated a Block-B student, and allocated a student into
+-- Block B — every one accepted by the database.
+--
+-- The rule is the application's own, not a new one: a warden's scope is
+-- hostel_blocks.warden_id -> rooms -> active allocations -> students
+-- (resolveWardenScopedStudentIds / assertGatePassInWardenScope). These
+-- functions express exactly that chain so it is defined once.
+--
+-- hostel_blocks.warden_id itself is admin-only (hostel_blocks_admin, 013),
+-- which is the master-data node — verified: a warden cannot reassign a block
+-- to themselves. So unlike the academic graph, only the leaves needed
+-- closing here.
+-- ---------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.wardens_block(p_block_id UUID)
+RETURNS BOOLEAN AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.hostel_blocks b
+    WHERE b.id = p_block_id AND b.warden_id = auth.uid()
+  );
+$$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public, pg_catalog;
+
+CREATE OR REPLACE FUNCTION public.wardens_room(p_room_id UUID)
+RETURNS BOOLEAN AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.hostel_rooms r
+    WHERE r.id = p_room_id AND public.wardens_block(r.block_id)
+  );
+$$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public, pg_catalog;
+
+-- The block a student is CURRENTLY allocated in. A student with no active
+-- allocation is in nobody's scope — fail closed, matching the app's
+-- "no active hostel allocation in your scope" error.
+CREATE OR REPLACE FUNCTION public.wardens_student(p_student_id UUID)
+RETURNS BOOLEAN AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.hostel_allocations a
+    WHERE a.student_id = p_student_id
+      AND a.status = 'active'
+      AND public.wardens_room(a.room_id)
+  );
+$$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public, pg_catalog;
+
+-- complaints.submitted_by is a profile id, so one more hop.
+CREATE OR REPLACE FUNCTION public.wardens_student_profile(p_user_id UUID)
+RETURNS BOOLEAN AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.students s
+    WHERE s.user_id = p_user_id AND public.wardens_student(s.id)
+  );
+$$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public, pg_catalog;
+
+DROP POLICY IF EXISTS "gate_passes_staff" ON public.gate_passes;
+CREATE POLICY "gate_passes_staff" ON public.gate_passes
+  FOR ALL
+  USING (
+    college_id = public.get_my_college_id()
+    AND (
+      public.get_my_role() = 'admin'
+      OR (public.get_my_role() = 'warden' AND public.wardens_student(student_id))
+    )
+  )
+  WITH CHECK (
+    college_id = public.get_my_college_id()
+    AND (
+      public.get_my_role() = 'admin'
+      OR (public.get_my_role() = 'warden' AND public.wardens_student(student_id))
+    )
+  );
+
+DROP POLICY IF EXISTS "hostel_rooms_staff_manage" ON public.hostel_rooms;
+CREATE POLICY "hostel_rooms_staff_manage" ON public.hostel_rooms
+  FOR UPDATE
+  USING (
+    college_id = public.get_my_college_id()
+    AND (
+      public.get_my_role() = 'admin'
+      OR (public.get_my_role() = 'warden' AND public.wardens_block(block_id))
+    )
+  )
+  WITH CHECK (
+    college_id = public.get_my_college_id()
+    AND (
+      public.get_my_role() = 'admin'
+      OR (public.get_my_role() = 'warden' AND public.wardens_block(block_id))
+    )
+  );
+
+DROP POLICY IF EXISTS "hostel_allocations_staff_manage" ON public.hostel_allocations;
+CREATE POLICY "hostel_allocations_staff_manage" ON public.hostel_allocations
+  FOR ALL
+  USING (
+    college_id = public.get_my_college_id()
+    AND (
+      public.get_my_role() = 'admin'
+      OR (public.get_my_role() = 'warden' AND public.wardens_room(room_id))
+    )
+  )
+  WITH CHECK (
+    college_id = public.get_my_college_id()
+    AND (
+      public.get_my_role() = 'admin'
+      OR (public.get_my_role() = 'warden' AND public.wardens_room(room_id))
+    )
+  );
+
+DROP POLICY IF EXISTS "room_transfer_staff_manage" ON public.room_transfer_requests;
+CREATE POLICY "room_transfer_staff_manage" ON public.room_transfer_requests
+  FOR ALL
+  USING (
+    college_id = public.get_my_college_id()
+    AND (
+      public.get_my_role() = 'admin'
+      OR (public.get_my_role() = 'warden' AND public.wardens_student(student_id))
+    )
+  )
+  WITH CHECK (
+    college_id = public.get_my_college_id()
+    AND (
+      public.get_my_role() = 'admin'
+      OR (public.get_my_role() = 'warden' AND public.wardens_student(student_id))
+    )
+  );
+
+DROP POLICY IF EXISTS "complaints_staff" ON public.complaints;
+CREATE POLICY "complaints_staff" ON public.complaints
+  FOR ALL
+  USING (
+    college_id = public.get_my_college_id()
+    AND (
+      public.get_my_role() = 'admin'
+      OR (public.get_my_role() = 'warden' AND public.wardens_student_profile(submitted_by))
+    )
+  )
+  WITH CHECK (
+    college_id = public.get_my_college_id()
+    AND (
+      public.get_my_role() = 'admin'
+      OR (public.get_my_role() = 'warden' AND public.wardens_student_profile(submitted_by))
+    )
+  );
+
+-- ---------------------------------------------------------------
+-- 7h. Gate pass — a student files a REQUEST, never an approval
+--
+-- gate_passes_student_create (006) checked only that the student was
+-- themselves. Reproduced: a student inserted a pass with status='approved'
+-- and approved_by set to a warden, and it landed. That is the approval
+-- workflow bypassed at the first step. applyGatePass always writes
+-- status='pending' with nothing else set, so pinning that shape here takes
+-- nothing from the application.
+-- ---------------------------------------------------------------
+DROP POLICY IF EXISTS "gate_passes_student_create" ON public.gate_passes;
+CREATE POLICY "gate_passes_student_create" ON public.gate_passes
+  FOR INSERT WITH CHECK (
+    student_id IN (SELECT s.id FROM public.students s WHERE s.user_id = auth.uid())
+    AND status = 'pending'
+    AND approved_by IS NULL
+    AND approved_at IS NULL
+    AND actual_exit IS NULL
+    AND actual_return IS NULL
+  );
+
+-- ---------------------------------------------------------------
+-- 7i. Finance — the ledger must not be able to disagree with itself
+--
+-- update_fee_on_payment (003) credited fees.paid_amount for EVERY inserted
+-- payment: status 'failed', status 'pending', negative amounts, amounts far
+-- above the fee, and payments whose student_id was not the fee's student.
+-- Deleting a payment left the credit behind. All reproduced as the finance
+-- role — a legitimate user, through PostgREST, with no application code in
+-- the way. And payments.college_id was client-supplied, so a College A
+-- finance user could credit a College B fee: the payment row said College A
+-- and the policy believed it.
+--
+-- Every rule below already exists in recordPaymentCore — positive amount,
+-- status 'cleared', student taken from the fee, "exceeds the outstanding
+-- balance" refused. This makes the database say the same thing, so the
+-- rules hold for a raw request and, because the fee UPDATE inside the
+-- trigger takes a row lock, for two requests at once. That closes a race
+-- the application has: recordPaymentCore reads `outstanding` and inserts
+-- without a compare-and-swap (the refund path has one; this path did not),
+-- so two concurrent payments could both pass the app check and both land.
+--
+-- Deliberately NOT changed, because the accounting model is not mine to
+-- decide: partial refunds are recorded in refund_requests and applied to
+-- paid_amount by hand (approveRefundCore), while a full refund ALSO flips
+-- payments.status. A trigger that debited on that status change would
+-- double-count against the manual adjustment. UPDATE is therefore left
+-- alone except for making a payment's identity (fee, student, amount)
+-- immutable — the ledger may change state, not history.
+-- ---------------------------------------------------------------
+ALTER TABLE public.payments
+  DROP CONSTRAINT IF EXISTS payments_amount_positive;
+ALTER TABLE public.payments
+  ADD CONSTRAINT payments_amount_positive CHECK (amount > 0);
+
+-- Composite FK: the payment's college and student must be the fee's.
+-- Same technique as 5a — a referential statement, expressed referentially.
+-- Dependent FK first, then the key it references (see 5a).
+ALTER TABLE public.payments
+  DROP CONSTRAINT IF EXISTS payments_fee_context_fkey;
+ALTER TABLE public.fees
+  DROP CONSTRAINT IF EXISTS fees_payment_target_key;
+ALTER TABLE public.fees
+  ADD CONSTRAINT fees_payment_target_key UNIQUE (id, college_id, student_id);
+
+ALTER TABLE public.payments
+  DROP CONSTRAINT IF EXISTS payments_fee_id_fkey;
+ALTER TABLE public.payments
+  ADD CONSTRAINT payments_fee_context_fkey
+  FOREIGN KEY (fee_id, college_id, student_id)
+  REFERENCES public.fees (id, college_id, student_id)
+  ON DELETE CASCADE;
+
+CREATE OR REPLACE FUNCTION public.update_fee_on_payment()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    -- Only money that actually arrived is money.
+    IF NEW.status <> 'cleared' THEN
+      RETURN NEW;
+    END IF;
+
+    UPDATE public.fees
+    SET
+      paid_amount = paid_amount + NEW.amount,
+      paid_at = CASE WHEN (paid_amount + NEW.amount) >= amount THEN now() ELSE paid_at END,
+      status = CASE
+        WHEN (paid_amount + NEW.amount) >= amount THEN 'paid'
+        WHEN (paid_amount + NEW.amount) > 0 THEN 'partial'
+        ELSE status
+      END
+    WHERE id = NEW.fee_id
+      AND paid_amount + NEW.amount <= amount;
+
+    -- The FK guarantees the fee exists, so zero rows means one thing.
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'Payment of % exceeds the outstanding balance on fee %', NEW.amount, NEW.fee_id
+        USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN NEW;
+
+  ELSIF TG_OP = 'UPDATE' THEN
+    IF NEW.fee_id <> OLD.fee_id OR NEW.student_id <> OLD.student_id OR NEW.amount <> OLD.amount THEN
+      RAISE EXCEPTION 'A payment''s fee, student and amount are immutable; record a refund instead'
+        USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN NEW;
+
+  ELSIF TG_OP = 'DELETE' THEN
+    IF OLD.status = 'cleared' THEN
+      UPDATE public.fees
+      SET
+        paid_amount = GREATEST(paid_amount - OLD.amount, 0),
+        paid_at = CASE WHEN GREATEST(paid_amount - OLD.amount, 0) >= amount THEN paid_at ELSE NULL END,
+        status = CASE
+          WHEN GREATEST(paid_amount - OLD.amount, 0) >= amount THEN 'paid'
+          WHEN GREATEST(paid_amount - OLD.amount, 0) > 0 THEN 'partial'
+          ELSE 'pending'
+        END
+      WHERE id = OLD.fee_id;
+    END IF;
+    RETURN OLD;
+  END IF;
+  RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS on_payment_inserted ON public.payments;
+DROP TRIGGER IF EXISTS on_payment_changed ON public.payments;
+CREATE TRIGGER on_payment_changed
+  AFTER INSERT OR UPDATE OR DELETE ON public.payments
+  FOR EACH ROW EXECUTE FUNCTION public.update_fee_on_payment();
+
+-- processed_by is who recorded it. Every app insert sets it to the actor.
+DROP POLICY IF EXISTS "payments_finance_manage" ON public.payments;
+CREATE POLICY "payments_finance_manage" ON public.payments
+  FOR ALL
+  USING (
+    college_id = public.get_my_college_id()
+    AND public.get_my_role() IN ('finance', 'admin')
+  )
+  WITH CHECK (
+    college_id = public.get_my_college_id()
+    AND public.get_my_role() IN ('finance', 'admin')
+    AND (processed_by IS NULL OR processed_by = auth.uid())
+  );
+
+-- ---------------------------------------------------------------
+-- 7j. Pin search_path on every SECURITY DEFINER function that lacked one
+--
+-- get_my_role(), get_my_college_id() and get_my_email() are the three
+-- functions every policy in this database calls, and none of them pinned
+-- search_path. A SECURITY DEFINER function resolves unqualified names using
+-- the CALLER's search_path, so a caller who can create an object earlier in
+-- that path can substitute it. On hosted Supabase `authenticated` holds no
+-- CREATE on public, which closes the practical attack — verified, not
+-- assumed — but the foundation of the whole authorization model should not
+-- depend on a grant that nobody here controls. Supabase's own security
+-- advisor flags this shape as function_search_path_mutable.
+--
+-- ALTER rather than CREATE OR REPLACE: the bodies are correct and belong to
+-- their own migrations; only the attribute is missing.
+-- ---------------------------------------------------------------
+ALTER FUNCTION public.get_my_role()       SET search_path = public, pg_catalog;
+ALTER FUNCTION public.get_my_college_id() SET search_path = public, pg_catalog;
+ALTER FUNCTION public.get_my_email()      SET search_path = public, pg_catalog;
+ALTER FUNCTION public.handle_new_user()   SET search_path = public, pg_catalog;
+ALTER FUNCTION public.refresh_analytics() SET search_path = public, pg_catalog;
 
 -- ---------------------------------------------------------------
 -- 8. Rebuild the analytics views against the offering model.
