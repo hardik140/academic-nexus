@@ -6,6 +6,8 @@ import { createClient } from "@/lib/supabase/server";
 import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib/rbac";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { PERMISSIONS } from "@/lib/permissions";
+import { logAudit } from "@/lib/audit";
+import { assertClaimed } from "@/lib/concurrent-claim";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 
@@ -35,7 +37,7 @@ export async function assignHodCore(
   // even one that came from a dropdown we populated ourselves.
   const { data: department } = await supabase
     .from("departments")
-    .select("id, college_id")
+    .select("id, college_id, hod_id")
     .eq("id", departmentId)
     .single();
 
@@ -60,15 +62,32 @@ export async function assignHodCore(
     }
   }
 
-  const { error } = await supabase
+  // departments.hod_id is the row every HOD-scoped policy in the database
+  // reads (heads_course_department, heads_user_department, ...) — changing
+  // it moves review, approval and offering authority immediately, for the
+  // old holder and the new one alike. An authority change with no audit
+  // row is the gap a director cannot explain later, so the write is
+  // confirmed (not assumed) and recorded as a before/after diff.
+  const { data: updated, error } = await supabase
     .from("departments")
     .update({ hod_id: hodUserId })
     .eq("id", departmentId)
-    .eq("college_id", actor.collegeId);
+    .eq("college_id", actor.collegeId)
+    .select("id");
 
   if (error) {
     throw new Error(error.message);
   }
+  assertClaimed(updated, "department");
+
+  await logAudit(
+    supabase,
+    actor,
+    hodUserId ? "Assigned department head" : "Removed department head",
+    "departments",
+    departmentId,
+    { oldValue: { hod_id: department.hod_id }, newValue: { hod_id: hodUserId } }
+  );
 }
 
 export async function assignHod(departmentId: string, hodUserId: string | null) {

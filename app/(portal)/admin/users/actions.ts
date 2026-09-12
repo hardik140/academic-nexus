@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib/rbac";
 import { logAudit } from "@/lib/audit";
+import { assertClaimed } from "@/lib/concurrent-claim";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { getCached, invalidateCache, middlewareProfileCacheKey } from "@/lib/cache";
 import { inviteUserCore, resendInvitationCore, revokeInvitationCore, type InviteUserParams } from "@/lib/invitations";
@@ -139,11 +140,20 @@ export async function updateUserProfileCore(
   const { targetUserId, fullName, role, phone } = UpdateUserProfileSchema.parse(params);
   await checkRateLimit(`updateUserProfile:${actor.userId}`, 20, 60);
 
-  await supabase
+  // The result is checked, not assumed. Migration 042's trigger refuses some
+  // of these writes outright (an admin granting super_admin, or editing
+  // their own role) and RLS filters a foreign-college target to zero rows
+  // with no error at all. Either way the old code went on to write an audit
+  // row saying the role had changed — a false receipt for a privilege
+  // change, which is the one place an audit trail must not lie.
+  const { data: updated, error } = await supabase
     .from("profiles")
     .update({ full_name: fullName, role, phone: phone || null })
     .eq("id", targetUserId)
-    .eq("college_id", actor.collegeId);
+    .eq("college_id", actor.collegeId)
+    .select("id");
+  if (error) throw new Error(error.message);
+  assertClaimed(updated, "user profile");
 
   // Changes `role`, which middleware's route-access check reads (cached,
   // see lib/supabase/middleware.ts) — bust it so the propagation window is
@@ -201,11 +211,16 @@ export async function updateUserStatusCore(
     throw new Error("You can't suspend your own account.");
   }
 
-  await supabase
+  // Same rule as updateUserProfileCore: a refused or filtered write must not
+  // reach the audit log as "Changed status".
+  const { data: updated, error } = await supabase
     .from("profiles")
     .update({ status })
     .eq("id", targetUserId)
-    .eq("college_id", actor.collegeId);
+    .eq("college_id", actor.collegeId)
+    .select("id");
+  if (error) throw new Error(error.message);
+  assertClaimed(updated, "user profile");
 
   // Changes `status`, which middleware's active-account check reads
   // (cached) — a suspended user's browser should stop being routed to
