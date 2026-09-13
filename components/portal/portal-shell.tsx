@@ -58,6 +58,7 @@ const NAV_MAP: Record<
     { label: "Invoices", href: "/finance/invoices", icon: "🧾" },
     { label: "Scholarships", href: "/finance/scholarships", icon: "🎓" },
     { label: "Reports", href: "/finance/reports", icon: "📈" },
+    { label: "Integrations", href: "/finance/integrations", icon: "🔌" },
   ],
   director: [
     { label: "Dashboard", href: "/director/dashboard", icon: "📊" },
@@ -82,6 +83,7 @@ const NAV_MAP: Record<
     { label: "Hostel", href: "/admin/hostel", icon: "🏠" },
     { label: "Courses", href: "/admin/courses", icon: "📚" },
     { label: "Academic Periods", href: "/admin/academic-periods", icon: "📅" },
+    { label: "Finance Integrations", href: "/finance/integrations", icon: "🔌" },
     { label: "Web Forms", href: "/admin/forms", icon: "📋" },
     { label: "Audit Log", href: "/admin/audit", icon: "📜" },
     { label: "Settings", href: "/admin/settings", icon: "⚙️" },

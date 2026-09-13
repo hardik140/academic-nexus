@@ -353,7 +353,13 @@ describe("tenant consistency across the academic structure", () => {
       "course_enrollments_offering_tenant_fkey", "course_enrollments_student_tenant_fkey",
       "course_offerings_course_tenant_fkey", "course_offerings_instructor_tenant_fkey",
       "course_offerings_section_tenant_fkey", "course_offerings_semester_tenant_fkey",
-      "courses_department_tenant_fkey", "marks_offering_tenant_fkey", "marks_student_tenant_fkey",
+      "courses_department_tenant_fkey",
+      // Finance Integration Hub (049): every child of a connection carries the
+      // connection's college, so a College B row cannot hang off a College A
+      // integration.
+      "fam_connection_tenant_fkey", "fel_connection_tenant_fkey", "fic_cred_tenant_fkey",
+      "frr_connection_tenant_fkey", "fsc_connection_tenant_fkey", "fso_connection_tenant_fkey",
+      "marks_offering_tenant_fkey", "marks_student_tenant_fkey",
       "placement_applications_drive_tenant_fkey",
       "programmes_department_tenant_fkey", "sections_programme_tenant_fkey",
       "semesters_academic_year_tenant_fkey",

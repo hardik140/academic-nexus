@@ -95,6 +95,37 @@ export const PERMISSIONS = {
   // mirrored by the semesters_*_manage policies in 047 §7k. Not hod: their
   // management rights stop at sections and their own department's offerings.
   academic_period_manage: ["admin", "director"],
+
+  // ── Finance Integration Hub (migration 049) ─────────────────────────
+  //
+  // Split along the line that matters: CREDENTIAL CUSTODY is separated from
+  // DAILY OPERATION. The person who posts and reconciles the books does not
+  // also hold the accounting system's OAuth tokens, and the person who holds
+  // them does not need to.
+  //
+  //   admin    — connections and credentials (institution configuration,
+  //              alongside admin/settings and the colleges row)
+  //   finance  — mappings, sync, reconciliation (the accounting work)
+  //   both     — read
+  //
+  // DESIGN DECISION on the register: §74 asks for four finance tiers
+  // (Viewer / Operator / Manager / Administrator). This product has ONE
+  // `finance` role; adding three more means widening profiles.role's CHECK,
+  // migration 042's privilege trigger, ROLE_ROUTES and every finance policy
+  // — a role-model change, not a permission table entry. These names are the
+  // capability vocabulary that split would attach to.
+  finance_integration_read: ["finance", "admin"],
+  finance_integration_connect: ["admin"],
+  finance_integration_manage: ["admin"],
+  finance_mapping_read: ["finance", "admin"],
+  finance_mapping_manage: ["finance", "admin"],
+  finance_sync_read: ["finance", "admin"],
+  finance_sync_execute: ["finance", "admin"],
+  finance_sync_retry: ["finance", "admin"],
+  finance_reconciliation_read: ["finance", "admin"],
+  finance_reconciliation_execute: ["finance", "admin"],
+  finance_reconciliation_resolve: ["finance", "admin"],
+  finance_integration_audit_read: ["finance", "admin"],
 } as const satisfies Record<string, readonly UserRole[]>;
 
 export type Permission = keyof typeof PERMISSIONS;

@@ -1359,6 +1359,234 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["forecast_scenarios"]["Insert"]>;
         Relationships: [];
       };
+
+      // ── Finance Integration Hub (migration 049) ──────────────────────
+      // finance_integration_credentials is deliberately ABSENT from this
+      // type. RLS on that table admits no authenticated role, so no client
+      // built from this Database type may read or write it; only the
+      // service-role worker touches it, through lib/finance/credentials.ts.
+
+      finance_integration_connections: {
+        Row: {
+          id: string;
+          college_id: string;
+          provider: "tallyprime" | "busy" | "zoho_books";
+          display_name: string;
+          status:
+            | "DRAFT" | "CONFIGURING" | "AUTH_REQUIRED" | "AUTHENTICATED" | "VERIFIED" | "ACTIVE"
+            | "AUTH_FAILED" | "CONNECTION_FAILED" | "WRONG_ORGANIZATION" | "WRONG_COMPANY"
+            | "CAPABILITY_MISSING" | "RATE_LIMITED" | "DISABLED" | "REVOKED" | "BLOCKED";
+          environment: "production" | "sandbox";
+          organization_id: string | null;
+          external_company_id: string | null;
+          external_company_name: string | null;
+          host: string | null;
+          port: number | null;
+          base_url: string | null;
+          transport: "xml_http" | "odbc" | "rest" | "file" | null;
+          capabilities: Json;
+          financial_year_start_month: number;
+          default_direction: "outbound" | "inbound" | "bidirectional";
+          auto_sync_enabled: boolean;
+          auto_sync_interval_minutes: number | null;
+          last_tested_at: string | null;
+          last_success_at: string | null;
+          last_failure_at: string | null;
+          last_error_code: string | null;
+          last_error_message: string | null;
+          created_by: string | null;
+          updated_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: OptionalKeys<
+          Database["public"]["Tables"]["finance_integration_connections"]["Row"],
+          "id" | "created_at" | "updated_at" | "status" | "environment" | "organization_id"
+          | "external_company_id" | "external_company_name" | "host" | "port" | "base_url"
+          | "transport" | "capabilities" | "financial_year_start_month" | "default_direction"
+          | "auto_sync_enabled" | "auto_sync_interval_minutes" | "last_tested_at" | "last_success_at"
+          | "last_failure_at" | "last_error_code" | "last_error_message" | "created_by" | "updated_by"
+        >;
+        Update: Partial<Database["public"]["Tables"]["finance_integration_connections"]["Insert"]>;
+        Relationships: [];
+      };
+
+      finance_account_mappings: {
+        Row: {
+          id: string;
+          college_id: string;
+          connection_id: string;
+          kind: "fee_head" | "payment_method" | "bank_account" | "tax_code" | "customer" | "cost_center" | "department" | "branch";
+          local_key: string;
+          local_label: string | null;
+          external_id: string | null;
+          external_code: string | null;
+          external_name: string;
+          tax_rate: number | null;
+          tax_treatment: "taxable" | "exempt" | "zero_rated" | "non_taxable" | "out_of_scope" | null;
+          direction: "outbound" | "inbound" | "bidirectional";
+          status: "active" | "inactive";
+          created_by: string | null;
+          updated_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: OptionalKeys<
+          Database["public"]["Tables"]["finance_account_mappings"]["Row"],
+          "id" | "created_at" | "updated_at" | "local_label" | "external_id" | "external_code"
+          | "tax_rate" | "tax_treatment" | "direction" | "status" | "created_by" | "updated_by"
+        >;
+        Update: Partial<Database["public"]["Tables"]["finance_account_mappings"]["Insert"]>;
+        Relationships: [];
+      };
+
+      finance_external_links: {
+        Row: {
+          id: string;
+          college_id: string;
+          connection_id: string;
+          entity_type: "payment" | "refund" | "invoice" | "student" | "journal_entry";
+          entity_id: string;
+          external_id: string;
+          external_number: string | null;
+          external_type: string | null;
+          external_created_at: string | null;
+          created_at: string;
+        };
+        Insert: OptionalKeys<
+          Database["public"]["Tables"]["finance_external_links"]["Row"],
+          "id" | "created_at" | "external_number" | "external_type" | "external_created_at"
+        >;
+        Update: Partial<Database["public"]["Tables"]["finance_external_links"]["Insert"]>;
+        Relationships: [];
+      };
+
+      finance_sync_operations: {
+        Row: {
+          id: string;
+          college_id: string;
+          connection_id: string;
+          provider: "tallyprime" | "busy" | "zoho_books";
+          entity_type: "payment" | "refund" | "invoice" | "student" | "journal_entry" | "master_data";
+          entity_id: string | null;
+          operation: string;
+          direction: "outbound" | "inbound";
+          idempotency_key: string;
+          status:
+            | "PENDING" | "QUEUED" | "PROCESSING" | "SYNCED" | "PARTIALLY_SYNCED"
+            | "FAILED" | "RETRYING" | "RECONCILIATION_REQUIRED" | "BLOCKED" | "CANCELLED";
+          attempt_number: number;
+          max_attempts: number;
+          external_id: string | null;
+          external_number: string | null;
+          financial_year: string | null;
+          period_key: string | null;
+          request_hash: string | null;
+          response_hash: string | null;
+          request_summary: Json | null;
+          error_code: string | null;
+          error_message: string | null;
+          retry_safety: "safe" | "unsafe" | "exhausted" | null;
+          next_attempt_at: string | null;
+          started_at: string | null;
+          completed_at: string | null;
+          created_by: string | null;
+          system_actor: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: OptionalKeys<
+          Database["public"]["Tables"]["finance_sync_operations"]["Row"],
+          "id" | "created_at" | "updated_at" | "status" | "direction" | "attempt_number"
+          | "max_attempts" | "entity_id" | "external_id" | "external_number" | "financial_year"
+          | "period_key" | "request_hash" | "response_hash" | "request_summary" | "error_code"
+          | "error_message" | "retry_safety" | "next_attempt_at" | "started_at" | "completed_at"
+          | "created_by" | "system_actor"
+        >;
+        Update: Partial<Database["public"]["Tables"]["finance_sync_operations"]["Insert"]>;
+        Relationships: [];
+      };
+
+      finance_sync_cursors: {
+        Row: {
+          id: string;
+          college_id: string;
+          connection_id: string;
+          entity_type: string;
+          last_cursor: string | null;
+          last_sync_at: string | null;
+          last_external_timestamp: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: OptionalKeys<
+          Database["public"]["Tables"]["finance_sync_cursors"]["Row"],
+          "id" | "created_at" | "updated_at" | "last_cursor" | "last_sync_at" | "last_external_timestamp"
+        >;
+        Update: Partial<Database["public"]["Tables"]["finance_sync_cursors"]["Insert"]>;
+        Relationships: [];
+      };
+
+      finance_reconciliation_runs: {
+        Row: {
+          id: string;
+          college_id: string;
+          connection_id: string;
+          period_start: string;
+          period_end: string;
+          status: "RUNNING" | "RECONCILED" | "RECONCILIATION_REQUIRED" | "FAILED";
+          local_count: number | null;
+          external_count: number | null;
+          local_amount: number | null;
+          external_amount: number | null;
+          difference_amount: number | null;
+          issue_count: number;
+          error_message: string | null;
+          started_at: string;
+          completed_at: string | null;
+          created_by: string | null;
+          system_actor: string | null;
+        };
+        Insert: OptionalKeys<
+          Database["public"]["Tables"]["finance_reconciliation_runs"]["Row"],
+          "id" | "started_at" | "status" | "issue_count" | "local_count" | "external_count"
+          | "local_amount" | "external_amount" | "difference_amount" | "error_message"
+          | "completed_at" | "created_by" | "system_actor"
+        >;
+        Update: Partial<Database["public"]["Tables"]["finance_reconciliation_runs"]["Insert"]>;
+        Relationships: [];
+      };
+
+      finance_reconciliation_items: {
+        Row: {
+          id: string;
+          college_id: string;
+          run_id: string;
+          difference_type:
+            | "MISSING_EXTERNAL_TRANSACTION" | "MISSING_LOCAL_TRANSACTION" | "AMOUNT_MISMATCH"
+            | "STATUS_MISMATCH" | "DATE_MISMATCH" | "LEDGER_MISMATCH" | "TAX_MISMATCH"
+            | "DUPLICATE_EXTERNAL_TRANSACTION" | "DUPLICATE_LOCAL_TRANSACTION"
+            | "EXTERNAL_ID_MISMATCH" | "REFUND_MISMATCH" | "UNMAPPED_ACCOUNT" | "PERIOD_MISMATCH";
+          entity_type: string | null;
+          entity_id: string | null;
+          external_id: string | null;
+          local_amount: number | null;
+          external_amount: number | null;
+          detail: string;
+          status: "open" | "resolved" | "accepted";
+          resolution: string | null;
+          resolved_by: string | null;
+          resolved_at: string | null;
+          created_at: string;
+        };
+        Insert: OptionalKeys<
+          Database["public"]["Tables"]["finance_reconciliation_items"]["Row"],
+          "id" | "created_at" | "status" | "entity_type" | "entity_id" | "external_id"
+          | "local_amount" | "external_amount" | "resolution" | "resolved_by" | "resolved_at"
+        >;
+        Update: Partial<Database["public"]["Tables"]["finance_reconciliation_items"]["Insert"]>;
+        Relationships: [];
+      };
     };
 
     Views: {
@@ -1453,6 +1681,7 @@ export interface Database {
         };
         Relationships: [];
       };
+
     };
 
     Functions: Record<string, never>;

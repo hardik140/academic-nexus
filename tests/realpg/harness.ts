@@ -64,9 +64,35 @@ export interface SessionResult {
 
 let counter = 0;
 
-export function startCluster(): Cluster {
+/**
+ * A port nothing else is listening on.
+ *
+ * The first version of this picked at random from a 100-wide band, which
+ * collided the moment two real-PostgreSQL test FILES ran in parallel — one
+ * cluster would start and the other would fail or, worse, the second suite
+ * would talk to the first suite's server. Asking the OS for an ephemeral
+ * port and releasing it immediately is not race-free either, so the caller
+ * retries; between the two, a collision needs two suites to be handed the
+ * same port in the same instant AND for the retry to repeat it.
+ */
+function freePort(): number {
+  const probe = spawnSync(
+    process.execPath,
+    ["-e", "const s=require('net').createServer();s.listen(0,'127.0.0.1',()=>{process.stdout.write(String(s.address().port));s.close()})"],
+    { encoding: "utf8" }
+  );
+  const port = Number(probe.stdout?.trim());
+  if (!Number.isInteger(port) || port <= 1024) {
+    // Fall back to a pid-derived port rather than a random one: two workers
+    // on one machine never share a pid.
+    return 54000 + (process.pid % 1000);
+  }
+  return port;
+}
+
+export function startCluster(attempt = 0): Cluster {
   const dataDir = mkdtempSync(join(tmpdir(), "nexus-realpg-"));
-  const port = 54400 + Math.floor(Math.random() * 100);
+  const port = freePort();
   const initdb = spawnSync(exe("initdb"), ["-D", dataDir, "-U", "qa", "-A", "trust", "-E", "UTF8", "--no-locale"], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
   if (initdb.status !== 0) throw new Error(`initdb failed: ${initdb.stderr}`);
   // stdio MUST be 'ignore', not 'pipe': pg_ctl start launches the server as a
@@ -80,7 +106,11 @@ export function startCluster(): Cluster {
   if (start.status !== 0) {
     let log = "";
     try { log = readFileSync(logFile, "utf8"); } catch { /* no log yet */ }
-    throw new Error(`pg_ctl start failed (status ${start.status})\n${log}`);
+    try { rmSync(dataDir, { recursive: true, force: true }); } catch { /* best effort */ }
+    // Almost always "address already in use" — another suite took the port
+    // between our probe and the server binding it. Try again with a new one.
+    if (attempt < 5) return startCluster(attempt + 1);
+    throw new Error(`pg_ctl start failed after ${attempt + 1} attempts (status ${start.status})\n${log}`);
   }
 
   const cluster: Cluster = {
