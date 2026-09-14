@@ -134,6 +134,69 @@ DROP MATERIALIZED VIEW IF EXISTS public.mv_department_health_raw;
 DROP POLICY IF EXISTS "substitution_read_enrolled_student" ON public.substitution_assignments;
 
 -- ---------------------------------------------------------------
+-- 0b. Reclaim constraint names left behind by a half-applied run
+--
+-- Every `ADD CONSTRAINT ... UNIQUE` below is preceded by a
+-- `DROP CONSTRAINT IF EXISTS`, and that is enough when the previous attempt
+-- left a CONSTRAINT behind. It is NOT enough when it left the constraint's
+-- INDEX behind without the constraint: DROP CONSTRAINT IF EXISTS then
+-- matches nothing, and ADD CONSTRAINT collides with the index by name —
+--
+--   ERROR: 42P07: relation "course_enrollments_offering_student_key"
+--          already exists
+--
+-- which is precisely how this file failed in the field. A UNIQUE constraint
+-- and its backing index share one name in one namespace, and only the
+-- constraint half of that pair is idempotent.
+--
+-- This matters because a partly-applied migration is the NORMAL failure
+-- mode here, not an exotic one: Supabase's SQL editor commits statement by
+-- statement, so a file that fails in the middle leaves everything above the
+-- failure permanently committed, and the re-run has to cope with the
+-- wreckage. It matters twice over because this file aborting is also what
+-- makes 050 fail later with "function public.wardens_student(uuid) does not
+-- exist" — that function is created near the end of this file, so an abort
+-- anywhere above it takes the whole batch down with a second,
+-- unrelated-looking error.
+--
+-- The guard is deliberately narrow: an index is dropped ONLY when no
+-- constraint of that name exists, so a healthy schema passes through
+-- untouched and a constraint that is doing its job is never disturbed.
+-- ---------------------------------------------------------------
+DO $reclaim_constraint_names$
+DECLARE
+  n TEXT;
+BEGIN
+  FOREACH n IN ARRAY ARRAY[
+    'course_enrollments_offering_student_key',
+    'attendance_offering_student_date_key',
+    'marks_offering_student_exam_key',
+    'substitution_assignments_offering_date_key',
+    'fees_payment_target_key',
+    'fees_student_key',
+    'payments_student_key',
+    'hostel_allocations_student_key',
+    'departments_tenant_key',
+    'profiles_tenant_key',
+    'students_tenant_key',
+    'courses_tenant_key',
+    'academic_years_tenant_key',
+    'semesters_tenant_key',
+    'programmes_tenant_key',
+    'sections_tenant_key',
+    'course_offerings_tenant_key',
+    'placement_drives_tenant_key'
+  ]
+  LOOP
+    IF to_regclass('public.' || quote_ident(n)) IS NOT NULL
+       AND NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = n) THEN
+      RAISE NOTICE 'migration 047: reclaiming orphaned index % from a previous partial run', n;
+      EXECUTE format('DROP INDEX IF EXISTS public.%I', n);
+    END IF;
+  END LOOP;
+END $reclaim_constraint_names$;
+
+-- ---------------------------------------------------------------
 -- 1. course_enrollments — offering-scoped, and the id-space bug fixed
 --
 -- course_enrollments.student_id references profiles(id), while

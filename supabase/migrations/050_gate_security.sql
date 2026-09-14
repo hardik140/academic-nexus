@@ -67,6 +67,29 @@
 -- ============================================================
 
 -- ---------------------------------------------------------------
+-- 0. Preflight: 047 has to be in place, and finished
+--
+-- This file calls wardens_student() (sections 13, 15 and 16) and binds to
+-- the composite tenant keys 047 creates. 047 defines that function near its
+-- END, so if 047 aborted anywhere earlier — and a half-applied migration is
+-- the normal failure mode on a platform that commits statement by statement
+-- — everything here still looks applicable right up until Postgres says
+--
+--   ERROR: 42883: function public.wardens_student(uuid) does not exist
+--
+-- That names a symptom two files away from its cause, and it arrives after
+-- this migration has already created tables. Checking first turns it into
+-- one sentence that says what to do, before anything has been written.
+-- ---------------------------------------------------------------
+DO $require_047$
+BEGIN
+  IF to_regprocedure('public.wardens_student(uuid)') IS NULL THEN
+    RAISE EXCEPTION 'migration 050 requires 047, which has not been applied or did not finish: public.wardens_student(uuid) is missing. Re-run 047 to completion first — 047, 049 and 050 ship as one batch, in that order.'
+      USING ERRCODE = 'undefined_function';
+  END IF;
+END $require_047$;
+
+-- ---------------------------------------------------------------
 -- 1. The role
 --
 -- Follows 023's exact pattern (the constraint's real name is discovered,
@@ -256,6 +279,14 @@ BEGIN
     ALTER TABLE public.gate_movements DROP CONSTRAINT IF EXISTS gm_pass_tenant_fkey;
   END IF;
   ALTER TABLE public.gate_passes DROP CONSTRAINT IF EXISTS gate_passes_subject_key;
+  -- DROP CONSTRAINT only matches a constraint. If a previous partial run
+  -- left the backing INDEX holding this name with no constraint behind it,
+  -- the ADD below fails with 42P07 "relation already exists" — 047 §0b has
+  -- the full account; this is the same defect, found in the field on 047.
+  IF to_regclass('public.gate_passes_subject_key') IS NOT NULL THEN
+    RAISE NOTICE 'migration 050: reclaiming orphaned index gate_passes_subject_key from a previous partial run';
+    EXECUTE 'DROP INDEX IF EXISTS public.gate_passes_subject_key';
+  END IF;
   ALTER TABLE public.gate_passes
     ADD CONSTRAINT gate_passes_subject_key UNIQUE (id, college_id, student_id);
 END $gate_pass_subject_key$;

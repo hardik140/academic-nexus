@@ -158,6 +158,77 @@ describe("the real migration chain applies to an empty database", () => {
     expect(await snapshot()).toEqual(before);
   });
 
+  it("047 recovers from the half-applied state that broke this deploy in the field", async () => {
+    // The actual production failure:
+    //
+    //   ERROR: 42P07: relation "course_enrollments_offering_student_key"
+    //          already exists
+    //
+    // A UNIQUE constraint and its backing index share one name. `DROP
+    // CONSTRAINT IF EXISTS` matches only the constraint half, so an index
+    // left behind by an aborted run makes the following ADD CONSTRAINT
+    // collide — and on a platform that commits statement by statement, an
+    // aborted run leaves exactly that.
+    //
+    // Every other test in this file replays migrations against a FULLY
+    // applied database, which is precisely why none of them saw this. The
+    // state that breaks a deploy is the partial one, so this test builds
+    // it deliberately.
+    const name = "course_enrollments_offering_student_key";
+    const hasConstraint = async () =>
+      (await db.query(`SELECT 1 FROM pg_constraint WHERE conname = '${name}'`)).rows.length;
+    const hasRelation = async () =>
+      (await db.query(
+        `SELECT 1 FROM pg_class WHERE relname = '${name}' AND relnamespace = 'public'::regnamespace`
+      )).rows.length;
+
+    await db.exec(`ALTER TABLE public.course_enrollments DROP CONSTRAINT ${name};`);
+    await db.exec(
+      `CREATE UNIQUE INDEX ${name} ON public.course_enrollments(offering_id, student_id);`
+    );
+
+    // The wreckage an operator re-running the file is actually holding:
+    // the name is taken, but nothing owns it.
+    expect(await hasRelation(), "test did not build the orphaned-index state").toBe(1);
+    expect(await hasConstraint(), "test did not build the orphaned-index state").toBe(0);
+
+    const fs = await import("node:fs");
+    const sql = fs
+      .readFileSync(join(process.cwd(), "supabase/migrations", "047_academic_transactions_on_offerings.sql"), "utf8")
+      .replace(/\r\n/g, "\n");
+    await expect(db.exec(sql), "047 cannot recover from its own partial apply").resolves.toBeDefined();
+
+    // Back as a CONSTRAINT, not merely as an index — the FKs in 047 and 050
+    // reference the constraint, and an index alone would not carry them.
+    expect(await hasConstraint(), "047 left the name as a bare index").toBe(1);
+  });
+
+  it("050 refuses to start when 047 has not finished, and names the cause", async () => {
+    // The second error from the same field report:
+    //
+    //   ERROR: 42883: function public.wardens_student(uuid) does not exist
+    //
+    // That function is created near the END of 047, so any abort above it
+    // leaves 050 failing on a symptom two files from its cause — after 050
+    // has already begun creating tables. The preflight turns it into one
+    // sentence, before anything is written.
+    const bare = new PGlite();
+    try {
+      const fs = await import("node:fs");
+      const sql = fs
+        .readFileSync(join(process.cwd(), "supabase/migrations", "050_gate_security.sql"), "utf8")
+        .replace(/\r\n/g, "\n");
+      await expect(bare.exec(sql)).rejects.toThrow(/migration 050 requires 047/);
+      // and it stopped before touching the schema
+      const made = await bare.query(
+        `SELECT 1 FROM pg_class WHERE relname = 'gates' AND relnamespace = 'public'::regnamespace`
+      );
+      expect(made.rows, "050 created tables before failing its preflight").toHaveLength(0);
+    } finally {
+      await bare.close();
+    }
+  });
+
   it("rebuilds the analytics views and leaves them queryable", async () => {
     const views = await db.query<{ relname: string }>(
       `SELECT relname FROM pg_class

@@ -137,6 +137,16 @@ BEGIN
     WHERE conrelid = 'public.finance_integration_connections'::regclass
       AND conname = 'fic_tenant_key'
   ) THEN
+    -- Absent as a CONSTRAINT is not the same as absent as a NAME. A run
+    -- that aborted after the index was built but before the constraint
+    -- committed leaves the index holding the name, and the ADD below then
+    -- fails with 42P07 "relation already exists" — see 047 §0b, which is
+    -- the same defect found in the field. Only ever drops an index that no
+    -- constraint is standing behind.
+    IF to_regclass('public.fic_tenant_key') IS NOT NULL THEN
+      RAISE NOTICE 'migration 049: reclaiming orphaned index fic_tenant_key from a previous partial run';
+      DROP INDEX IF EXISTS public.fic_tenant_key;
+    END IF;
     ALTER TABLE public.finance_integration_connections
       ADD CONSTRAINT fic_tenant_key UNIQUE (id, college_id);
   END IF;
