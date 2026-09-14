@@ -10,6 +10,7 @@ import { resolveListSort, listCacheKey } from "@/lib/cached-list";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import type { DataTableQuery } from "@/components/ui/data-table";
+import { dbError } from "@/lib/internal-error";
 
 type OfferType = Database["public"]["Tables"]["placements"]["Row"]["offer_type"];
 type PlacementStatus = Database["public"]["Tables"]["placements"]["Row"]["status"];
@@ -97,7 +98,7 @@ export async function createPlacementCore(
   });
 
   if (error) {
-    throw new Error(error.message);
+    throw dbError(error);
   }
 }
 

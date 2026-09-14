@@ -8,6 +8,7 @@ import { checkRateLimit } from "@/lib/rate-limit";
 import { PERMISSIONS } from "@/lib/permissions";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
+import { dbError } from "@/lib/internal-error";
 
 async function resolveStudentId(supabase: SupabaseClient<Database>, actor: AuthorizedActor): Promise<string> {
   const { data: student } = await supabase.from("students").select("id").eq("user_id", actor.userId).single();
@@ -70,7 +71,7 @@ export async function requestRefund(paymentIdRaw: string, amountRaw: number, rea
     amount,
     reason,
   });
-  if (error) throw new Error(error.message);
+  if (error) throw dbError(error);
 
   revalidatePath("/student/fees");
 }
@@ -123,7 +124,7 @@ export async function submitDispute(feeIdRaw: string | null, paymentIdRaw: strin
     payment_id: paymentId,
     description,
   });
-  if (error) throw new Error(error.message);
+  if (error) throw dbError(error);
 
   revalidatePath("/student/fees");
 }

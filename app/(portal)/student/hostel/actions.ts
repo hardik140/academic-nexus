@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/rbac";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { PERMISSIONS } from "@/lib/permissions";
+import { dbError } from "@/lib/internal-error";
 
 const RequestTransferSchema = z.object({
   reason: z.string().trim().min(1).max(1000),
@@ -49,7 +50,7 @@ export async function requestRoomTransfer(reasonRaw: string) {
     reason,
   });
   if (error) {
-    throw new Error(error.message);
+    throw dbError(error);
   }
 
   revalidatePath("/student/hostel");

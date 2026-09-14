@@ -11,6 +11,7 @@ import { resolveListSort, listCacheKey } from "@/lib/cached-list";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import type { DataTableQuery } from "@/components/ui/data-table";
+import { dbError } from "@/lib/internal-error";
 
 type CourseType = Database["public"]["Tables"]["courses"]["Row"]["type"];
 
@@ -101,7 +102,7 @@ export async function createCourseCore(
     .single();
 
   if (error) {
-    throw new Error(error.message);
+    throw dbError(error);
   }
 
   await logAudit(supabase, actor, `Created course ${code} — ${name}`, "courses", course.id);

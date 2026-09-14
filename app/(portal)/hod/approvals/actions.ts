@@ -13,6 +13,7 @@ import { PERMISSIONS } from "@/lib/permissions";
 import { computeAffectedClasses, type AffectedClass } from "@/lib/leave-impact";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
+import { dbError } from "@/lib/internal-error";
 
 const ActOnLeaveRequestSchema = z.object({
   requestId: z.string().guid(),
@@ -274,7 +275,7 @@ export async function actOnLeaveRequestCore(
     .select("id");
 
   if (error) {
-    throw new Error(error.message);
+    throw dbError(error);
   }
   assertClaimed(claimed, "leave request");
 
@@ -465,7 +466,7 @@ export async function actOnAttendanceCorrectionCore(
     .eq("status", "pending")
     .select("id");
   if (updateRequestError) {
-    throw new Error(updateRequestError.message);
+    throw dbError(updateRequestError);
   }
   assertClaimed(claimed, "correction request");
 
@@ -486,7 +487,7 @@ export async function actOnAttendanceCorrectionCore(
       .eq("id", request.attendance_id)
       .select("id");
     if (updateAttendanceError) {
-      throw new Error(updateAttendanceError.message);
+      throw dbError(updateAttendanceError);
     }
     assertPersisted(corrected, 1, "attendance");
     await logAudit(supabase, actor, "attendance_correction_approved", "attendance", request.attendance_id, {

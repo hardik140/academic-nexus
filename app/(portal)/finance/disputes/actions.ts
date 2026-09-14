@@ -11,6 +11,7 @@ import { assertClaimed } from "@/lib/concurrent-claim";
 import { PERMISSIONS } from "@/lib/permissions";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
+import { dbError } from "@/lib/internal-error";
 
 function disputesCacheKey(collegeId: string) {
   return `finance-disputes:${collegeId}`;
@@ -62,7 +63,7 @@ export async function claimDispute(disputeIdRaw: string) {
     .eq("id", disputeId)
     .eq("status", "submitted")
     .select("id");
-  if (error) throw new Error(error.message);
+  if (error) throw dbError(error);
   assertClaimed(claimedRows, "dispute");
 
   await logAudit(supabase, actor, "dispute_claimed", "financial_disputes", disputeId, {
@@ -96,7 +97,7 @@ async function finalizeDispute(status: "resolved" | "rejected", disputeIdRaw: st
     .eq("id", disputeId)
     .eq("status", dispute.status)
     .select("id");
-  if (error) throw new Error(error.message);
+  if (error) throw dbError(error);
   assertClaimed(resolvedRows, "dispute");
 
   await logAudit(supabase, actor, `dispute_${status}`, "financial_disputes", disputeId, {

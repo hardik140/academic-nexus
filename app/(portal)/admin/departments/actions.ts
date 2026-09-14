@@ -7,6 +7,7 @@ import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib
 import { checkRateLimit } from "@/lib/rate-limit";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
+import { dbError } from "@/lib/internal-error";
 
 const CreateDepartmentSchema = z.object({
   name: z.string().trim().min(1).max(200),
@@ -40,7 +41,7 @@ export async function createDepartmentCore(
   });
 
   if (error) {
-    throw new Error(error.message);
+    throw dbError(error);
   }
 }
 

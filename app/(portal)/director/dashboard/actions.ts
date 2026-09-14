@@ -9,6 +9,7 @@ import { sendExpoPushNotifications } from "@/lib/push";
 import { PERMISSIONS } from "@/lib/permissions";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
+import { dbError } from "@/lib/internal-error";
 
 const STAFF_ROLES = ["teacher", "hod", "warden", "finance", "admin"] as const;
 
@@ -65,7 +66,7 @@ export async function sendAnnouncementCore(
 
   const { data: recipients, error: recipientsError } = await query;
   if (recipientsError) {
-    throw new Error(recipientsError.message);
+    throw dbError(recipientsError);
   }
   if (!recipients || recipients.length === 0) {
     throw new Error("No recipients found for the selected audience.");
@@ -83,7 +84,7 @@ export async function sendAnnouncementCore(
   );
 
   if (error) {
-    throw new Error(error.message);
+    throw dbError(error);
   }
 
   // Push delivery to any recipient with a registered device (mobile app).

@@ -14,7 +14,7 @@ import type { Database } from "@/types/database";
  *
  * WHAT A FAILED RPC IS ALLOWED TO SAY
  *
- * This used to be `throw new Error(error.message)`, and that message is
+ * This used to throw the PostgREST error's own message, and that message is
  * whatever PostgreSQL produced. Route handlers pass an unrecognised Error
  * straight through to the client (lib/api-errors.ts), so POST
  * /api/security/scan would answer a failure with the database's own words:

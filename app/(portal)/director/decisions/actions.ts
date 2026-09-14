@@ -12,6 +12,7 @@ import { assertNotSelfApproval } from "@/lib/segregation-of-duties";
 import { PERMISSIONS } from "@/lib/permissions";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
+import { dbError } from "@/lib/internal-error";
 
 const DECISION_CATEGORIES = [
   "department_change",
@@ -234,7 +235,7 @@ export async function decideOnDecisionCore(
     .select("id");
 
   if (error) {
-    throw new Error(error.message);
+    throw dbError(error);
   }
   assertClaimed(claimed, "decision");
 
@@ -293,7 +294,7 @@ export async function listDelegateCandidates() {
     .neq("id", actor.userId)
     .order("full_name");
   if (error) {
-    throw new Error(error.message);
+    throw dbError(error);
   }
   return data || [];
 }
@@ -322,7 +323,7 @@ export async function listDecisionAuditTrail(recordId?: string) {
 
   const { data, error } = await query;
   if (error) {
-    throw new Error(error.message);
+    throw dbError(error);
   }
   return data || [];
 }

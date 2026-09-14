@@ -10,6 +10,7 @@ import { buildPayload, credentialSigningConfigured } from "@/lib/gate-security/c
 import { qrSvg } from "@/lib/gate-security/qr";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
+import { dbError } from "@/lib/internal-error";
 
 const ApplyForGatePassSchema = z.object({
   destination: z.string().trim().min(1).max(200),
@@ -59,7 +60,7 @@ export async function applyForGatePassCore(
   });
 
   if (error) {
-    throw new Error(error.message);
+    throw dbError(error);
   }
 }
 

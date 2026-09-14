@@ -13,6 +13,7 @@ import { PERMISSIONS } from "@/lib/permissions";
 import { inviteUserCore, type InviteUserParams } from "@/lib/invitations";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
+import { dbError } from "@/lib/internal-error";
 
 // Roles eligible to be promoted directly into Placement Cell — mirrors
 // assignHodCore's "must already hold an eligible role" guard
@@ -101,7 +102,7 @@ export async function promoteToPlacementCellCore(
     .select("id");
 
   if (error) {
-    throw new Error(error.message);
+    throw dbError(error);
   }
   assertClaimed(promoted, "staff member");
 
@@ -175,7 +176,7 @@ export async function revokePlacementCellCore(
     .select("id");
 
   if (error) {
-    throw new Error(error.message);
+    throw dbError(error);
   }
   assertClaimed(revoked, "Placement Cell user");
 
@@ -208,7 +209,7 @@ export async function reactivatePlacementCell(userId: string) {
     .select("id");
 
   if (error) {
-    throw new Error(error.message);
+    throw dbError(error);
   }
   assertClaimed(reactivated, "Placement Cell user");
 

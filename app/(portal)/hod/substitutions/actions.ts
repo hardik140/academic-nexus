@@ -9,6 +9,7 @@ import { getCached, invalidateCache } from "@/lib/cache";
 import { logAudit } from "@/lib/audit";
 import { assertClaimed } from "@/lib/concurrent-claim";
 import { PERMISSIONS } from "@/lib/permissions";
+import { dbError } from "@/lib/internal-error";
 
 function substitutionsCacheKey(hodUserId: string) {
   return `hod-substitutions:${hodUserId}`;
@@ -143,7 +144,7 @@ export async function assignSubstitute(idRaw: string, substituteTeacherIdRaw: st
     .eq("status", "needed")
     .select("id");
   if (error) {
-    throw new Error(error.message);
+    throw dbError(error);
   }
   assertClaimed(claimed, "substitution requirement");
 

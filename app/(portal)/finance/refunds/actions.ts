@@ -9,6 +9,7 @@ import { getCached, invalidateCache } from "@/lib/cache";
 import { logAudit } from "@/lib/audit";
 import { assertClaimed } from "@/lib/concurrent-claim";
 import { PERMISSIONS } from "@/lib/permissions";
+import { dbError } from "@/lib/internal-error";
 
 function refundsCacheKey(collegeId: string) {
   return `finance-refunds:${collegeId}`;
@@ -59,7 +60,7 @@ export async function rejectRefund(requestIdRaw: string, reviewNotesRaw: string)
     .eq("id", requestId)
     .eq("status", "pending")
     .select("id");
-  if (error) throw new Error(error.message);
+  if (error) throw dbError(error);
   assertClaimed(rejected, "refund request");
 
   await logAudit(supabase, actor, "refund_rejected", "refund_requests", requestId, {
@@ -129,7 +130,7 @@ export async function approveRefund(requestIdRaw: string) {
     "approve_refund",
     { p_request_id: requestId }
   );
-  if (error) throw new Error(error.message);
+  if (error) throw dbError(error);
   const result = (data as unknown as ApproveRefundRow[] | null)?.[0];
   if (!result) throw new Error("Refund request not found or already processed.");
 

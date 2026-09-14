@@ -7,6 +7,7 @@ import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib
 import { checkRateLimit } from "@/lib/rate-limit";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
+import { dbError } from "@/lib/internal-error";
 
 const AssignWardenSchema = z.object({
   blockId: z.string().guid(),
@@ -51,7 +52,7 @@ export async function assignWardenCore(
     .eq("college_id", actor.collegeId);
 
   if (error) {
-    throw new Error(error.message);
+    throw dbError(error);
   }
 }
 

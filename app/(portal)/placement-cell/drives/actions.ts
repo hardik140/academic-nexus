@@ -13,6 +13,7 @@ import { assertValidTransition, PLACEMENT_APPLICATION_TRANSITIONS, type Placemen
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import type { DataTableQuery } from "@/components/ui/data-table";
+import { dbError } from "@/lib/internal-error";
 
 // See app/(portal)/student/placements/actions.ts's comment on why embedded
 // selects need a local cast — the hand-maintained Database type has no
@@ -175,7 +176,7 @@ async function createDriveCore(supabase: SupabaseClient<Database>, actor: Author
     .single();
 
   if (error) {
-    throw new Error(error.message);
+    throw dbError(error);
   }
 
   await syncDriveDepartments(supabase, actor, data.id, parsed.eligibleDepartmentIds || []);
@@ -226,7 +227,7 @@ export async function updateDrive(driveId: string, params: DriveParams, viewQuer
     .eq("college_id", actor.collegeId);
 
   if (error) {
-    throw new Error(error.message);
+    throw dbError(error);
   }
 
   await syncDriveDepartments(supabase, actor, driveId, parsed.eligibleDepartmentIds || []);
@@ -256,7 +257,7 @@ export async function setDriveStatus(driveId: string, status: "draft" | "publish
     .eq("college_id", actor.collegeId);
 
   if (error) {
-    throw new Error(error.message);
+    throw dbError(error);
   }
 
   await logAudit(supabase, actor, `Set placement drive status to ${parsed.status}`, "placement_drives", parsed.driveId);
@@ -350,7 +351,7 @@ export async function updateApplicationStatus(applicationId: string, status: (ty
     .eq("status", application.status as PlacementApplicationStatus)
     .select("id");
   if (error) {
-    throw new Error(error.message);
+    throw dbError(error);
   }
   assertClaimed(claimed, "application");
 

@@ -7,6 +7,7 @@ import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib
 import { checkRateLimit } from "@/lib/rate-limit";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
+import { dbError } from "@/lib/internal-error";
 
 type ComplaintCategory = Database["public"]["Tables"]["complaints"]["Row"]["category"];
 type ComplaintPriority = Database["public"]["Tables"]["complaints"]["Row"]["priority"];
@@ -54,7 +55,7 @@ export async function submitComplaintCore(
   });
 
   if (error) {
-    throw new Error(error.message);
+    throw dbError(error);
   }
 }
 

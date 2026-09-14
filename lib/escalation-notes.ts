@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/rbac";
+import { dbError } from "@/lib/internal-error";
 
 const ENTRY_TYPES = [
   "note",
@@ -51,7 +52,7 @@ export async function addEscalationNote(params: AddEscalationNoteParams) {
   });
 
   if (error) {
-    throw new Error(error.message);
+    throw dbError(error);
   }
 }
 
@@ -68,7 +69,7 @@ export async function listEscalationNotes(entityType: "decision" | "risk_flag", 
     .order("created_at", { ascending: true });
 
   if (error) {
-    throw new Error(error.message);
+    throw dbError(error);
   }
   return data || [];
 }

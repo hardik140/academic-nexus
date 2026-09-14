@@ -12,6 +12,7 @@ import {
 import { bodyHash, redact } from "./crypto";
 import { indexMappings, loadMappings, requireMapping, MappingMissingError, taxFor } from "./mapping";
 import { financialYearFor, idempotencyKey, nextAttemptAt, periodKeyFor, retrySafetyFor } from "./idempotency";
+import { dbError } from "@/lib/internal-error";
 
 /**
  * The outbound financial transaction pipeline (§51).
@@ -131,7 +132,7 @@ export async function enqueue(db: Db, input: EnqueueInput): Promise<SyncOperatio
         .single();
       if (winner) return winner as SyncOperation;
     }
-    throw new Error(error.message);
+    throw dbError(error);
   }
   return data as SyncOperation;
 }

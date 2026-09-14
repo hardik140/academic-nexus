@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/rbac";
+import { dbError } from "@/lib/internal-error";
 
 /**
  * Director-only for this pass (see components/portal/portal-shell.tsx —
@@ -20,7 +21,7 @@ export async function listMyNotifications() {
     .order("created_at", { ascending: false })
     .limit(100);
   if (error) {
-    throw new Error(error.message);
+    throw dbError(error);
   }
   return data || [];
 }
@@ -30,7 +31,7 @@ export async function markNotificationRead(notificationId: string) {
   const supabase = await createClient();
   const { error } = await supabase.from("notifications").update({ read: true }).eq("id", notificationId).eq("receiver_id", actor.userId);
   if (error) {
-    throw new Error(error.message);
+    throw dbError(error);
   }
   revalidatePath("/director/notifications");
 }
@@ -40,7 +41,7 @@ export async function markAllNotificationsRead() {
   const supabase = await createClient();
   const { error } = await supabase.from("notifications").update({ read: true }).eq("receiver_id", actor.userId).eq("read", false);
   if (error) {
-    throw new Error(error.message);
+    throw dbError(error);
   }
   revalidatePath("/director/notifications");
 }

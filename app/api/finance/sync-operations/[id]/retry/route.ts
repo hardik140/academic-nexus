@@ -4,6 +4,7 @@ import { requireRoleFromRequest } from "@/lib/rbac";
 import { PERMISSIONS } from "@/lib/permissions";
 import { assertClaimed } from "@/lib/concurrent-claim";
 import { logAudit } from "@/lib/audit";
+import { dbError } from "@/lib/internal-error";
 
 /**
  * POST /api/finance/sync-operations/:id/retry (§77, §68).
@@ -52,7 +53,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       .eq("id", id)
       .eq("status", "FAILED")
       .select("id");
-    if (error) throw new Error(error.message);
+    if (error) throw dbError(error);
     assertClaimed(claimed, "sync operation");
 
     await logAudit(supabase, actor, "finance_sync_retried", "finance_sync_operations", id, {

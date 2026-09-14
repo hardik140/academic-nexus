@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { errorResponse } from "@/lib/api-errors";
 import { requireRoleFromRequest } from "@/lib/rbac";
 import { PERMISSIONS } from "@/lib/permissions";
+import { dbError } from "@/lib/internal-error";
 
 /**
  * GET /api/finance/integrations — the provider-neutral connection list (§77).
@@ -28,7 +29,7 @@ export async function GET(request: Request) {
       )
       .eq("college_id", actor.collegeId)
       .order("created_at", { ascending: false });
-    if (error) throw new Error(error.message);
+    if (error) throw dbError(error);
     return NextResponse.json({ connections: data ?? [] });
   } catch (err) {
     return errorResponse(err);

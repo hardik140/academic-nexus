@@ -11,6 +11,7 @@ import { resolveListSort, listCacheKey } from "@/lib/cached-list";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import type { DataTableQuery } from "@/components/ui/data-table";
+import { dbError } from "@/lib/internal-error";
 
 const COMPANIES_PAGE_SIZE = 10;
 const COMPANIES_SORT_COLUMNS = ["name", "industry"] as const;
@@ -81,7 +82,7 @@ async function createCompanyCore(supabase: SupabaseClient<Database>, actor: Auth
     .single();
 
   if (error) {
-    throw new Error(error.message);
+    throw dbError(error);
   }
 
   await logAudit(supabase, actor, `Added company ${parsed.name}`, "companies", data.id);
@@ -138,7 +139,7 @@ export async function updateCompany(
     .eq("college_id", actor.collegeId);
 
   if (error) {
-    throw new Error(error.message);
+    throw dbError(error);
   }
 
   await logAudit(supabase, actor, `Updated company ${parsed.name}`, "companies", companyId);

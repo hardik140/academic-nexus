@@ -18,6 +18,7 @@ import { enqueue } from "@/lib/finance/pipeline";
 import { reconcile } from "@/lib/finance/reconciliation";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Json } from "@/types/database";
+import { dbError } from "@/lib/internal-error";
 
 /**
  * Finance Integration Hub — the operator-facing actions.
@@ -276,7 +277,7 @@ export async function createConnection(params: CreateConnectionParams) {
     })
     .select("id")
     .single();
-  if (error) throw new Error(error.message);
+  if (error) throw dbError(error);
 
   await logAudit(supabase, actor, "finance_connection_created", "finance_integration_connections", data.id, {
     newValue: { provider: parsed.provider, display_name: parsed.displayName, environment: parsed.environment },
@@ -325,7 +326,7 @@ export async function setCredential(connectionId: string, credential: z.input<ty
     .eq("id", conn.id)
     .eq("college_id", actor.collegeId)
     .select("id");
-  if (error) throw new Error(error.message);
+  if (error) throw dbError(error);
   assertClaimed(moved, "integration connection");
 
   await logAudit(supabase, actor, "finance_credential_stored", "finance_integration_connections", conn.id, {
@@ -422,7 +423,7 @@ export async function verifyConnection(connectionId: string, expectedCompany?: s
     .eq("id", conn.id)
     .eq("college_id", actor.collegeId)
     .select("id");
-  if (error) throw new Error(error.message);
+  if (error) throw dbError(error);
   assertClaimed(verified, "integration connection");
 
   await logAudit(supabase, actor, "finance_connection_verified", "finance_integration_connections", conn.id, {
@@ -461,7 +462,7 @@ export async function activateConnection(connectionId: string) {
     .eq("college_id", actor.collegeId)
     .eq("status", "VERIFIED")
     .select("id");
-  if (error) throw new Error(error.message);
+  if (error) throw dbError(error);
   assertClaimed(activated, "integration connection");
 
   await logAudit(supabase, actor, "finance_connection_activated", "finance_integration_connections", conn.id, {
@@ -482,7 +483,7 @@ export async function disableConnection(connectionId: string, removeCredential =
     .eq("id", conn.id)
     .eq("college_id", actor.collegeId)
     .select("id");
-  if (error) throw new Error(error.message);
+  if (error) throw dbError(error);
   assertClaimed(disabled, "integration connection");
 
   if (removeCredential) await deleteCredential(createAdminClient(), conn.id);
@@ -548,7 +549,7 @@ export async function upsertMapping(params: UpsertMappingParams) {
     )
     .select("id")
     .single();
-  if (error) throw new Error(error.message);
+  if (error) throw dbError(error);
 
   await logAudit(supabase, actor, "finance_mapping_changed", "finance_account_mappings", data.id, {
     newValue: { kind: parsed.kind, local_key: parsed.localKey, external_name: parsed.externalName },
@@ -684,7 +685,7 @@ export async function retryOperation(operationId: string) {
     .eq("id", operationId)
     .eq("status", "FAILED")
     .select("id");
-  if (error) throw new Error(error.message);
+  if (error) throw dbError(error);
   assertClaimed(claimed, "sync operation");
 
   await logAudit(supabase, actor, "finance_sync_retried", "finance_sync_operations", operationId, {
@@ -705,7 +706,7 @@ export async function cancelOperation(operationId: string) {
     .eq("college_id", actor.collegeId)
     .in("status", ["PENDING", "BLOCKED", "FAILED"])
     .select("id");
-  if (error) throw new Error(error.message);
+  if (error) throw dbError(error);
   assertClaimed(cancelled, "sync operation");
   await logAudit(supabase, actor, "finance_sync_cancelled", "finance_sync_operations", operationId, {
     newValue: { status: "CANCELLED" },
@@ -767,7 +768,7 @@ export async function resolveReconciliationItem(itemId: string, resolution: stri
     .eq("college_id", actor.collegeId)
     .eq("status", "open")
     .select("id");
-  if (error) throw new Error(error.message);
+  if (error) throw dbError(error);
   assertClaimed(resolved, "reconciliation finding");
 
   await logAudit(supabase, actor, "finance_reconciliation_resolved", "finance_reconciliation_items", itemId, {

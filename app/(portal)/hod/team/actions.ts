@@ -7,6 +7,7 @@ import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib
 import { inviteUserCore, resendInvitationCore, revokeInvitationCore } from "@/lib/invitations";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
+import { dbError } from "@/lib/internal-error";
 
 const InviteTeacherSchema = z.object({
   email: z.string().trim().email({ message: "Enter a valid email address." }),
@@ -81,7 +82,7 @@ async function inviteHodTeam(
       parent_phone: params.parentPhone || null,
     });
     if (error) {
-      throw new Error(error.message);
+      throw dbError(error);
     }
   }
 }

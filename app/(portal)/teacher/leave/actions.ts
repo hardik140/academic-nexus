@@ -7,6 +7,7 @@ import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib
 import { checkRateLimit } from "@/lib/rate-limit";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
+import { dbError } from "@/lib/internal-error";
 
 type LeaveType = Database["public"]["Tables"]["leave_requests"]["Row"]["leave_type"];
 
@@ -50,7 +51,7 @@ export async function applyForLeaveCore(
   });
 
   if (error) {
-    throw new Error(error.message);
+    throw dbError(error);
   }
 }
 

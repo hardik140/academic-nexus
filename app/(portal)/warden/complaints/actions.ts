@@ -14,6 +14,7 @@ import { resolveWardenScopedStudentIds } from "../gatepasses/actions";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import type { DataTableQuery } from "@/components/ui/data-table";
+import { dbError } from "@/lib/internal-error";
 
 const COMPLAINTS_PAGE_SIZE = 10;
 const COMPLAINTS_SORT_COLUMNS = ["title"] as const;
@@ -121,7 +122,7 @@ export async function updateComplaintStatusCore(
     .select("id");
 
   if (error) {
-    throw new Error(error.message);
+    throw dbError(error);
   }
   assertClaimed(claimed, "complaint");
 

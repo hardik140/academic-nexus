@@ -119,8 +119,23 @@ maybe("real-PostgreSQL concurrency", () => {
       const payId = owner(cluster, db, `SELECT id FROM payments WHERE fee_id='${FEE_A}' AND amount=10000`);
       owner(cluster, db, `INSERT INTO refund_requests (college_id, student_id, payment_id, amount, reason) VALUES ('${COLLEGE_A}','${S.a}','${payId}',4000,'x')`);
       const reqId = owner(cluster, db, `SELECT id FROM refund_requests WHERE payment_id='${payId}'`);
+      // The refund arrives SECOND, behind the same short pg_sleep the other
+      // ordered races in this file use.
+      //
+      // Without it this test was a coin toss, and it lost about half the
+      // time. Both interleavings are legal PostgreSQL; they just answer
+      // different questions. Refund-first drops paid to 6,000, at which
+      // point the 2,000 payment is genuinely within the outstanding balance
+      // and is CORRECTLY accepted — so the assertions below would fail
+      // while the database behaved exactly as designed. The question this
+      // test exists to ask is the other one: does a payment racing a refund
+      // see the COMMITTED balance rather than a half-applied one, and is it
+      // refused when the fee is still paid in full.
+      //
+      // Only the test's timing changed. No Finance code, no RPC, no schema,
+      // and no assertion was weakened to accommodate the race.
       const [refund, overpay] = await concurrently(
-        session(cluster, db, `SELECT public.approve_refund('${reqId}');`, U.finance),
+        session(cluster, db, `SELECT pg_sleep(0.2); SELECT public.approve_refund('${reqId}');`, U.finance),
         session(cluster, db, `INSERT INTO public.payments (college_id, fee_id, student_id, amount, method, status, processed_by) VALUES ('${COLLEGE_A}','${FEE_A}','${S.a}',2000,'cash','cleared',auth.uid());`, U.finance),
       );
       expect(refund.code, refund.stderr).toBe(0);

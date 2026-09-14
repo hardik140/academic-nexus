@@ -3,6 +3,7 @@ import { errorResponse } from "@/lib/api-errors";
 import { requireRoleFromRequest } from "@/lib/rbac";
 import { PERMISSIONS } from "@/lib/permissions";
 import type { Database } from "@/types/database";
+import { dbError } from "@/lib/internal-error";
 
 type SyncStatus = Database["public"]["Tables"]["finance_sync_operations"]["Row"]["status"];
 
@@ -47,7 +48,7 @@ export async function GET(request: Request) {
     if (statusParam) query = query.eq("status", statusParam as SyncStatus);
 
     const { data, error } = await query;
-    if (error) throw new Error(error.message);
+    if (error) throw dbError(error);
     return NextResponse.json({ operations: data ?? [] });
   } catch (err) {
     return errorResponse(err);

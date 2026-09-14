@@ -10,6 +10,7 @@ import { logAudit } from "@/lib/audit";
 import { PERMISSIONS } from "@/lib/permissions";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
+import { dbError } from "@/lib/internal-error";
 
 const METRIC_KEYS = ["placement_rate", "avg_cgpa", "attendance_pct", "fee_collection_pct", "hostel_occupancy_pct"] as const;
 type MetricKey = (typeof METRIC_KEYS)[number];
@@ -73,7 +74,7 @@ export async function listGoals() {
 
   const { data, error } = await query;
   if (error) {
-    throw new Error(error.message);
+    throw dbError(error);
   }
 
   // Cast to any: this hand-maintained types file doesn't declare table
@@ -175,7 +176,7 @@ export async function updateGoal(params: { goalId: string; status?: string; curr
 
   const { error } = await supabase.from("strategic_goals").update(update).eq("id", goalId).eq("college_id", actor.collegeId);
   if (error) {
-    throw new Error(error.message);
+    throw dbError(error);
   }
 
   await logAudit(supabase, actor, "strategic_goal_updated", "strategic_goals", goalId, {
@@ -205,7 +206,7 @@ export async function addMilestone(params: { goalId: string; title: string; targ
     target_date: targetDate || null,
   });
   if (error) {
-    throw new Error(error.message);
+    throw dbError(error);
   }
 
   await invalidateCache(goalsCacheKey(actor.collegeId));
@@ -222,7 +223,7 @@ export async function toggleMilestone(milestoneId: string, done: boolean) {
     .eq("id", milestoneId)
     .eq("college_id", actor.collegeId);
   if (error) {
-    throw new Error(error.message);
+    throw dbError(error);
   }
 
   await invalidateCache(goalsCacheKey(actor.collegeId));
@@ -240,7 +241,7 @@ export async function listGoalOwnerCandidates() {
     .in("role", ["director", "hod"])
     .order("full_name");
   if (error) {
-    throw new Error(error.message);
+    throw dbError(error);
   }
   return data || [];
 }

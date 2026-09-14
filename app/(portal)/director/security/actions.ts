@@ -15,6 +15,7 @@ import {
 import { inviteUserCore, type InviteUserParams } from "@/lib/invitations";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
+import { dbError } from "@/lib/internal-error";
 
 /**
  * Director-side security administration.
@@ -177,7 +178,7 @@ export async function authorizeSecurityPersonnel(params: {
     })
     .select("id");
 
-  if (error) throw new Error(error.message);
+  if (error) throw dbError(error);
   assertClaimed(created, "security account");
 
   await logAudit(supabase, actor, "security_user_activated", "security_personnel", created![0].id, {
@@ -239,7 +240,7 @@ export async function setSecurityPersonnelStatus(params: {
     .eq("college_id", actor.collegeId)
     .eq("status", person.status)
     .select("id");
-  if (error) throw new Error(error.message);
+  if (error) throw dbError(error);
   assertClaimed(claimed, "security account");
 
   await logAudit(
@@ -275,7 +276,7 @@ export async function setSecurityPermissions(personnelIdRaw: string, permissions
     .eq("id", personnelId)
     .eq("college_id", actor.collegeId)
     .select("id");
-  if (error) throw new Error(error.message);
+  if (error) throw dbError(error);
   assertClaimed(claimed, "security account");
 
   await logAudit(supabase, actor, "security_permission_changed", "security_personnel", personnelId, {
@@ -321,7 +322,7 @@ export async function createGate(params: { code: string; name: string; descripti
       created_by: actor.userId,
     })
     .select("id");
-  if (error) throw new Error(error.message);
+  if (error) throw dbError(error);
   assertClaimed(created, "gate");
 
   await logAudit(supabase, actor, "gate_created", "gates", created![0].id, { newValue: { code, name } });
@@ -344,7 +345,7 @@ export async function setGateActive(gateIdRaw: string, isActive: boolean) {
     .eq("id", gateId)
     .eq("college_id", actor.collegeId)
     .select("id");
-  if (error) throw new Error(error.message);
+  if (error) throw dbError(error);
   assertClaimed(claimed, "gate");
 
   await logAudit(supabase, actor, isActive ? "gate_reopened" : "gate_retired", "gates", gateId, {
@@ -383,7 +384,7 @@ export async function assignGate(personnelIdRaw: string, gateIdRaw: string) {
     if (error.message.includes("idx_sga_live") || error.message.includes("duplicate key")) {
       throw new Error("That guard is already assigned to this gate.");
     }
-    throw new Error(error.message);
+    throw dbError(error);
   }
   assertClaimed(created, "gate assignment");
 
@@ -405,7 +406,7 @@ export async function revokeGateAssignment(assignmentIdRaw: string) {
     .eq("college_id", actor.collegeId)
     .is("revoked_at", null)
     .select("id, security_personnel_id, gate_id");
-  if (error) throw new Error(error.message);
+  if (error) throw dbError(error);
   assertClaimed(claimed, "gate assignment");
 
   await logAudit(supabase, actor, "gate_unassigned", "security_personnel", claimed![0].security_personnel_id, {
@@ -467,7 +468,7 @@ export async function sendSecurityInstruction(params: {
       created_by: actor.userId,
     })
     .select("id");
-  if (error) throw new Error(error.message);
+  if (error) throw dbError(error);
   assertClaimed(created, "security instruction");
 
   await notifyRecipients(supabase, actor, input, created![0].id);
@@ -550,7 +551,7 @@ export async function withdrawSecurityInstruction(instructionIdRaw: string) {
     .eq("college_id", actor.collegeId)
     .eq("status", "active")
     .select("id");
-  if (error) throw new Error(error.message);
+  if (error) throw dbError(error);
   assertClaimed(claimed, "security instruction");
 
   await logAudit(supabase, actor, "security_instruction_withdrawn", "security_instructions", instructionId);

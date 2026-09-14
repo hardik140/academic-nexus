@@ -8,6 +8,7 @@ import { logAudit } from "@/lib/audit";
 import { canInvite } from "@/lib/auth/invite-tiers";
 import { sendInvitationEmail } from "@/lib/email";
 import { getPublicAppUrl } from "@/lib/app-url";
+import { dbError } from "@/lib/internal-error";
 
 /**
  * Best-effort college-name lookup for the invitation email body. Never
@@ -169,7 +170,7 @@ export async function inviteUserCore(
     metadata: (parsed.metadata as Database["public"]["Tables"]["invitations"]["Insert"]["metadata"]) || null,
   });
   if (insertErr) {
-    throw new Error(insertErr.message);
+    throw dbError(insertErr);
   }
 
   const collegeName = await getCollegeName(supabase, collegeId);
@@ -259,7 +260,7 @@ export async function resendInvitationCore(
     })
     .eq("id", invitationId);
   if (updateErr) {
-    throw new Error(updateErr.message);
+    throw dbError(updateErr);
   }
 
   // invitations doesn't store full_name (only the original inviteUserByEmail
@@ -297,7 +298,7 @@ export async function revokeInvitationCore(
 
   const { error } = await supabase.from("invitations").update({ status: "revoked" }).eq("id", invitationId);
   if (error) {
-    throw new Error(error.message);
+    throw dbError(error);
   }
 
   await logAudit(supabase, actor, `Revoked invitation to ${invitation.email}`, "invitations", invitationId);

@@ -3,6 +3,7 @@ import type { Database } from "@/types/database";
 import { adapterFor } from "./providers/registry";
 import { isUsable, type CapabilityMap, type ExternalTransaction, type ProviderContext } from "./providers/types";
 import { loadCredential } from "./credentials";
+import { dbError } from "@/lib/internal-error";
 
 /**
  * The reconciliation engine (§64, §65, §80, §98).
@@ -272,7 +273,7 @@ export async function reconcile(
 
     if (items.length > 0) {
       const { error } = await db.from("finance_reconciliation_items").insert(items);
-      if (error) throw new Error(error.message);
+      if (error) throw dbError(error);
     }
 
     const status = items.length === 0 && Math.abs(difference) <= MONEY_EPSILON ? "RECONCILED" : "RECONCILIATION_REQUIRED";
@@ -336,7 +337,7 @@ async function loadLocalPayments(db: Db, input: ReconcileInput): Promise<LocalPa
     .eq("status", "cleared")
     .gte("created_at", `${input.periodStart}T00:00:00Z`)
     .lte("created_at", `${input.periodEnd}T23:59:59Z`);
-  if (error) throw new Error(error.message);
+  if (error) throw dbError(error);
   return (data ?? []).map((p) => ({
     id: p.id,
     amount: Number(p.amount),

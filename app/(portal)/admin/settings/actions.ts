@@ -8,6 +8,7 @@ import { checkRateLimit } from "@/lib/rate-limit";
 import { logAudit } from "@/lib/audit";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
+import { dbError } from "@/lib/internal-error";
 
 const UpdateCollegeSchema = z.object({
   name: z.string().trim().min(1, { message: "Institution name is required." }).max(200),
@@ -70,7 +71,7 @@ export async function updateCollegeCore(
     .eq("id", actor.collegeId);
 
   if (error) {
-    throw new Error(error.message);
+    throw dbError(error);
   }
 
   await logAudit(supabase, actor, "Updated institution settings", "colleges", actor.collegeId);

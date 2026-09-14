@@ -12,6 +12,7 @@ import { inviteUserCore, resendInvitationCore, revokeInvitationCore, type Invite
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, UserRole, UserStatus } from "@/types/database";
 import type { DataTableQuery } from "@/components/ui/data-table";
+import { dbError } from "@/lib/internal-error";
 
 const USERS_PAGE_SIZE = 10;
 // Server actions are callable directly (not just through the UI that only
@@ -152,7 +153,7 @@ export async function updateUserProfileCore(
     .eq("id", targetUserId)
     .eq("college_id", actor.collegeId)
     .select("id");
-  if (error) throw new Error(error.message);
+  if (error) throw dbError(error);
   assertClaimed(updated, "user profile");
 
   // Changes `role`, which middleware's route-access check reads (cached,
@@ -219,7 +220,7 @@ export async function updateUserStatusCore(
     .eq("id", targetUserId)
     .eq("college_id", actor.collegeId)
     .select("id");
-  if (error) throw new Error(error.message);
+  if (error) throw dbError(error);
   assertClaimed(updated, "user profile");
 
   // Changes `status`, which middleware's active-account check reads

@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/rbac";
 import { checkRateLimit } from "@/lib/rate-limit";
 import type { Database } from "@/types/database";
+import { dbError } from "@/lib/internal-error";
 
 // The hand-maintained Database type's Relationships arrays are empty (see
 // types/database.ts's own header comment), so supabase-js can't infer
@@ -121,7 +122,7 @@ export async function applyToDrive(driveIdRaw: string) {
     if (error.code === "23505") {
       throw new Error("You have already applied to this drive.");
     }
-    throw new Error(error.message);
+    throw dbError(error);
   }
 
   await supabase

@@ -9,6 +9,7 @@ import { logAudit } from "@/lib/audit";
 import { sendExpoPushNotifications } from "@/lib/push";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
+import { dbError } from "@/lib/internal-error";
 
 const OPERATOR_ROLES = ["placement_cell", "admin"] as const;
 
@@ -151,7 +152,7 @@ async function sendPlacementNotificationCore(
     }))
   );
   if (error) {
-    throw new Error(error.message);
+    throw dbError(error);
   }
 
   // Best-effort push — see lib/push.ts's doc comment; a push failure must

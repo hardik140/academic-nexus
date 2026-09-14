@@ -11,6 +11,7 @@ import { assertCanRecordAttendance, assertCanWriteOfferingRecords } from "@/lib/
 import { assertPersisted } from "@/lib/concurrent-claim";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
+import { dbError } from "@/lib/internal-error";
 
 type AttendanceStatus = Database["public"]["Tables"]["attendance"]["Row"]["status"];
 
@@ -94,7 +95,7 @@ export async function saveAttendanceCore(
     .select("id");
 
   if (error) {
-    throw new Error(error.message);
+    throw dbError(error);
   }
 
   return { saved: assertPersisted(persisted, rows.length, "attendance") };
@@ -182,7 +183,7 @@ export async function requestAttendanceCorrection(paramsRaw: RequestCorrectionPa
     .select("id");
 
   if (error) {
-    throw new Error(error.message);
+    throw dbError(error);
   }
   // Telling a teacher their correction was filed when no row exists means
   // they stop chasing it and the record stays wrong.

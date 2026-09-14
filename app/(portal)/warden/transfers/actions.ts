@@ -11,6 +11,7 @@ import { assertClaimed } from "@/lib/concurrent-claim";
 import { PERMISSIONS } from "@/lib/permissions";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
+import { dbError } from "@/lib/internal-error";
 
 function transfersCacheKey(scopeKey: string) {
   return `warden-transfers:${scopeKey}`;
@@ -126,7 +127,7 @@ export async function rejectRoomTransfer(requestIdRaw: string, reviewNotesRaw: s
     .eq("id", requestId)
     .eq("status", "pending")
     .select("id");
-  if (error) throw new Error(error.message);
+  if (error) throw dbError(error);
   assertClaimed(claimed, "transfer request");
 
   await logAudit(supabase, actor, "room_transfer_rejected", "room_transfer_requests", requestId, {
@@ -212,7 +213,7 @@ export async function approveRoomTransfer(requestIdRaw: string, newRoomIdRaw: st
     .eq("id", requestId)
     .eq("status", "pending")
     .select("id");
-  if (claimError) throw new Error(claimError.message);
+  if (claimError) throw dbError(claimError);
   assertClaimed(claimed, "transfer request");
 
   // Concurrency-safe capacity check: optimistic compare-and-swap on the
@@ -228,7 +229,7 @@ export async function approveRoomTransfer(requestIdRaw: string, newRoomIdRaw: st
     .eq("id", newRoomId)
     .eq("occupancy", newRoom.occupancy)
     .select("id");
-  if (casError) throw new Error(casError.message);
+  if (casError) throw dbError(casError);
   if (!casResult || casResult.length === 0) {
     throw new Error("This room was just filled by another transfer — please pick a different room and retry.");
   }
@@ -239,7 +240,7 @@ export async function approveRoomTransfer(requestIdRaw: string, newRoomIdRaw: st
     .from("hostel_allocations")
     .update({ status: "transferred", vacated_date: today })
     .eq("id", oldAllocation.id);
-  if (vacateError) throw new Error(vacateError.message);
+  if (vacateError) throw dbError(vacateError);
 
   await supabase
     .from("hostel_rooms")
@@ -259,7 +260,7 @@ export async function approveRoomTransfer(requestIdRaw: string, newRoomIdRaw: st
     .from("room_transfer_requests")
     .update({ new_room_id: newRoomId, new_allocation_id: newAllocation.id })
     .eq("id", requestId);
-  if (updateRequestError) throw new Error(updateRequestError.message);
+  if (updateRequestError) throw dbError(updateRequestError);
 
   await logAudit(supabase, actor, "room_transfer_approved", "room_transfer_requests", requestId, {
     oldValue: { room_id: oldAllocation.room_id, allocation_id: oldAllocation.id },

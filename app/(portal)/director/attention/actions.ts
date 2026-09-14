@@ -12,6 +12,7 @@ import { PERMISSIONS } from "@/lib/permissions";
 import { computeEffectiveFeeStatus } from "@/lib/finance-status";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
+import { dbError } from "@/lib/internal-error";
 
 function attentionCacheKey(scopeKey: string) {
   return `attention:${scopeKey}`;
@@ -263,7 +264,7 @@ export async function assignRiskFlag(params: { flagId: string; assigneeId: strin
     .eq("id", flagId)
     .eq("college_id", actor.collegeId);
   if (error) {
-    throw new Error(error.message);
+    throw dbError(error);
   }
 
   await logAudit(supabase, actor, "risk_flag_assigned", "risk_flags", flagId, {
@@ -342,7 +343,7 @@ export async function actOnRiskFlag(params: { flagId: string; action: "acknowled
     .eq("status", existing.status)
     .select("id");
   if (error) {
-    throw new Error(error.message);
+    throw dbError(error);
   }
   assertClaimed(claimed, "escalation");
 
@@ -422,7 +423,7 @@ export async function reviewRiskFlag(params: { flagId: string; outcome: "accept"
     .eq("status", "resolved")
     .select("id");
   if (error) {
-    throw new Error(error.message);
+    throw dbError(error);
   }
   assertClaimed(claimed, "escalation");
 
@@ -462,7 +463,7 @@ export async function listAssignableStaff() {
     .in("role", ["hod", "warden", "placement_cell", "finance", "admin"])
     .order("full_name");
   if (error) {
-    throw new Error(error.message);
+    throw dbError(error);
   }
   return data || [];
 }

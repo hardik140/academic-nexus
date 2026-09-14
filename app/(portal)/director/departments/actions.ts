@@ -10,6 +10,7 @@ import { logAudit } from "@/lib/audit";
 import { assertClaimed } from "@/lib/concurrent-claim";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
+import { dbError } from "@/lib/internal-error";
 
 const AssignHodSchema = z.object({
   departmentId: z.string().guid(),
@@ -76,7 +77,7 @@ export async function assignHodCore(
     .select("id");
 
   if (error) {
-    throw new Error(error.message);
+    throw dbError(error);
   }
   assertClaimed(updated, "department");
 

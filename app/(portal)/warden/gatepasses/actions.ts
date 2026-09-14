@@ -14,6 +14,7 @@ import { callRpc } from "@/lib/gate-security/rpc";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import type { DataTableQuery } from "@/components/ui/data-table";
+import { dbError } from "@/lib/internal-error";
 
 const PROCESSED_PAGE_SIZE = 10;
 const PROCESSED_SORT_COLUMNS = ["exit_time", "destination"] as const;
@@ -188,7 +189,7 @@ export async function actOnGatePassCore(
     .select("id");
 
   if (error) {
-    throw new Error(error.message);
+    throw dbError(error);
   }
   assertClaimed(claimed, "gate pass");
 

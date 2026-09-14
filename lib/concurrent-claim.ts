@@ -1,3 +1,5 @@
+
+import { dbError } from "@/lib/internal-error";
 /**
  * Guard for the read-check-write race every approval workflow in this app
  * shares.
@@ -33,7 +35,7 @@
  *     .eq("college_id", actor.collegeId)
  *     .eq("status", "pending")
  *     .select("id");
- *   if (error) throw new Error(error.message);
+ *   if (error) throw dbError(error);
  *   assertClaimed(claimed, "leave request");
  *
  * This is deliberately app-layer optimistic locking, not a transaction — it
@@ -66,7 +68,7 @@ export function assertClaimed(rows: unknown[] | null, entityLabel: string): void
  *     .from("attendance")
  *     .upsert(rows, { onConflict: "offering_id,student_id,date" })
  *     .select("id");
- *   if (error) throw new Error(error.message);
+ *   if (error) throw dbError(error);
  *   return { saved: assertPersisted(persisted, rows.length, "attendance record") };
  *
  * ATOMIC, not partial — deliberately. These upserts are already all-or-

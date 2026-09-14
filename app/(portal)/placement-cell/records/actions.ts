@@ -9,6 +9,7 @@ import { getCached, invalidateCache } from "@/lib/cache";
 import { logAudit } from "@/lib/audit";
 import { resolveListSort, listCacheKey } from "@/lib/cached-list";
 import type { DataTableQuery } from "@/components/ui/data-table";
+import { dbError } from "@/lib/internal-error";
 
 // See app/(portal)/student/placements/actions.ts's comment on why embedded
 // selects need a local cast — the hand-maintained Database type has no
@@ -123,7 +124,7 @@ export async function updateStudentPlacementStatus(
   );
 
   if (error) {
-    throw new Error(error.message);
+    throw dbError(error);
   }
 
   await logAudit(supabase, actor, `Updated placement record to ${parsed.placementStatus}`, "student_placement_profiles", parsed.studentId);

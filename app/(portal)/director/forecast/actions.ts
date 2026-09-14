@@ -6,6 +6,7 @@ import { requireRole } from "@/lib/rbac";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { PERMISSIONS } from "@/lib/permissions";
 import type { Json } from "@/types/database";
+import { dbError } from "@/lib/internal-error";
 
 export async function getForecastBaseline() {
   const actor = await requireRole(PERMISSIONS.forecast_simulator_read);
@@ -112,7 +113,7 @@ export async function saveForecastScenario(params: { name: string; assumptions: 
     computed_results: result.projected as unknown as Json,
   });
   if (error) {
-    throw new Error(error.message);
+    throw dbError(error);
   }
 }
 
@@ -127,7 +128,7 @@ export async function listSavedScenarios() {
     .order("created_at", { ascending: false })
     .limit(20);
   if (error) {
-    throw new Error(error.message);
+    throw dbError(error);
   }
   return data || [];
 }

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
+import { dbError } from "@/lib/internal-error";
 
 /**
  * Mapping resolution and pre-flight validation (§48, §49, §62, §63).
@@ -75,7 +76,7 @@ export async function loadMappings(
     .select("id, kind, local_key, local_label, external_id, external_code, external_name, tax_rate, tax_treatment, status")
     .eq("connection_id", connectionId)
     .eq("status", "active");
-  if (error) throw new Error(error.message);
+  if (error) throw dbError(error);
   return (data ?? []) as unknown as AccountMapping[];
 }
 

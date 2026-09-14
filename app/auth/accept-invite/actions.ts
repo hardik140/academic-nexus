@@ -7,6 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { logAudit } from "@/lib/audit";
 import { dashboardPathFor } from "@/lib/auth/role-routes";
 import { invalidateCache, middlewareProfileCacheKey } from "@/lib/cache";
+import { dbError } from "@/lib/internal-error";
 
 const AcceptInvitationSchema = z.object({
   password: z.string().min(8, { message: "Password must be at least 8 characters." }).max(200),
@@ -70,7 +71,7 @@ export async function acceptInvitation(password: string) {
 
   const { error: passwordErr } = await supabase.auth.updateUser({ password: validPassword });
   if (passwordErr) {
-    throw new Error(passwordErr.message);
+    throw dbError(passwordErr);
   }
 
   const { error: profileErr } = await supabase
@@ -78,7 +79,7 @@ export async function acceptInvitation(password: string) {
     .update({ status: "active" })
     .eq("id", user.id);
   if (profileErr) {
-    throw new Error(profileErr.message);
+    throw dbError(profileErr);
   }
   // Belt-and-suspenders: /auth/accept-invite is a public route, so
   // middleware never cached this user's (still-pending) profile in the
@@ -91,7 +92,7 @@ export async function acceptInvitation(password: string) {
     .update({ status: "accepted", accepted_at: new Date().toISOString(), accepted_by: user.id })
     .eq("id", invitation.id);
   if (invitationErr) {
-    throw new Error(invitationErr.message);
+    throw dbError(invitationErr);
   }
 
   await logAudit(

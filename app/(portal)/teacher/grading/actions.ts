@@ -10,6 +10,7 @@ import { assertCanWriteOfferingRecords } from "@/lib/offerings";
 import { assertPersisted } from "@/lib/concurrent-claim";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
+import { dbError } from "@/lib/internal-error";
 
 type ExamType = Database["public"]["Tables"]["marks"]["Row"]["exam_type"];
 
@@ -94,7 +95,7 @@ export async function saveMarksCore(
     .select("id");
 
   if (error) {
-    throw new Error(error.message);
+    throw dbError(error);
   }
 
   return { saved: assertPersisted(persisted, rows.length, "marks") };
