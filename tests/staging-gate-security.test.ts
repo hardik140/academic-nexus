@@ -333,6 +333,37 @@ describe("§45 QR replay and copy testing", () => {
     } finally { await d.close(); }
   });
 
+  it("Test 8c — a deactivated guard cannot scan either, and cannot be revived to try again", async () => {
+    // SUSPENDED and DEACTIVATED are refused by the same `status = 'ACTIVE'`
+    // predicate, so this looks redundant next to Test 8. It is not: the two
+    // mean different things operationally — suspension is a pause, and
+    // deactivation is the row you are left with after someone leaves the
+    // job. A future change that made suspension reversible in-place could
+    // easily special-case one and not the other, and the attack matrix
+    // lists them separately for that reason.
+    const d = await fresh();
+    try {
+      const { passId, credentialId } = await approvedPass(d);
+
+      expect((await as(d, U.director,
+        `UPDATE public.security_personnel SET status='DEACTIVATED', deactivated_by=auth.uid()
+          WHERE id='${SEC.main}' RETURNING id`)).rows).toBe(1);
+
+      const r = await as(d, U.guardMain,
+        `SELECT outcome FROM public.record_gate_movement('${credentialId}','${GATE_MAIN}','{}'::jsonb)`);
+      expect(r.ok, "a deactivated guard recorded a movement").toBe(false);
+      expect(r.error).toMatch(/not an active gate security operator/);
+      expect(await movementCount(d, passId)).toBe(0);
+      expect(await passStatus(d, passId)).toBe("approved");
+
+      // And the account cannot be quietly put back to work.
+      const revive = await as(d, U.director,
+        `UPDATE public.security_personnel SET status='ACTIVE' WHERE id='${SEC.main}' RETURNING id`);
+      expect(revive.ok).toBe(false);
+      expect(await scalar(d, `SELECT status FROM security_personnel WHERE id=$1`, [SEC.main])).toBe("DEACTIVATED");
+    } finally { await d.close(); }
+  });
+
   it("Test 8b — no other role can call the movement recorder at all", async () => {
     const d = await fresh();
     try {
