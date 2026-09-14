@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "@sentry/nextjs": "^10.70.0",
-    "@supabase/ssr": "^0.12.4",
+    "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.116.0",
     "@upstash/qstash": "^2.11.3",
     "@upstash/ratelimit": "^2.0.8",
