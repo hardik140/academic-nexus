@@ -58,11 +58,12 @@ export interface InternalErrorLike {
  * chances to paste the wrong one, and the frame below this function is
  * always the thrower.
  */
-export function dbError(error: InternalErrorLike | null | undefined): InternalOperationError {
+export function dbError(error: InternalErrorLike | null | undefined): Error {
   const wrapped = new InternalOperationError();
   // console.error is what this deployment collects (Workers observability is
-  // enabled in wrangler.jsonc). Never the payload, never a credential — a
-  // SQLSTATE and a message is enough to find the fault.
+  // enabled in wrangler.jsonc). Always logged, whichever branch is taken.
+  // Never the payload, never a credential — a SQLSTATE and a message is
+  // enough to find the fault.
   console.error("[internal] database/service call failed", {
     code: error?.code,
     message: error?.message,
@@ -70,7 +71,29 @@ export function dbError(error: InternalErrorLike | null | undefined): InternalOp
     hint: error?.hint,
     at: wrapped.stack?.split("\n")[2]?.trim(),
   });
-  return wrapped;
+
+  // NOT EVERY `error.message` IS AN INTERNAL MESSAGE.
+  //
+  // The first version of this flattened all of them, and an existing test
+  // caught what that cost: migration triggers RAISE EXCEPTION with prose
+  // written to be read by the person who tripped them —
+  //
+  //   You cannot change your own role, status or department.
+  //
+  // arrives through exactly the same `error.message` channel as
+  //
+  //   permission denied for table gate_pass_credentials
+  //
+  // Replacing the first with "the request could not be completed" hides a
+  // legitimate authorization refusal and tells the user nothing about what
+  // they did wrong. So the same rule the response boundary uses is applied
+  // here: a message that describes the DATABASE is replaced, and a message
+  // that describes the USER'S ACTION is preserved. Both are logged either
+  // way, so nothing is lost to operators.
+  const message = String(error?.message ?? "").trim();
+  if (!message || looksInternal(message)) return wrapped;
+
+  return new Error(message);
 }
 
 /**

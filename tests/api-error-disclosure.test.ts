@@ -88,6 +88,37 @@ describe("an internal database error", () => {
   });
 });
 
+describe("a message the DATABASE wrote on purpose still reaches the caller", () => {
+  // Migration triggers RAISE EXCEPTION with prose meant to be read by the
+  // person who tripped them, and it arrives through exactly the same
+  // `error.message` channel as a PostgreSQL internal. Flattening these
+  // would hide legitimate authorization refusals — caught by
+  // tests/privileged-writes.test.ts when the first version of dbError()
+  // replaced every message unconditionally.
+  const TRIGGER_MESSAGES = [
+    "You cannot change your own role, status or department.",
+    "gate_movements is an immutable ledger and cannot be deleted",
+    "security_personnel: activation must record who authorized it",
+    "A refund cannot exceed the outstanding balance.",
+  ];
+
+  it("passes through dbError unchanged, and is still logged", async () => {
+    for (const message of TRIGGER_MESSAGES) {
+      const err = dbError({ message, code: "P0001" });
+      expect(err.message, `flattened a deliberate message: ${message}`).toBe(message);
+      expect((await body(errorResponse(err))).error).toBe(message);
+    }
+    // every one of them still reached the operator log
+    expect(console.error).toHaveBeenCalledTimes(TRIGGER_MESSAGES.length);
+  });
+
+  it("is still distinguished from an internal message on the same channel", () => {
+    expect(dbError({ message: "permission denied for table fees" }).message).not.toContain("fees");
+    expect(dbError({ message: "You cannot change your own role, status or department." }).message)
+      .toContain("your own role");
+  });
+});
+
 describe("a deliberate business error still reaches the person who caused it", () => {
   // The whole point of classifying rather than blanket-replacing: these are
   // written to be read, and hiding them would be a regression in its own
