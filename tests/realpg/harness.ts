@@ -14,7 +14,7 @@ import { join } from "node:path";
  * binaries are absent the suite reports itself BLOCKED rather than passing.
  *
  * Each test gets its own database cloned from a template that carries the
- * platform layer, the full migration chain 001..047 and the QA dataset —
+ * platform layer, the full migration chain 001..050 and the QA dataset —
  * the same three inputs the PGlite harness uses — so results are directly
  * comparable across the two engines.
  *

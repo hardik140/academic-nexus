@@ -65,8 +65,14 @@ async function approvedPass(
 /** Runs the scan exactly as a guard's session would. */
 async function scan(d: PGlite, guard: string, credentialId: string, gateId: string) {
   const r = await as(d, guard,
-    `SELECT outcome, movement, detail, student_name FROM public.record_gate_movement('${credentialId}','${gateId}','{}'::jsonb)`);
-  return { ...r, outcome: (r.data[0]?.outcome as string) ?? null, movement: (r.data[0]?.movement as string) ?? null };
+    `SELECT outcome, movement, detail, student_name, occurred_at FROM public.record_gate_movement('${credentialId}','${gateId}','{}'::jsonb)`);
+  return {
+    ...r,
+    outcome: (r.data[0]?.outcome as string) ?? null,
+    movement: (r.data[0]?.movement as string) ?? null,
+    studentName: (r.data[0]?.student_name as string) ?? null,
+    occurredAt: (r.data[0]?.occurred_at as string) ?? null,
+  };
 }
 
 const passStatus = (d: PGlite, id: string) =>
@@ -111,7 +117,7 @@ describe("the whole journey, through the database only", () => {
       // occurred_at is impossible, so this test asserts the IN through a
       // separate pass below and checks the window itself in its own test.
       const tooSoon = await scan(d, U.guardMain, credentialId, GATE_MAIN);
-      expect(tooSoon.outcome).toBe("ALREADY_OUTSIDE");
+      expect(tooSoon.outcome).toBe("ALREADY_RECORDED");
       expect(await movementCount(d, passId)).toBe(1);
     } finally { await d.close(); }
   });
@@ -257,10 +263,54 @@ describe("§45 QR replay and copy testing", () => {
       const second = await scan(d, U.guardMain, credentialId, GATE_MAIN);
       const third = await scan(d, U.guardNorth, credentialId, GATE_NORTH);
       expect(first.outcome).toBe("RECORDED");
-      expect(second.outcome).toBe("ALREADY_OUTSIDE");
+      expect(second.outcome).toBe("ALREADY_RECORDED");
       // A different guard at a different gate gets the same answer — the
       // window is a property of the PASS, not of the scanner.
-      expect(third.outcome).toBe("ALREADY_OUTSIDE");
+      expect(third.outcome).toBe("ALREADY_RECORDED");
+      expect(await movementCount(d, passId)).toBe(1);
+      expect(await passStatus(d, passId)).toBe("active");
+
+      // Both repeats REPLAY the one movement rather than merely refusing:
+      // same direction, same instant, same student as the row in the
+      // ledger. This is what a guard needs to see after a dropped
+      // response, and it is asserted against the stored row so the
+      // function cannot satisfy it by inventing a plausible answer.
+      const [row] = await verify<{ movement_type: string; occurred_at: string }>(d,
+        `SELECT movement_type, occurred_at FROM gate_movements WHERE gate_pass_id=$1`, [passId]);
+      for (const repeat of [second, third]) {
+        expect(repeat.movement).toBe(row.movement_type);
+        expect(new Date(repeat.occurredAt!).getTime()).toBe(new Date(row.occurred_at).getTime());
+        expect(repeat.studentName).toBe(first.studentName);
+      }
+    } finally { await d.close(); }
+  });
+
+  it("a retry after a lost response confirms the movement instead of refusing it", async () => {
+    // Section 34, and the reason the duplicate path replays rather than
+    // refuses. A guard's network drops between the INSERT and the
+    // response; they have no idea whether the exit was recorded, so they
+    // scan again. Before this, the second scan answered ALREADY_OUTSIDE
+    // with no student, no direction and no time — indistinguishable, at a
+    // gate, from "this pass is not usable", which is how a recorded
+    // student gets turned back or an unrecorded one gets waved through.
+    const d = await fresh();
+    try {
+      const { passId, credentialId } = await approvedPass(d);
+
+      const landed = await scan(d, U.guardMain, credentialId, GATE_MAIN);
+      expect(landed.outcome).toBe("RECORDED");
+      expect(landed.movement).toBe("OUT");
+
+      // The retry the guard makes because they never saw the line above.
+      const retry = await scan(d, U.guardMain, credentialId, GATE_MAIN);
+
+      expect(retry.outcome).toBe("ALREADY_RECORDED");
+      expect(retry.movement).toBe("OUT");
+      expect(retry.studentName).toBe(landed.studentName);
+      expect(new Date(retry.occurredAt!).getTime()).toBe(new Date(landed.occurredAt!).getTime());
+      expect(retry.data[0].detail).toMatch(/already recorded/i);
+
+      // And the point of the whole exercise: still one crossing.
       expect(await movementCount(d, passId)).toBe(1);
       expect(await passStatus(d, passId)).toBe("active");
     } finally { await d.close(); }
@@ -675,6 +725,62 @@ describe("security personnel and gates", () => {
     expect(aGates.data.map((g) => g.id).sort()).toEqual([GATE_MAIN, GATE_NORTH, GATE_RETIRED].sort());
     const bGuardSees = await as(db, U.guardB, `SELECT id FROM public.gates`);
     expect(bGuardSees.data.map((g) => g.id)).toEqual([GATE_B]);
+  });
+
+  it("revoking an assignment stops that guard scanning on the very next scan", async () => {
+    // §23. The guard's session, token and personnel row are all untouched
+    // and still ACTIVE — only the assignment is withdrawn. Authorisation is
+    // re-derived inside record_gate_movement() on every call, so there is
+    // no window in which a revoked guard keeps working until they log out.
+    const d = await fresh();
+    try {
+      const { passId, credentialId } = await approvedPass(d);
+
+      const before = await scan(d, U.guardMain, credentialId, GATE_MAIN);
+      expect(before.outcome, before.error ?? "").toBe("RECORDED");
+
+      // S.c sits in another hostel block, so the warden cannot approve for
+      // them — the administrator does, which is a real path and keeps this
+      // test about the assignment rather than about warden scope.
+      const { passId: pass2, credentialId: cred2 } = await approvedPass(d, { student: S.c, approver: U.admin });
+      await verify(d, `UPDATE security_gate_assignments SET revoked_at = now()
+                        WHERE security_personnel_id = $1 AND gate_id = $2`, [SEC.main, GATE_MAIN]);
+
+      const after = await scan(d, U.guardMain, cred2, GATE_MAIN);
+      expect(after.outcome).toBe("UNAUTHORIZED_GATE");
+      expect(await movementCount(d, pass2)).toBe(0);
+      expect(await passStatus(d, pass2)).toBe("approved");
+      // The crossing recorded while they were assigned still stands.
+      expect(await movementCount(d, passId)).toBe(1);
+    } finally { await d.close(); }
+  });
+
+  it("removing the movement.record permission stops scanning without touching the account", async () => {
+    // §22. The guard stays ACTIVE and assigned; only the capability goes.
+    // The refusal has to come from the database, because the permission
+    // array is exactly the kind of thing a front end would be tempted to
+    // enforce by hiding a button.
+    const d = await fresh();
+    try {
+      const { passId, credentialId } = await approvedPass(d);
+
+      await verify(d, `UPDATE security_personnel
+                          SET permissions = array_remove(permissions, 'gate_security.movement.record')
+                        WHERE id = $1`, [SEC.main]);
+
+      const r = await scan(d, U.guardMain, credentialId, GATE_MAIN);
+      expect(r.outcome).toBe("PERMISSION_DENIED");
+      expect(await movementCount(d, passId)).toBe(0);
+      expect(await passStatus(d, passId)).toBe("approved");
+
+      // Still ACTIVE, still assigned — the account was not what changed.
+      expect(await scalar(d, `SELECT status FROM security_personnel WHERE id=$1`, [SEC.main])).toBe("ACTIVE");
+
+      // And the refusal is on the record.
+      const audited = await verify<{ action: string }>(d,
+        `SELECT action FROM audit_logs WHERE user_id=$1 AND action='gate_scan_permission_denied'`, [U.guardMain]);
+      expect(audited).toHaveLength(1);
+    } finally { await d.close(); }
   });
 });
 

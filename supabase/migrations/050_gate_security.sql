@@ -810,6 +810,15 @@ GRANT EXECUTE ON FUNCTION public.log_gate_security_event(UUID, UUID, TEXT, TEXT,
 -- alongside them survives the transaction. The two exceptions are "you are
 -- not a gate operator" (there is no college to file the event under) and
 -- the impossible post-lock race, which should abort loudly.
+--
+-- IDEMPOTENT ON RETRY. Scanning a QR whose movement is already in the
+-- ledger returns ALREADY_RECORDED together with that movement — its
+-- direction, its server timestamp, the student it belongs to — and writes
+-- nothing. A guard whose response was lost to a dropped connection scans
+-- again and is told the crossing exists, which is the difference between
+-- letting a recorded student walk and turning them back over a network
+-- fault. The ledger row count is unchanged by any number of retries; only
+-- what the guard can see changes.
 -- ---------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.record_gate_movement(
   p_credential_id UUID,
@@ -850,6 +859,7 @@ DECLARE
   v_cred        RECORD;
   v_pass        RECORD;
   v_student     RECORD;
+  v_prior       RECORD;
   v_movement    TEXT;
   v_last        TIMESTAMPTZ;
   v_move_id     UUID;
@@ -1024,17 +1034,53 @@ BEGIN
   -- physical event. Without this, a double tap would record an exit and an
   -- immediate return, and the student would read as back inside while
   -- standing outside the gate.
-  SELECT max(m.occurred_at) INTO v_last FROM public.gate_movements m WHERE m.gate_pass_id = v_pass.id;
+  --
+  -- It is also where a RETRY lands, and that is the case worth getting
+  -- right. A guard whose network drops between the INSERT and the response
+  -- has no way to know the movement was recorded, so they scan again. The
+  -- honest answer to that second scan is not "refused" — it is "already
+  -- done, and here it is". Answering with a bare refusal is what makes a
+  -- guard either wave the student through unrecorded or turn them back for
+  -- a movement that is sitting in the ledger.
+  --
+  -- So the duplicate path REPLAYS the stored movement in full. The ledger
+  -- still gets exactly one row; the difference is entirely in what the
+  -- person at the gate is able to see. Nothing new is disclosed: this is
+  -- the same projection a successful scan of this credential at this gate
+  -- would have returned, to a guard who has already cleared every check
+  -- above.
+  SELECT m.* INTO v_prior
+  FROM public.gate_movements m
+  WHERE m.gate_pass_id = v_pass.id
+  ORDER BY m.occurred_at DESC
+  LIMIT 1;
+  v_last := v_prior.occurred_at;
+
   IF v_last IS NOT NULL AND now() - v_last < c_min_interval THEN
-    v_outcome := CASE WHEN v_pass.status = 'active' THEN 'ALREADY_OUTSIDE' ELSE 'DUPLICATE_SCAN' END;
-    v_detail  := CASE v_outcome
-      WHEN 'ALREADY_OUTSIDE' THEN 'This gate pass has already been checked out.'
-      ELSE 'This pass was just scanned.'
-    END;
+    SELECT s.enrollment_number, pr.full_name INTO v_student
+    FROM public.students s
+    JOIN public.profiles pr ON pr.id = s.user_id
+    WHERE s.id = v_pass.student_id;
+
     PERFORM public.log_gate_security_event(v_college, v_actor, 'gate_scan_duplicate', v_pass.id::TEXT,
-      v_meta || jsonb_build_object('last_movement_at', v_last));
-    RETURN QUERY SELECT v_outcome, NULL::TEXT, v_pass.id, NULL::TEXT, NULL::TEXT, NULL::TEXT,
-                        NULL::TEXT, NULL::TEXT, NULL::TIMESTAMPTZ, v_last, v_gate.name, v_detail;
+      v_meta || jsonb_build_object('last_movement_at', v_last, 'replayed_movement_id', v_prior.id));
+
+    RETURN QUERY SELECT
+      'ALREADY_RECORDED'::TEXT,
+      v_prior.movement_type,
+      v_pass.id,
+      'GP-' || upper(substr(replace(v_pass.id::TEXT, '-', ''), 1, 8)),
+      v_student.full_name,
+      v_student.enrollment_number,
+      v_pass.destination,
+      v_pass.reason,
+      v_pass.return_time,
+      v_prior.occurred_at,
+      v_gate.name,
+      CASE v_prior.movement_type
+        WHEN 'OUT' THEN 'Exit was already recorded for this pass. No second movement was created.'
+        ELSE 'Return was already recorded for this pass. No second movement was created.'
+      END;
     RETURN;
   END IF;
 
@@ -1048,12 +1094,38 @@ BEGIN
     RETURNING id, gate_movements.occurred_at INTO v_move_id, v_occurred;
   EXCEPTION WHEN unique_violation THEN
     -- idx_gm_one_per_direction. Under the row lock above this should be
-    -- unreachable; it is the floor that holds if it ever is reached.
-    v_outcome := CASE WHEN v_movement = 'OUT' THEN 'ALREADY_OUTSIDE' ELSE 'ALREADY_RETURNED' END;
-    v_detail  := 'This movement has already been recorded for this gate pass.';
-    PERFORM public.log_gate_security_event(v_college, v_actor, 'gate_scan_duplicate', v_pass.id::TEXT, v_meta);
-    RETURN QUERY SELECT v_outcome, v_movement, v_pass.id, NULL::TEXT, NULL::TEXT, NULL::TEXT,
-                        NULL::TEXT, NULL::TEXT, NULL::TIMESTAMPTZ, NULL::TIMESTAMPTZ, v_gate.name, v_detail;
+    -- unreachable; it is the floor that holds if it ever is reached — and
+    -- like the duplicate window, it answers with the movement that already
+    -- exists rather than with a bare refusal, because a retry that arrives
+    -- after the 2-minute window has drained is still a retry.
+    SELECT m.* INTO v_prior
+    FROM public.gate_movements m
+    WHERE m.gate_pass_id = v_pass.id AND m.movement_type = v_movement;
+
+    SELECT s.enrollment_number, pr.full_name INTO v_student
+    FROM public.students s
+    JOIN public.profiles pr ON pr.id = s.user_id
+    WHERE s.id = v_pass.student_id;
+
+    PERFORM public.log_gate_security_event(v_college, v_actor, 'gate_scan_duplicate', v_pass.id::TEXT,
+      v_meta || jsonb_build_object('replayed_movement_id', v_prior.id, 'via', 'unique_index'));
+
+    RETURN QUERY SELECT
+      'ALREADY_RECORDED'::TEXT,
+      v_movement,
+      v_pass.id,
+      'GP-' || upper(substr(replace(v_pass.id::TEXT, '-', ''), 1, 8)),
+      v_student.full_name,
+      v_student.enrollment_number,
+      v_pass.destination,
+      v_pass.reason,
+      v_pass.return_time,
+      v_prior.occurred_at,
+      v_gate.name,
+      CASE WHEN v_movement = 'OUT'
+        THEN 'Exit was already recorded for this pass. No second movement was created.'
+        ELSE 'Return was already recorded for this pass. No second movement was created.'
+      END;
     RETURN;
   END;
 

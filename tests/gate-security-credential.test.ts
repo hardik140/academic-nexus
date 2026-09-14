@@ -10,6 +10,7 @@ import {
   unsignedPayloadFor,
   CredentialSigningUnavailableError,
 } from "@/lib/gate-security/credential";
+import { gateRpcError, GateSecurityRpcError } from "@/lib/gate-security/rpc";
 
 /**
  * The half of QR validation that lives in the application: the payload is
@@ -211,5 +212,50 @@ describe("the audit fingerprint", () => {
   it("does not need a key, so a refused scan can still be logged", () => {
     delete process.env.GATE_QR_SIGNING_KEY;
     expect(payloadFingerprint("anything at all")).toMatch(/^[0-9a-f]{16}$/);
+  });
+});
+
+describe("what a failed RPC is allowed to tell the caller", () => {
+  /**
+   * Route handlers pass an unrecognised Error's message straight to the
+   * client (lib/api-errors.ts), so whatever callRpc throws is what POST
+   * /api/security/scan answers with. Before this, that was PostgreSQL's own
+   * message — constraint names, function names, schema shape — handed to
+   * anyone holding a guard's token.
+   */
+
+  it("passes through the refusals migration 050 wrote on purpose", () => {
+    const err = gateRpcError("record_gate_movement", {
+      message: "gate security: this account is not an active gate security operator",
+      code: "42501",
+    });
+    expect(err).toBeInstanceOf(GateSecurityRpcError);
+    expect(err.message).toBe("this account is not an active gate security operator");
+  });
+
+  it("replaces a PostgreSQL message with one that discloses nothing", () => {
+    const internals = [
+      'duplicate key value violates unique constraint "idx_gm_one_per_direction"',
+      'permission denied for table gate_pass_credentials',
+      'column "nonce" does not exist',
+      'new row for relation "gate_movements" violates check constraint "gm_scan_has_gate"',
+      'function public.record_gate_movement(uuid, uuid, jsonb) does not exist',
+    ];
+
+    for (const message of internals) {
+      const err = gateRpcError("record_gate_movement", { message, code: "23505" });
+      expect(err.message).toBe(
+        "The request could not be completed. Try again, and tell your administrator if it keeps happening."
+      );
+      // Nothing recognisable from the schema survives into the answer.
+      for (const leak of ["nonce", "constraint", "idx_gm", "gate_movements", "gate_pass_credentials", "public."]) {
+        expect(err.message).not.toContain(leak);
+      }
+    }
+  });
+
+  it("never returns an empty message, whatever the database sent", () => {
+    expect(gateRpcError("f", { message: "gate security: " }).message).toBe("The request was refused.");
+    expect(gateRpcError("f", { message: "" }).message).toMatch(/could not be completed/);
   });
 });

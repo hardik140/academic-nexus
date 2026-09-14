@@ -27,6 +27,26 @@ const securityHeaders = [
   { key: "Content-Security-Policy-Report-Only", value: cspDirectives },
 ];
 
+/**
+ * The one route that is allowed to open a camera.
+ *
+ * `camera=()` above is an empty allowlist, which disables getUserMedia for
+ * every origin INCLUDING this one — so with only that header the gate
+ * scanner cannot acquire a stream on any browser, and the guard is told
+ * "camera access was refused" with nothing they can do about it. Reading
+ * the scanner's source does not reveal this; the header does.
+ *
+ * The fix stays local, per the rule that a page needing a capability does
+ * not get it by weakening the policy globally: `camera=(self)` is scoped to
+ * /security/scanner, which is behind the gate_security role check, and
+ * every other route on the deployment keeps the empty allowlist. Microphone
+ * and geolocation stay denied here too — the scanner needs neither.
+ */
+const scannerHeaders = [
+  ...securityHeaders.filter((h) => h.key !== "Permissions-Policy"),
+  { key: "Permissions-Policy", value: "camera=(self), microphone=(), geolocation=()" },
+];
+
 const nextConfig: NextConfig = {
   // Enable experimental features for Next.js 15
   experimental: {
@@ -50,6 +70,13 @@ const nextConfig: NextConfig = {
       {
         source: "/:path*",
         headers: securityHeaders,
+      },
+      // Listed AFTER the catch-all deliberately: for a duplicated header
+      // key the later matching rule is the one that survives, so this
+      // re-grants the camera on exactly one path and nowhere else.
+      {
+        source: "/security/scanner",
+        headers: scannerHeaders,
       },
     ];
   },

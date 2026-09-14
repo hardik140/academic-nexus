@@ -13,7 +13,7 @@ import { U, S, SEC, COLLEGE_A, GATE_MAIN, GATE_NORTH } from "./staging/harness";
  *
  * A note on what "passing" means here. The scan function RETURNS an outcome
  * rather than raising, so both sessions exit 0; the loser is the one whose
- * outcome is ALREADY_OUTSIDE. Counting exit codes would therefore prove
+ * outcome is ALREADY_RECORDED. Counting exit codes would therefore prove
  * nothing at all. Every assertion below reads the persisted state instead:
  * one ledger row, one status, one timestamp.
  *
@@ -35,12 +35,12 @@ maybe("real-PostgreSQL gate security concurrency", () => {
   afterAll(() => cluster?.stop());
 
   /** An approved pass whose credential window contains now(). */
-  function approvedPass(db: string): { passId: string; credentialId: string } {
+  function approvedPass(db: string, destination = "Market"): { passId: string; credentialId: string } {
     owner(cluster, db,
       `INSERT INTO gate_passes (college_id, student_id, destination, reason, exit_time, return_time, status, approved_by, approved_at)
-         VALUES ('${COLLEGE_A}','${S.a}','Market','QA', now() - interval '1 hour', now() + interval '6 hours', 'pending', NULL, NULL)`);
+         VALUES ('${COLLEGE_A}','${S.a}','${destination}','QA', now() - interval '1 hour', now() + interval '6 hours', 'pending', NULL, NULL)`);
     const passId = owner(cluster, db,
-      `SELECT id FROM gate_passes WHERE student_id='${S.a}' AND destination='Market' ORDER BY created_at DESC LIMIT 1`);
+      `SELECT id FROM gate_passes WHERE student_id='${S.a}' AND destination='${destination}' ORDER BY created_at DESC LIMIT 1`);
     // The credential is issued by the approval transition, so go through it.
     owner(cluster, db,
       `UPDATE gate_passes SET status='approved', approved_by='${U.warden}', approved_at=now() WHERE id='${passId}'`);
@@ -71,7 +71,11 @@ maybe("real-PostgreSQL gate security concurrency", () => {
       expect(b.code, b.stderr).toBe(0);
       const outcomes = [a.stdout, b.stdout].map((s) => s.trim().split("\n").pop() ?? "");
       expect(outcomes.filter((o) => o === "RECORDED")).toHaveLength(1);
-      expect(outcomes.filter((o) => o === "ALREADY_OUTSIDE")).toHaveLength(1);
+      // The loser is told the crossing exists, not merely that it was
+      // refused — the second guard at the gate needs to know the student
+      // is cleared to walk, and the ledger assertions below are what prove
+      // only one of the two calls actually wrote anything.
+      expect(outcomes.filter((o) => o === "ALREADY_RECORDED")).toHaveLength(1);
 
       expect(owner(cluster, db, `SELECT count(*) FROM gate_movements WHERE gate_pass_id='${passId}'`)).toBe("1");
       expect(owner(cluster, db, `SELECT status FROM gate_passes WHERE id='${passId}'`)).toBe("active");
@@ -160,6 +164,87 @@ maybe("real-PostgreSQL gate security concurrency", () => {
       expect([a, b].filter((r) => r.code === 0), `${a.stderr}|${b.stderr}`).toHaveLength(1);
       expect(owner(cluster, db,
         `SELECT count(*) FROM security_gate_assignments WHERE security_personnel_id='${SEC.north}' AND gate_id='${GATE_MAIN}' AND revoked_at IS NULL`)).toBe("1");
+    } finally { cluster.drop(db); }
+  });
+
+  /**
+   * §35 — peak hour, which for a hostel gate is everyone leaving inside the
+   * same ten minutes.
+   *
+   * The question worth asking is not "how many milliseconds" — that number
+   * belongs to hardware this test is not running on. It is whether the
+   * locking design serialises the GATE. record_gate_movement() takes a row
+   * lock on gate_passes, and if that lock were taken on anything shared
+   * between passes — the gate, the guard, the college — then twenty
+   * students presenting at once would queue behind one another and the
+   * design would fall over exactly when a gate is busiest. Twenty distinct
+   * passes scanned simultaneously either all record or they do not.
+   */
+  it("a dozen different passes scanned at the same instant all record, with no deadlock", async () => {
+    const db = cluster.fork();
+    try {
+      // Each of these is a real psql process. Twelve is enough to prove
+      // the passes do not queue behind one another and light enough not to
+      // starve the other real-PostgreSQL suite running beside this one —
+      // at twenty, the finance concurrency tests began failing on timing
+      // alone, which is a flake this file has no business creating.
+      const N = 12;
+      const creds = Array.from({ length: N }, (_, i) => approvedPass(db, `Errand-${i}`));
+
+      const results = await concurrently(
+        ...creds.map((c) => scan(db, U.guardMain, c.credentialId, GATE_MAIN))
+      );
+
+      const outcomes = results.map((r) => r.stdout.trim().split("\n").pop() ?? "");
+      expect(outcomes.filter((o) => o === "RECORDED"), outcomes.join(",")).toHaveLength(N);
+
+      // A deadlock or a lock-timeout would surface here, and a
+      // serialization_failure would surface as a non-zero exit.
+      const failures = results.filter((r) => r.code !== 0).map((r) => r.stderr);
+      expect(failures, failures.join("\n")).toEqual([]);
+      expect(results.flatMap((r) => (/deadlock|could not serialize/i.test(r.stderr) ? [r.stderr] : []))).toEqual([]);
+
+      expect(owner(cluster, db,
+        `SELECT count(*) FROM gate_movements WHERE movement_type='OUT' AND gate_id='${GATE_MAIN}'`)).toBe(String(N));
+    } finally { cluster.drop(db); }
+  });
+
+  /**
+   * What one scan costs the DATABASE, measured inside SQL so that psql's
+   * own process startup — which dominates every other timing in this file
+   * and is not something a deployed request pays — stays out of the number.
+   *
+   * The ceiling is deliberately loose. This is a regression tripwire for a
+   * scan that becomes catastrophically slow (a lost index, a sequential
+   * scan of the ledger), not a performance target, and it is measured on a
+   * laptop rather than on production hardware.
+   */
+  it("a scan costs single-digit-to-low-double-digit milliseconds in the database", async () => {
+    const db = cluster.fork();
+    try {
+      const N = 20;
+      const creds = Array.from({ length: N }, (_, i) => approvedPass(db, `Timed-${i}`));
+
+      const script = [
+        `CREATE TEMP TABLE _t AS SELECT clock_timestamp() AS started;`,
+        ...creds.map((c) =>
+          `SELECT outcome FROM public.record_gate_movement('${c.credentialId}','${GATE_MAIN}','{}'::jsonb);`
+        ),
+        `SELECT round((EXTRACT(EPOCH FROM (clock_timestamp() - started)) * 1000)::numeric, 1) FROM _t;`,
+      ].join("\n");
+
+      const r = await session(cluster, db, script, U.guardMain);
+      expect(r.code, r.stderr).toBe(0);
+
+      const lines = r.stdout.trim().split("\n");
+      const totalMs = Number(lines[lines.length - 1]);
+      const perScan = totalMs / N;
+
+      expect(lines.filter((l) => l.trim() === "RECORDED")).toHaveLength(N);
+      expect(Number.isFinite(totalMs)).toBe(true);
+      // eslint-disable-next-line no-console
+      console.log(`    [perf] ${N} sequential scans: ${totalMs}ms total, ${perScan.toFixed(1)}ms per scan`);
+      expect(perScan, `${perScan.toFixed(1)}ms per scan`).toBeLessThan(250);
     } finally { cluster.drop(db); }
   });
 });

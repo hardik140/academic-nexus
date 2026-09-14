@@ -29,6 +29,17 @@ import { scanGatePass, securityScanFeed, type ScanFeedRow, type ScanResult } fro
  * screen is too dim — the guard types the code and the server does exactly
  * the same thing with it. The manual path is not a weaker path; it reaches
  * the identical server action with the identical checks.
+ *
+ * ONE PRESENTATION, ONE REQUEST
+ *
+ * A decoder run against a live video fires 30-60 times a second and returns
+ * the same string every time while the phone is in front of the lens. Each
+ * of those is a candidate HTTP request. The cooldown below collapses a
+ * physical presentation into a single server call, keyed on the payload, so
+ * a student standing at the gate for fifteen seconds costs one request
+ * rather than four. The server refuses duplicates regardless — this is a
+ * load and legibility control, not a security one, and it is deliberately
+ * DROPPED when a request fails so the guard can retry immediately.
  */
 
 type Decoder = (video: HTMLVideoElement, canvas: HTMLCanvasElement) => Promise<string | null>;
@@ -67,13 +78,24 @@ const canvasDecoder: Decoder = async (video, canvas) => {
   return found?.data ?? null;
 };
 
+/** One presentation of one QR costs one request for this long. */
+const PAYLOAD_COOLDOWN_MS = 10_000;
+
 /** Outcome -> how it should look and read at a gate, at a glance. */
 const PRESENTATION: Record<string, { tone: "ok" | "warn" | "bad"; mark: string; headline: string }> = {
   RECORDED: { tone: "ok", mark: "✓", headline: "AUTHORIZED" },
+  // The movement exists — recorded by the scan whose response this guard
+  // never saw, or by the guard beside them. Operationally this is a PASS:
+  // the ledger has the crossing, and the student may go. It reads green for
+  // that reason, with the time so the guard can see it was a moment ago.
+  ALREADY_RECORDED: { tone: "ok", mark: "✓", headline: "ALREADY RECORDED" },
   ALREADY_OUTSIDE: { tone: "warn", mark: "⚠", headline: "ALREADY OUTSIDE" },
   ALREADY_RETURNED: { tone: "warn", mark: "⚠", headline: "ALREADY RETURNED" },
   DUPLICATE_SCAN: { tone: "warn", mark: "⚠", headline: "JUST SCANNED" },
   NOT_YET_VALID: { tone: "warn", mark: "⚠", headline: "NOT YET VALID" },
+  // Not a refusal and not a success: the request did not complete, so the
+  // only honest thing the screen can say is that it does not know.
+  UNCONFIRMED: { tone: "warn", mark: "?", headline: "NOT CONFIRMED" },
   INVALID_QR: { tone: "bad", mark: "✕", headline: "INVALID QR" },
   EXPIRED: { tone: "bad", mark: "✕", headline: "EXPIRED" },
   REVOKED: { tone: "bad", mark: "✕", headline: "REVOKED" },
@@ -90,6 +112,43 @@ const TONE_CLASS = {
   bad: "bg-error/10 border-error/30 text-error",
 };
 
+const BLANK: Omit<ScanResult, "outcome" | "detail"> = {
+  movement: null,
+  gatePassId: null,
+  passCode: null,
+  studentName: null,
+  enrollmentNumber: null,
+  destination: null,
+  purpose: null,
+  expectedReturn: null,
+  occurredAt: null,
+  gateName: null,
+};
+
+/**
+ * Why getUserMedia said no, in words a guard can act on.
+ *
+ * The browser's own message is a DOMException name; the difference between
+ * "you denied the permission" and "there is no camera on this machine"
+ * decides whether the guard taps the address bar or switches to typing the
+ * code, so it is worth spelling out.
+ */
+function cameraFailure(err: unknown): string {
+  const name = err instanceof Error ? err.name : "";
+  switch (name) {
+    case "NotAllowedError":
+    case "SecurityError":
+      return "Camera permission was denied for this site. Allow it in the browser's address bar, then press Scan QR again — or type the code below.";
+    case "NotFoundError":
+    case "OverconstrainedError":
+      return "No camera was found on this device. Type the code from the student's screen below.";
+    case "NotReadableError":
+      return "The camera is already in use by another app. Close it and try again, or type the code below.";
+    default:
+      return "The camera could not be started. Type the code from the student's screen below.";
+  }
+}
+
 export function ScannerClient({ gates }: { gates: { id: string; code: string; name: string }[] }) {
   const [gateId, setGateId] = useState(gates[0]?.id ?? "");
   const [scanning, setScanning] = useState(false);
@@ -98,16 +157,27 @@ export function ScannerClient({ gates }: { gates: { id: string; code: string; na
   const [result, setResult] = useState<ScanResult | null>(null);
   const [manual, setManual] = useState("");
   const [feed, setFeed] = useState<ScanFeedRow[]>([]);
+  const [cameras, setCameras] = useState<MediaDeviceInfo[]>([]);
+  const [deviceId, setDeviceId] = useState<string>("");
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const loopRef = useRef<number | null>(null);
-  // Guards against the same physical presentation firing several server
-  // calls while the QR is still in frame. The server refuses the duplicate
-  // anyway (050 §12) — this only stops the guard's screen flickering
-  // between "authorized" and "just scanned" thirty times a second.
-  const lastSentRef = useRef<{ payload: string; at: number } | null>(null);
+  const gateIdRef = useRef(gateId);
+  // In-flight guard. A ref and NOT the `busy` state: the decode loop closes
+  // over `submit` once, at start(), so a state value read inside it is
+  // frozen at whatever it was when the camera opened — the guard would be
+  // permanently false and two students presenting in quick succession would
+  // both be in flight at once. The ref is read live.
+  const inFlightRef = useRef(false);
+  // payload -> when we last sent it. Collapses a presentation into one
+  // request; cleared for that payload if the request fails.
+  const cooldownRef = useRef<Map<string, number>>(new Map());
+
+  useEffect(() => {
+    gateIdRef.current = gateId;
+  }, [gateId]);
 
   const refreshFeed = useCallback(async (gate: string) => {
     if (!gate) return;
@@ -124,40 +194,49 @@ export function ScannerClient({ gates }: { gates: { id: string; code: string; na
 
   const submit = useCallback(
     async (payload: string, source: "camera" | "manual") => {
-      if (!gateId || busy) return;
-      const now = Date.now();
-      if (source === "camera" && lastSentRef.current?.payload === payload && now - lastSentRef.current.at < 4000) return;
-      lastSentRef.current = { payload, at: now };
+      const gate = gateIdRef.current;
+      if (!gate || !payload || inFlightRef.current) return;
 
+      const now = Date.now();
+      if (source === "camera") {
+        const last = cooldownRef.current.get(payload);
+        if (last !== undefined && now - last < PAYLOAD_COOLDOWN_MS) return;
+        // Keep the map from growing for the length of a shift.
+        if (cooldownRef.current.size > 64) cooldownRef.current.clear();
+        cooldownRef.current.set(payload, now);
+      }
+
+      inFlightRef.current = true;
       setBusy(true);
       try {
         const outcome = await scanGatePass({
           payload,
-          gateId,
+          gateId: gate,
           device: { source, userAgent: navigator.userAgent.slice(0, 300) },
         });
         setResult(outcome);
-        void refreshFeed(gateId);
+        void refreshFeed(gate);
       } catch (e) {
+        // The request did not complete. The movement may or may not have
+        // been written — the server is the only thing that knows, and a
+        // client that guesses here is exactly what section 34 forbids. Say
+        // so, drop the cooldown so the next scan is allowed straight away,
+        // and let that scan come back ALREADY RECORDED if it landed.
+        cooldownRef.current.delete(payload);
         setResult({
-          outcome: "ERROR",
-          movement: null,
-          gatePassId: null,
-          passCode: null,
-          studentName: null,
-          enrollmentNumber: null,
-          destination: null,
-          purpose: null,
-          expectedReturn: null,
-          occurredAt: null,
-          gateName: null,
-          detail: e instanceof Error ? e.message : "The scan could not be completed.",
+          ...BLANK,
+          outcome: "UNCONFIRMED",
+          detail:
+            e instanceof Error && /not configured/i.test(e.message)
+              ? e.message
+              : "The scan did not reach the server, so it is not known whether the movement was recorded. Scan the same QR again — if it was recorded, the next scan will say so.",
         });
       } finally {
+        inFlightRef.current = false;
         setBusy(false);
       }
     },
-    [gateId, busy, refreshFeed]
+    [refreshFeed]
   );
 
   const stop = useCallback(() => {
@@ -167,45 +246,107 @@ export function ScannerClient({ gates }: { gates: { id: string; code: string; na
     }
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
+    // Without this the element keeps a reference to the stopped stream and
+    // some browsers leave the camera indicator lit after a shift ends.
+    if (videoRef.current) videoRef.current.srcObject = null;
     setScanning(false);
   }, []);
 
-  const start = useCallback(async () => {
-    setCameraError(null);
-    if (!navigator.mediaDevices?.getUserMedia) {
-      setCameraError("This browser cannot open a camera. Type the code below instead.");
-      return;
-    }
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment" },
-        audio: false,
-      });
-      streamRef.current = stream;
-      const video = videoRef.current;
-      if (!video) return;
-      video.srcObject = stream;
-      await video.play();
-      setScanning(true);
+  const start = useCallback(
+    async (preferredDeviceId?: string) => {
+      setCameraError(null);
 
-      const decode = nativeDecoder() ?? canvasDecoder;
-      const tick = async () => {
-        const canvas = canvasRef.current;
-        if (video.readyState === video.HAVE_ENOUGH_DATA && canvas) {
-          const text = await decode(video, canvas);
-          if (text) await submit(text, "camera");
+      // getUserMedia is undefined on an insecure origin, which is a
+      // deployment fault and not a browser limitation — worth saying,
+      // because "this browser cannot open a camera" would send the guard
+      // looking for a different browser they will not find.
+      if (typeof window !== "undefined" && !window.isSecureContext) {
+        setCameraError(
+          "Cameras are only available over HTTPS. This page was served over an insecure connection — tell your administrator, and type the code below in the meantime."
+        );
+        return;
+      }
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setCameraError("This browser cannot open a camera. Type the code from the student's screen below.");
+        return;
+      }
+
+      // Re-entrant by design: switching cameras calls start() again, and
+      // the old stream has to be released or the device stays busy.
+      stop();
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: preferredDeviceId
+            ? { deviceId: { exact: preferredDeviceId } }
+            : { facingMode: { ideal: "environment" } },
+          audio: false,
+        });
+        streamRef.current = stream;
+
+        const video = videoRef.current;
+        if (!video) {
+          // The component unmounted between the prompt and the grant. Give
+          // the camera back rather than leaving the light on.
+          stream.getTracks().forEach((t) => t.stop());
+          streamRef.current = null;
+          return;
         }
+
+        video.srcObject = stream;
+        try {
+          await video.play();
+        } catch {
+          /* autoplay interrupted by a re-render; the loop below still reads frames */
+        }
+        setScanning(true);
+
+        // Labels are only populated once permission has been granted, so
+        // this is deliberately after getUserMedia and not before it.
+        try {
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          const videoInputs = devices.filter((d) => d.kind === "videoinput");
+          setCameras(videoInputs);
+          const active = stream.getVideoTracks()[0]?.getSettings().deviceId;
+          if (active) setDeviceId(active);
+        } catch {
+          /* enumeration is a convenience; scanning works without it */
+        }
+
+        const decode = nativeDecoder() ?? canvasDecoder;
+        const tick = async () => {
+          const canvas = canvasRef.current;
+          if (video.readyState === video.HAVE_ENOUGH_DATA && canvas && !inFlightRef.current) {
+            const text = await decode(video, canvas);
+            if (text) await submit(text, "camera");
+          }
+          loopRef.current = requestAnimationFrame(() => void tick());
+        };
         loopRef.current = requestAnimationFrame(() => void tick());
-      };
-      loopRef.current = requestAnimationFrame(() => void tick());
-    } catch {
-      setCameraError("Camera access was refused. Type the code below instead.");
-    }
-  }, [submit]);
+      } catch (err) {
+        setCameraError(cameraFailure(err));
+        stop();
+      }
+    },
+    [submit, stop]
+  );
+
+  // Release the camera when the gatehouse tab is backgrounded — the guard
+  // is not scanning anyone, and a live stream is a lit indicator plus a
+  // decode loop draining the battery of whatever is propped up at the gate.
+  useEffect(() => {
+    const onHidden = () => {
+      if (document.visibilityState === "hidden") stop();
+    };
+    document.addEventListener("visibilitychange", onHidden);
+    return () => document.removeEventListener("visibilitychange", onHidden);
+  }, [stop]);
 
   useEffect(() => stop, [stop]);
 
-  const presentation = result ? (PRESENTATION[result.outcome] ?? { tone: "bad" as const, mark: "✕", headline: "REFUSED" }) : null;
+  const presentation = result
+    ? (PRESENTATION[result.outcome] ?? { tone: "bad" as const, mark: "✕", headline: "REFUSED" })
+    : null;
 
   if (gates.length === 0) {
     return (
@@ -233,7 +374,24 @@ export function ScannerClient({ gates }: { gates: { id: string; code: string; na
             <Button size="lg" onClick={() => (scanning ? stop() : void start())} disabled={!gateId}>
               {scanning ? "Stop camera" : "Scan QR"}
             </Button>
+            {busy && <span className="text-xs font-semibold text-on-surface-variant pb-sm">Checking…</span>}
           </div>
+
+          {scanning && cameras.length > 1 && (
+            <div className="max-w-[20rem]">
+              <FormField
+                label="Camera"
+                id="scan-camera"
+                type="select"
+                value={deviceId}
+                onChange={(v) => { setDeviceId(v); void start(v); }}
+                options={cameras.map((c, i) => ({
+                  value: c.deviceId,
+                  label: c.label || `Camera ${i + 1}`,
+                }))}
+              />
+            </div>
+          )}
 
           {cameraError && <p className="text-xs text-warning font-medium">{cameraError}</p>}
 
@@ -265,7 +423,7 @@ export function ScannerClient({ gates }: { gates: { id: string; code: string; na
         </div>
 
         {result && presentation && (
-          <div className={`rounded-2xl border p-lg ${TONE_CLASS[presentation.tone]}`} aria-live="polite">
+          <div className={`rounded-2xl border p-lg ${TONE_CLASS[presentation.tone]}`} aria-live="assertive">
             <div className="flex items-baseline gap-sm">
               <span className="text-2xl leading-none">{presentation.mark}</span>
               <span className="text-lg font-extrabold tracking-tight">{presentation.headline}</span>
