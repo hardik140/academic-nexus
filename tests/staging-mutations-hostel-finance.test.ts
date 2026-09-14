@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { as, scalar, verify, U, S, COLLEGE_A, PASS_C, FEE_A, FEE_B_COLLEGE, ROOM_B201 } from "./staging/harness";
-import { mutated } from "./staging/mutate";
+import { mutated, mutatedFile } from "./staging/mutate";
 
 /**
  * Mutation resistance for 047 §7g–§7j. See tests/staging/mutate.ts for the
@@ -11,15 +11,20 @@ import { mutated } from "./staging/mutate";
 vi.setConfig({ testTimeout: 240_000, hookTimeout: 300_000 });
 
 describe("hostel mutations", () => {
-  it("detects: warden scope removed from gate_passes_staff", async () => {
-    const d = await mutated("gate pass scope", (sql) =>
-      sql.replace(
-        /OR \(public\.get_my_role\(\) = 'warden' AND public\.wardens_student\(student_id\)\)\n    \)\n  \)\n  WITH CHECK \(\n    college_id = public\.get_my_college_id\(\)\n    AND \(\n      public\.get_my_role\(\) = 'admin'\n      OR \(public\.get_my_role\(\) = 'warden' AND public\.wardens_student\(student_id\)\)/,
-        "OR public.get_my_role() = 'warden'\n    )\n  )\n  WITH CHECK (\n    college_id = public.get_my_college_id()\n    AND (\n      public.get_my_role() = 'admin'\n      OR public.get_my_role() = 'warden'"
-      )
+  it("detects: warden scope removed from the gate_passes decision policy", async () => {
+    // The policy this attacks MOVED in migration 050: 047's single
+    // gate_passes_staff FOR ALL is replaced there by three narrower ones.
+    // The block-ownership predicate is identical in all of them, so widening
+    // every occurrence is what removes the scope — and widening only the
+    // USING half would still be caught by the WITH CHECK half, which is why
+    // this replaces globally rather than once.
+    const d = await mutatedFile("050_gate_security.sql", "gate pass warden scope", (sql) =>
+      sql
+        .split("OR (public.get_my_role() = 'warden' AND public.wardens_student(student_id))")
+        .join("OR public.get_my_role() = 'warden'")
     );
     try {
-      const r = await as(d, U.warden, `UPDATE public.gate_passes SET status='approved', approved_by=auth.uid(), approved_at=now() WHERE id='${PASS_C}'`);
+      const r = await as(d, U.warden, `UPDATE public.gate_passes SET status='approved', approved_by=auth.uid(), approved_at=now() WHERE id='${PASS_C}' RETURNING id`);
       expect(r.rows, "mutation not detected — Warden A reached Block B").toBe(1);
     } finally { await d.close(); }
   });

@@ -23,7 +23,8 @@ export type UserRole =
   | "admin"
   | "warden"
   | "super_admin"
-  | "placement_cell";
+  | "placement_cell"
+  | "gate_security";
 
 export type UserStatus = "active" | "suspended" | "pending" | "graduated" | "alumni";
 
@@ -1585,6 +1586,159 @@ export interface Database {
           | "local_amount" | "external_amount" | "resolution" | "resolved_by" | "resolved_at"
         >;
         Update: Partial<Database["public"]["Tables"]["finance_reconciliation_items"]["Insert"]>;
+        Relationships: [];
+      };
+
+      // ── Gate Security (migration 050) ──────────────────────────────
+      //
+      // gate_pass_credentials is here WITHOUT its `nonce` column, which is
+      // not an omission. The column exists in the database and is revoked
+      // from `authenticated` at the privilege level, so a query naming it
+      // through a user session fails. Leaving it out of the type makes that
+      // a compile error instead of a runtime one — the only reader is
+      // my_gate_pass_credential(), which returns it as an RPC result and is
+      // typed at its own call site.
+      gates: {
+        Row: {
+          id: string;
+          college_id: string;
+          code: string;
+          name: string;
+          description: string | null;
+          is_active: boolean;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: OptionalKeys<
+          Database["public"]["Tables"]["gates"]["Row"],
+          "id" | "created_at" | "updated_at" | "description" | "is_active" | "created_by"
+        >;
+        Update: Partial<Database["public"]["Tables"]["gates"]["Insert"]>;
+        Relationships: [];
+      };
+
+      security_personnel: {
+        Row: {
+          id: string;
+          college_id: string;
+          profile_id: string;
+          employee_code: string | null;
+          status: "PENDING" | "ACTIVE" | "SUSPENDED" | "DEACTIVATED";
+          permissions: string[];
+          authorized_by: string | null;
+          authorized_at: string | null;
+          deactivated_by: string | null;
+          deactivated_at: string | null;
+          deactivation_reason: string | null;
+          notes: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: OptionalKeys<
+          Database["public"]["Tables"]["security_personnel"]["Row"],
+          "id" | "created_at" | "updated_at" | "status" | "permissions" | "employee_code"
+          | "authorized_by" | "authorized_at" | "deactivated_by" | "deactivated_at"
+          | "deactivation_reason" | "notes"
+        >;
+        Update: Partial<Database["public"]["Tables"]["security_personnel"]["Insert"]>;
+        Relationships: [];
+      };
+
+      security_gate_assignments: {
+        Row: {
+          id: string;
+          college_id: string;
+          security_personnel_id: string;
+          gate_id: string;
+          assigned_by: string | null;
+          assigned_at: string;
+          revoked_by: string | null;
+          revoked_at: string | null;
+        };
+        Insert: OptionalKeys<
+          Database["public"]["Tables"]["security_gate_assignments"]["Row"],
+          "id" | "assigned_at" | "assigned_by" | "revoked_by" | "revoked_at"
+        >;
+        Update: Partial<Database["public"]["Tables"]["security_gate_assignments"]["Insert"]>;
+        Relationships: [];
+      };
+
+      gate_pass_credentials: {
+        Row: {
+          id: string;
+          college_id: string;
+          gate_pass_id: string;
+          student_id: string;
+          version: number;
+          status: "ACTIVE" | "CONSUMED" | "REVOKED" | "EXPIRED" | "SUPERSEDED";
+          valid_from: string;
+          expires_at: string;
+          issued_at: string;
+          revoked_by: string | null;
+          revoked_at: string | null;
+          revocation_reason: string | null;
+        };
+        // No Insert/Update shape that differs from Row: nothing in the
+        // application writes this table. It is issued by a trigger and
+        // closed by the credential functions, and `authenticated` holds no
+        // INSERT, UPDATE or DELETE on it at all.
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
+
+      gate_movements: {
+        Row: {
+          id: string;
+          college_id: string;
+          gate_pass_id: string;
+          student_id: string;
+          gate_id: string | null;
+          credential_id: string | null;
+          movement_type: "OUT" | "IN";
+          recorded_by: string;
+          security_personnel_id: string | null;
+          recorded_role: "gate_security" | "warden" | "admin" | "director";
+          is_override: boolean;
+          override_reason: string | null;
+          occurred_at: string;
+          device_info: Json;
+          created_at: string;
+        };
+        // Written only by record_gate_movement() and
+        // record_manual_gate_movement(). An append-only ledger with no
+        // client write path is not an insertable table.
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
+
+      security_instructions: {
+        Row: {
+          id: string;
+          college_id: string;
+          title: string;
+          message: string;
+          priority: "normal" | "high" | "emergency";
+          audience: "all" | "gate" | "person";
+          gate_id: string | null;
+          security_personnel_id: string | null;
+          status: "active" | "withdrawn" | "expired";
+          effective_from: string;
+          effective_until: string | null;
+          created_by: string;
+          created_at: string;
+          withdrawn_by: string | null;
+          withdrawn_at: string | null;
+        };
+        Insert: OptionalKeys<
+          Database["public"]["Tables"]["security_instructions"]["Row"],
+          "id" | "created_at" | "status" | "priority" | "audience" | "gate_id"
+          | "security_personnel_id" | "effective_from" | "effective_until"
+          | "withdrawn_by" | "withdrawn_at"
+        >;
+        Update: Partial<Database["public"]["Tables"]["security_instructions"]["Insert"]>;
         Relationships: [];
       };
     };

@@ -254,3 +254,65 @@ INSERT INTO public.fees (id, college_id, student_id, type, amount, due_date, sta
   ('00000014-0000-4000-8000-000000000001', '00000001-0000-4000-8000-000000000001', '00000004-0000-4000-8000-000000000001', 'tuition', 10000, '2026-10-01', 'pending', 0, 3, 'QA 2026-27'),
   ('00000014-0000-4000-8000-000000000002', '00000001-0000-4000-8000-000000000001', '00000004-0000-4000-8000-000000000003', 'tuition', 8000,  '2026-10-01', 'pending', 0, 3, 'QA 2026-27'),
   ('00000014-0000-4000-8000-000000000003', '00000001-0000-4000-8000-000000000002', '00000004-0000-4000-8000-000000000007', 'tuition', 9000,  '2026-10-01', 'pending', 0, 3, 'QA-B 2026-27');
+
+-- ============================================================
+-- Gate security (migration 050)
+--
+-- Four guards, deliberately not interchangeable:
+--   Guard Main       College A, ACTIVE, operates MAIN
+--   Guard North      College A, ACTIVE, operates NORTH
+--   Guard Suspended  College A, SUSPENDED, still assigned to MAIN — so
+--                    "assigned" and "may operate" can be told apart
+--   Guard B          College B, ACTIVE, operates the College B gate
+--
+-- Guard North exists so "assigned to a gate" and "assigned to THIS gate"
+-- are different questions, which a single-gate fixture cannot ask.
+-- ============================================================
+INSERT INTO auth.users (id, email, raw_user_meta_data) VALUES
+  ('00000003-0000-4000-8000-000000000016', 'qa.guard.main@qa.test',  jsonb_build_object('full_name','QA Guard Main','college_id','00000001-0000-4000-8000-000000000001')),
+  ('00000003-0000-4000-8000-000000000017', 'qa.guard.north@qa.test', jsonb_build_object('full_name','QA Guard North','college_id','00000001-0000-4000-8000-000000000001')),
+  ('00000003-0000-4000-8000-000000000018', 'qa.guard.susp@qa.test',  jsonb_build_object('full_name','QA Guard Suspended','college_id','00000001-0000-4000-8000-000000000001')),
+  ('00000003-0000-4000-8000-000000000019', 'qa.b.guard@qa.test',     jsonb_build_object('full_name','QA-B Guard','college_id','00000001-0000-4000-8000-000000000002'));
+
+UPDATE public.profiles SET role = 'gate_security', status = 'active'
+ WHERE id IN ('00000003-0000-4000-8000-000000000016','00000003-0000-4000-8000-000000000017',
+              '00000003-0000-4000-8000-000000000018','00000003-0000-4000-8000-000000000019');
+
+INSERT INTO public.gates (id, college_id, code, name, is_active) VALUES
+  ('00000015-0000-4000-8000-000000000001', '00000001-0000-4000-8000-000000000001', 'MAIN',  'QA Main Gate',  true),
+  ('00000015-0000-4000-8000-000000000002', '00000001-0000-4000-8000-000000000001', 'NORTH', 'QA North Gate', true),
+  ('00000015-0000-4000-8000-000000000003', '00000001-0000-4000-8000-000000000002', 'B-MAIN','QA-B Main Gate',true),
+  ('00000015-0000-4000-8000-000000000004', '00000001-0000-4000-8000-000000000001', 'OLD',   'QA Retired Gate', false);
+
+INSERT INTO public.security_personnel
+  (id, college_id, profile_id, employee_code, status, permissions, authorized_by, authorized_at) VALUES
+  ('00000016-0000-4000-8000-000000000001', '00000001-0000-4000-8000-000000000001', '00000003-0000-4000-8000-000000000016', 'SEC-01', 'ACTIVE',
+    ARRAY['gate_security.dashboard.view','gate_security.scanner.use','gate_security.pass.view','gate_security.pass.validate',
+          'gate_security.movement.record','gate_security.movement.view','gate_security.history.view',
+          'gate_security.instructions.view','gate_security.gate.view']::TEXT[],
+    '00000003-0000-4000-8000-00000000000c', now()),
+  ('00000016-0000-4000-8000-000000000002', '00000001-0000-4000-8000-000000000001', '00000003-0000-4000-8000-000000000017', 'SEC-02', 'ACTIVE',
+    ARRAY['gate_security.dashboard.view','gate_security.scanner.use','gate_security.pass.view','gate_security.pass.validate',
+          'gate_security.movement.record','gate_security.movement.view','gate_security.history.view',
+          'gate_security.instructions.view','gate_security.gate.view']::TEXT[],
+    '00000003-0000-4000-8000-00000000000c', now()),
+  ('00000016-0000-4000-8000-000000000003', '00000001-0000-4000-8000-000000000001', '00000003-0000-4000-8000-000000000018', 'SEC-03', 'SUSPENDED',
+    ARRAY['gate_security.dashboard.view','gate_security.scanner.use','gate_security.movement.record','gate_security.movement.view']::TEXT[],
+    '00000003-0000-4000-8000-00000000000c', now()),
+  ('00000016-0000-4000-8000-000000000004', '00000001-0000-4000-8000-000000000002', '00000003-0000-4000-8000-000000000019', 'BSEC-01', 'ACTIVE',
+    ARRAY['gate_security.dashboard.view','gate_security.scanner.use','gate_security.pass.view','gate_security.pass.validate',
+          'gate_security.movement.record','gate_security.movement.view','gate_security.history.view',
+          'gate_security.instructions.view','gate_security.gate.view']::TEXT[],
+    NULL, now());
+
+INSERT INTO public.security_gate_assignments (id, college_id, security_personnel_id, gate_id, assigned_by) VALUES
+  ('00000017-0000-4000-8000-000000000001', '00000001-0000-4000-8000-000000000001', '00000016-0000-4000-8000-000000000001', '00000015-0000-4000-8000-000000000001', '00000003-0000-4000-8000-00000000000c'),
+  ('00000017-0000-4000-8000-000000000002', '00000001-0000-4000-8000-000000000001', '00000016-0000-4000-8000-000000000002', '00000015-0000-4000-8000-000000000002', '00000003-0000-4000-8000-00000000000c'),
+  ('00000017-0000-4000-8000-000000000003', '00000001-0000-4000-8000-000000000001', '00000016-0000-4000-8000-000000000003', '00000015-0000-4000-8000-000000000001', '00000003-0000-4000-8000-00000000000c'),
+  ('00000017-0000-4000-8000-000000000004', '00000001-0000-4000-8000-000000000002', '00000016-0000-4000-8000-000000000004', '00000015-0000-4000-8000-000000000003', NULL);
+
+-- A standing instruction for everyone at College A.
+INSERT INTO public.security_instructions (id, college_id, title, message, priority, audience, created_by) VALUES
+  ('00000018-0000-4000-8000-000000000001', '00000001-0000-4000-8000-000000000001',
+   'QA standing instruction', 'Check the photograph on the pass against the person.', 'normal', 'all',
+   '00000003-0000-4000-8000-00000000000c');

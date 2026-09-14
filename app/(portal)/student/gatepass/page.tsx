@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { Button, FormField, StatusBadge } from "@/components/ui/modal";
-import { applyForGatePass } from "./actions";
+import { Button, FormField, Modal, StatusBadge } from "@/components/ui/modal";
+import { applyForGatePass, getGatePassCredential, type CredentialView } from "./actions";
 
 export default function StudentGatePass() {
   const supabase = createClient();
@@ -56,6 +56,33 @@ export default function StudentGatePass() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // The QR is fetched on demand, never with the list. It is rendered on the
+  // server and arrives as an <svg> — the credential string itself never
+  // reaches this component, so there is nothing here to copy out of the
+  // page source.
+  const [qrFor, setQrFor] = useState<any | null>(null);
+  const [credential, setCredential] = useState<CredentialView | null>(null);
+  const [qrLoading, setQrLoading] = useState(false);
+
+  const openQr = async (pass: any) => {
+    setQrFor(pass);
+    setCredential(null);
+    setQrLoading(true);
+    try {
+      setCredential(await getGatePassCredential(pass.id));
+    } catch (e) {
+      setCredential({ state: "none", reason: e instanceof Error ? e.message : "The pass could not be loaded." });
+    } finally {
+      setQrLoading(false);
+    }
+  };
+
+  const MOVEMENT_LABEL: Record<string, string> = {
+    NOT_EXITED: "Not exited",
+    OUTSIDE: "Outside campus",
+    RETURNED: "Returned",
   };
 
   return (
@@ -115,13 +142,75 @@ export default function StudentGatePass() {
                   {pass.reason && <div className="text-xs text-outline mt-xs">{pass.reason}</div>}
                 </div>
               </div>
-              <StatusBadge status={pass.status} />
+              <div className="flex items-center gap-sm shrink-0">
+                {["approved", "active", "returned"].includes(pass.status) && (
+                  <Button size="sm" variant="outline" onClick={() => openQr(pass)}>
+                    Show QR
+                  </Button>
+                )}
+                <StatusBadge status={pass.status} />
+              </div>
             </div>
           )) : (
             <div className="p-xl text-center text-sm text-outline">No gate pass requests found.</div>
           )}
         </div>
       </div>
+
+      <Modal
+        open={!!qrFor}
+        onClose={() => setQrFor(null)}
+        title="Gate Pass"
+        description={qrFor ? `${qrFor.destination} · ${new Date(qrFor.exit_time).toLocaleString()}` : undefined}
+      >
+        {qrLoading && <div className="py-xl text-center text-sm text-outline">Loading...</div>}
+
+        {!qrLoading && credential && (
+          <div className="space-y-md">
+            {credential.state === "issued" && credential.svg ? (
+              <div className="flex justify-center">
+                <div
+                  className="bg-white p-md rounded-xl border border-outline-variant [&>svg]:w-full [&>svg]:h-auto w-[16rem]"
+                  // Generated on this server by lib/gate-security/qr.ts from a
+                  // payload this server built. Not user content.
+                  dangerouslySetInnerHTML={{ __html: credential.svg }}
+                />
+              </div>
+            ) : (
+              <div className="bg-warning/10 border border-warning/20 text-warning rounded-xl p-md text-sm font-medium text-center">
+                {credential.reason}
+              </div>
+            )}
+
+            {credential.state === "issued" && (
+              <dl className="grid grid-cols-2 gap-sm text-sm">
+                <div>
+                  <dt className="text-xs text-on-surface-variant">Pass</dt>
+                  <dd className="font-semibold text-on-surface">
+                    GP-{String(qrFor?.id ?? "").replace(/-/g, "").slice(0, 8).toUpperCase()}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-on-surface-variant">Movement</dt>
+                  <dd className="font-semibold text-on-surface">{MOVEMENT_LABEL[credential.movementState]}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-on-surface-variant">Valid from</dt>
+                  <dd className="font-semibold text-on-surface">{new Date(credential.validFrom).toLocaleString()}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-on-surface-variant">Valid until</dt>
+                  <dd className="font-semibold text-on-surface">{new Date(credential.expiresAt).toLocaleString()}</dd>
+                </div>
+              </dl>
+            )}
+
+            {credential.state === "issued" && credential.usable && (
+              <p className="text-xs text-outline text-center">{credential.reason}</p>
+            )}
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

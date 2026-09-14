@@ -118,15 +118,29 @@ CREATE TABLE IF NOT EXISTS public.finance_integration_connections (
 
 CREATE INDEX IF NOT EXISTS idx_fic_college ON public.finance_integration_connections(college_id);
 CREATE INDEX IF NOT EXISTS idx_fic_status ON public.finance_integration_connections(college_id, status);
+DROP TRIGGER IF EXISTS set_updated_at_fic ON public.finance_integration_connections;
 CREATE TRIGGER set_updated_at_fic BEFORE UPDATE ON public.finance_integration_connections
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at();
 
 -- The tenant-qualified identity every child table references, so a
 -- College B row can never hang off a College A connection (§75).
-ALTER TABLE public.finance_integration_connections
-  DROP CONSTRAINT IF EXISTS fic_tenant_key;
-ALTER TABLE public.finance_integration_connections
-  ADD CONSTRAINT fic_tenant_key UNIQUE (id, college_id);
+--
+-- Added only when absent, rather than dropped and recreated: five child
+-- tables below carry foreign keys to it, and Postgres refuses to drop a
+-- key they depend on — so the drop-then-add form made this whole migration
+-- fail on a second apply. Same lesson as 047 §7l, reached from the other
+-- direction.
+DO $fic_tenant_key$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'public.finance_integration_connections'::regclass
+      AND conname = 'fic_tenant_key'
+  ) THEN
+    ALTER TABLE public.finance_integration_connections
+      ADD CONSTRAINT fic_tenant_key UNIQUE (id, college_id);
+  END IF;
+END $fic_tenant_key$;
 
 -- ---------------------------------------------------------------
 -- 2. Credentials — ciphertext only, and readable by nobody
@@ -158,6 +172,7 @@ CREATE TABLE IF NOT EXISTS public.finance_integration_credentials (
     REFERENCES public.finance_integration_connections (id, college_id) ON DELETE CASCADE
 );
 
+DROP TRIGGER IF EXISTS set_updated_at_fic_cred ON public.finance_integration_credentials;
 CREATE TRIGGER set_updated_at_fic_cred BEFORE UPDATE ON public.finance_integration_credentials
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at();
 
@@ -208,6 +223,7 @@ CREATE TABLE IF NOT EXISTS public.finance_account_mappings (
 );
 
 CREATE INDEX IF NOT EXISTS idx_fam_connection ON public.finance_account_mappings(connection_id, kind);
+DROP TRIGGER IF EXISTS set_updated_at_fam ON public.finance_account_mappings;
 CREATE TRIGGER set_updated_at_fam BEFORE UPDATE ON public.finance_account_mappings
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at();
 
@@ -328,6 +344,7 @@ CREATE INDEX IF NOT EXISTS idx_fso_college_status ON public.finance_sync_operati
 CREATE INDEX IF NOT EXISTS idx_fso_entity ON public.finance_sync_operations(college_id, entity_type, entity_id);
 CREATE INDEX IF NOT EXISTS idx_fso_queue ON public.finance_sync_operations(status, next_attempt_at)
   WHERE status IN ('QUEUED', 'RETRYING');
+DROP TRIGGER IF EXISTS set_updated_at_fso ON public.finance_sync_operations;
 CREATE TRIGGER set_updated_at_fso BEFORE UPDATE ON public.finance_sync_operations
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at();
 
@@ -350,6 +367,7 @@ CREATE TABLE IF NOT EXISTS public.finance_sync_cursors (
     REFERENCES public.finance_integration_connections (id, college_id) ON DELETE CASCADE
 );
 
+DROP TRIGGER IF EXISTS set_updated_at_fsc ON public.finance_sync_cursors;
 CREATE TRIGGER set_updated_at_fsc BEFORE UPDATE ON public.finance_sync_cursors
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at();
 

@@ -104,6 +104,54 @@ const CHECKS: Array<[string, string]> = [
   ["gate pass approved by someone who is not warden or admin",
     `SELECT count(*) FROM gate_passes g JOIN profiles p ON p.id=g.approved_by WHERE p.role NOT IN ('warden','admin')`],
 
+  // ---- gate security (050) ---------------------------------------------
+  //
+  // The ledger and the pass are written in one transaction by
+  // record_gate_movement(), so these should be structurally impossible.
+  // They are scanned anyway: an invariant that is only true because one
+  // function is careful stops being true the moment a second writer exists,
+  // and this is the check that would notice.
+  ["a pass outside or returned with no recorded exit",
+    `SELECT count(*) FROM gate_passes g WHERE g.status IN ('active','returned')
+       AND NOT EXISTS (SELECT 1 FROM gate_movements m WHERE m.gate_pass_id=g.id AND m.movement_type='OUT')`],
+  ["a returned pass with no recorded return",
+    `SELECT count(*) FROM gate_passes g WHERE g.status='returned'
+       AND NOT EXISTS (SELECT 1 FROM gate_movements m WHERE m.gate_pass_id=g.id AND m.movement_type='IN')`],
+  ["a movement on a pass that was never approved",
+    `SELECT count(*) FROM gate_movements m JOIN gate_passes g ON g.id=m.gate_pass_id
+      WHERE g.status IN ('pending','rejected')`],
+  ["a movement recorded before its pass was approved",
+    `SELECT count(*) FROM gate_movements m JOIN gate_passes g ON g.id=m.gate_pass_id
+      WHERE g.approved_at IS NOT NULL AND m.occurred_at < g.approved_at`],
+  ["a return recorded before its own exit",
+    `SELECT count(*) FROM gate_movements i JOIN gate_movements o
+        ON o.gate_pass_id=i.gate_pass_id AND o.movement_type='OUT'
+      WHERE i.movement_type='IN' AND i.occurred_at < o.occurred_at`],
+  ["a movement at a gate in another college",
+    `SELECT count(*) FROM gate_movements m JOIN gates g ON g.id=m.gate_id WHERE g.college_id <> m.college_id`],
+  ["a scanned movement with no gate, or an override with no reason",
+    `SELECT count(*) FROM gate_movements
+      WHERE (is_override = false AND gate_id IS NULL)
+         OR (is_override = true AND (override_reason IS NULL OR length(btrim(override_reason)) < 10))`],
+  ["more than one live credential on a pass",
+    `SELECT count(*) FROM (SELECT gate_pass_id FROM gate_pass_credentials WHERE status='ACTIVE'
+        GROUP BY gate_pass_id HAVING count(*)>1) x`],
+  ["a credential on a pass that was never approved",
+    `SELECT count(*) FROM gate_pass_credentials c JOIN gate_passes g ON g.id=c.gate_pass_id
+      WHERE g.approved_at IS NULL`],
+  ["a live credential on a pass that is finished",
+    `SELECT count(*) FROM gate_pass_credentials c JOIN gate_passes g ON g.id=c.gate_pass_id
+      WHERE c.status='ACTIVE' AND g.status IN ('rejected','returned','expired')`],
+  ["a credential whose student is not the pass holder",
+    `SELECT count(*) FROM gate_pass_credentials c JOIN gate_passes g ON g.id=c.gate_pass_id
+      WHERE c.student_id <> g.student_id OR c.college_id <> g.college_id`],
+  ["an active security guard whose profile is not gate_security",
+    `SELECT count(*) FROM security_personnel s JOIN profiles p ON p.id=s.profile_id
+      WHERE s.status='ACTIVE' AND (p.role <> 'gate_security' OR p.college_id <> s.college_id)`],
+  ["a live gate assignment to a retired gate",
+    `SELECT count(*) FROM security_gate_assignments a JOIN gates g ON g.id=a.gate_id
+      WHERE a.revoked_at IS NULL AND NOT g.is_active`],
+
   // ---- audit -----------------------------------------------------------
   ["audit row whose actor is in another college",
     `SELECT count(*) FROM audit_logs l JOIN profiles p ON p.id=l.user_id WHERE p.college_id <> l.college_id`],

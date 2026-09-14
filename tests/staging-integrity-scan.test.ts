@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 
-import { stagingDb, as, verify, scalar, U, S, OFF, COLLEGE_A, FEE_A, SEM_3, ROOM_A101, ROOM_A102 } from "./staging/harness";
+import { stagingDb, as, verify, scalar, U, S, OFF, COLLEGE_A, FEE_A, SEM_3, ROOM_A101, ROOM_A102, GATE_MAIN, PASS_A } from "./staging/harness";
 import { scanIntegrity, integrityViolations, scanAdvisory } from "./staging/integrity";
 
 /**
@@ -52,11 +52,29 @@ describe("after a day of legitimate operations", () => {
 
       // Hostel: a gate pass walked to returned; a room moved to maintenance and back.
       const pass = await as(d, U.studentA, `INSERT INTO public.gate_passes (college_id, student_id, destination, exit_time, return_time) VALUES ('${COLLEGE_A}','${S.a}','Home',now()+interval '1 hour',now()+interval '1 day') RETURNING id`);
-      for (const step of [
-        `status='approved', approved_by=auth.uid(), approved_at=now()`,
-        `status='active', actual_exit=now()`,
-        `status='returned', actual_return=now()`,
-      ]) expect((await as(d, U.warden, `UPDATE public.gate_passes SET ${step} WHERE id='${pass.data[0].id}' RETURNING id`)).rows).toBe(1);
+      // The warden decides; a guard records the crossings. Since 050 the
+      // movement transitions are unreachable by any role, so this is what a
+      // legitimate day now looks like end to end.
+      expect((await as(d, U.warden,
+        `UPDATE public.gate_passes SET status='approved', approved_by=auth.uid(), approved_at=now() WHERE id='${pass.data[0].id}' RETURNING id`)).rows).toBe(1);
+      // Age the approval so the crossings below land after it. Everything
+      // in this block is the test simulating a clock, as the OWNER with the
+      // relevant trigger disabled — never by finding a way through one.
+      await verify(d, `ALTER TABLE gate_passes DISABLE TRIGGER guard_gate_pass_update`);
+      await verify(d, `UPDATE gate_passes SET approved_at = now() - interval '20 minutes' WHERE id=$1`, [pass.data[0].id]);
+      await verify(d, `ALTER TABLE gate_passes ENABLE TRIGGER guard_gate_pass_update`);
+      const credId = await scalar(d, `SELECT id FROM gate_pass_credentials WHERE gate_pass_id=$1 AND status='ACTIVE'`, [pass.data[0].id]);
+      const out = await as(d, U.guardMain, `SELECT outcome FROM public.record_gate_movement('${credId}','${GATE_MAIN}','{}'::jsonb)`);
+      expect(out.data[0]?.outcome, out.error ?? "").toBe("RECORDED");
+      // Move the clock past the duplicate-scan window. The ledger refuses
+      // UPDATE for every role, so the trigger is disabled as the OWNER for
+      // one statement rather than the test finding a way around it.
+      await verify(d, `ALTER TABLE gate_movements DISABLE TRIGGER guard_gate_movement_change`);
+      await verify(d, `UPDATE gate_movements SET occurred_at = occurred_at - interval '3 minutes' WHERE gate_pass_id=$1`, [pass.data[0].id]);
+      await verify(d, `ALTER TABLE gate_movements ENABLE TRIGGER guard_gate_movement_change`);
+      const back = await as(d, U.guardMain, `SELECT outcome FROM public.record_gate_movement('${credId}','${GATE_MAIN}','{}'::jsonb)`);
+      expect(back.data[0]?.outcome, back.error ?? "").toBe("RECORDED");
+      expect(await scalar(d, `SELECT status FROM gate_passes WHERE id=$1`, [pass.data[0].id])).toBe("returned");
       expect((await as(d, U.warden, `UPDATE public.hostel_rooms SET status='maintenance' WHERE id='${ROOM_A102}' RETURNING id`)).rows).toBe(1);
 
       // Period: close the term, open the next year and term.
@@ -76,10 +94,13 @@ describe("after a day of legitimate operations", () => {
 });
 
 describe("the scanner is load-bearing", () => {
+  // exec(), not query(): several injections below need more than one
+  // statement (disable a trigger, write the impossible row, put the trigger
+  // back), and a prepared statement takes exactly one.
   const inject = async (label: string, sql: string, expectCheck: RegExp) => {
     const d = await fresh();
     try {
-      await verify(d, sql);
+      await d.exec(sql);
       const v = await integrityViolations(d);
       expect(v.some((x) => expectCheck.test(x)), `${label}: ${JSON.stringify(v)}`).toBe(true);
     } finally { await d.close(); }
@@ -104,6 +125,62 @@ describe("the scanner is load-bearing", () => {
 
   it("names a substitution where the substitute is the absentee", () =>
     inject("substitute", `INSERT INTO substitution_assignments (college_id, leave_request_id, offering_id, original_teacher_id, substitute_teacher_id, date, status) VALUES ('${COLLEGE_A}','0000000f-0000-4000-8000-000000000001','${OFF.dsA3}','${U.teacherA}','${U.teacherA}','2026-10-10','assigned')`, /substitute is the absent teacher/));
+
+  // ── gate security (050) ──────────────────────────────────────
+  //
+  // These are the states record_gate_movement() makes impossible. Injecting
+  // them as the console is the only way to know the checks would notice if
+  // a second writer ever appeared — the checks would otherwise be asserting
+  // that a defect is absent from a system it was never introduced into.
+
+  it("names a student marked outside with nothing on the ledger", () =>
+    inject("outside without an exit",
+      `UPDATE gate_passes SET status='approved', approved_by='${U.warden}', approved_at=now() WHERE id='${PASS_A}';
+       ALTER TABLE gate_passes DISABLE TRIGGER guard_gate_pass_update;
+       UPDATE gate_passes SET status='active', actual_exit=now() WHERE id='${PASS_A}';
+       ALTER TABLE gate_passes ENABLE TRIGGER guard_gate_pass_update;`,
+      /outside or returned with no recorded exit/));
+
+  it("names a movement on a pass nobody approved", () =>
+    inject("movement without approval",
+      `INSERT INTO gate_movements (college_id, gate_pass_id, student_id, gate_id, movement_type, recorded_by, recorded_role)
+         VALUES ('${COLLEGE_A}','${PASS_A}','${S.a}','${GATE_MAIN}','OUT','${U.admin}','admin')`,
+      /movement on a pass that was never approved/));
+
+  it("names an override with no reason behind it", () =>
+    // gm_override_has_reason is a CHECK, so this state is unreachable while
+    // the constraint stands — the injection drops it. That is the point: the
+    // scan is the thing that would notice if the constraint were ever
+    // removed, and a test that could not produce the state would be
+    // asserting nothing.
+    inject("override without a reason",
+      `UPDATE gate_passes SET status='approved', approved_by='${U.warden}', approved_at=now() WHERE id='${PASS_A}';
+       ALTER TABLE gate_movements DROP CONSTRAINT gm_override_has_reason;
+       INSERT INTO gate_movements (college_id, gate_pass_id, student_id, movement_type, recorded_by, recorded_role, is_override, override_reason)
+         VALUES ('${COLLEGE_A}','${PASS_A}','${S.a}','OUT','${U.warden}','warden',true,'x');`,
+      /override with no reason/));
+
+  it("names a live QR on a pass that is finished", () =>
+    // approved -> expired is a legal transition; what makes the state
+    // impossible in practice is the issuer trigger closing the credential
+    // alongside it. Disabling that one trigger is exactly the failure being
+    // simulated.
+    inject("credential outliving its pass",
+      `UPDATE gate_passes SET status='approved', approved_by='${U.warden}', approved_at=now() WHERE id='${PASS_A}';
+       ALTER TABLE gate_passes DISABLE TRIGGER issue_gate_pass_credential;
+       UPDATE gate_passes SET status='expired' WHERE id='${PASS_A}';
+       ALTER TABLE gate_passes ENABLE TRIGGER issue_gate_pass_credential;`,
+      /live credential on a pass that is finished/));
+
+  it("names an active guard whose account is no longer gate security", () =>
+    inject("guard without the role",
+      `UPDATE profiles SET role='teacher' WHERE id='${U.guardMain}'`,
+      /active security guard whose profile is not gate_security/));
+
+  it("names a live assignment to a gate that was retired", () =>
+    inject("assignment to a retired gate",
+      `UPDATE gates SET is_active=false WHERE id='${GATE_MAIN}'`,
+      /live gate assignment to a retired gate/));
 
   it("stays silent when the injected change is legitimate", async () => {
     const d = await fresh();

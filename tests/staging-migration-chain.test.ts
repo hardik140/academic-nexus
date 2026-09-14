@@ -118,13 +118,21 @@ describe("the real migration chain applies to an empty database", () => {
     expect(res.rows.map((r) => r.policyname)).toEqual([]);
   });
 
-  it("is re-runnable — applying 047 a second time to the SAME database changes nothing", async () => {
+  it("is re-runnable — applying the unreleased batch again to the SAME database changes nothing", async () => {
     // An earlier version of this test applied the chain twice to two fresh
     // databases and compared them, which proves the chain is deterministic
     // and nothing about idempotency. It passed while 047 contained a DROP
     // CONSTRAINT that fails on re-application because a foreign key still
     // depended on it. Re-applying to the database that already carries 047
     // is the only thing that catches that.
+    //
+    // It replays the BATCH (047, 049, 050), not 047 alone, because 050
+    // supersedes objects 047 defines — gate_passes_staff is replaced there
+    // by three narrower policies. Replaying only the earlier file would
+    // restore the superseded FOR ALL policy and report a difference that is
+    // an artefact of replaying half a deployment, not a defect. Replaying
+    // the whole batch is also what an operator re-running a failed deploy
+    // actually does.
     const snapshot = async () =>
       (
         await db.query<{ policies: number; constraints: number; functions: number; triggers: number }>(
@@ -138,10 +146,15 @@ describe("the real migration chain applies to an empty database", () => {
       ).rows[0];
 
     const before = await snapshot();
-    const sql = (await import("node:fs"))
-      .readFileSync(join(process.cwd(), "supabase/migrations/047_academic_transactions_on_offerings.sql"), "utf8")
-      .replace(/\r\n/g, "\n");
-    await expect(db.exec(sql)).resolves.toBeDefined();
+    const fs = await import("node:fs");
+    for (const file of [
+      "047_academic_transactions_on_offerings.sql",
+      "049_finance_integration_hub.sql",
+      "050_gate_security.sql",
+    ]) {
+      const sql = fs.readFileSync(join(process.cwd(), "supabase/migrations", file), "utf8").replace(/\r\n/g, "\n");
+      await expect(db.exec(sql), `${file} is not re-runnable`).resolves.toBeDefined();
+    }
     expect(await snapshot()).toEqual(before);
   });
 

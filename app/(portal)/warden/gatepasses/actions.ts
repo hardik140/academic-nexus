@@ -10,6 +10,7 @@ import { resolveListSort, listCacheKey } from "@/lib/cached-list";
 import { logAudit } from "@/lib/audit";
 import { assertClaimed } from "@/lib/concurrent-claim";
 import { PERMISSIONS } from "@/lib/permissions";
+import { callRpc } from "@/lib/gate-security/rpc";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import type { DataTableQuery } from "@/components/ui/data-table";
@@ -247,26 +248,44 @@ export async function actOnGatePassViaRequest(
 const VerifyMovementSchema = z.object({
   passId: z.string().guid(),
   action: z.enum(["exit", "return"]),
+  gateId: z.string().guid().nullable().optional(),
+  reason: z.string().trim().min(10).max(500),
 });
 
 /**
- * Wires up gate_passes' actual_exit/actual_return columns and
- * active/returned status values — defined in schema since migration 004,
- * never read or written by any app code until now. This is what turns
- * "gate pass approved" into real entry/exit tracking: exit verification
- * requires status='approved' -> 'active' (+actual_exit); return
- * verification requires 'active' -> 'returned' (+actual_return). No
- * separate "security/gate staff" role exists in this schema, so the
- * warden performs verification themselves, same as approval already is.
+ * The manual movement override (migration 050 §13).
+ *
+ * WHAT THIS USED TO BE
+ *
+ * This function wrote gate_passes.status and actual_exit/actual_return
+ * directly, because when it was written there was no gate security role and
+ * no ledger — the warden was the only person who could record that a
+ * student had left. Migration 050 removes that write: approved -> active
+ * and active -> returned are granted to no authenticated role, and the
+ * ordinary path is a guard scanning a QR at a gate.
+ *
+ * WHAT IT IS NOW
+ *
+ * The same button, doing something honest. A phone with a flat battery, a
+ * cracked screen or a pass issued before the QR rollout is a real event at
+ * a real gate, and the alternative to recording it is a student waved
+ * through with nothing written down. So the override stays — but it now
+ * demands a reason, records the gate if there is one, stamps the server
+ * clock, writes a ledger row marked is_override, and audits itself. The
+ * database still refuses an out-of-order movement and still refuses a
+ * second exit.
+ *
+ * The block-ownership check below is kept even though the function
+ * re-checks it in SQL: this one produces the message the warden reads, the
+ * one in SQL is the boundary.
  */
-export async function verifyGatePassMovementCore(
+export async function recordManualGateMovementCore(
   supabase: SupabaseClient<Database>,
   actor: AuthorizedActor,
-  passIdRaw: string,
-  actionRaw: "exit" | "return"
+  params: { passId: string; action: "exit" | "return"; gateId?: string | null; reason: string }
 ) {
-  const { passId, action } = VerifyMovementSchema.parse({ passId: passIdRaw, action: actionRaw });
-  await checkRateLimit(`verifyGatePassMovement:${actor.userId}`, 30, 60);
+  const { passId, action, gateId, reason } = VerifyMovementSchema.parse(params);
+  await checkRateLimit(`manualGateMovement:${actor.userId}`, 30, 60);
 
   const { data: pass } = await supabase
     .from("gate_passes")
@@ -283,48 +302,119 @@ export async function verifyGatePassMovementCore(
   if (pass.status !== requiredStatus) {
     throw new Error(
       action === "exit"
-        ? "This gate pass must be approved before exit can be verified."
-        : "This gate pass must have a verified exit before return can be verified."
+        ? "This gate pass must be approved before an exit can be recorded."
+        : "This gate pass must have a recorded exit before a return can be recorded."
     );
   }
 
-  const update =
-    action === "exit"
-      ? { status: "active" as const, actual_exit: new Date().toISOString() }
-      : { status: "returned" as const, actual_return: new Date().toISOString() };
+  const rows = await callRpc<{ outcome: string; movement: string; occurred_at: string | null; detail: string }>(
+    supabase,
+    "record_manual_gate_movement",
+    {
+      p_gate_pass_id: passId,
+      p_movement: action === "exit" ? "OUT" : "IN",
+      p_gate_id: gateId ?? null,
+      p_reason: reason,
+    }
+  );
 
-  // Compare-and-swap on requiredStatus — double-clicking "Verify exit" must
-  // record one actual_exit, not overwrite it with a second timestamp.
-  const { data: claimed, error } = await supabase
-    .from("gate_passes")
-    .update(update)
-    .eq("id", passId)
-    .eq("status", requiredStatus)
-    .select("id");
-  if (error) {
-    throw new Error(error.message);
-  }
-  assertClaimed(claimed, "gate pass");
+  const result = rows[0];
+  if (!result) throw new Error("The movement could not be recorded.");
+  if (result.outcome !== "RECORDED") throw new Error(result.detail);
 
-  await logAudit(supabase, actor, `gate_pass_${action}_verified`, "gate_passes", passId, {
+  await logAudit(supabase, actor, `gate_movement_override_${action}`, "gate_movements", passId, {
     oldValue: { status: pass.status },
-    newValue: update,
+    newValue: {
+      movement: result.movement,
+      occurred_at: result.occurred_at,
+      gate_id: gateId ?? null,
+      reason,
+      override: true,
+    },
   });
+
+  return result;
 }
 
-export async function verifyGatePassMovement(passId: string, action: "exit" | "return") {
-  const actor = await requireRole(PERMISSIONS.gatepass_verify_movement);
+export async function recordManualGateMovement(params: {
+  passId: string;
+  action: "exit" | "return";
+  gateId?: string | null;
+  reason: string;
+}) {
+  const actor = await requireRole(PERMISSIONS.gate_movement_override);
   const supabase = await createClient();
-  await verifyGatePassMovementCore(supabase, actor, passId, action);
+  const result = await recordManualGateMovementCore(supabase, actor, params);
   revalidatePath("/warden/gatepasses");
   revalidatePath("/warden/dashboard");
   await invalidateCache(pendingCacheKey(actor.role === "admin" ? actor.collegeId : actor.userId));
+  return result;
 }
 
-/** Called by app/api/mobile/gatepass/verify-movement/route.ts, if/when a mobile screen needs it. */
-export async function verifyGatePassMovementViaRequest(request: Request, passId: string, action: "exit" | "return") {
-  const { supabase, ...actor } = await requireRoleFromRequest(request, ["warden", "admin"]);
-  await verifyGatePassMovementCore(supabase, actor, passId, action);
+/** Called by app/api/mobile/gatepass/verify-movement/route.ts. */
+export async function recordManualGateMovementViaRequest(
+  request: Request,
+  params: { passId: string; action: "exit" | "return"; gateId?: string | null; reason: string }
+) {
+  const { supabase, ...actor } = await requireRoleFromRequest(request, PERMISSIONS.gate_movement_override);
+  return recordManualGateMovementCore(supabase, actor, params);
+}
+
+/**
+ * Pull a student's QR without touching the decision behind it (§19).
+ *
+ * A lost phone or a screenshot shared in a group chat is a credential
+ * problem, not an approval problem — the warden still thinks the student
+ * may go out. Revoking issues nothing new; the student asks for a fresh
+ * pass if they still need one.
+ */
+export async function revokeGatePassCredential(passIdRaw: string, reasonRaw: string) {
+  const actor = await requireRole(PERMISSIONS.gate_credential_revoke);
+  const passId = z.string().guid().parse(passIdRaw);
+  const reason = z.string().trim().min(5).max(500).parse(reasonRaw);
+  await checkRateLimit(`revokeGateCredential:${actor.userId}`, 30, 60);
+  const supabase = await createClient();
+
+  const rows = await callRpc<{ revoked: number }>(supabase, "revoke_gate_pass_credential", {
+    p_gate_pass_id: passId,
+    p_reason: reason,
+  });
+  const revoked = rows[0]?.revoked ?? 0;
+
+  if (revoked > 0) {
+    await logAudit(supabase, actor, "gate_credential_revoked", "gate_pass_credentials", passId, {
+      newValue: { reason, credentials: revoked },
+    });
+  }
+  revalidatePath("/warden/gatepasses");
+  return { revoked };
+}
+
+/** The gates a manual movement can be attributed to. */
+export async function listGatesForOverride() {
+  const actor = await requireRole(PERMISSIONS.gate_movement_override);
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("gates")
+    .select("id, code, name")
+    .eq("college_id", actor.collegeId)
+    .eq("is_active", true)
+    .order("code");
+  return data ?? [];
+}
+
+/** The crossings recorded against one pass, newest last. */
+export async function listGatePassMovements(passIdRaw: string) {
+  const actor = await requireRole(PERMISSIONS.gate_movement_read);
+  const passId = z.string().guid().parse(passIdRaw);
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("gate_movements")
+    .select("id, movement_type, occurred_at, is_override, override_reason, recorded_role, gate_id")
+    .eq("gate_pass_id", passId)
+    .eq("college_id", actor.collegeId)
+    .order("occurred_at", { ascending: true });
+  return data ?? [];
 }
 
 // An 'active' pass whose return_time + grace has passed with no

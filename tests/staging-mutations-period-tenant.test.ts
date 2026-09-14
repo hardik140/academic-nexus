@@ -196,8 +196,14 @@ describe("gate pass state machine mutations (§7m)", () => {
     );
     try {
       const id = await pending(d);
-      const r = await as(d, U.warden, `UPDATE public.gate_passes SET status='returned', actual_return=now() WHERE id='${id}' RETURNING id`);
-      expect(r.rows, "mutation not detected").toBe(1);
+      // Driven as the OWNER, not as the warden. This mutation removes a
+      // TRIGGER branch, and since 050 the warden has no UPDATE path to the
+      // movement states at all — so going through RLS would report zero rows
+      // whether the trigger were mutated or not, and the test would pass for
+      // the wrong reason. Intact, this statement raises "may not move from
+      // pending to returned"; mutated, it lands.
+      await verify(d, `UPDATE gate_passes SET status='returned', actual_return=now() WHERE id=$1`, [id]);
+      expect(await scalar(d, `SELECT status FROM gate_passes WHERE id=$1`, [id]), "mutation not detected").toBe("returned");
     } finally { await d.close(); }
   });
 

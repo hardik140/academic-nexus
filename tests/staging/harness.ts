@@ -138,6 +138,14 @@ export const U = {
   bTeacher: "00000003-0000-4000-8000-000000000011",
   bStudent: "00000003-0000-4000-8000-000000000012",
   bHod: "00000003-0000-4000-8000-000000000013",
+  /** gate_security, ACTIVE, operates MAIN. */
+  guardMain: "00000003-0000-4000-8000-000000000016",
+  /** gate_security, ACTIVE, operates NORTH — never MAIN. */
+  guardNorth: "00000003-0000-4000-8000-000000000017",
+  /** gate_security, SUSPENDED, still assigned to MAIN. */
+  guardSuspended: "00000003-0000-4000-8000-000000000018",
+  /** gate_security in College B. */
+  guardB: "00000003-0000-4000-8000-000000000019",
 } as const;
 
 /** students(id) — NOT profiles(id). 047 made these distinct id spaces. */
@@ -190,6 +198,19 @@ export const ALLOC_A = "00000012-0000-4000-8000-000000000001";
 export const ALLOC_C = "00000012-0000-4000-8000-000000000002";
 export const PASS_A = "00000013-0000-4000-8000-000000000001"; // Student A, Block A
 export const PASS_C = "00000013-0000-4000-8000-000000000002"; // Student C, Block B
+
+// ── Gate security (050) ──
+export const GATE_MAIN = "00000015-0000-4000-8000-000000000001";
+export const GATE_NORTH = "00000015-0000-4000-8000-000000000002";
+export const GATE_B = "00000015-0000-4000-8000-000000000003";
+/** is_active = false — an assignment to it must still not admit a scan. */
+export const GATE_RETIRED = "00000015-0000-4000-8000-000000000004";
+export const SEC = {
+  main: "00000016-0000-4000-8000-000000000001",
+  north: "00000016-0000-4000-8000-000000000002",
+  suspended: "00000016-0000-4000-8000-000000000003",
+  b: "00000016-0000-4000-8000-000000000004",
+} as const;
 export const FEE_A = "00000014-0000-4000-8000-000000000001";  // 10,000 owed
 export const FEE_C = "00000014-0000-4000-8000-000000000002";  // 8,000 owed
 export const FEE_B_COLLEGE = "00000014-0000-4000-8000-000000000003";

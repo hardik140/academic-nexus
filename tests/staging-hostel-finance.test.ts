@@ -185,19 +185,32 @@ describe("gate pass workflow", () => {
     } finally { await d.close(); }
   });
 
-  it("the full pass lifecycle: pending → approved → active → returned, by the right people", async () => {
+  it("the full pass lifecycle: the warden decides, and only a guard can move it", async () => {
+    // Rewritten for migration 050. The warden's half is unchanged; the two
+    // movement transitions are no longer theirs to write, so what this test
+    // now asserts is the split: the decision lands, the movements do not,
+    // and the pass is left exactly where the warden left it.
     const d = await fresh();
     try {
       expect((await as(d, U.warden, `UPDATE public.gate_passes SET status='approved', approved_by=auth.uid(), approved_at=now() WHERE id='${PASS_A}' AND status='pending'`)).rows).toBe(1);
-      expect((await as(d, U.warden, `UPDATE public.gate_passes SET status='active', actual_exit=now() WHERE id='${PASS_A}' AND status='approved'`)).rows).toBe(1);
-      expect((await as(d, U.warden, `UPDATE public.gate_passes SET status='returned', actual_return=now() WHERE id='${PASS_A}' AND status='active'`)).rows).toBe(1);
-      const [row] = await verify<{ status: string; approved_by: string }>(d, `SELECT status, approved_by FROM gate_passes WHERE id=$1`, [PASS_A]);
-      expect(row.status).toBe("returned");
+      expect((await as(d, U.warden, `UPDATE public.gate_passes SET status='active', actual_exit=now() WHERE id='${PASS_A}' AND status='approved'`)).rows).toBe(0);
+      expect((await as(d, U.warden, `UPDATE public.gate_passes SET status='returned', actual_return=now() WHERE id='${PASS_A}' AND status='active'`)).rows).toBe(0);
+      const [row] = await verify<{ status: string; approved_by: string; actual_exit: string | null }>(d, `SELECT status, approved_by, actual_exit FROM gate_passes WHERE id=$1`, [PASS_A]);
+      expect(row.status).toBe("approved");
       expect(row.approved_by).toBe(U.warden);
+      expect(row.actual_exit).toBeNull();
     } finally { await d.close(); }
   });
 
-  /** Walks a pending pass to 'returned' along the only legal path (as owner). */
+  /**
+   * Walks a pending pass to 'returned' along the only legal path.
+   *
+   * As the OWNER, so RLS is out of the way: since 050 the two movement
+   * transitions are granted to no authenticated role, and these tests are
+   * about the state machine underneath rather than about who may drive it.
+   * The trigger still holds here and still enforces the order and the
+   * stamps — see staging-gate-security.test.ts for the guard's real path.
+   */
   const walkToReturned = async (d: PGlite, id: string) => {
     await verify(d, `UPDATE public.gate_passes SET status='approved', approved_by=$2, approved_at=now() WHERE id=$1`, [id, U.warden]);
     await verify(d, `UPDATE public.gate_passes SET status='active', actual_exit=now() WHERE id=$1`, [id]);
@@ -221,9 +234,13 @@ describe("gate pass workflow", () => {
     const d = await fresh();
     try {
       await walkToReturned(d, PASS_A);
-      const jump = await as(d, U.warden, `UPDATE public.gate_passes SET status='active' WHERE id='${PASS_A}'`);
-      expect(jump.ok).toBe(false);
-      expect(jump.error).toMatch(/may not move from returned to active/);
+      // Two layers now, and the test asserts both. RLS refuses the warden
+      // silently (050 §16b: they hold no UPDATE on a decided pass), and the
+      // trigger names the refusal when RLS is out of the way.
+      const jump = await as(d, U.warden, `UPDATE public.gate_passes SET status='active' WHERE id='${PASS_A}' RETURNING id`);
+      expect(jump.rows, "a warden replayed a returned pass").toBe(0);
+      await expect(verify(d, `UPDATE gate_passes SET status='active' WHERE id=$1`, [PASS_A]))
+        .rejects.toThrow(/may not move from returned to active/);
       expect(await scalar(d, `SELECT status FROM gate_passes WHERE id=$1`, [PASS_A])).toBe("returned");
     } finally { await d.close(); }
   });

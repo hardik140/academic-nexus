@@ -187,6 +187,36 @@ const ACTION_INVOKERS: Record<string, () => Promise<unknown>> = {
     }),
   transitionSemester: async () =>
     (await import("@/app/(portal)/admin/academic-periods/actions")).transitionSemester(UUID_RECORD, "activate"),
+
+  // Gate Security (050). The deny rows these generate are the separation
+  // the module rests on: gate_security is denied every administrative
+  // action, and warden/director are denied the scanner.
+  authorizeSecurityPersonnel: async () =>
+    (await import("@/app/(portal)/director/security/actions")).authorizeSecurityPersonnel({ profileId: UUID_TARGET }),
+  assignSecurityGate: async () =>
+    (await import("@/app/(portal)/director/security/actions")).assignGate(UUID_TARGET, UUID_RECORD),
+  manageGates: async () =>
+    (await import("@/app/(portal)/director/security/actions")).createGate({ code: "MAIN", name: "Main Gate" }),
+  sendSecurityInstruction: async () =>
+    (await import("@/app/(portal)/director/security/actions")).sendSecurityInstruction({
+      title: "T",
+      message: "M",
+      priority: "normal",
+      audience: "all",
+    }),
+  recordGateMovement: async () =>
+    (await import("@/app/(portal)/security/actions")).scanGatePass({
+      payload: "ANGP1.11111111-1111-4111-8111-111111111111." + "A".repeat(43),
+      gateId: UUID_RECORD,
+    }),
+  overrideGateMovement: async () =>
+    (await import("@/app/(portal)/warden/gatepasses/actions")).recordManualGateMovement({
+      passId: UUID_RECORD,
+      action: "exit",
+      reason: "a reason long enough to pass validation",
+    }),
+  revokeGateCredential: async () =>
+    (await import("@/app/(portal)/warden/gatepasses/actions")).revokeGatePassCredential(UUID_RECORD, "lost phone"),
 };
 
 function isForbidden(err: unknown): boolean {

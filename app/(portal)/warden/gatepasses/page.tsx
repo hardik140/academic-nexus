@@ -1,9 +1,16 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Button, StatusBadge } from "@/components/ui/modal";
+import { Button, FormField, Modal, StatusBadge } from "@/components/ui/modal";
 import { DataTable, type DataTableQuery } from "@/components/ui/data-table";
-import { actOnGatePass, listPendingGatePasses, listProcessedGatePasses, verifyGatePassMovement } from "./actions";
+import {
+  actOnGatePass,
+  listGatesForOverride,
+  listPendingGatePasses,
+  listProcessedGatePasses,
+  recordManualGateMovement,
+  revokeGatePassCredential,
+} from "./actions";
 
 const PROCESSED_PAGE_SIZE = 10;
 
@@ -50,14 +57,60 @@ export default function WardenGatePasses() {
     }
   };
 
-  const handleMovement = async (id: string, action: "exit" | "return") => {
-    setLoading(id);
+  // The manual override (migration 050 §13). This used to be a one-click
+  // "Verify Exit" that wrote the timestamp directly. It is now a recorded
+  // exception: the ordinary path is a guard scanning the student's QR at a
+  // gate, and taking that path out of the guard's hands needs a reason
+  // attached to it, because the ledger is what anyone reviewing an incident
+  // will read months later.
+  const [override, setOverride] = useState<{ id: string; action: "exit" | "return"; student: string } | null>(null);
+  const [overrideReason, setOverrideReason] = useState("");
+  const [overrideGate, setOverrideGate] = useState("");
+  const [gates, setGates] = useState<{ id: string; code: string; name: string }[]>([]);
+  const [revoke, setRevoke] = useState<{ id: string; student: string } | null>(null);
+  const [revokeReason, setRevokeReason] = useState("");
+
+  useEffect(() => {
+    listGatesForOverride().then(setGates).catch(() => setGates([]));
+  }, []);
+
+  const openOverride = (id: string, action: "exit" | "return", student: string) => {
+    setOverrideReason("");
+    setOverrideGate("");
+    setError(null);
+    setOverride({ id, action, student });
+  };
+
+  const submitOverride = async () => {
+    if (!override) return;
+    setLoading(override.id);
     setError(null);
     try {
-      await verifyGatePassMovement(id, action);
+      await recordManualGateMovement({
+        passId: override.id,
+        action: override.action,
+        gateId: overrideGate || null,
+        reason: overrideReason,
+      });
+      setOverride(null);
       await loadProcessed(processedQuery);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to verify movement.");
+      setError(e instanceof Error ? e.message : "Failed to record the movement.");
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const submitRevoke = async () => {
+    if (!revoke) return;
+    setLoading(revoke.id);
+    setError(null);
+    try {
+      await revokeGatePassCredential(revoke.id, revokeReason);
+      setRevoke(null);
+      await loadProcessed(processedQuery);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to revoke the QR.");
     } finally {
       setLoading(null);
     }
@@ -126,18 +179,27 @@ export default function WardenGatePasses() {
             key: "movement",
             header: "Movement",
             render: (row: any) => {
+              const student = (row.students as any)?.profiles?.full_name || "this student";
               if (row.status === "approved") {
                 return (
-                  <Button size="sm" variant="outline" onClick={() => handleMovement(row.id, "exit")} disabled={loading === row.id}>
-                    {loading === row.id ? "..." : "Verify Exit"}
-                  </Button>
+                  <div className="flex gap-xs">
+                    <Button size="sm" variant="outline" onClick={() => openOverride(row.id, "exit", student)} disabled={loading === row.id}>
+                      Record exit
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => { setRevokeReason(""); setRevoke({ id: row.id, student }); }} disabled={loading === row.id}>
+                      Revoke QR
+                    </Button>
+                  </div>
                 );
               }
               if (row.status === "active") {
                 return (
-                  <Button size="sm" variant="outline" onClick={() => handleMovement(row.id, "return")} disabled={loading === row.id}>
-                    {loading === row.id ? "..." : "Verify Return"}
-                  </Button>
+                  <div className="flex gap-xs items-center">
+                    <span className="text-xs font-semibold text-warning">Outside</span>
+                    <Button size="sm" variant="outline" onClick={() => openOverride(row.id, "return", student)} disabled={loading === row.id}>
+                      Record return
+                    </Button>
+                  </div>
                 );
               }
               if (row.status === "returned") {
@@ -156,6 +218,71 @@ export default function WardenGatePasses() {
         pageSize={PROCESSED_PAGE_SIZE}
         emptyMessage="No processed requests yet."
       />
+
+      <Modal
+        open={!!override}
+        onClose={() => setOverride(null)}
+        title={override?.action === "exit" ? "Record an exit manually" : "Record a return manually"}
+        description={`The usual path is a security guard scanning ${override?.student ?? "the student"}'s QR at a gate. Recording it here is an exception, and it is kept in the movement ledger as one.`}
+        footer={
+          <div className="flex justify-end gap-sm">
+            <Button variant="ghost" onClick={() => setOverride(null)}>Cancel</Button>
+            <Button onClick={submitOverride} disabled={overrideReason.trim().length < 10 || loading === override?.id}>
+              {loading === override?.id ? "Recording..." : "Record movement"}
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-md">
+          <FormField
+            label="Gate"
+            id="override-gate"
+            type="select"
+            value={overrideGate}
+            onChange={setOverrideGate}
+            options={gates.map((g) => ({ value: g.id, label: `${g.code} — ${g.name}` }))}
+          />
+          <FormField
+            label="Why is this being recorded manually?"
+            id="override-reason"
+            type="textarea"
+            rows={3}
+            value={overrideReason}
+            onChange={setOverrideReason}
+            placeholder="e.g. student's phone battery died at the main gate; identity checked against hostel ID"
+            required
+          />
+          <p className="text-xs text-outline">
+            At least 10 characters. The reason, your name and the server time are written to the movement ledger and the audit log, and cannot be edited afterwards.
+          </p>
+        </div>
+      </Modal>
+
+      <Modal
+        open={!!revoke}
+        onClose={() => setRevoke(null)}
+        title="Revoke this QR"
+        description={`The approval stands — only the QR stops working. ${revoke?.student ?? "The student"} will need a new pass to go out.`}
+        footer={
+          <div className="flex justify-end gap-sm">
+            <Button variant="ghost" onClick={() => setRevoke(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={submitRevoke} disabled={revokeReason.trim().length < 5 || loading === revoke?.id}>
+              {loading === revoke?.id ? "Revoking..." : "Revoke"}
+            </Button>
+          </div>
+        }
+      >
+        <FormField
+          label="Reason"
+          id="revoke-reason"
+          type="textarea"
+          rows={3}
+          value={revokeReason}
+          onChange={setRevokeReason}
+          placeholder="e.g. student reported the phone lost"
+          required
+        />
+      </Modal>
     </div>
   );
 }

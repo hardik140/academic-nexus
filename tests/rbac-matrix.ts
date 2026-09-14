@@ -10,6 +10,7 @@ export const ALL_ROLES: UserRole[] = [
   "warden",
   "super_admin",
   "placement_cell",
+  "gate_security",
 ];
 
 /**
@@ -59,6 +60,18 @@ export const ACTION_ALLOWED_ROLES: Record<string, UserRole[]> = {
   // grant 046 gave academic_years_manage. hod is deliberately absent.
   createSemester: ["admin", "director"],
   transitionSemester: ["admin", "director"],
+  // Gate Security (050). The rows that matter most in this block are the
+  // DENIES the matrix generates for free: gate_security is absent from
+  // every action above, and warden/director are absent from the scanner.
+  // A guard who could approve a pass, or a warden who could stand in for
+  // the gate, would collapse the separation the module is built on.
+  authorizeSecurityPersonnel: ["director", "admin"],
+  assignSecurityGate: ["director", "admin"],
+  manageGates: ["director", "admin"],
+  sendSecurityInstruction: ["director", "admin"],
+  recordGateMovement: ["gate_security"],
+  overrideGateMovement: ["warden", "admin"],
+  revokeGateCredential: ["warden", "admin", "director"],
 };
 
 export interface RbacMatrixRow {

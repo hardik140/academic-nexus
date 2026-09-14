@@ -59,7 +59,10 @@ export const PERMISSIONS = {
   // enforced app-side, same split as every other staff table this session.
   hostel_room_read: ["warden", "admin"],
   gatepass_review: ["warden", "admin"],
-  gatepass_verify_movement: ["warden", "admin"],
+  // gatepass_verify_movement was here. It named the warden's direct write of
+  // actual_exit / actual_return, which migration 050 removes: recording a
+  // physical movement is the gate security role's, and what a warden keeps
+  // is the audited override, named gate_movement_override below.
   hostel_complaint_manage: ["warden", "admin"],
   room_transfer_request: ["student"],
   room_transfer_review: ["warden", "admin"],
@@ -126,7 +129,83 @@ export const PERMISSIONS = {
   finance_reconciliation_execute: ["finance", "admin"],
   finance_reconciliation_resolve: ["finance", "admin"],
   finance_integration_audit_read: ["finance", "admin"],
+
+  // ── Gate Security (migration 050) ───────────────────────────────────
+  //
+  // Two tiers, and the line between them is the one the module exists to
+  // draw: AUTHORISING a guard is institution administration, OPERATING a
+  // gate is not.
+  //
+  //   director/admin   the roster, the gates, the assignments, the
+  //                    instructions, and the institution-wide view
+  //   gate_security    the scanner and what it needs to work
+  //   warden           unchanged — decides passes, never scans
+  //
+  // `gate_security` appears in NO entry above this block, and that is load
+  // bearing rather than incidental: a guard reaching any other module gets
+  // FORBIDDEN from requireRole() before RLS is ever consulted. There is no
+  // inheritance from warden or director anywhere in this table.
+  //
+  // These entries are the ROLE gate. Per-person capability (this guard may
+  // record movements, that one may only view) lives in
+  // security_personnel.permissions, is enforced in the database by
+  // security_has_permission(), and is mirrored for the UI as
+  // GATE_SECURITY_CAPABILITIES below — a role check that passes still meets
+  // a capability check it can fail.
+  security_admin_manage: ["director", "admin"],
+  security_admin_read: ["director", "admin"],
+  gate_manage: ["director", "admin"],
+  security_instruction_send: ["director", "admin"],
+  gate_security_dashboard: ["gate_security"],
+  gate_security_scan: ["gate_security"],
+  gate_security_history: ["gate_security"],
+  // The manual movement override (§35). Warden and admin only — never the
+  // guard, whose whole path is the scanner, and never the director, who
+  // authorises guards rather than standing at gates.
+  gate_movement_override: ["warden", "admin"],
+  gate_credential_revoke: ["warden", "admin", "director"],
+  gate_movement_read: ["warden", "admin", "director"],
 } as const satisfies Record<string, readonly UserRole[]>;
+
+/**
+ * The per-person capability vocabulary for a security operator.
+ *
+ * MUST stay identical to the sp_permissions_known CHECK constraint in
+ * migration 050 — the database refuses a string that is not in its own
+ * list, so a drift here surfaces as a failed write rather than as a
+ * silently ineffective permission. tests/staging-gate-security.test.ts
+ * asserts the two lists match.
+ */
+export const GATE_SECURITY_CAPABILITIES = [
+  "gate_security.dashboard.view",
+  "gate_security.scanner.use",
+  "gate_security.pass.view",
+  "gate_security.pass.validate",
+  "gate_security.movement.record",
+  "gate_security.movement.view",
+  "gate_security.history.view",
+  "gate_security.instructions.view",
+  "gate_security.audit.view",
+  "gate_security.gate.view",
+] as const;
+
+export type GateSecurityCapability = (typeof GATE_SECURITY_CAPABILITIES)[number];
+
+/**
+ * What a newly authorised guard gets unless the director narrows it.
+ * Everything operational, and neither audit nor anything outside the gate.
+ */
+export const DEFAULT_GATE_SECURITY_CAPABILITIES: GateSecurityCapability[] = [
+  "gate_security.dashboard.view",
+  "gate_security.scanner.use",
+  "gate_security.pass.view",
+  "gate_security.pass.validate",
+  "gate_security.movement.record",
+  "gate_security.movement.view",
+  "gate_security.history.view",
+  "gate_security.instructions.view",
+  "gate_security.gate.view",
+];
 
 export type Permission = keyof typeof PERMISSIONS;
 

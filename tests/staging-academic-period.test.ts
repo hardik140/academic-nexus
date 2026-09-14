@@ -359,10 +359,17 @@ describe("tenant consistency across the academic structure", () => {
       // integration.
       "fam_connection_tenant_fkey", "fel_connection_tenant_fkey", "fic_cred_tenant_fkey",
       "frr_connection_tenant_fkey", "fsc_connection_tenant_fkey", "fso_connection_tenant_fkey",
+      // Gate Security (050). gm_/gpc_pass_tenant_fkey are three-column —
+      // (pass, college, student) — so a ledger row cannot name a pass in one
+      // tenant, a college in another and a student in neither. The rest bind
+      // guards, gates, assignments and instructions to one college.
+      "gm_gate_tenant_fkey", "gm_pass_tenant_fkey", "gpc_pass_tenant_fkey",
       "marks_offering_tenant_fkey", "marks_student_tenant_fkey",
       "placement_applications_drive_tenant_fkey",
       "programmes_department_tenant_fkey", "sections_programme_tenant_fkey",
       "semesters_academic_year_tenant_fkey",
+      "sga_gate_tenant_fkey", "sga_personnel_tenant_fkey",
+      "si_gate_tenant_fkey", "si_personnel_tenant_fkey",
       "substitution_assignments_offering_tenant_fkey", "substitution_assignments_substitute_tenant_fkey",
       "timetable_slots_offering_tenant_fkey",
     ]);
