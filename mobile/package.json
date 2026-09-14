@@ -16,7 +16,7 @@
     "expo-secure-store": "~57.0.1",
     "expo-status-bar": "~57.0.1",
     "expo-web-browser": "~57.0.2",
-    "react": "19.2.8",
+    "react": "19.3.0",
     "react-native": "0.86.2",
     "react-native-safe-area-context": "~5.9.0",
     "react-native-screens": "~4.27.0",
@@ -24,7 +24,7 @@
   },
   "devDependencies": {
     "@types/jest": "30.0.0",
-    "@types/react": "~19.2.2",
+    "@types/react": "~19.3.0",
     "babel-preset-expo": "~57.0.11",
     "eslint-config-expo": "^57.0.1",
     "jest": "~30.5.1",
