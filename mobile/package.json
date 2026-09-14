@@ -11,7 +11,7 @@
     "@supabase/supabase-js": "^2.112.3",
     "expo": "~57.0.20",
     "expo-device": "~57.0.1",
-    "expo-linking": "~57.0.5",
+    "expo-linking": "~57.0.10",
     "expo-notifications": "~57.0.10",
     "expo-secure-store": "~57.0.1",
     "expo-status-bar": "~57.0.1",
