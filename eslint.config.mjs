@@ -17,8 +17,14 @@ const eslintConfig = [
     // mobile/ has always been linted separately (`cd mobile && npx expo
     // lint`, its own eslint config) — switching the root lint script from
     // `next lint` to a bare `eslint .` (next lint is gone in Next 16)
-    // started crawling it too unless excluded here explicitly.
-    ignores: [".next/**", "node_modules/**", "supabase/**", "mobile/**"],
+    // started crawling it too unless excluded here explicitly. .open-next/
+    // is the Cloudflare Workers build output (open-next.config.ts/
+    // wrangler.jsonc) — bundled/minified build artifacts, not source; a
+    // bare `eslint .` crawls into it once it exists and fails outright
+    // ("could not find plugin jsx-a11y") rather than just producing
+    // findings, since generated files there don't match this config's
+    // plugin-registration entry the way real source files do.
+    ignores: [".next/**", ".open-next/**", ".wrangler/**", "node_modules/**", "supabase/**", "mobile/**"],
   },
   {
     // Scoped to the same files next/typescript's own entry applies to —

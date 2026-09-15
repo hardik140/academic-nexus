@@ -6,8 +6,27 @@ import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { DataTable, type DataTableQuery } from "@/components/ui/data-table";
 import { Modal, Button, FormField, StatusBadge } from "@/components/ui/modal";
-import { inviteUser, resendInvitation, revokeInvitation, updateUserProfile, updateUserStatus as updateUserStatusAction, listUsers } from "./actions";
+import { formatCurrency } from "@/lib/utils";
+import {
+  inviteUser,
+  resendInvitation,
+  revokeInvitation,
+  updateUserProfile,
+  updateUserStatus as updateUserStatusAction,
+  listUsers,
+  getStudentAcademicSummary,
+  updateStudentAcademicStatus,
+  type StudentAcademicSummary,
+} from "./actions";
 import type { UserRole, UserStatus } from "@/types/database";
+
+const ACADEMIC_STATUSES = [
+  { value: "active", label: "Active" },
+  { value: "suspended", label: "Suspended" },
+  { value: "graduated", label: "Graduated" },
+  { value: "dropped", label: "Dropped" },
+  { value: "on_leave", label: "On Leave" },
+];
 
 const roles: { value: UserRole; label: string }[] = [
   { value: "student", label: "Student" },
@@ -31,6 +50,10 @@ function AdminUsersInner() {
   const [invitations, setInvitations] = useState<any[]>([]);
   const [departments, setDepartments] = useState<any[]>([]);
   const [editUser, setEditUser] = useState<any>(null);
+  const [academicSummary, setAcademicSummary] = useState<StudentAcademicSummary | null>(null);
+  const [academicStatusDraft, setAcademicStatusDraft] = useState("");
+  const [academicLoading, setAcademicLoading] = useState(false);
+  const [academicError, setAcademicError] = useState<string | null>(null);
   const [showInvite, setShowInvite] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -136,6 +159,38 @@ function AdminUsersInner() {
     }
   };
 
+  const openEditUser = async (row: any) => {
+    setEditUser(row);
+    setAcademicSummary(null);
+    setAcademicError(null);
+    if (row.role === "student") {
+      const summary = await getStudentAcademicSummary(row.id);
+      setAcademicSummary(summary);
+      if (summary) setAcademicStatusDraft(summary.status);
+    }
+  };
+
+  const closeEditUser = () => {
+    setEditUser(null);
+    setAcademicSummary(null);
+    setAcademicError(null);
+  };
+
+  const handleUpdateAcademicStatus = async () => {
+    if (!editUser || !academicStatusDraft) return;
+    setAcademicLoading(true);
+    setAcademicError(null);
+    try {
+      await updateStudentAcademicStatus(editUser.id, academicStatusDraft as any, query);
+      const summary = await getStudentAcademicSummary(editUser.id);
+      setAcademicSummary(summary);
+    } catch (e) {
+      setAcademicError(e instanceof Error ? e.message : "Failed to update academic status.");
+    } finally {
+      setAcademicLoading(false);
+    }
+  };
+
   const updateUserStatus = async (userId: string, status: string) => {
     setError(null);
     try {
@@ -238,7 +293,7 @@ function AdminUsersInner() {
         searchKey="full_name"
         searchPlaceholder="Search users..."
         emptyMessage="No users found."
-        onRowClick={(row) => setEditUser(row)}
+        onRowClick={openEditUser}
         serverMode
         totalCount={totalUsers}
         loading={usersLoading}
@@ -247,7 +302,7 @@ function AdminUsersInner() {
         actions={(row: any) => (
           <div className="flex gap-xs">
             <button
-              onClick={(e) => { e.stopPropagation(); setEditUser(row); }}
+              onClick={(e) => { e.stopPropagation(); openEditUser(row); }}
               className="text-xs text-secondary hover:underline font-medium"
             >
               Edit
@@ -300,13 +355,13 @@ function AdminUsersInner() {
       {/* Edit User Modal */}
       <Modal
         open={!!editUser}
-        onClose={() => setEditUser(null)}
+        onClose={closeEditUser}
         title="Edit User"
         description={editUser?.email}
         size="md"
         footer={
           <>
-            <Button variant="outline" onClick={() => setEditUser(null)}>Cancel</Button>
+            <Button variant="outline" onClick={closeEditUser}>Cancel</Button>
             <Button onClick={handleSaveUser} disabled={loading}>
               {loading ? "Saving..." : "Save Changes"}
             </Button>
@@ -318,6 +373,64 @@ function AdminUsersInner() {
             <FormField label="Full Name" id="edit_name" value={editUser.full_name} onChange={(v) => setEditUser({ ...editUser, full_name: v })} />
             <FormField label="Role" id="edit_role" type="select" value={editUser.role} onChange={(v) => setEditUser({ ...editUser, role: v })} options={roles} />
             <FormField label="Phone" id="edit_phone" value={editUser.phone || ""} onChange={(v) => setEditUser({ ...editUser, phone: v })} />
+
+            {/* Academic status — a separate concern from identity above (own
+                validation, own effect: transitioning to 'graduated' also
+                sets profiles.status to 'alumni', see lib/student-lifecycle.ts),
+                so it's a second, independent action rather than folded into
+                Save Changes. Clearance signals are informational only —
+                never a reason this update is blocked. */}
+            {editUser.role === "student" && (
+              <div className="pt-md mt-md border-t border-outline-variant space-y-sm">
+                <div className="text-xs font-bold text-on-surface-variant uppercase tracking-wider">Academic Status</div>
+                {academicSummary ? (
+                  <>
+                    <div className="text-xs text-outline">
+                      {academicSummary.enrollmentNumber} · Batch {academicSummary.batchYear} · Semester {academicSummary.semester}
+                    </div>
+                    <div className="flex flex-wrap gap-xs">
+                      {academicSummary.outstandingFees > 0 && (
+                        <span className="text-[11px] font-semibold px-sm py-[2px] rounded-full bg-warning/10 text-warning">
+                          {formatCurrency(academicSummary.outstandingFees)} outstanding
+                        </span>
+                      )}
+                      {academicSummary.hasActiveHostelAllocation && (
+                        <span className="text-[11px] font-semibold px-sm py-[2px] rounded-full bg-secondary/10 text-secondary">Active hostel allocation</span>
+                      )}
+                      {academicSummary.hasOpenGatePass && (
+                        <span className="text-[11px] font-semibold px-sm py-[2px] rounded-full bg-secondary/10 text-secondary">Open gate pass</span>
+                      )}
+                      {academicSummary.outstandingFees <= 0 && !academicSummary.hasActiveHostelAllocation && !academicSummary.hasOpenGatePass && (
+                        <span className="text-[11px] text-outline">No clearance flags</span>
+                      )}
+                    </div>
+                    {academicError && <p className="text-xs text-error font-medium">{academicError}</p>}
+                    <div className="flex gap-sm items-end">
+                      <div className="flex-1">
+                        <FormField
+                          label="Status"
+                          id="academic_status"
+                          type="select"
+                          value={academicStatusDraft}
+                          onChange={setAcademicStatusDraft}
+                          options={ACADEMIC_STATUSES}
+                        />
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handleUpdateAcademicStatus}
+                        disabled={academicLoading || academicStatusDraft === academicSummary.status}
+                      >
+                        {academicLoading ? "Updating..." : "Update Status"}
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-xs text-outline">Loading academic record...</div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </Modal>

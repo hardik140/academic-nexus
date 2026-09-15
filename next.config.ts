@@ -82,15 +82,15 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default withSentryConfig(nextConfig, {
-  org: process.env.SENTRY_ORG,
-  project: process.env.SENTRY_PROJECT,
-  authToken: process.env.SENTRY_AUTH_TOKEN,
-  silent: true,
-  // No org/project/authToken until the user creates a Sentry project — the
-  // plugin skips source-map upload gracefully in that case rather than
-  // failing the build.
-  widenClientFileUpload: true,
-  disableLogger: true,
-  automaticVercelMonitors: false,
-});
+export default process.env.ENABLE_SENTRY === "true"
+  ? withSentryConfig(nextConfig, {
+      org: process.env.SENTRY_ORG,
+      project: process.env.SENTRY_PROJECT,
+      authToken: process.env.SENTRY_AUTH_TOKEN,
+      silent: true,
+      widenClientFileUpload: true,
+      disableLogger: true,
+      automaticVercelMonitors: false,
+    })
+  : nextConfig;
+

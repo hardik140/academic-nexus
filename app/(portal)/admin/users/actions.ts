@@ -9,6 +9,8 @@ import { assertClaimed } from "@/lib/concurrent-claim";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { getCached, invalidateCache, middlewareProfileCacheKey } from "@/lib/cache";
 import { inviteUserCore, resendInvitationCore, revokeInvitationCore, type InviteUserParams } from "@/lib/invitations";
+import { computeEffectiveFeeStatus } from "@/lib/finance-status";
+import { resolveProfileStatusForAcademicTransition, type StudentAcademicStatus } from "@/lib/student-lifecycle";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, UserRole, UserStatus } from "@/types/database";
 import type { DataTableQuery } from "@/components/ui/data-table";
@@ -246,4 +248,125 @@ export async function updateUserStatus(targetUserId: string, status: UserStatus,
 export async function updateUserStatusViaRequest(request: Request, targetUserId: string, status: UserStatus) {
   const { supabase, ...actor } = await requireRoleFromRequest(request, ["admin"]);
   await updateUserStatusCore(supabase, actor, targetUserId, status);
+}
+
+const STUDENT_ACADEMIC_STATUSES = ["active", "suspended", "graduated", "dropped", "on_leave"] as const;
+
+export interface StudentAcademicSummary {
+  studentId: string;
+  status: StudentAcademicStatus;
+  enrollmentNumber: string;
+  batchYear: number;
+  semester: number;
+  outstandingFees: number;
+  hasActiveHostelAllocation: boolean;
+  hasOpenGatePass: boolean;
+}
+
+/**
+ * Informational only — every signal here is live-computed, never a reason
+ * to block the transition below. Blocking on outstanding fees/hostel
+ * allocation would encode institutional policy this codebase has no basis
+ * to assume (same "surface, don't silently gate" principle already applied
+ * to Finance clearance and hostel expense requests). Returns null if the
+ * target user isn't a student — this is called from the generic user-edit
+ * modal, which doesn't otherwise know that up front.
+ */
+export async function getStudentAcademicSummary(targetUserId: string): Promise<StudentAcademicSummary | null> {
+  const actor = await requireRole(["admin"]);
+  const supabase = await createClient();
+
+  const { data: student } = await supabase
+    .from("students")
+    .select("id, status, enrollment_number, batch_year, semester")
+    .eq("user_id", targetUserId)
+    .eq("college_id", actor.collegeId)
+    .maybeSingle();
+  if (!student) return null;
+
+  const [feesRes, allocationRes, gatePassRes] = await Promise.all([
+    supabase.from("fees").select("amount, paid_amount, status, due_date").eq("student_id", student.id),
+    supabase.from("hostel_allocations").select("id").eq("student_id", student.id).eq("status", "active").maybeSingle(),
+    supabase.from("gate_passes").select("id").eq("student_id", student.id).in("status", ["pending", "approved", "active"]).maybeSingle(),
+  ]);
+
+  const outstandingFees = (feesRes.data || [])
+    .filter((f) => !["paid", "waived", "refunded"].includes(computeEffectiveFeeStatus(f)))
+    .reduce((sum, f) => sum + (f.amount - f.paid_amount), 0);
+
+  return {
+    studentId: student.id,
+    status: student.status as StudentAcademicStatus,
+    enrollmentNumber: student.enrollment_number,
+    batchYear: student.batch_year,
+    semester: student.semester,
+    outstandingFees,
+    hasActiveHostelAllocation: !!allocationRes.data,
+    hasOpenGatePass: !!gatePassRes.data,
+  };
+}
+
+const UpdateStudentAcademicStatusSchema = z.object({
+  targetUserId: z.string().guid(),
+  status: z.enum(STUDENT_ACADEMIC_STATUSES),
+});
+
+/**
+ * The write path students.status has never had — see lib/student-lifecycle.ts
+ * for why only 'graduated' also touches profiles.status.
+ */
+export async function updateStudentAcademicStatusCore(
+  supabase: SupabaseClient<Database>,
+  actor: AuthorizedActor,
+  targetUserIdRaw: string,
+  statusRaw: StudentAcademicStatus
+) {
+  const { targetUserId, status } = UpdateStudentAcademicStatusSchema.parse({ targetUserId: targetUserIdRaw, status: statusRaw });
+  await checkRateLimit(`updateStudentAcademicStatus:${actor.userId}`, 20, 60);
+
+  const { data: student } = await supabase
+    .from("students")
+    .select("id, status")
+    .eq("user_id", targetUserId)
+    .eq("college_id", actor.collegeId)
+    .single();
+  if (!student) {
+    throw new Error("Student record not found.");
+  }
+  if (student.status === status) {
+    throw new Error(`This student is already ${status}.`);
+  }
+
+  const { error } = await supabase.from("students").update({ status }).eq("id", student.id);
+  if (error) {
+    throw dbError(error);
+  }
+
+  const mappedProfileStatus = resolveProfileStatusForAcademicTransition(status);
+  if (mappedProfileStatus) {
+    await supabase.from("profiles").update({ status: mappedProfileStatus }).eq("id", targetUserId).eq("college_id", actor.collegeId);
+    // Changes profiles.status, which middleware's active-account check
+    // reads (cached) — same cache-bust updateUserStatusCore does above.
+    await invalidateCache(middlewareProfileCacheKey(targetUserId));
+  }
+
+  await logAudit(supabase, actor, "student_academic_status_changed", "students", student.id, {
+    oldValue: { status: student.status },
+    newValue: { status, profile_status: mappedProfileStatus },
+  });
+}
+
+export async function updateStudentAcademicStatus(
+  targetUserId: string,
+  status: StudentAcademicStatus,
+  viewQuery?: DataTableQuery
+) {
+  const actor = await requireRole(["admin"]);
+  const supabase = await createClient();
+  await updateStudentAcademicStatusCore(supabase, actor, targetUserId, status);
+  revalidatePath("/admin/users");
+  if (viewQuery) {
+    const sortColumn = viewQuery.sortKey && USERS_SORT_COLUMNS.has(viewQuery.sortKey) ? viewQuery.sortKey : "created_at";
+    await invalidateCache(usersCacheKey(actor.collegeId, viewQuery, sortColumn));
+  }
 }

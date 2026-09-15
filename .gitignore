@@ -33,3 +33,14 @@ next-env.d.ts
 
 # Supabase
 supabase/.temp/
+
+# Cloudflare & OpenNext
+.open-next/
+.wrangler/
+.dev.vars
+.dev.vars.*
+
+
+# npm pack debris (package/ above is this tarball extracted)
+blake3-internal.tgz
+package/
