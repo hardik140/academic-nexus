@@ -63,7 +63,17 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci --legacy-peer-deps
+      - name: Check Cloudflare Token
+        id: cf_auth
+        run: |
+          if [ -z "${{ secrets.CLOUDFLARE_API_TOKEN }}" ]; then
+            echo "has_token=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Missing CLOUDFLARE_API_TOKEN::Automated Cloudflare deployment skipped because CLOUDFLARE_API_TOKEN is not configured in GitHub repository secrets. Add CLOUDFLARE_API_TOKEN under Settings -> Secrets and variables -> Actions to enable auto-deployment."
+          else
+            echo "has_token=true" >> "$GITHUB_OUTPUT"
+          fi
       - name: Build OpenNext Worker
+        if: steps.cf_auth.outputs.has_token == 'true'
         run: npm run build:worker
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || vars.NEXT_PUBLIC_SUPABASE_URL }}
@@ -71,7 +81,8 @@ jobs:
           NEXT_PUBLIC_APP_URL: ${{ secrets.NEXT_PUBLIC_APP_URL || vars.NEXT_PUBLIC_APP_URL || 'https://academic-nexus.hardik-nexus.workers.dev' }}
           NEXT_PUBLIC_APP_NAME: ${{ secrets.NEXT_PUBLIC_APP_NAME || vars.NEXT_PUBLIC_APP_NAME || 'Academic Nexus' }}
       - name: Deploy to Cloudflare Workers
+        if: steps.cf_auth.outputs.has_token == 'true'
         run: npx wrangler deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || 'a059935851bdbe42c8718a75fea143d9' }}
