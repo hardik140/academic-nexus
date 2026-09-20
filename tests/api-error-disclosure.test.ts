@@ -2,8 +2,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { ZodError, z } from "zod";
 import { errorResponse } from "@/lib/api-errors";
 import { RbacError } from "@/lib/rbac";
-import { RateLimitError } from "@/lib/rate-limit";
-import { dbError, looksInternal, InternalOperationError } from "@/lib/internal-error";
+import { RateLimitError, RateLimiterUnavailableError } from "@/lib/rate-limit";
+import { dbError, looksInternal, InternalOperationError, type InternalErrorLike } from "@/lib/internal-error";
 
 /**
  * F-002 — what a failed request is allowed to tell the caller.
@@ -150,10 +150,31 @@ describe("authorization and validation outcomes are unchanged", () => {
     expect((await body(forbidden)).error).toMatch(/not permitted/);
   });
 
-  it("keeps rate limiting at 429", async () => {
-    const res = errorResponse(new RateLimitError());
+  it("keeps rate limiting at 429, and says when to come back", async () => {
+    const res = errorResponse(new RateLimitError(undefined, 42));
     expect(res.status).toBe(429);
     expect((await body(res)).error).toMatch(/too many requests/i);
+    // Retry-After is the only part of a 429 a client can act on. Without it
+    // a well-behaved caller guesses, and guessing means retrying too soon.
+    expect(res.headers.get("Retry-After")).toBe("42");
+  });
+
+  it("answers a BLIND limiter with 503, not 429", async () => {
+    // R-001. These are different facts and a client must be able to tell
+    // them apart: 429 means the caller went too fast, 503 means we cannot
+    // currently tell how fast they are going. Reporting our own outage as
+    // their fault also means a retry-counting client punishes itself for it.
+    const res = errorResponse(new RateLimiterUnavailableError());
+    expect(res.status).toBe(503);
+    expect(res.headers.get("Retry-After")).toBeTruthy();
+  });
+
+  it("does not name Redis, Upstash or the bucket when the limiter is blind", async () => {
+    const res = errorResponse(new RateLimiterUnavailableError());
+    const message = (await body(res)).error!;
+    for (const leak of ["redis", "upstash", "ratelimit", "bucket", "ECONNRESET", "6379"]) {
+      expect(message.toLowerCase(), `"${leak}" leaked`).not.toContain(leak.toLowerCase());
+    }
   });
 
   it("keeps Zod validation at 400 with the field message", async () => {
@@ -201,5 +222,53 @@ describe("the response-boundary backstop", () => {
       expect(json.error).toBe("Request failed.");
       for (const leak of FORBIDDEN) expect(json.error).not.toContain(leak);
     }
+  });
+});
+
+describe("the `error?.message || \"fallback\"` shape is sanitised too", () => {
+  // The first F-002 pass rewrote `throw new Error(error.message)`. Ten sites
+  // wrote it differently — `throw new Error(error?.message || "Failed to
+  // record payment.")` — and the pattern did not match them, so they kept
+  // relaying PostgreSQL verbatim through recordPayment, createInvoice,
+  // createScholarship, createCollege and six others, all of which are
+  // reachable from app/api/mobile/*.
+  //
+  // Their conversion has to do two things at once, which is what these
+  // assert: sanitise the error branch WITHOUT losing the human fallback that
+  // covers the "no error, but no row either" case.
+
+  /** Exactly the expression those ten call sites now use. */
+  function atCallSite(error: InternalErrorLike | null, fallback: string): Error {
+    return dbError({ ...error, message: error?.message || fallback });
+  }
+
+  it("replaces the database's words when there is an error", async () => {
+    const err = atCallSite(
+      { code: "23503", message: 'insert or update on table "payments" violates foreign key constraint "payments_fee_context_fkey"' },
+      "Failed to record payment."
+    );
+    expect(err.message).toBe(new InternalOperationError().message);
+    expect((await body(errorResponse(err))).error).not.toContain("payments");
+  });
+
+  it("keeps the human fallback when there is no error object at all", async () => {
+    // The row came back empty with no error — not a database message, and it
+    // must still read like one a person wrote.
+    const err = atCallSite(null, "Failed to record payment.");
+    expect(err.message).toBe("Failed to record payment.");
+    expect((await body(errorResponse(err))).error).toBe("Failed to record payment.");
+  });
+
+  it("keeps the human fallback when the error carries an empty message", async () => {
+    const err = atCallSite({ code: "P0001", message: "" }, "Failed to create invoice.");
+    expect(err.message).toBe("Failed to create invoice.");
+  });
+
+  it("keeps a deliberate trigger message even in this shape", () => {
+    const err = atCallSite(
+      { code: "P0001", message: "A refund cannot exceed the outstanding balance." },
+      "Failed to approve refund."
+    );
+    expect(err.message).toBe("A refund cannot exceed the outstanding balance.");
   });
 });

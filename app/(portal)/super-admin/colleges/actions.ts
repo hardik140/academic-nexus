@@ -13,6 +13,7 @@ import { inviteUserCore, resendInvitationCore, revokeInvitationCore, type Invite
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import type { DataTableQuery } from "@/components/ui/data-table";
+import { dbError } from "@/lib/internal-error";
 
 const COLLEGES_PAGE_SIZE = 10;
 const COLLEGES_SORT_COLUMNS = ["name", "code"] as const;
@@ -91,7 +92,7 @@ export async function createCollegeCore(
     .single();
 
   if (error || !college) {
-    throw new Error(error?.message || "Failed to create college.");
+    throw dbError({ ...error, message: error?.message || "Failed to create college." });
   }
 
   await logAudit(supabase, actor, `Created college ${parsed.code} — ${parsed.name}`, "colleges", college.id);

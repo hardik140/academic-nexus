@@ -1,7 +1,8 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { routePrefixFor, dashboardPathFor } from "@/lib/auth/role-routes";
-import { checkRateLimit, RateLimitError } from "@/lib/rate-limit";
+import { checkRateLimit, RateLimitError, RateLimiterUnavailableError } from "@/lib/rate-limit";
+import { clientIp } from "@/lib/client-ip";
 import { getCached, middlewareProfileCacheKey } from "@/lib/cache";
 import type { UserRole, UserStatus } from "@/types/database";
 
@@ -30,12 +31,27 @@ export async function updateSession(request: NextRequest) {
   // Coarse, global first line of defense — checked before any Supabase call
   // so a flood doesn't even cost an auth lookup. Fails open (see
   // lib/rate-limit.ts) if Redis isn't configured or unreachable.
-  const ip = request.headers.get("x-forwarded-for")?.split(",")[0].trim() || "unknown";
+  // Keyed on the one header the edge sets and the client cannot choose —
+  // see lib/client-ip.ts for why the previous `x-forwarded-for` key was not
+  // a limit at all.
+  const { ip } = clientIp(request.headers);
   try {
     await checkRateLimit(`ip:${ip}`, 100, 60);
   } catch (err) {
     if (err instanceof RateLimitError) {
-      return new NextResponse("Too many requests. Please try again shortly.", { status: 429 });
+      return new NextResponse("Too many requests. Please try again shortly.", {
+        status: 429,
+        headers: { "Retry-After": String(err.retryAfterSeconds) },
+      });
+    }
+    // `ip` is classified fail-open (lib/rate-limit-policy.ts) so this should
+    // be unreachable; if the policy ever changes, a limiter outage must not
+    // become an unhandled exception on every request in the application.
+    if (err instanceof RateLimiterUnavailableError) {
+      return new NextResponse("Service temporarily unavailable.", {
+        status: 503,
+        headers: { "Retry-After": "30" },
+      });
     }
   }
 
@@ -113,10 +129,23 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  // If no profile exists yet (first login), redirect to onboarding
+  // No profile row for an authenticated user. This used to `return
+  // supabaseResponse` — "for now, allow access" — which meant that every
+  // check below it (active status, role, route prefix) was skipped and the
+  // session could load every portal shell in the application.
+  //
+  // It was never reachable through signup: migration 043's handle_new_user()
+  // trigger writes a profile inside the same transaction that creates the
+  // auth user, so an account without one does not normally exist. But that
+  // makes the branch a fail-OPEN default guarding a condition that only
+  // occurs when something has already gone wrong — the trigger was dropped,
+  // the row was deleted, the profile read failed. Every one of those is a
+  // reason to stop, not a reason to wave the request through.
   if (!profile) {
-    // For now, allow access — profile will be created on first login
-    return supabaseResponse;
+    const url = request.nextUrl.clone();
+    url.pathname = "/login";
+    url.searchParams.set("error", "no_profile");
+    return NextResponse.redirect(url);
   }
 
   // Check if account is active

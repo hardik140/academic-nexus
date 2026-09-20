@@ -252,7 +252,9 @@ export async function approveRoomTransfer(requestIdRaw: string, newRoomIdRaw: st
     .insert({ college_id: actor.collegeId, student_id: req.student_id, room_id: newRoomId, allocated_date: today, status: "active" })
     .select("id")
     .single();
-  if (newAllocationError || !newAllocation) throw new Error(newAllocationError?.message || "Failed to create new allocation.");
+  if (newAllocationError || !newAllocation) {
+    throw dbError({ ...newAllocationError, message: newAllocationError?.message || "Failed to create new allocation." });
+  }
 
   // Status/reviewer were already written by the claim above; this only
   // records which room and allocation the approval actually produced.

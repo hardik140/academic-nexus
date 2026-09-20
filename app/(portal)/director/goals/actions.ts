@@ -141,7 +141,7 @@ export async function createGoal(params: CreateGoalParams) {
     .single();
 
   if (error || !data) {
-    throw new Error(error?.message || "Failed to create goal.");
+    throw dbError({ ...error, message: error?.message || "Failed to create goal." });
   }
 
   await logAudit(supabase, actor, "strategic_goal_created", "strategic_goals", data.id, {

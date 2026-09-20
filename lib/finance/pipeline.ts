@@ -180,7 +180,9 @@ export async function runOperation(
     .select("*")
     .eq("id", operationId)
     .single();
-  if (opError || !opRow) throw new Error(opError?.message ?? "Sync operation not found.");
+  if (opError || !opRow) {
+    throw dbError({ ...opError, message: opError?.message ?? "Sync operation not found." });
+  }
   const op = opRow as SyncOperation;
 
   if (!["QUEUED", "RETRYING"].includes(op.status)) {

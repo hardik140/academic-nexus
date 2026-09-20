@@ -215,7 +215,7 @@ export async function createManualRiskFlag(params: ManualFlagParams) {
     .single();
 
   if (error || !data) {
-    throw new Error(error?.message || "Failed to create risk flag.");
+    throw dbError({ ...error, message: error?.message || "Failed to create risk flag." });
   }
 
   await logAudit(supabase, actor, "risk_flag_created", "risk_flags", data.id, {

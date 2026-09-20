@@ -12,6 +12,7 @@ import { PERMISSIONS } from "@/lib/permissions";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import type { DataTableQuery } from "@/components/ui/data-table";
+import { dbError } from "@/lib/internal-error";
 
 type ScholarshipType = Database["public"]["Tables"]["scholarships"]["Row"]["type"];
 
@@ -96,7 +97,7 @@ export async function createScholarshipCore(
     .single();
 
   if (error || !scholarship) {
-    throw new Error(error?.message || "Failed to create scholarship.");
+    throw dbError({ ...error, message: error?.message || "Failed to create scholarship." });
   }
 
   await logAudit(supabase, actor, "scholarship_created", "scholarships", scholarship.id, {

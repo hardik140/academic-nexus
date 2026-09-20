@@ -213,6 +213,15 @@ describe("app/api/mobile/* — HTTP-boundary authorization matrix", () => {
     mockSelectResolve.mockReset();
     mockSelectResolve.mockResolvedValue({ data: [] });
     mockInsert.mockReset();
+    // The real Supabase client ALWAYS resolves an insert to { data, error };
+    // it never resolves to undefined. Tests that only care about the update
+    // path (leave/act, gatepass/act, complaints/status, assign-hod) still
+    // reach an insert through logAudit, and left to vi.fn()'s default this
+    // mock handed that call `undefined` — a shape the client cannot produce.
+    // That went unnoticed only while logAudit discarded the result; once it
+    // started reading `error` (A-001), four tests failed on the mock rather
+    // than on the code. Default it to the contract the client actually has.
+    mockInsert.mockResolvedValue({ error: null });
     mockUpsert.mockReset();
     // Both thenable (callers that don't chain) and .select()-able. The
     // select echoes one row per row written, which is what the real client

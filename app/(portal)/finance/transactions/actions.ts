@@ -14,6 +14,7 @@ import { listInvoices } from "../invoices/actions";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import type { DataTableQuery } from "@/components/ui/data-table";
+import { dbError } from "@/lib/internal-error";
 
 const PAYMENTS_PAGE_SIZE = 10;
 const PAYMENTS_SORT_COLUMNS = ["amount", "created_at"] as const;
@@ -147,7 +148,7 @@ export async function recordPaymentCore(
     .single();
 
   if (error || !payment) {
-    throw new Error(error?.message || "Failed to record payment.");
+    throw dbError({ ...error, message: error?.message || "Failed to record payment." });
   }
 
   await logAudit(supabase, actor, "payment_recorded", "payments", payment.id, {

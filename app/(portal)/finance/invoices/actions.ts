@@ -12,6 +12,7 @@ import { PERMISSIONS } from "@/lib/permissions";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import type { DataTableQuery } from "@/components/ui/data-table";
+import { dbError } from "@/lib/internal-error";
 
 const FEES_PAGE_SIZE = 10;
 const FEES_SORT_COLUMNS = ["type", "amount", "due_date"] as const;
@@ -95,7 +96,7 @@ export async function createInvoiceCore(
     .single();
 
   if (error || !fee) {
-    throw new Error(error?.message || "Failed to create invoice.");
+    throw dbError({ ...error, message: error?.message || "Failed to create invoice." });
   }
 
   await logAudit(supabase, actor, "invoice_created", "fees", fee.id, {

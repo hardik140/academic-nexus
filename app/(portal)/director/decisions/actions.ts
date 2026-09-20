@@ -85,7 +85,7 @@ export async function submitDecisionCore(
     .single();
 
   if (error || !data) {
-    throw new Error(error?.message || "Failed to submit decision.");
+    throw dbError({ ...error, message: error?.message || "Failed to submit decision." });
   }
 
   // Decisions have no single owner — notify every Director in the college.

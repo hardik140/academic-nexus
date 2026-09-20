@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { RbacError } from "@/lib/rbac";
-import { RateLimitError } from "@/lib/rate-limit";
+import { RateLimitError, RateLimiterUnavailableError } from "@/lib/rate-limit";
 import { InternalOperationError, looksInternal } from "@/lib/internal-error";
 
 /**
@@ -16,7 +16,24 @@ export function errorResponse(err: unknown): NextResponse {
     return NextResponse.json({ error: err.message }, { status });
   }
   if (err instanceof RateLimitError) {
-    return NextResponse.json({ error: err.message }, { status: 429 });
+    // Retry-After is the only part of a 429 a client can act on. Without it
+    // a well-behaved caller has to guess, and guessing means retrying too
+    // soon — which is indistinguishable from the abuse the bucket exists to
+    // stop.
+    return NextResponse.json(
+      { error: err.message, retryAfter: err.retryAfterSeconds },
+      { status: 429, headers: { "Retry-After": String(err.retryAfterSeconds) } }
+    );
+  }
+  // The limiter could not reach Redis and this bucket is not allowed to run
+  // uncounted (lib/rate-limit-policy.ts). 503, not 429: the caller did
+  // nothing wrong and the condition is ours, so it must not be reported as
+  // their fault or counted against them.
+  if (err instanceof RateLimiterUnavailableError) {
+    return NextResponse.json(
+      { error: err.message },
+      { status: 503, headers: { "Retry-After": "30" } }
+    );
   }
   if (err instanceof ZodError) {
     return NextResponse.json(

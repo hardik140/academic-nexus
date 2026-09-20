@@ -75,7 +75,9 @@ export async function reconcile(
     })
     .select("id")
     .single();
-  if (runError || !runRow) throw new Error(runError?.message ?? "Could not start a reconciliation run.");
+  if (runError || !runRow) {
+    throw dbError({ ...runError, message: runError?.message ?? "Could not start a reconciliation run." });
+  }
   const runId = runRow.id;
 
   try {
