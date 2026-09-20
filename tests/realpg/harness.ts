@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import { appendFileSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -92,9 +92,16 @@ function freePort(): number {
 
 export function startCluster(attempt = 0): Cluster {
   const dataDir = mkdtempSync(join(tmpdir(), "nexus-realpg-"));
+  const socketDir = dataDir.replace(/\\/g, "/");
   const port = freePort();
   const initdb = spawnSync(exe("initdb"), ["-D", dataDir, "-U", "qa", "-A", "trust", "-E", "UTF8", "--no-locale"], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
   if (initdb.status !== 0) throw new Error(`initdb failed: ${initdb.stderr}`);
+
+  // Guarantee that PostgreSQL writes Unix domain sockets and lock files to the cluster's
+  // own disposable dataDir instead of the system-wide default (/var/run/postgresql on Ubuntu/Debian),
+  // which is not writable by unprivileged CI runners (e.g. runner in GitHub Actions).
+  appendFileSync(join(dataDir, "postgresql.conf"), `\nunix_socket_directories = '${socketDir}'\n`);
+
   // stdio MUST be 'ignore', not 'pipe': pg_ctl start launches the server as a
   // detached grandchild that inherits our stdio handles, and a piped stdout
   // stays open for the server's whole life — so spawnSync would wait forever
@@ -102,7 +109,12 @@ export function startCluster(attempt = 0): Cluster {
   // goes to the -l log file. (This is why it worked from an interactive shell
   // and hung under Node.)
   const logFile = join(dataDir, "server.log");
-  const start = spawnSync(exe("pg_ctl"), ["-D", dataDir, "-o", `-p ${port} -c listen_addresses=127.0.0.1 -c fsync=off -c synchronous_commit=off -c log_min_messages=warning`, "-l", logFile, "-w", "start"], { stdio: "ignore" });
+  const start = spawnSync(exe("pg_ctl"), [
+    "-D", dataDir,
+    "-o", `-p ${port} -c listen_addresses=127.0.0.1 -c unix_socket_directories="${socketDir}" -c fsync=off -c synchronous_commit=off -c log_min_messages=warning`,
+    "-l", logFile,
+    "-w", "start"
+  ], { stdio: "ignore" });
   if (start.status !== 0) {
     let log = "";
     try { log = readFileSync(logFile, "utf8"); } catch { /* no log yet */ }
