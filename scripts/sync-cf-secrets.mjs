@@ -21,7 +21,10 @@ const SECRET_KEYS = [
   'SMTP_PORT',
   'SMTP_USER',
   'SMTP_PASSWORD',
-  'SMTP_FROM'
+  'SMTP_FROM',
+  // AES-256-GCM key for finance integration credentials (lib/finance/crypto.ts)
+  'FINANCE_CREDENTIAL_KEY',
+  'NEXT_PUBLIC_APP_NAME'
 ];
 
 function loadEnv() {

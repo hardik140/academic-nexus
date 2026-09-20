@@ -1,14 +1,30 @@
-import nodemailer, { type Transporter } from "nodemailer";
+/**
+ * Email sending module — Cloudflare Workers compatible.
+ *
+ * `nodemailer` relies on raw TCP sockets (`node:net`, `node:tls`) which are
+ * unavailable on Cloudflare Workers. This module dynamically imports
+ * nodemailer only when running on Node.js. On Workers the send functions
+ * log a warning and silently no-op — the app keeps working, just without
+ * email delivery until a future migration to an HTTP-based provider
+ * (Resend, SendGrid, etc.).
+ */
 
-let transporter: Transporter | null = null;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let transporter: any = null;
 
 /**
- * Lazily-built SMTP transport. Throws only when an email actually needs to
- * be sent and SMTP isn't configured yet — never at import time — so the
- * rest of the app keeps working even before real SMTP credentials exist,
- * same "ships inert until configured" posture as Sentry (see lib/../next.config.ts).
+ * True when running on a full Node.js runtime (Vercel, local dev, CI).
+ * False on Cloudflare Workers.
  */
-function getTransporter(): Transporter {
+function isNodeRuntime(): boolean {
+  return typeof process !== "undefined" && !!process.versions?.node;
+}
+
+/**
+ * Lazily-built SMTP transport. Only works on Node.js — throws when SMTP
+ * is unconfigured, and the caller already guards on `isNodeRuntime()`.
+ */
+async function getTransporter() {
   if (transporter) return transporter;
 
   const host = process.env.SMTP_HOST;
@@ -21,6 +37,10 @@ function getTransporter(): Transporter {
       "SMTP is not configured. Set SMTP_HOST, SMTP_PORT, SMTP_USER, and SMTP_PASSWORD in .env.local."
     );
   }
+
+  // Dynamic import so the bundler doesn't pull nodemailer into the
+  // Workers bundle where it would crash at import time.
+  const nodemailer = (await import("nodemailer")).default;
 
   transporter = nodemailer.createTransport({
     host,
@@ -54,9 +74,15 @@ export async function sendInvitationEmail(params: {
   collegeName: string;
   actionLink: string;
 }) {
-  const roleLabel = ROLE_LABELS[params.role] ?? params.role;
+  if (!isNodeRuntime()) {
+    console.warn("[email] sendInvitationEmail no-op: nodemailer is unavailable on Cloudflare Workers");
+    return;
+  }
 
-  await getTransporter().sendMail({
+  const roleLabel = ROLE_LABELS[params.role] ?? params.role;
+  const t = await getTransporter();
+
+  await t.sendMail({
     from: fromAddress(),
     to: params.to,
     subject: `You've been invited to Academic Nexus`,
@@ -70,7 +96,14 @@ export async function sendInvitationEmail(params: {
 }
 
 export async function sendPasswordResetEmail(params: { to: string; actionLink: string }) {
-  await getTransporter().sendMail({
+  if (!isNodeRuntime()) {
+    console.warn("[email] sendPasswordResetEmail no-op: nodemailer is unavailable on Cloudflare Workers");
+    return;
+  }
+
+  const t = await getTransporter();
+
+  await t.sendMail({
     from: fromAddress(),
     to: params.to,
     subject: "Reset your Academic Nexus password",
