@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { Platform } from "react-native";
 import * as Notifications from "expo-notifications";
+import { AndroidImportance } from "expo-notifications";
 import * as Device from "expo-device";
 import { apiPost } from "@/lib/api";
 
@@ -28,7 +29,7 @@ export function usePushRegistration(enabled: boolean) {
       if (Platform.OS === "android") {
         await Notifications.setNotificationChannelAsync("default", {
           name: "default",
-          importance: Notifications.AndroidImportance.DEFAULT,
+          importance: AndroidImportance.DEFAULT,
         });
       }
 

@@ -11,6 +11,7 @@ import jsxA11y from "eslint-plugin-jsx-a11y";
 const eslintConfig = [
   ...eslintConfigNext,
   {
+    files: ["**/*.{js,jsx,mjs,ts,tsx,mts,cts}"],
     rules: jsxA11y.configs.recommended.rules,
   },
   {
@@ -54,6 +55,7 @@ const eslintConfig = [
     // refactor, not something to fold into a dependency-version merge.
     // Downgraded to warnings for now, same treatment as no-explicit-any
     // above.
+    files: ["**/*.{js,jsx,mjs,ts,tsx,mts,cts}"],
     rules: {
       "react-hooks/exhaustive-deps": "warn",
       "react-hooks/immutability": "warn",

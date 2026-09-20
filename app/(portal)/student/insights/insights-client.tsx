@@ -152,8 +152,9 @@ export function StudentInsightsClient({
       {tab === "forecast" && (
         <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-sm p-lg space-y-lg max-w-[36rem]">
           <div>
-            <label className="text-xs font-semibold text-outline uppercase tracking-wider block mb-xs">Course</label>
+            <label htmlFor="forecast-course-select" className="text-xs font-semibold text-outline uppercase tracking-wider block mb-xs">Course</label>
             <select
+              id="forecast-course-select"
               value={selectedCourse}
               onChange={(e) => setSelectedCourse(e.target.value)}
               className="w-full bg-surface-container-low border border-outline-variant rounded-xl px-md py-sm text-sm text-on-surface"

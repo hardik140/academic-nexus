@@ -25,9 +25,7 @@ jobs:
           key: ${{ runner.os }}-nextjs-${{ hashFiles('**/package-lock.json') }}-${{ hashFiles('**.[jt]s', '**.[jt]sx') }}
           restore-keys: |
             ${{ runner.os }}-nextjs-${{ hashFiles('**/package-lock.json') }}-
-      # NON-BLOCKING, deliberately: typescript-eslint compatibility notice
       - run: npm run lint
-        continue-on-error: true
       - run: npx tsc --noEmit
       - run: npm run test
       - run: npm run build
@@ -51,9 +49,7 @@ jobs:
           cache-dependency-path: mobile/package-lock.json
       - run: npm ci --legacy-peer-deps
       - run: npx tsc --noEmit
-      # NON-BLOCKING: typescript-eslint / ts-api-utils incompatibility with TS 7.0
       - run: npx expo lint
-        continue-on-error: true
       - run: npm run test:ci
 
   deploy:
