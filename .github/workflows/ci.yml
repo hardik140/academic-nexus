@@ -15,7 +15,7 @@ jobs:
         with:
           node-version: 20
           cache: npm
-      - run: npm ci
+      - run: npm ci --legacy-peer-deps
       - name: Cache Next.js build
         uses: actions/cache@v4
         with:
@@ -44,7 +44,7 @@ jobs:
           node-version: 20
           cache: npm
           cache-dependency-path: mobile/package-lock.json
-      - run: npm ci
+      - run: npm ci --legacy-peer-deps
       - run: npx tsc --noEmit
       # NON-BLOCKING: typescript-eslint / ts-api-utils incompatibility with TS 7.0
       - run: npx expo lint
