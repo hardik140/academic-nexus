@@ -12,7 +12,7 @@
     "expo": "~57.0.22",
     "expo-device": "~57.0.1",
     "expo-linking": "~57.0.10",
-    "expo-notifications": "~57.0.10",
+    "expo-notifications": "~58.0.3",
     "expo-secure-store": "~57.0.4",
     "expo-status-bar": "~57.0.1",
     "expo-web-browser": "~57.0.2",
