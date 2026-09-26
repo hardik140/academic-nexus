@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { PHASE_DEVELOPMENT_SERVER } from "next/constants";
 import { withSentryConfig } from "@sentry/nextjs";
 
 const supabaseConnectSrc = "https://*.supabase.co wss://*.supabase.co";
@@ -82,15 +83,34 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default process.env.ENABLE_SENTRY === "true"
-  ? withSentryConfig(nextConfig, {
-      org: process.env.SENTRY_ORG,
-      project: process.env.SENTRY_PROJECT,
-      authToken: process.env.SENTRY_AUTH_TOKEN,
-      silent: true,
-      widenClientFileUpload: true,
-      disableLogger: true,
-      automaticVercelMonitors: false,
-    })
-  : nextConfig;
+/**
+ * Development-only routes — the component gallery under app/dev/ — are named
+ * `page.dev.tsx`. `dev.tsx` is a page extension ONLY in the `next dev` phase,
+ * so `next build` (and the OpenNext build that wraps it) never recognises
+ * those files as routes: they are not compiled, not bundled, and there is
+ * nothing at /dev/ to reach in any built deployment. Keyed on the phase
+ * rather than NODE_ENV so that a mis-set NODE_ENV during a build cannot pull
+ * them in. scripts/check-no-dev-routes.mjs verifies a finished build.
+ */
+const PAGE_EXTENSIONS = ["tsx", "ts", "jsx", "js"];
+
+export function pageExtensionsFor(phase: string): string[] {
+  return phase === PHASE_DEVELOPMENT_SERVER ? ["dev.tsx", ...PAGE_EXTENSIONS] : PAGE_EXTENSIONS;
+}
+
+export default function config(phase: string): NextConfig {
+  const resolved: NextConfig = { ...nextConfig, pageExtensions: pageExtensionsFor(phase) };
+
+  return process.env.ENABLE_SENTRY === "true"
+    ? withSentryConfig(resolved, {
+        org: process.env.SENTRY_ORG,
+        project: process.env.SENTRY_PROJECT,
+        authToken: process.env.SENTRY_AUTH_TOKEN,
+        silent: true,
+        widenClientFileUpload: true,
+        disableLogger: true,
+        automaticVercelMonitors: false,
+      })
+    : resolved;
+}
 
