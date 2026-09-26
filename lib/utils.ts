@@ -1,7 +1,20 @@
 import { clsx, type ClassValue } from "clsx";
-import { twMerge } from "tailwind-merge";
+import { extendTailwindMerge } from "tailwind-merge";
 
-/** Merge Tailwind classes safely (handles conflicts) */
+/**
+ * The named spacing steps app/globals.css defines as --spacing-<name>.
+ * tailwind-merge only knows Tailwind's numeric spacing scale, so without
+ * these it treats `p-md` and `p-lg` as unrelated classes, keeps both, and the
+ * stylesheet's order — not the caller — decides which padding wins. Kept in
+ * step with globals.css by tests/cn.test.ts.
+ */
+export const NAMED_SPACING = ["xs", "sm", "md", "lg", "xl", "2xl", "3xl"] as const;
+
+const twMerge = extendTailwindMerge({
+  extend: { theme: { spacing: [...NAMED_SPACING] } },
+});
+
+/** Merge Tailwind classes safely (handles conflicts, including named spacing) */
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }

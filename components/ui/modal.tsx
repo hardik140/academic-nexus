@@ -150,14 +150,21 @@ const buttonSizes = {
   lg: "px-lg py-md text-sm",
 };
 
+/**
+ * Defaults to type="button". A native <button> defaults to "submit", so an
+ * untyped Button placed inside a <form> would submit it — a Cancel button
+ * included. Submit and reset buttons must say so explicitly.
+ */
 export function Button({
   variant = "primary",
   size = "md",
   className,
+  type = "button",
   ...props
 }: ButtonProps) {
   return (
     <button
+      type={type}
       className={cn(
         "inline-flex items-center justify-center gap-xs rounded-xl font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed",
         buttonVariants[variant],
