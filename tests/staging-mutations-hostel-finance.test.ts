@@ -60,8 +60,10 @@ describe("finance mutations", () => {
        VALUES ('${COLLEGE_A}','${fee}','${student}',${amount},'cash','${status}',auth.uid())`;
 
   it("detects: status gate removed — a failed payment credits the fee", async () => {
-    const d = await mutated("status gate", (sql) =>
-      sql.replace("    IF NEW.status <> 'cleared' THEN\n      RETURN NEW;\n    END IF;\n\n    UPDATE public.fees", "    UPDATE public.fees")
+    // update_fee_on_payment's final owner is migration 051, so the mutation is
+    // applied there.
+    const d = await mutatedFile("051_phase3_hardening.sql", "status gate", (sql) =>
+      sql.replace("    IF NEW.status <> 'cleared' THEN\n      RETURN NEW;\n    END IF;\n    UPDATE public.fees SET", "    UPDATE public.fees SET")
     );
     try {
       await as(d, U.finance, pay(FEE_A, S.a, 1000, "failed"));
@@ -69,23 +71,29 @@ describe("finance mutations", () => {
     } finally { await d.close(); }
   });
 
-  it("detects: overpayment guard removed", async () => {
-    const d = await mutated("overpayment", (sql) =>
-      sql.replace("    WHERE id = NEW.fee_id\n      AND paid_amount + NEW.amount <= amount;", "    WHERE id = NEW.fee_id;")
+  it("overpayment is refused even with the trigger guard removed (051 fees invariant backstops it)", async () => {
+    // Removing the trigger's own overpayment guard (now in 051) no longer lets
+    // an overpayment through: migration 051's fees_amount_paid_sane CHECK
+    // (paid_amount <= amount) is an independent second defence.
+    const d = await mutatedFile("051_phase3_hardening.sql", "overpayment", (sql) =>
+      sql.replace("    WHERE id = NEW.fee_id AND paid_amount + NEW.amount <= amount;", "    WHERE id = NEW.fee_id;")
     );
     try {
       const r = await as(d, U.finance, pay(FEE_A, S.a, 50000));
-      expect(r.ok, "mutation not detected").toBe(true);
-      expect(Number(await scalar(d, `SELECT paid_amount FROM fees WHERE id=$1`, [FEE_A]))).toBe(50000);
+      expect(r.ok).toBe(false);
+      expect(Number(await scalar(d, `SELECT paid_amount FROM fees WHERE id=$1`, [FEE_A]))).toBe(0);
     } finally { await d.close(); }
   });
 
-  it("detects: positive-amount check removed", async () => {
+  it("a negative payment is refused even with the positive-amount check removed (051 fees invariant backstops it)", async () => {
+    // With payments_amount_positive weakened, a negative payment is still
+    // refused: crediting it would drive fees.paid_amount below zero, which
+    // 051's fees_amount_paid_sane CHECK (paid_amount >= 0) forbids.
     const d = await mutated("positive amount", (sql) =>
       sql.replace("  ADD CONSTRAINT payments_amount_positive CHECK (amount > 0);", "  ADD CONSTRAINT payments_amount_positive CHECK (true);")
     );
     try {
-      expect((await as(d, U.finance, pay(FEE_A, S.a, -2000))).ok, "mutation not detected").toBe(true);
+      expect((await as(d, U.finance, pay(FEE_A, S.a, -2000))).ok).toBe(false);
     } finally { await d.close(); }
   });
 
@@ -96,11 +104,13 @@ describe("finance mutations", () => {
     // independent defences overlap on that path. What the composite FK alone
     // guards is a same-college mismatch: fee A's student is A, the payment
     // says C.
-    const d = await mutated("payments composite FK", (sql) =>
+    // payments_fee_context_fkey is re-created by migration 051 (as ON DELETE
+    // RESTRICT), so the mutation is applied to its final definition there.
+    const d = await mutatedFile("051_phase3_hardening.sql", "payments composite FK", (sql) =>
       sql.replace(
-        /ALTER TABLE public\.payments\n  ADD CONSTRAINT payments_fee_context_fkey[\s\S]*?ON DELETE CASCADE;/,
+        /ALTER TABLE public\.payments\n  ADD CONSTRAINT payments_fee_context_fkey[\s\S]*?ON DELETE RESTRICT;/,
         `ALTER TABLE public.payments
-  ADD CONSTRAINT payments_fee_context_fkey FOREIGN KEY (fee_id) REFERENCES public.fees (id) ON DELETE CASCADE;`
+  ADD CONSTRAINT payments_fee_context_fkey FOREIGN KEY (fee_id) REFERENCES public.fees (id) ON DELETE RESTRICT;`
       )
     );
     try {
@@ -138,8 +148,15 @@ describe("every SECURITY DEFINER function has a pinned search_path", () => {
   });
 
   it("detects: the pin removed from get_my_role", async () => {
-    const d = await mutated("unpin get_my_role", (sql) =>
-      sql.replace("ALTER FUNCTION public.get_my_role()       SET search_path = public, pg_catalog;", "")
+    // get_my_role's final definition is migration 051's CREATE OR REPLACE,
+    // which carries the pin inline; dropping that clause leaves it unpinned.
+    const d = await mutatedFile("051_phase3_hardening.sql", "unpin get_my_role", (sql) =>
+      // Function replacer: in a replacement STRING, "$$" means a literal "$",
+      // which would break the dollar-quoted body.
+      sql.replace(
+        "  SELECT role FROM public.profiles\n  WHERE id = auth.uid() AND status = 'active';\n$$ LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public, pg_catalog;",
+        () => "  SELECT role FROM public.profiles\n  WHERE id = auth.uid() AND status = 'active';\n$$ LANGUAGE sql SECURITY DEFINER STABLE;"
+      )
     );
     try {
       const [row] = await verify<{ cfg: string | null }>(d,

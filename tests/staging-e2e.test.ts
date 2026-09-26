@@ -349,14 +349,13 @@ describe("Phase 16 — section isolation", () => {
     const d = await fresh();
     try {
       // Student C exists, is in the same college and the same course — just
-      // not in Teacher A's delivery of it. Course-level authority would allow
-      // this; offering-level authority does not.
+      // not in Teacher A's delivery of it. Migration 051 (P3-8) made enrolment
+      // binding a DATABASE invariant (guard_enrolled_student), not just an
+      // application one, so the offering-scoped RLS pass is no longer enough:
+      // the row is refused because Student C is not enrolled in this offering.
       const r = await as(d, U.teacherA, insertAttendance(OFF.dsA3, S.c));
-      // RLS is offering-scoped, so the INSERT itself passes: Teacher A does
-      // hold OFF.dsA3. Enrolment is an APPLICATION invariant
-      // (verifyStudentsEnrolled), not an RLS one — recorded plainly rather
-      // than asserted away.
-      expect(r.ok).toBe(true);
+      expect(r.ok).toBe(false);
+      expect(r.error).toMatch(/not enrolled/);
       const enrolled = await scalar(
         d,
         `SELECT count(*)::int FROM public.course_enrollments WHERE offering_id=$1 AND student_id=$2`,
@@ -720,17 +719,20 @@ describe("Phase 20 — historical offerings", () => {
     expect(await scalar(db, `SELECT count(*)::int FROM public.attendance WHERE offering_id=$1`, [OFF.dsA3])).toBe(0);
   });
 
-  it("preserves write authority over a completed offering", async () => {
+  it("freezes writes on a completed offering once its semester is closed (051 P2-3)", async () => {
     const d = await fresh();
     try {
-      // Teacher A still holds the 2025-26 delivery. 'completed' is not
-      // 'cancelled', and no finalization rule exists yet (lib/offerings.ts
-      // records this explicitly), so the write is allowed.
+      // Teacher A still holds the 2025-26 delivery, but that term is CLOSED.
+      // Before 051 a 'completed' offering stayed writable (no finalization
+      // rule existed); now guard_closed_semester() freezes every academic
+      // record under a closed semester, so the write is refused and the two
+      // historical rows are unchanged.
       const r = await as(d, U.teacherA, insertAttendance(OFF.historical, S.f, "2025-08-13"));
-      expect(r.error).toBeNull();
+      expect(r.ok).toBe(false);
+      expect(r.error).toMatch(/semester is closed/);
       expect(
         await scalar(d, `SELECT count(*)::int FROM public.attendance WHERE offering_id=$1`, [OFF.historical])
-      ).toBe(3);
+      ).toBe(2);
     } finally {
       await d.close();
     }

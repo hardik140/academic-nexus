@@ -269,19 +269,19 @@ describe("deletion and history", () => {
     } finally { await d.close(); }
   });
 
-  it("DOCUMENTED: closing a semester does not yet freeze academic writes under it", async () => {
-    // getActiveSemesterId has no callers and no policy consults
-    // semesters.status. Whether a closed term should refuse new attendance
-    // is a results-finalisation decision (lib/offerings.ts records it as
-    // deliberately not implemented) — this test pins the CURRENT behaviour
-    // so a change in either direction is a visible diff, not a surprise.
+  it("closing a semester freezes academic writes under it (051 P2-3)", async () => {
+    // Migration 051 made a closed semester immutable for its academic
+    // children: guard_closed_semester() refuses attendance/marks/enrolment/
+    // offering writes once the term is closed, in the database, so a direct
+    // PostgREST call cannot escape it.
     const d = await fresh();
     try {
       await verify(d, `UPDATE semesters SET status='closed' WHERE id=$1`, [SEM_3]);
       const r = await as(d, U.teacherA,
         `INSERT INTO public.attendance (college_id, offering_id, student_id, date, status, marked_by)
-           VALUES ('${COLLEGE_A}','${OFF.dsA3}','00000004-0000-4000-8000-000000000001','2026-12-30','present',auth.uid()) RETURNING id`);
-      expect(r.ok, r.error ?? "").toBe(true);
+           VALUES ('${COLLEGE_A}','${OFF.dsA3}','00000004-0000-4000-8000-000000000001','${DATE}','present',auth.uid()) RETURNING id`);
+      expect(r.ok).toBe(false);
+      expect(r.error).toMatch(/semester is closed/);
     } finally { await d.close(); }
   });
 });
@@ -327,9 +327,11 @@ describe("tenant consistency across the academic structure", () => {
     const enrol = await as(db, U.admin, `INSERT INTO public.course_enrollments (college_id, offering_id, student_id) VALUES ('${COLLEGE_A}','${OFF.dsA3}','${S_B}')`);
     expect(enrol.error).toMatch(/course_enrollments_student_tenant_fkey/);
     const att = await as(db, U.admin, `INSERT INTO public.attendance (college_id, offering_id, student_id, date, status, marked_by) VALUES ('${COLLEGE_A}','${OFF.dsA3}','${S_B}','${DATE}','present',auth.uid())`);
-    expect(att.error).toMatch(/attendance_student_tenant_fkey/);
+    // 051's enrolment-binding guard (P3-8) fires first for a student who is
+    // not on this offering; the tenant FK is the backstop underneath it.
+    expect(att.error).toMatch(/not enrolled|attendance_student_tenant_fkey/);
     const mark = await as(db, U.admin, `INSERT INTO public.marks (college_id, offering_id, student_id, exam_type, obtained_marks, max_marks, entered_by) VALUES ('${COLLEGE_A}','${OFF.dsA3}','${S_B}','internal_1',10,20,auth.uid())`);
-    expect(mark.error).toMatch(/marks_student_tenant_fkey/);
+    expect(mark.error).toMatch(/not enrolled|marks_student_tenant_fkey/);
     expect(await scalar(db, `SELECT count(*)::int FROM course_enrollments WHERE student_id=$1 AND college_id=$2`, [S_B, COLLEGE_A])).toBe(0);
     expect(await scalar(db, `SELECT count(*)::int FROM attendance WHERE student_id=$1`, [S_B])).toBe(0);
   });

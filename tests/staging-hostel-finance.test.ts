@@ -325,15 +325,17 @@ describe("finance ledger", () => {
     } finally { await d.close(); }
   });
 
-  it("deleting a cleared payment reverses its credit", async () => {
+  it("a cleared payment cannot be deleted — the credit stays and the ledger is permanent (051 P1-2)", async () => {
     const d = await fresh();
     try {
       await as(d, U.finance, pay(FEE_A, S.a, 4000));
       expect(await paid(d)).toBe(4000);
       const id = String(await scalar(d, `SELECT id FROM payments WHERE fee_id=$1`, [FEE_A]));
-      expect((await as(d, U.finance, `DELETE FROM public.payments WHERE id='${id}'`)).rows).toBe(1);
-      expect(await paid(d)).toBe(0);
-      expect(await feeStatus(d)).toBe("pending");
+      const del = await as(d, U.finance, `DELETE FROM public.payments WHERE id='${id}'`);
+      expect(del.ok).toBe(false);
+      expect(del.error).toMatch(/cleared payment cannot be deleted/);
+      expect(await scalar(d, `SELECT count(*)::int FROM payments WHERE id=$1`, [id])).toBe(1);
+      expect(await paid(d)).toBe(4000);
     } finally { await d.close(); }
   });
 

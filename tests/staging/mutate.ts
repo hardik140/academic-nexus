@@ -24,16 +24,40 @@ export async function mutatedFile(
   label: string,
   mutate: (sql: string) => string
 ): Promise<PGlite> {
-  const path = join(ROOT, "supabase/migrations", file);
-  const original = lf(readFileSync(path, "utf8"));
-  const changed = mutate(original);
-  if (changed === original) {
-    throw new Error(`Mutation "${label}" did not change ${file} — its pattern no longer matches.`);
+  return mutatedFiles(label, { [file]: mutate });
+}
+
+/**
+ * The same thing across SEVERAL migrations at once.
+ *
+ * Needed because a control is not always written in one place. Two cases in
+ * this repo: a rule enforced by an RLS policy in one migration and a trigger
+ * in another, and a function that a later migration redefines with CREATE OR
+ * REPLACE — where mutating only the earlier copy changes nothing, because the
+ * later definition is the one that survives the chain. That failure mode is
+ * silent and dangerous (the test would assert a defect is absent from a
+ * database it was never introduced into), so EVERY named file must actually
+ * change or this throws.
+ */
+export async function mutatedFiles(
+  label: string,
+  mutations: Record<string, (sql: string) => string>
+): Promise<PGlite> {
+  const changed = new Map<string, string>();
+
+  for (const [file, mutate] of Object.entries(mutations)) {
+    const original = lf(readFileSync(join(ROOT, "supabase/migrations", file), "utf8"));
+    const next = mutate(original);
+    if (next === original) {
+      throw new Error(`Mutation "${label}" did not change ${file} — its pattern no longer matches.`);
+    }
+    changed.set(file, next);
   }
+
   const db = new PGlite();
   await db.exec(lf(readFileSync(join(ROOT, "tests/staging/platform.sql"), "utf8")));
   for (const f of readdirSync(join(ROOT, "supabase/migrations")).filter((x) => x.endsWith(".sql")).sort()) {
-    await db.exec(f === file ? changed : lf(readFileSync(join(ROOT, "supabase/migrations", f), "utf8")));
+    await db.exec(changed.get(f) ?? lf(readFileSync(join(ROOT, "supabase/migrations", f), "utf8")));
   }
   await db.exec(lf(readFileSync(join(ROOT, "tests/staging/qa-dataset.sql"), "utf8")));
   return db;

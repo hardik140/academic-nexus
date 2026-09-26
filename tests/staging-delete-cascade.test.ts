@@ -43,12 +43,10 @@ describe("what a delete reaches", () => {
       "financial_disputes.student_id -> students",
       "gate_passes.student_id -> students",
       "hostel_allocations.student_id -> students",
-      // DOCUMENTED (register): deleting a FEE cascades through payments (003's
-      // key, mirrored by 7i's composite) and on into refund_requests — the
-      // ledger for that fee goes with it. finance holds DELETE on fees. Whether
-      // fees/payments should ever be deletable rather than cancelled is a
-      // product decision; it is pinned here so it cannot widen unnoticed.
-      "payments.fee_id -> fees",
+      // 051 (P1-2): payments.fee_id -> fees was ON DELETE CASCADE, which let a
+      // fee delete erase its payment ledger. It is now ON DELETE RESTRICT
+      // (and guard_fee_delete refuses a fee that has payments), so it no longer
+      // appears in this cascade-into-history map.
       "placement_applications.drive_id -> placement_drives",
       "placement_applications.drive_id -> placement_drives",
       "placement_applications.student_id -> students",
@@ -95,7 +93,7 @@ describe("a record with history cannot be deleted", () => {
       const p = await verify<{ id: string }>(d, `INSERT INTO auth.users (id, email, raw_user_meta_data) VALUES (gen_random_uuid(), 'ghost@qa.test', jsonb_build_object('full_name','QA Ghost','college_id',$1::text)) RETURNING id`, [COLLEGE_A]);
       await verify(d, `UPDATE profiles SET role='student', status='active' WHERE id=$1`, [p[0].id]);
       const s = await verify<{ id: string }>(d, `INSERT INTO students (college_id, user_id, department_id, enrollment_number, batch_year, semester) VALUES ($1,$2,$3,'QA-GHOST',2026,1) RETURNING id`, [COLLEGE_A, p[0].id, DEPT_CSE]);
-      await verify(d, `INSERT INTO gate_passes (college_id, student_id, destination, exit_time, return_time, status, approved_by, approved_at) VALUES ($1,$2,'x',now(),now(),'rejected',$3,now())`, [COLLEGE_A, s[0].id, U.warden]);
+      await verify(d, `INSERT INTO gate_passes (college_id, student_id, destination, exit_time, return_time, status, approved_by, approved_at) VALUES ($1,$2,'x',now(),now()+interval '1 hour','rejected',$3,now())`, [COLLEGE_A, s[0].id, U.warden]);
       await expect(verify(d, `DELETE FROM students WHERE id=$1`, [s[0].id])).rejects.toThrow(/cannot be deleted/);
       expect(await scalar(d, `SELECT count(*)::int FROM students WHERE id=$1`, [s[0].id])).toBe(1);
     } finally { await d.close(); }
@@ -115,13 +113,16 @@ describe("a record with history cannot be deleted", () => {
     } finally { await d.close(); }
   });
 
-  it("DOCUMENTED: a payment can still be deleted by finance, and the ledger reverses it (§7i) — whether ledger rows should ever be deletable is a register item", async () => {
+  it("a cleared payment cannot be deleted by finance (051 P1-2) — the ledger is permanent", async () => {
     const d = await fresh();
     try {
       const pay = await as(d, U.finance, `INSERT INTO public.payments (college_id, fee_id, student_id, amount, method, status, processed_by) VALUES ('${COLLEGE_A}','00000014-0000-4000-8000-000000000001','${S.a}',1000,'cash','cleared',auth.uid()) RETURNING id`);
       const after = await scalar(d, `SELECT paid_amount::numeric FROM fees WHERE id='00000014-0000-4000-8000-000000000001'`).then(Number);
-      expect((await as(d, U.finance, `DELETE FROM public.payments WHERE id='${pay.data[0].id}' RETURNING id`)).rows).toBe(1);
-      expect(await scalar(d, `SELECT paid_amount::numeric FROM fees WHERE id='00000014-0000-4000-8000-000000000001'`).then(Number)).toBe(after - 1000);
+      const del = await as(d, U.finance, `DELETE FROM public.payments WHERE id='${pay.data[0].id}' RETURNING id`);
+      expect(del.ok).toBe(false);
+      expect(del.error).toMatch(/cleared payment cannot be deleted/);
+      // ledger unchanged — nothing reversed because nothing was destroyed.
+      expect(await scalar(d, `SELECT paid_amount::numeric FROM fees WHERE id='00000014-0000-4000-8000-000000000001'`).then(Number)).toBe(after);
     } finally { await d.close(); }
   });
 });

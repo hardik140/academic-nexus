@@ -700,7 +700,16 @@ describe("mutation resistance", () => {
     try {
       const r = await as(d, U.hodCse, `UPDATE public.course_offerings SET instructor_id=auth.uid() WHERE id='${OFF.ece}'`);
       expect(r.rows, "mutation was not detected").toBe(1);
-      // And the escalation completes.
+      // And the escalation completes. Migration 051 added an independent
+      // enrolment-binding guard (P3-8) on attendance, so to isolate the
+      // control THIS test targets — course_offerings_manage — the student is
+      // first enrolled in the offering via the owner path. With that second
+      // lock satisfied, a successful write proves the offering-manage weakening
+      // alone reopened the escalation.
+      await d.exec(
+        `INSERT INTO public.course_enrollments (college_id, offering_id, student_id, status)
+           VALUES ('${COLLEGE_A}','${OFF.ece}','${S.a}','enrolled')`
+      );
       const att = await as(
         d,
         U.hodCse,
