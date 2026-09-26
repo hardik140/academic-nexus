@@ -18,7 +18,7 @@
     "cutover-password-reset": "tsx scripts/cutover-password-reset.ts"
   },
   "dependencies": {
-    "@sentry/nextjs": "^10.70.0",
+    "@sentry/nextjs": "^11.0.0",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.116.0",
     "@types/qrcode": "^1.5.6",
