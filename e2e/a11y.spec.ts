@@ -16,18 +16,11 @@ const WCAG_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 
 type KnownDebt = { maxNodes: number; reason: string };
 
+// color-contrast was removed from both pages by Foundation Stage 2 (was 2 on
+// /login, 22 on /dev/gallery): any contrast failure is now a new violation.
 const KNOWN_DEBT: Record<string, Record<string, KnownDebt>> = {
-  "/login": {
-    "color-contrast": {
-      maxNodes: 2,
-      reason: "outline grey #76777d is 4.46:1 on white (needs 4.5). Fixed by Foundation Stage 2 tokens.",
-    },
-  },
+  "/login": {},
   "/dev/gallery": {
-    "color-contrast": {
-      maxNodes: 22,
-      reason: "status text on tints (1.9–3.13:1) and outline grey (4.24–4.46:1). Fixed by Foundation Stage 2 tokens.",
-    },
     "scrollable-region-focusable": {
       maxNodes: 3,
       reason: "DataTable's overflow-x container cannot receive keyboard focus when it scrolls (375px). Fixed by the DataTable refactor.",

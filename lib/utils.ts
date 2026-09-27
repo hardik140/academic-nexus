@@ -10,8 +10,29 @@ import { extendTailwindMerge } from "tailwind-merge";
  */
 export const NAMED_SPACING = ["xs", "sm", "md", "lg", "xl", "2xl", "3xl"] as const;
 
+/**
+ * The other named tokens app/globals.css adds to Tailwind's scales (Stage 2).
+ * Without them tailwind-merge misreads the classes: it takes `text-caption`
+ * for a text COLOUR, so cn("text-caption", "text-error") would silently drop
+ * the size; and it does not recognise `rounded-panel`, `shadow-menu` or
+ * `ease-emphasized` at all, so they never override a conflicting class.
+ * Kept in step with globals.css by tests/cn.test.ts.
+ */
+export const NAMED_TEXT = ["caption", "body-sm", "body", "emphasis", "section", "page-title", "metric"] as const;
+export const NAMED_RADIUS = ["control", "panel", "dialog"] as const;
+export const NAMED_SHADOW = ["panel", "menu", "dialog"] as const;
+export const NAMED_EASE = ["emphasized"] as const;
+
 const twMerge = extendTailwindMerge({
-  extend: { theme: { spacing: [...NAMED_SPACING] } },
+  extend: {
+    theme: {
+      spacing: [...NAMED_SPACING],
+      text: [...NAMED_TEXT],
+      radius: [...NAMED_RADIUS],
+      shadow: [...NAMED_SHADOW],
+      ease: [...NAMED_EASE],
+    },
+  },
 });
 
 /** Merge Tailwind classes safely (handles conflicts, including named spacing) */

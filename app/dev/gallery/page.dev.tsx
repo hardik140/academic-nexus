@@ -16,8 +16,8 @@ import { AsyncResourceDemo, ButtonFormDemo, DataTableDemos, FormFieldDemos, Moda
  *   3. lib/supabase/middleware.ts only exempts /dev/ from the session check
  *      when NODE_ENV is "development".
  *
- * It renders the CURRENT primitives exactly as they are, with fictional
- * sample data. Nothing is fetched and no server action is imported.
+ * It renders the current primitives and the Stage 2 design tokens with
+ * fictional sample data. Nothing is fetched and no server action is imported.
  */
 export const metadata: Metadata = {
   title: "Component gallery (development only)",
@@ -31,8 +31,29 @@ const STATUSES = [
 
 const COLOR_TOKENS = [
   "surface", "surface-container-lowest", "surface-container-low", "surface-container-high",
-  "on-surface", "on-surface-variant", "outline", "outline-variant",
-  "secondary", "error", "success", "warning", "info",
+  "on-surface", "on-surface-variant", "outline", "outline-variant", "border-control",
+  "secondary", "focus-ring",
+  "success", "success-container", "warning", "warning-container",
+  "info", "info-container", "error", "error-container", "neutral", "neutral-container",
+];
+
+const TYPE_ROLES = [
+  { role: "Caption", className: "text-caption text-outline", size: "12px" },
+  { role: "Secondary", className: "text-body-sm text-on-surface-variant", size: "13px" },
+  { role: "Body / table", className: "text-body text-on-surface", size: "14px" },
+  { role: "Emphasis", className: "text-emphasis font-medium text-on-surface", size: "16px" },
+  { role: "Section title", className: "text-section text-on-surface", size: "18px" },
+  { role: "Page title", className: "text-page-title text-on-surface", size: "24px" },
+  { role: "Dashboard number", className: "text-metric text-on-surface tabular-nums", size: "30px" },
+];
+
+const LIFECYCLE = ["planned", "active", "closed", "reopened"];
+
+const CHARTS = [1, 2, 3, 4, 5, 6];
+
+const MOTION_TOKENS = [
+  "--duration-instant", "--duration-fast", "--duration-normal", "--duration-slow",
+  "--ease-out", "--ease-in-out", "--ease-emphasized",
 ];
 
 function Section({ id, title, children }: { id: string; title: string; children: React.ReactNode }) {
@@ -55,7 +76,7 @@ export default function ComponentGalleryPage() {
         <header className="space-y-xs">
           <h1 className="text-2xl font-extrabold text-on-surface tracking-tight">Component gallery</h1>
           <p className="text-sm text-on-surface-variant">
-            Development only — current primitives, unchanged, with fictional sample data.
+            Development only — current primitives on the Stage 2 design tokens, with fictional sample data.
           </p>
         </header>
 
@@ -74,15 +95,72 @@ export default function ComponentGalleryPage() {
         </Section>
 
         <Section id="typography" title="Typography">
-          <div className="space-y-sm">
-            <p className="text-2xl font-extrabold text-on-surface tracking-tight">Page title — text-2xl extrabold</p>
-            <p className="text-sm font-bold text-on-surface">Section title — text-sm bold</p>
-            <p className="text-sm text-on-surface">Body — text-sm on-surface</p>
-            <p className="text-sm text-on-surface-variant">Secondary — text-sm on-surface-variant</p>
-            <p className="text-xs text-outline">Muted — text-xs outline</p>
-            <p className="text-[11px] text-outline">Caption — text-[11px] outline</p>
-            <p className="font-mono text-sm text-on-surface">22CS041 · PAY-7Q2K · CS301</p>
+          <dl className="grid grid-cols-[minmax(0,11rem)_minmax(0,1fr)] gap-x-md gap-y-sm items-baseline">
+            {TYPE_ROLES.map(({ role, className, size }) => (
+              <div key={role} className="contents">
+                <dt className="text-caption text-outline">
+                  {role} · <span className="tabular-nums">{size}</span>
+                </dt>
+                <dd className={className}>{role === "Dashboard number" ? "1,284" : "Semester 5 attendance register"}</dd>
+              </div>
+            ))}
+            <div className="contents">
+              <dt className="text-caption text-outline">Identifier · mono</dt>
+              <dd className="font-mono text-body text-on-surface">22CS041 · PAY-7Q2K · CS301</dd>
+            </div>
+          </dl>
+        </Section>
+
+        <Section id="lifecycle" title="Academic-period lifecycle">
+          <div className="flex flex-wrap gap-sm">
+            {LIFECYCLE.map((status) => (
+              <StatusBadge key={status} status={status} />
+            ))}
           </div>
+          <p className="text-body-sm text-on-surface-variant">
+            Closed means read-only, not failed: neutral with a lock.
+          </p>
+        </Section>
+
+        <Section id="surfaces" title="Radius and elevation">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-md">
+            <div className="rounded-panel border border-outline-variant bg-surface-container-lowest p-md">
+              <p className="text-body font-semibold text-on-surface">Panel</p>
+              <p className="text-body-sm text-on-surface-variant">radius-panel 12px · 1px border · no shadow</p>
+            </div>
+            <div className="rounded-control border border-outline-variant bg-surface-container-lowest p-md shadow-menu">
+              <p className="text-body font-semibold text-on-surface">Menu</p>
+              <p className="text-body-sm text-on-surface-variant">radius-control 8px · shadow-menu</p>
+            </div>
+            <div className="rounded-dialog border border-outline-variant bg-surface-container-lowest p-md shadow-dialog">
+              <p className="text-body font-semibold text-on-surface">Dialog</p>
+              <p className="text-body-sm text-on-surface-variant">radius-dialog 16px · shadow-dialog</p>
+            </div>
+          </div>
+        </Section>
+
+        <Section id="charts" title="Chart colours">
+          <ul className="grid grid-cols-3 md:grid-cols-6 gap-sm">
+            {CHARTS.map((n) => (
+              <li key={n} className="text-caption text-on-surface-variant">
+                <div className="h-8 rounded-control" style={{ background: `var(--color-chart-${n})` }} />
+                <span className="block mt-xs font-mono">chart-{n}</span>
+              </li>
+            ))}
+          </ul>
+        </Section>
+
+        <Section id="motion" title="Motion tokens">
+          <ul className="flex flex-wrap gap-sm">
+            {MOTION_TOKENS.map((name) => (
+              <li key={name} className="font-mono text-caption text-on-surface-variant border border-outline-variant rounded-control px-sm py-xs">
+                {name}
+              </li>
+            ))}
+          </ul>
+          <p className="text-body-sm text-on-surface-variant">
+            Names only. With reduced motion requested, the durations are 0ms and animations stop.
+          </p>
         </Section>
 
         <Section id="buttons" title="Buttons">

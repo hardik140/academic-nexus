@@ -156,7 +156,7 @@ export function DataTable<T extends Record<string, any>>({
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 placeholder={searchPlaceholder}
-                className="w-full max-w-[20rem] bg-surface-container-low border border-outline-variant rounded-lg px-md py-xs text-sm text-on-surface placeholder:text-outline focus:ring-2 focus:ring-secondary focus:border-secondary outline-none transition-all"
+                className="w-full max-w-[20rem] bg-surface-container-low border border-border-control rounded-lg px-md py-xs text-sm text-on-surface placeholder:text-outline focus:ring-2 focus:ring-secondary focus:border-secondary outline-none transition-all"
               />
             )}
             {headerAction}
