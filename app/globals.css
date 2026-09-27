@@ -317,18 +317,6 @@
   }
 }
 
-/* Used only by the current Modal's arbitrary animate-[…] classes; both go
- * when the native Dialog (motion-dialog) replaces it in M4. */
-@keyframes fade-in {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes slide-up {
-  from { opacity: 0; transform: translateY(16px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
 /* ─── Dark Mode Overrides ─── (not enabled anywhere yet) */
 .dark {
   --color-surface: #0b1c30;

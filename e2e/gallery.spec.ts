@@ -19,6 +19,7 @@ const SECTIONS = [
   "stats-cards",
   "data-table",
   "modal",
+  "modal-behaviour",
   "button-form",
   "async-resource",
 ];

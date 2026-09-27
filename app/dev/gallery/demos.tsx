@@ -171,6 +171,156 @@ export function ModalDemo() {
   );
 }
 
+const LONG_PARAGRAPHS = Array.from(
+  { length: 24 },
+  (_, i) => `Clause ${i + 1}. Attendance below 75% in a course bars the student from its end-semester examination unless the Head of Department condones the shortfall on medical or institutional grounds.`
+);
+
+/**
+ * Browser checks for the native-dialog Modal (Checkpoint 4, M4), shaped like
+ * the portal's own callers: a record's dialog whose state is cleared on
+ * close, a long dialog, a real <form> inside one, a trigger the dialog
+ * removes, and a counter behind the dialog that must never be reached.
+ */
+export function ModalBehaviourDemos() {
+  const [editing, setEditing] = useState<SampleRow | null>(null);
+  const [programme, setProgramme] = useState("");
+  const [note, setNote] = useState("");
+  const [closeRequests, setCloseRequests] = useState(0);
+  const [saved, setSaved] = useState("none");
+  const [longOpen, setLongOpen] = useState(false);
+  const [formOpen, setFormOpen] = useState(false);
+  const [formTitle, setFormTitle] = useState("");
+  const [submissions, setSubmissions] = useState(0);
+  const [draftExists, setDraftExists] = useState(true);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [backgroundClicks, setBackgroundClicks] = useState(0);
+
+  const closeEdit = () => {
+    setCloseRequests((n) => n + 1);
+    setEditing(null);
+  };
+
+  return (
+    <div className="space-y-md">
+      <div className="flex flex-wrap items-center gap-sm">
+        <Button variant="outline" onClick={() => setBackgroundClicks((n) => n + 1)}>
+          Background action
+        </Button>
+        <Button onClick={() => setEditing(SAMPLE_ROWS[0])}>Edit Asha Rao</Button>
+        <Button variant="outline" onClick={() => setLongOpen(true)}>Open long modal</Button>
+        <Button variant="outline" onClick={() => setFormOpen(true)}>Open form modal</Button>
+        {draftExists ? (
+          <Button key="delete" variant="destructive" onClick={() => setDeleteOpen(true)}>Delete draft</Button>
+        ) : (
+          <Button key="restore" variant="outline" onClick={() => setDraftExists(true)}>Restore draft</Button>
+        )}
+      </div>
+      <p className="text-sm text-on-surface" data-testid="modal-log">
+        Background clicks: {backgroundClicks} · Close requests: {closeRequests} · Saved: {saved} · Submissions: {submissions}
+      </p>
+
+      <Modal
+        open={!!editing}
+        onClose={closeEdit}
+        title={editing ? `Edit ${editing.name}` : ""}
+        description={editing?.enrollment}
+        footer={
+          <>
+            <Button variant="outline" onClick={closeEdit}>Cancel</Button>
+            <Button
+              onClick={() => {
+                // Closed by the caller, not through onClose.
+                setSaved(`${editing?.name}: ${programme || "unchanged"} / ${note || "no note"}`);
+                setEditing(null);
+              }}
+            >
+              Save
+            </Button>
+          </>
+        }
+      >
+        {editing && (
+          <div className="space-y-md">
+            <FormField
+              label="Programme"
+              id="g-edit-programme"
+              type="select"
+              value={programme}
+              onChange={setProgramme}
+              options={[
+                { value: "B.Tech CSE", label: "B.Tech CSE" },
+                { value: "B.Tech ECE", label: "B.Tech ECE" },
+              ]}
+            />
+            <FormField label="Note" id="g-edit-note" value={note} onChange={setNote} />
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        open={longOpen}
+        onClose={() => setLongOpen(false)}
+        title="Attendance regulations"
+        size="lg"
+        footer={<Button variant="outline" onClick={() => setLongOpen(false)}>Done</Button>}
+      >
+        <div className="space-y-sm text-body text-on-surface" data-testid="long-modal-content">
+          {LONG_PARAGRAPHS.map((p) => (
+            <p key={p}>{p}</p>
+          ))}
+        </div>
+      </Modal>
+
+      <Modal
+        open={formOpen}
+        onClose={() => setFormOpen(false)}
+        title="New circular"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setFormOpen(false)}>Cancel</Button>
+            <Button type="submit" form="g-modal-form">Publish</Button>
+          </>
+        }
+      >
+        <form
+          id="g-modal-form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            setSubmissions((n) => n + 1);
+            setFormOpen(false);
+          }}
+        >
+          <FormField label="Circular title" id="g-modal-form-title" value={formTitle} onChange={setFormTitle} required />
+        </form>
+      </Modal>
+
+      <Modal
+        open={deleteOpen}
+        onClose={() => setDeleteOpen(false)}
+        title="Delete draft?"
+        description="The draft circular is removed."
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setDeleteOpen(false)}>Keep</Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                setDraftExists(false);
+                setDeleteOpen(false);
+              }}
+            >
+              Delete
+            </Button>
+          </>
+        }
+      >
+        <p className="text-body text-on-surface">This cannot be undone.</p>
+      </Modal>
+    </div>
+  );
+}
+
 /**
  * Browser checks for the four motion utilities (Checkpoint 4, M1). These are
  * bare elements carrying each utility — deliberately not the future Dialog
