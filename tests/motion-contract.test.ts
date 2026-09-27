@@ -37,11 +37,9 @@ const MAX_DURATION_MS = 300;
 const CLASS_RULE_SCOPE = ["app", "components/ui", "components/portal", "components/charts"];
 const CHART_RULE_SCOPE = ["app", "components"];
 
-// M2 removed the stats-card, FormField, DataTable-search and nav-item debt.
+// M2 removed the stats-card, FormField, DataTable-search and nav-item debt;
+// M4 the Modal's two keyframe animations.
 const KNOWN_DEBT: Record<string, Partial<Record<Rule, { count: number; stage: string }>>> = {
-  "components/ui/modal.tsx": {
-    "keyframe-animation": { count: 2, stage: "M4 — replaced by the native Dialog with motion-dialog" },
-  },
   "components/portal/portal-shell.tsx": {
     "transition-all": { count: 1, stage: "M5 — sidebar width animation / mobile drawer" },
   },
@@ -337,5 +335,38 @@ describe("motion guard: M3 page contract", () => {
     for (const name of names) {
       expect(code.includes(`animate-[${name}_`) || new RegExp(`animation(?:-name)?:[^;]*\b${name}\b`).test(css), name).toBe(true);
     }
+  });
+});
+
+// ─── M4: the Modal on a native <dialog> ───────────────────────────────────
+
+describe("motion guard: M4 native Dialog", () => {
+  const source = readFileSync("components/ui/modal.tsx", "utf8");
+  const modal = source.slice(source.indexOf("export function Modal("), source.indexOf("// ─── Button Component"));
+
+  it("the Modal is a native <dialog>, opened with showModal() and closed with close()", () => {
+    expect(modal).toMatch(/<dialog\b/);
+    expect(modal).toContain(".showModal()");
+    expect(modal).toContain(".close()");
+  });
+
+  it("its motion is the motion-dialog utility, not re-timed or re-animated locally", () => {
+    expect(modal).toMatch(/["\s]motion-dialog[\s"]/);
+    expect(modal).not.toMatch(/animate-|transition-|duration-|delay-|ease-(?:in|out|linear|\[)/);
+  });
+
+  it("no simulated overlay: no fixed layer, z-index, backdrop element, role or aria-modal", () => {
+    expect(modal).not.toMatch(/\bfixed\b|inset-0|\bz-(?:\d|\[)|role="dialog"|aria-modal|Close dialog/);
+    expect(modal).toContain("backdrop:");
+  });
+
+  it("the Close button uses motion-feedback", () => {
+    const close = /<button[^>]*aria-label="Close"[^>]*>/.exec(modal)?.[0] ?? "";
+    expect(close).toContain("motion-feedback");
+    expect(close).toContain('type="button"');
+  });
+
+  it("the Modal's fade-in and slide-up keyframes are gone", () => {
+    expect(readFileSync("app/globals.css", "utf8")).not.toMatch(/@keyframes\s+(?:fade-in|slide-up)\b/);
   });
 });

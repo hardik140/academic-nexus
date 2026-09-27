@@ -4,7 +4,7 @@ import { Button, StatusBadge } from "@/components/ui/modal";
 import { StatsCard } from "@/components/ui/stats-card";
 import { PlacementFunnelChart } from "@/components/charts/placement-funnel-chart";
 import Loading from "@/app/loading";
-import { AsyncResourceDemo, ButtonFormDemo, DataTableDemos, FormFieldDemos, ModalDemo, MotionUtilityDemos, StatusChangeDemo } from "./demos";
+import { AsyncResourceDemo, ButtonFormDemo, DataTableDemos, FormFieldDemos, ModalBehaviourDemos, ModalDemo, MotionUtilityDemos, StatusChangeDemo } from "./demos";
 
 /**
  * Development-only component gallery — the browser-verification surface for
@@ -233,6 +233,10 @@ export default function ComponentGalleryPage() {
 
         <Section id="modal" title="Modal">
           <ModalDemo />
+        </Section>
+
+        <Section id="modal-behaviour" title="Modal behaviour (native dialog)">
+          <ModalBehaviourDemos />
         </Section>
 
         <Section id="button-form" title="Button inside a form">
