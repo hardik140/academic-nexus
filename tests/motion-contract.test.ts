@@ -11,6 +11,8 @@ import { describe, expect, it } from "vitest";
  *
  *   • transition-all — animates whatever changes, layout included; also its
  *     arbitrary spellings (transition-[all], transition-[width], …).
+ *   • animating box-shadow (M2): transition-shadow, transition-[box-shadow],
+ *     or the bare `transition` utility, whose default properties include it.
  *   • durations over 300ms (--duration-slow), as classes or inline styles.
  *   • animate-* other than animate-spin — decorative keyframe motion.
  *   • an animation library in package.json.
@@ -28,27 +30,20 @@ import { describe, expect, it } from "vitest";
  * raise a count to make a run pass.
  */
 
-type Rule = "transition-all" | "long-duration" | "keyframe-animation" | "chart-animation";
+type Rule = "transition-all" | "shadow-transition" | "long-duration" | "keyframe-animation" | "chart-animation";
 
 const MAX_DURATION_MS = 300;
 
 const CLASS_RULE_SCOPE = ["components/ui", "components/portal", "components/charts"];
 const CHART_RULE_SCOPE = ["app", "components"];
 
+// M2 removed the stats-card, FormField, DataTable-search and nav-item debt.
 const KNOWN_DEBT: Record<string, Partial<Record<Rule, { count: number; stage: string }>>> = {
-  "components/ui/stats-card.tsx": {
-    "transition-all": { count: 2, stage: "M2 — hover-shadow card and progress bar" },
-    "long-duration": { count: 1, stage: "M2 — 700ms progress-bar width transition" },
-  },
   "components/ui/modal.tsx": {
-    "transition-all": { count: 1, stage: "M2 — FormField focus ring" },
     "keyframe-animation": { count: 2, stage: "M4 — replaced by the native Dialog with motion-dialog" },
   },
-  "components/ui/data-table.tsx": {
-    "transition-all": { count: 1, stage: "M2 — search input focus ring" },
-  },
   "components/portal/portal-shell.tsx": {
-    "transition-all": { count: 2, stage: "M5 — sidebar width / drawer; M2 — nav items" },
+    "transition-all": { count: 1, stage: "M5 — sidebar width animation / mobile drawer" },
   },
 };
 
@@ -94,6 +89,26 @@ export function findViolations(source: string): Array<{ rule: Rule; match: strin
       if (toMs(t[1], t[2]) > MAX_DURATION_MS) found.push({ rule: "long-duration", match: m[0] });
     }
     if (/\ball\b/.test(m[1])) found.push({ rule: "transition-all", match: m[0] });
+  }
+
+  // Animating box-shadow (M2): transition-shadow, an arbitrary transition of
+  // box-shadow, and the bare `transition` utility — whose default property
+  // list includes box-shadow. Static shadow-* classes are fine; only the
+  // animation of a shadow is not. The bare word is only looked for inside
+  // string literals, so prose in comments or JSX text never matches.
+  for (const m of source.matchAll(new RegExp(`${B}!?transition-shadow!?${E}`, "g"))) {
+    found.push({ rule: "shadow-transition", match: m[0] });
+  }
+  for (const m of source.matchAll(new RegExp(`${B}!?transition-\\[([^\\]]+)\\]`, "g"))) {
+    if (/(^|[\s,_])box-shadow($|[\s,_])/.test(m[1])) found.push({ rule: "shadow-transition", match: m[0] });
+  }
+  for (const m of source.matchAll(/\b(?:transition|transitionProperty)\s*:\s*["'`]([^"'`]*)["'`]/g)) {
+    if (/(^|[\s,])box-shadow\b/.test(m[1])) found.push({ rule: "shadow-transition", match: m[0] });
+  }
+  for (const literal of source.matchAll(/"[^"\n]*"|'[^'\n]*'|`[^`]*`/g)) {
+    for (const m of literal[0].matchAll(new RegExp(`${B}!?transition!?(?=[\\s"'\\x60]|$)`, "g"))) {
+      found.push({ rule: "shadow-transition", match: m[0] });
+    }
   }
 
   // animate-[…], animate-pulse, animate-fade-in … — everything but spin/none.
@@ -144,6 +159,14 @@ describe("motion guard: rule detection", () => {
     ['className="transition-[opacity,max-height]"', "transition-all"],
     ['className="transition-[padding_150ms]"', "transition-all"],
     ["style={{ transitionProperty: 'height' }}", "transition-all"],
+    ['className="transition-shadow"', "shadow-transition"],
+    ['className="hover:shadow-md md:transition-shadow"', "shadow-transition"],
+    ['className="transition-[box-shadow]"', "shadow-transition"],
+    ['className="transition-[opacity,box-shadow]"', "shadow-transition"],
+    ["style={{ transition: 'box-shadow 150ms' }}", "shadow-transition"],
+    ["style={{ transitionProperty: 'box-shadow' }}", "shadow-transition"],
+    ['className="rounded-lg transition hover:shadow-md"', "shadow-transition"],
+    ["cn('transition', 'shadow-sm')", "shadow-transition"],
     ['className="duration-500"', "long-duration"],
     ['className="duration-700 ease-out"', "long-duration"],
     ['className="duration-[400ms]"', "long-duration"],
@@ -169,6 +192,10 @@ describe("motion guard: rule detection", () => {
     'className="motion-feedback rounded-control"',
     'className="motion-state motion-dialog motion-drawer"',
     'className="duration-300"',
+    'className="shadow-md hover:shadow-lg shadow-sm"',
+    'className="transition-colors transition-opacity transition-transform transition-none"',
+    "// a lifecycle transition from planned to active",
+    "<p>The transition happens when the semester closes.</p>",
     'className="transition-[opacity,transform] transition-[color]"',
     "style={{ transitionProperty: 'opacity, transform' }}",
     'className="duration-150 duration-[250ms] duration-[0.3s]"',
@@ -188,7 +215,7 @@ describe("motion guard: rule detection", () => {
 // ─── The repository ───────────────────────────────────────────────────────
 
 describe("motion guard: repository", () => {
-  const classRules: Rule[] = ["transition-all", "long-duration", "keyframe-animation"];
+  const classRules: Rule[] = ["transition-all", "shadow-transition", "long-duration", "keyframe-animation"];
   const classFiles = CLASS_RULE_SCOPE.flatMap(sourceFiles);
   const chartFiles = CHART_RULE_SCOPE.flatMap(sourceFiles);
 

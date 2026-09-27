@@ -207,7 +207,7 @@ export function PortalShell({ profile, children }: PortalShellProps) {
                 href={item.href}
                 onClick={() => setMobileOpen(false)}
                 className={cn(
-                  "flex items-center gap-sm px-md py-[10px] rounded-xl text-sm font-medium transition-all",
+                  "flex items-center gap-sm px-md py-[10px] rounded-xl text-sm font-medium motion-feedback",
                   isActive
                     ? "bg-secondary text-on-secondary shadow-md"
                     : "text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"

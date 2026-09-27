@@ -116,6 +116,11 @@ describe("cn(): semantic motion utilities (Checkpoint 4, M1)", () => {
     // Between two motion utilities the last one wins, as for any class group.
     ["motion-feedback motion-state", "motion-state"],
     ["motion-dialog motion-drawer", "motion-drawer"],
+    // M2: the combinations the migrated primitives meet.
+    ["motion-feedback transition-colors", "motion-feedback"],
+    ["transition-colors motion-feedback", "motion-feedback"],
+    ["motion-state ease-out", "motion-state"],
+    ["motion-state duration-700", "motion-state"],
   ])("resolves %s → %s", (input, expected) => {
     expect(cn(input)).toBe(expected);
   });
@@ -130,6 +135,16 @@ describe("cn(): semantic motion utilities (Checkpoint 4, M1)", () => {
     expect(cn("inline-flex motion-feedback rounded-control px-md", "text-error")).toBe("inline-flex motion-feedback rounded-control px-md text-error");
     expect(cn("motion-state", "opacity-50", "delay-75")).toBe("motion-state opacity-50 delay-75");
     expect(cn("motion-feedback", "motion-safe:animate-spin")).toBe("motion-feedback motion-safe:animate-spin");
+  });
+
+  it("keeps the migrated primitives' motion utility when a caller adds raw transition classes", () => {
+    const button = "inline-flex items-center justify-center gap-xs rounded-xl font-semibold motion-feedback disabled:opacity-50 disabled:cursor-not-allowed";
+    expect(cn(button, "bg-secondary text-on-secondary", "transition-all duration-300")).toBe(
+      "inline-flex items-center justify-center gap-xs rounded-xl font-semibold motion-feedback disabled:opacity-50 disabled:cursor-not-allowed bg-secondary text-on-secondary",
+    );
+    const badge = "inline-flex items-center gap-xs text-xs font-semibold px-sm py-xs rounded-full capitalize motion-state";
+    expect(cn(badge, "bg-success-container text-on-success-container", "shrink-0")).toBe(`${badge} bg-success-container text-on-success-container shrink-0`);
+    expect(cn(badge, "transition-colors")).toBe(badge);
   });
 
   it("lets a caller's className replace a component's motion utility", () => {

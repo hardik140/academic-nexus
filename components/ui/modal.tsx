@@ -166,7 +166,7 @@ export function Button({
     <button
       type={type}
       className={cn(
-        "inline-flex items-center justify-center gap-xs rounded-xl font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed",
+        "inline-flex items-center justify-center gap-xs rounded-xl font-semibold motion-feedback disabled:opacity-50 disabled:cursor-not-allowed",
         buttonVariants[variant],
         buttonSizes[size],
         className
@@ -267,7 +267,7 @@ export function StatusBadge({ status, className }: StatusBadgeProps) {
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-xs text-xs font-semibold px-sm py-xs rounded-full capitalize",
+        "inline-flex items-center gap-xs text-xs font-semibold px-sm py-xs rounded-full capitalize motion-state",
         toneClasses[statusTone(status)],
         className
       )}
@@ -326,7 +326,7 @@ export function FormField({
   disabled,
 }: FormFieldProps) {
   const baseClasses =
-    "w-full bg-surface-container-low border border-border-control rounded-xl px-md py-sm text-sm text-on-surface placeholder:text-outline focus:ring-2 focus:ring-secondary focus:border-secondary outline-none transition-all disabled:opacity-50";
+    "w-full bg-surface-container-low border border-border-control rounded-xl px-md py-sm text-sm text-on-surface placeholder:text-outline focus:ring-2 focus:ring-secondary focus:border-secondary outline-none motion-feedback disabled:opacity-50";
 
   return (
     <div className="space-y-xs">

@@ -42,7 +42,7 @@ export function StatsCard({
   return (
     <div
       className={cn(
-        "bg-surface-container-lowest border border-outline-variant rounded-2xl p-lg shadow-sm hover:shadow-md transition-all duration-200",
+        "bg-surface-container-lowest border border-outline-variant rounded-2xl p-lg shadow-sm",
         className
       )}
     >
@@ -75,7 +75,7 @@ export function StatsCard({
           <div className="mt-sm h-1.5 bg-surface-container-high rounded-full overflow-hidden">
             <div
               className={cn(
-                "h-full rounded-full transition-all duration-700",
+                "h-full rounded-full",
                 progressColorMap[color]
               )}
               style={{
