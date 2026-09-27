@@ -6,6 +6,10 @@ import { expect, test } from "@playwright/test";
 const SECTIONS = [
   "colors",
   "typography",
+  "lifecycle",
+  "surfaces",
+  "charts",
+  "motion",
   "buttons",
   "form-fields",
   "status-badges",
