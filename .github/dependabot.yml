@@ -1,18 +1,68 @@
 version: 2
+
+# Dependency updates, tuned to one reviewable PR per ecosystem per week.
+#
+# - target-branch: main — every change reaches master through main, like all
+#   other work. (Dependabot reads this file from the default branch, master,
+#   so it must be identical on both branches.)
+# - Minor and patch updates are grouped into a single PR per ecosystem.
+#   Major updates still arrive as individual PRs, because each one can break
+#   the build and deserves its own review.
+# - Majors that are known to break are ignored until a planned migration
+#   (see the comments on each rule). An ignored major is not offered even if
+#   it carries a security fix, so these rules should be revisited when the
+#   corresponding migration is scheduled.
+
 updates:
   - package-ecosystem: "npm"
     directory: "/"
+    target-branch: "main"
     schedule:
       interval: "weekly"
-    open-pull-requests-limit: 10
+      day: "monday"
+      time: "06:00"
+      timezone: "Asia/Kolkata"
+    open-pull-requests-limit: 5
+    groups:
+      web-minor-and-patch:
+        update-types: ["minor", "patch"]
+    ignore:
+      # typescript-eslint does not support TypeScript 7 (declined in #90).
+      # TypeScript is deliberately held on 6.x.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      # ESLint 10 breaks eslint-plugin-react rule loading via
+      # eslint-config-next (declined in #94). Upgrade together with
+      # eslint-config-next once it supports ESLint 10.
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
+      # Sentry 11 removes withSentryConfig and the sendDefaultPii option this
+      # app sets for privacy (declined in #95). Needs a planned migration.
+      - dependency-name: "@sentry/nextjs"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "npm"
     directory: "/mobile"
+    target-branch: "main"
     schedule:
       interval: "weekly"
-    open-pull-requests-limit: 10
+      day: "monday"
+      time: "06:00"
+      timezone: "Asia/Kolkata"
+    open-pull-requests-limit: 5
+    groups:
+      mobile-minor-and-patch:
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: "github-actions"
     directory: "/"
+    target-branch: "main"
     schedule:
       interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Asia/Kolkata"
+    open-pull-requests-limit: 3
+    groups:
+      github-actions:
+        patterns: ["*"]
