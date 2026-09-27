@@ -63,7 +63,7 @@ export function StudentInsightsClient({
   const currentPct = forecastBase.total > 0 ? (forecastBase.present / forecastBase.total) * 100 : null;
 
   return (
-    <div className="space-y-lg animate-[fade-in_0.3s_ease-out]">
+    <div className="space-y-lg">
       <div>
         <h1 className="text-2xl font-extrabold text-on-surface tracking-tight">Academic Intelligence</h1>
         <p className="text-sm text-on-surface-variant mt-xs">Risk, degree progress, and attendance projections — all computed from your own records</p>
@@ -119,7 +119,7 @@ export function StudentInsightsClient({
             </div>
             <div className="mt-sm h-1.5 bg-surface-container-high rounded-full overflow-hidden">
               <div
-                className="h-full bg-info rounded-full transition-all duration-700"
+                className="h-full bg-info rounded-full"
                 style={{ width: `${Math.min((degreeProgress.creditsCompleted / degreeProgress.creditsRequired) * 100, 100)}%` }}
               />
             </div>

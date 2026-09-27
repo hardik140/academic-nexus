@@ -57,7 +57,7 @@ export default async function FinanceReports() {
   });
 
   return (
-    <div className="space-y-lg animate-[fade-in_0.3s_ease-out]">
+    <div className="space-y-lg">
       <div>
         <h1 className="text-2xl font-extrabold text-on-surface tracking-tight">Financial Reports</h1>
         <p className="text-sm text-on-surface-variant mt-xs">Collection performance across departments</p>
@@ -100,7 +100,7 @@ export default async function FinanceReports() {
                   <span className="text-sm font-bold text-on-surface">{formatCurrency(d.collected)} / {formatCurrency(d.billed)}</span>
                 </div>
                 <div className="h-1.5 bg-surface-container-high rounded-full overflow-hidden">
-                  <div className="h-full rounded-full bg-secondary transition-all duration-700" style={{ width: `${Math.min(pct, 100)}%` }} />
+                  <div className="h-full rounded-full bg-secondary" style={{ width: `${Math.min(pct, 100)}%` }} />
                 </div>
               </div>
             );

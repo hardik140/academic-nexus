@@ -31,7 +31,7 @@ export default function DirectorNotifications() {
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   return (
-    <div className="space-y-lg animate-[fade-in_0.3s_ease-out]">
+    <div className="space-y-lg">
       <div className="flex items-start justify-between gap-md">
         <div>
           <h1 className="text-2xl font-extrabold text-on-surface tracking-tight">Notifications</h1>

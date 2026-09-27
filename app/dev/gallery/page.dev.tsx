@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { Button, StatusBadge } from "@/components/ui/modal";
 import { StatsCard } from "@/components/ui/stats-card";
 import { PlacementFunnelChart } from "@/components/charts/placement-funnel-chart";
+import Loading from "@/app/loading";
 import { AsyncResourceDemo, ButtonFormDemo, DataTableDemos, FormFieldDemos, ModalDemo, MotionUtilityDemos, StatusChangeDemo } from "./demos";
 
 /**
@@ -175,6 +176,13 @@ export default function ComponentGalleryPage() {
 
         <Section id="motion-utilities" title="Motion utilities">
           <MotionUtilityDemos />
+        </Section>
+
+        <Section id="loading-screen" title="Route loading screen (app/loading.tsx)">
+          {/* The real component, clipped to a panel: its min-h-screen becomes the panel's height. */}
+          <div data-testid="loading-screen" className="h-64 overflow-hidden rounded-panel border border-outline-variant [&>div]:min-h-full [&>div]:h-full">
+            <Loading />
+          </div>
         </Section>
 
         <Section id="funnel-chart" title="Placement funnel chart (never animated)">

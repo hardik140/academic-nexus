@@ -12,7 +12,7 @@ function BarRow({ label, count, max, sublabel }: { label: string; count: number;
       </div>
       <div className="h-2 bg-surface-container-high rounded-full overflow-hidden">
         <div
-          className="h-full rounded-full bg-secondary transition-all duration-700"
+          className="h-full rounded-full bg-secondary"
           style={{ width: `${max > 0 ? (count / max) * 100 : 0}%` }}
         />
       </div>
@@ -29,7 +29,7 @@ export default async function PlacementCellReports() {
   const maxPackage = Math.max(1, ...report.packageDistribution.map((p) => p.count));
 
   return (
-    <div className="space-y-lg animate-[fade-in_0.3s_ease-out]">
+    <div className="space-y-lg">
       <div>
         <h1 className="text-2xl font-extrabold text-on-surface tracking-tight">Placement Reports</h1>
         <p className="text-sm text-on-surface-variant mt-xs">Institution-wide placement performance</p>

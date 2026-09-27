@@ -35,7 +35,7 @@ export default function DirectorDecisions() {
   };
 
   return (
-    <div className="space-y-lg animate-[fade-in_0.3s_ease-out]">
+    <div className="space-y-lg">
       <div>
         <h1 className="text-2xl font-extrabold text-on-surface tracking-tight">Decision Inbox</h1>
         <p className="text-sm text-on-surface-variant mt-xs">Requests escalated to you from HOD, Warden, and Placement Cell</p>

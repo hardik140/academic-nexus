@@ -51,7 +51,7 @@ export default function FinanceDisputes() {
   const closed = disputes.filter((d) => d.status === "resolved" || d.status === "rejected");
 
   return (
-    <div className="space-y-lg animate-[fade-in_0.3s_ease-out]">
+    <div className="space-y-lg">
       <div>
         <h1 className="text-2xl font-extrabold text-on-surface tracking-tight">Financial Dispute Center</h1>
         <p className="text-sm text-on-surface-variant mt-xs">Student-reported payment/fee discrepancies</p>

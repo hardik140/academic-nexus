@@ -41,7 +41,7 @@ export default function HodFaculty() {
   );
 
   return (
-    <div className="space-y-lg animate-[fade-in_0.3s_ease-out]">
+    <div className="space-y-lg">
       <div>
         <h1 className="text-2xl font-extrabold text-on-surface tracking-tight">Faculty Directory</h1>
         <p className="text-sm text-on-surface-variant mt-xs">Faculty in your department</p>
@@ -60,7 +60,7 @@ export default function HodFaculty() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-md">
         {filtered.map((f: any) => (
-          <div key={f.id} className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-lg shadow-sm hover:shadow-md transition-all">
+          <div key={f.id} className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-lg shadow-sm">
             <div className="flex items-center gap-sm mb-md">
               <div className="w-10 h-10 rounded-full bg-secondary/10 text-secondary flex items-center justify-center text-sm font-bold">
                 {f.full_name?.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}

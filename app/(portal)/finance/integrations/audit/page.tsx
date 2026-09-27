@@ -60,7 +60,7 @@ export default function IntegrationAuditPage() {
   }, []);
 
   return (
-    <div className="space-y-lg animate-[fade-in_0.3s_ease-out]">
+    <div className="space-y-lg">
       <div>
         <Link href="/finance/integrations" className="text-sm text-secondary font-semibold hover:underline">← Integrations</Link>
         <h1 className="text-2xl font-extrabold text-on-surface tracking-tight mt-xs">Integration Audit</h1>
