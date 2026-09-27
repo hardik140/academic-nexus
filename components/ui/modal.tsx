@@ -1,7 +1,8 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { useId } from "react";
+import { NativeDialog } from "@/components/ui/native-dialog";
 
 interface ModalProps {
   open: boolean;
@@ -28,20 +29,10 @@ const sizeMap = {
   xl: "max-w-4xl",
 };
 
-type ModalContent = Pick<ModalProps, "title" | "description" | "children" | "footer">;
-
 /**
- * A native <dialog> opened with showModal(), so the browser supplies the
- * modal behaviour: the top layer and its ::backdrop, an inert page behind
- * it, focus moved inside on open and returned to the opener on close, and
- * Escape. `open` stays the single source of truth: Escape and a click on the
- * backdrop ask the caller through onClose, and the dialog follows the prop.
- *
- * On close it plays motion-dialog's exit showing its content as it last was
- * while open (callers usually clear the state behind that content in the
- * same update), inert so nothing in it can be used while it fades, and is
- * then unmounted, as before, so the content never keeps state between
- * openings. Nothing waits on the exit to decide whether the dialog is open.
+ * A modal dialog: a NativeDialog (native <dialog>, top layer, focus, Escape,
+ * backdrop, inert page — see components/ui/native-dialog.tsx) laid out as a
+ * titled panel with a body and an optional footer, moving with motion-dialog.
  */
 export function Modal({
   open,
@@ -54,99 +45,13 @@ export function Modal({
 }: ModalProps) {
   const titleId = useId();
   const descriptionId = useId();
-  const dialogRef = useRef<HTMLDialogElement>(null);
-  const pressStartedOnBackdrop = useRef(false);
-
-  // What the dialog shows: the live props while open, the last open ones
-  // while it closes, and null (nothing rendered) once it has closed.
-  const [shown, setShown] = useState<ModalContent | null>(
-    open ? { title, description, children, footer } : null
-  );
-  if (
-    open &&
-    (shown === null ||
-      shown.title !== title ||
-      shown.description !== description ||
-      shown.children !== children ||
-      shown.footer !== footer)
-  ) {
-    setShown({ title, description, children, footer });
-  }
-
-  useLayoutEffect(() => {
-    const dialog = dialogRef.current;
-    if (!dialog) return;
-    if (open) {
-      if (!dialog.open) {
-        // Bring the dialog's style up to date first. Reopened while its exit
-        // is ending, Chromium otherwise looks for the control to focus in
-        // stale style, finds none, and leaves focus on no element.
-        void getComputedStyle(dialog).display;
-        dialog.showModal();
-      }
-      return;
-    }
-    if (dialog.open) dialog.close();
-    // Unmount once the dialog's own exit (and its ::backdrop's) has played:
-    // at once when nothing transitions, and not at all if it reopens first.
-    let current = true;
-    const exit = dialog
-      .getAnimations({ subtree: true })
-      .filter((a) => a.effect instanceof KeyframeEffect && a.effect.target === dialog);
-    Promise.allSettled(exit.map((a) => a.finished)).then(() => {
-      if (current) setShown(null);
-    });
-    return () => {
-      current = false;
-    };
-  }, [open]);
-
-  // The page behind does not scroll while the dialog is open.
-  useEffect(() => {
-    if (!open) return;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = "";
-    };
-  }, [open]);
-
-  if (!shown) return null;
-
-  // Clicks on the ::backdrop are dispatched to the dialog itself, outside its box.
-  const onBackdrop = (e: React.MouseEvent<HTMLDialogElement>) => {
-    if (e.target !== e.currentTarget) return false;
-    const box = e.currentTarget.getBoundingClientRect();
-    return e.clientX < box.left || e.clientX > box.right || e.clientY < box.top || e.clientY > box.bottom;
-  };
 
   return (
-    // Escape, the keyboard route to the same dismissal, arrives as `cancel`.
-    // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions
-    <dialog
-      ref={dialogRef}
+    <NativeDialog
+      open={open}
+      onClose={onClose}
       aria-labelledby={titleId}
-      aria-describedby={shown.description ? descriptionId : undefined}
-      inert={!open}
-      onCancel={(e) => {
-        // Escape: ask the caller instead of closing underneath it.
-        e.preventDefault();
-        onClose();
-      }}
-      onClose={(e) => {
-        // The browser closed it without asking (it may refuse to let a page
-        // keep cancelling Escape): tell the caller. `close` is queued, so it
-        // can arrive after a quick reopen; only a dialog still closed counts.
-        if (open && !e.currentTarget.open) onClose();
-      }}
-      onPointerDown={(e) => {
-        pressStartedOnBackdrop.current = onBackdrop(e);
-      }}
-      onClick={(e) => {
-        // Only a click that starts and ends on the backdrop dismisses, never
-        // a text selection dragged out of the dialog.
-        if (pressStartedOnBackdrop.current && onBackdrop(e)) onClose();
-        pressStartedOnBackdrop.current = false;
-      }}
+      aria-describedby={description ? descriptionId : undefined}
       className={cn(
         "motion-dialog m-auto w-[calc(100%-2*var(--spacing-md))] max-h-[calc(100%-2*var(--spacing-md))] text-inherit bg-surface-container-lowest rounded-2xl shadow-xl border border-outline-variant backdrop:bg-black/50 backdrop:backdrop-blur-sm",
         sizeMap[size]
@@ -155,10 +60,10 @@ export function Modal({
       {/* Header */}
       <div className="flex items-center justify-between px-xl py-lg border-b border-outline-variant">
         <div>
-          <h2 id={titleId} className="text-lg font-bold text-on-surface">{shown.title}</h2>
-          {shown.description && (
+          <h2 id={titleId} className="text-lg font-bold text-on-surface">{title}</h2>
+          {description && (
             <p id={descriptionId} className="text-sm text-on-surface-variant mt-xs">
-              {shown.description}
+              {description}
             </p>
           )}
         </div>
@@ -188,16 +93,16 @@ export function Modal({
 
       {/* Body */}
       <div className="px-xl py-lg max-h-[60vh] overflow-y-auto">
-        {shown.children}
+        {children}
       </div>
 
       {/* Footer */}
-      {shown.footer && (
+      {footer && (
         <div className="px-xl py-md border-t border-outline-variant flex items-center justify-end gap-sm">
-          {shown.footer}
+          {footer}
         </div>
       )}
-    </dialog>
+    </NativeDialog>
   );
 }
 

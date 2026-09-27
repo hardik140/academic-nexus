@@ -38,12 +38,9 @@ const CLASS_RULE_SCOPE = ["app", "components/ui", "components/portal", "componen
 const CHART_RULE_SCOPE = ["app", "components"];
 
 // M2 removed the stats-card, FormField, DataTable-search and nav-item debt;
-// M4 the Modal's two keyframe animations.
-const KNOWN_DEBT: Record<string, Partial<Record<Rule, { count: number; stage: string }>>> = {
-  "components/portal/portal-shell.tsx": {
-    "transition-all": { count: 1, stage: "M5 — sidebar width animation / mobile drawer" },
-  },
-};
+// M4 the Modal's two keyframe animations; M5 the sidebar's width animation.
+// No motion debt remains: anything found now is new.
+const KNOWN_DEBT: Record<string, Partial<Record<Rule, { count: number; stage: string }>>> = {};
 
 // ─── Rules ───────────────────────────────────────────────────────────────
 
@@ -226,6 +223,7 @@ describe("motion guard: repository", () => {
 
   it("scans the intended files", () => {
     expect(classFiles).toContain("components/ui/modal.tsx");
+    expect(classFiles).toContain("components/ui/native-dialog.tsx");
     expect(classFiles).toContain("components/portal/portal-shell.tsx");
     expect(classFiles).toContain("components/charts/placement-funnel-chart.tsx");
     expect(classFiles).toContain("app/(portal)/admin/dashboard/page.tsx");
@@ -344,10 +342,14 @@ describe("motion guard: M4 native Dialog", () => {
   const source = readFileSync("components/ui/modal.tsx", "utf8");
   const modal = source.slice(source.indexOf("export function Modal("), source.indexOf("// ─── Button Component"));
 
-  it("the Modal is a native <dialog>, opened with showModal() and closed with close()", () => {
-    expect(modal).toMatch(/<dialog\b/);
-    expect(modal).toContain(".showModal()");
-    expect(modal).toContain(".close()");
+  // Since M5 the native <dialog> behaviour lives in NativeDialog, shared with the portal's drawer.
+  const nativeDialog = readFileSync("components/ui/native-dialog.tsx", "utf8");
+
+  it("the Modal is a native <dialog> (NativeDialog), opened with showModal() and closed with close()", () => {
+    expect(modal).toMatch(/<NativeDialog\b/);
+    expect(nativeDialog).toMatch(/<dialog\b/);
+    expect(nativeDialog).toContain(".showModal()");
+    expect(nativeDialog).toContain(".close()");
   });
 
   it("its motion is the motion-dialog utility, not re-timed or re-animated locally", () => {
@@ -355,8 +357,10 @@ describe("motion guard: M4 native Dialog", () => {
     expect(modal).not.toMatch(/animate-|transition-|duration-|delay-|ease-(?:in|out|linear|\[)/);
   });
 
-  it("no simulated overlay: no fixed layer, z-index, backdrop element, role or aria-modal", () => {
-    expect(modal).not.toMatch(/\bfixed\b|inset-0|\bz-(?:\d|\[)|role="dialog"|aria-modal|Close dialog/);
+  it("no simulated overlay: no fixed layer, z-index, backdrop element, role, aria-modal, focus trap or global key listener", () => {
+    for (const source of [modal, nativeDialog]) {
+      expect(source).not.toMatch(/\bfixed\b|inset-0|\bz-(?:\d|\[)|role="dialog"|aria-modal|Close dialog|addEventListener\(\s*["']keydown|\.focus\(/);
+    }
     expect(modal).toContain("backdrop:");
   });
 
@@ -368,5 +372,29 @@ describe("motion guard: M4 native Dialog", () => {
 
   it("the Modal's fade-in and slide-up keyframes are gone", () => {
     expect(readFileSync("app/globals.css", "utf8")).not.toMatch(/@keyframes\s+(?:fade-in|slide-up)\b/);
+  });
+});
+
+// ─── M5: the portal shell's sidebar and drawer ───────────────────────────
+
+describe("motion guard: M5 sidebar and drawer", () => {
+  const shell = readFileSync("components/portal/portal-shell.tsx", "utf8");
+  const aside = /<aside\b[\s\S]*?>/.exec(shell)?.[0] ?? "";
+  const drawer = /<NativeDialog\b[\s\S]*?>/.exec(shell)?.[0] ?? "";
+
+  it("the desktop sidebar changes width at once: no transition, duration or animation of any kind", () => {
+    expect(aside).toContain('"w-64"');
+    expect(aside).toContain('"w-[72px]"');
+    expect(aside).not.toMatch(/transition|duration-|animate-|motion-|ease-|delay-/);
+  });
+
+  it("the mobile drawer is the shared NativeDialog carrying motion-drawer, with no local timing", () => {
+    expect(shell).toContain('from "@/components/ui/native-dialog"');
+    expect(drawer).toMatch(/["\s]motion-drawer[\s"]/);
+    expect(drawer).not.toMatch(/transition|duration-|animate-|ease-|delay-/);
+  });
+
+  it("no simulated drawer: no fixed layer, z-index, translate, manual inert, focus trap or global Escape listener", () => {
+    expect(shell).not.toMatch(/\bfixed\b|inset-0|\bz-(?:\d|\[)|translate-x|\binert\b|aria-modal|role="dialog"|addEventListener\(\s*["']keydown|\.focus\(/);
   });
 });
