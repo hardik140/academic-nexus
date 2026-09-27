@@ -10,6 +10,8 @@ const SECTIONS = [
   "surfaces",
   "charts",
   "motion",
+  "motion-utilities",
+  "funnel-chart",
   "buttons",
   "form-fields",
   "status-badges",

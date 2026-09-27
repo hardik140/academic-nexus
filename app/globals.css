@@ -187,7 +187,7 @@
 /* Tokens with no Tailwind utility namespace: read with var() or the
  * `z-(--z-header)` / `duration-(--duration-fast)` utility syntax. */
 :root {
-  /* Motion — names only; the motion architecture is Checkpoint 4. */
+  /* Motion — consumed through the motion-* utilities below. */
   --duration-instant: 100ms;
   --duration-fast: 150ms;
   --duration-normal: 200ms;
@@ -203,6 +203,123 @@
   /* Focus indicator geometry. */
   --focus-ring-width: 2px;
   --focus-ring-offset: 2px;
+}
+
+/* ─── Motion utilities (Checkpoint 4, M1) ───
+ * The only sanctioned way to make something move. Each utility is a
+ * complete transition for one semantic job — properties, duration and
+ * easing together — so callers never pick a duration. Only colour, opacity
+ * and transform are animated (plus the discrete display/overlay switch a
+ * native <dialog> needs to animate its exit); nothing here touches layout.
+ * lib/utils.ts makes cn() keep these over any raw transition-/duration-/
+ * ease- class, and tests/motion-contract.test.ts guards the rest.
+ *
+ * Reduced motion needs no code here: the durations are the Stage 2 tokens,
+ * which are 0 under prefers-reduced-motion, and the global rule in the base
+ * layer cuts every element's transitions to 0.01ms. */
+
+/* Hover, press and focus on high-frequency controls. */
+@utility motion-feedback {
+  transition-property: color, background-color, border-color, outline-color, fill, stroke;
+  transition-duration: var(--duration-instant);
+  transition-timing-function: var(--ease-out);
+}
+
+/* The same element changing meaning: status, pending → done, enabled → disabled. */
+@utility motion-state {
+  transition-property: color, background-color, border-color, outline-color, fill, stroke, opacity;
+  transition-duration: var(--duration-fast);
+  transition-timing-function: var(--ease-in-out);
+}
+
+/* A native <dialog> opened with showModal(): rises 8px and fades in, fades
+ * out on close. The closed state is the exit (150ms, ease-in-out); [open] is
+ * the enter (200ms, ease-emphasized); @starting-style is where an opening
+ * dialog starts from. allow-discrete keeps it rendered until the exit ends.
+ * The ::backdrop only fades; its colour belongs to the Dialog component. */
+@utility motion-dialog {
+  opacity: 0;
+  transform: translateY(8px);
+  transition-property: opacity, transform, display, overlay;
+  transition-behavior: allow-discrete;
+  transition-duration: var(--duration-fast);
+  transition-timing-function: var(--ease-in-out);
+
+  &[open] {
+    opacity: 1;
+    transform: translateY(0);
+    transition-duration: var(--duration-normal);
+    transition-timing-function: var(--ease-emphasized);
+  }
+
+  @starting-style {
+    &[open] {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+  }
+
+  &::backdrop {
+    opacity: 0;
+    transition-property: opacity, display, overlay;
+    transition-behavior: allow-discrete;
+    transition-duration: var(--duration-fast);
+    transition-timing-function: var(--ease-in-out);
+  }
+
+  &[open]::backdrop {
+    opacity: 1;
+    transition-duration: var(--duration-normal);
+    transition-timing-function: var(--ease-emphasized);
+  }
+
+  @starting-style {
+    &[open]::backdrop {
+      opacity: 0;
+    }
+  }
+}
+
+/* A native <dialog> used as the mobile navigation drawer: slides in from the
+ * inline start (300ms, ease-emphasized), out in 200ms (ease-in-out). */
+@utility motion-drawer {
+  transform: translateX(-100%);
+  transition-property: transform, display, overlay;
+  transition-behavior: allow-discrete;
+  transition-duration: var(--duration-normal);
+  transition-timing-function: var(--ease-in-out);
+
+  &[open] {
+    transform: translateX(0);
+    transition-duration: var(--duration-slow);
+    transition-timing-function: var(--ease-emphasized);
+  }
+
+  @starting-style {
+    &[open] {
+      transform: translateX(-100%);
+    }
+  }
+
+  &::backdrop {
+    opacity: 0;
+    transition-property: opacity, display, overlay;
+    transition-behavior: allow-discrete;
+    transition-duration: var(--duration-normal);
+    transition-timing-function: var(--ease-in-out);
+  }
+
+  &[open]::backdrop {
+    opacity: 1;
+    transition-duration: var(--duration-slow);
+    transition-timing-function: var(--ease-emphasized);
+  }
+
+  @starting-style {
+    &[open]::backdrop {
+      opacity: 0;
+    }
+  }
 }
 
 @keyframes fade-in {
