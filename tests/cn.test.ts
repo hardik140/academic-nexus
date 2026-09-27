@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { twMerge } from "tailwind-merge";
-import { cn, NAMED_EASE, NAMED_RADIUS, NAMED_SHADOW, NAMED_SPACING, NAMED_TEXT } from "@/lib/utils";
+import { cn, MOTION_UTILITIES, NAMED_EASE, NAMED_RADIUS, NAMED_SHADOW, NAMED_SPACING, NAMED_TEXT } from "@/lib/utils";
 
 describe("cn(): named spacing tokens", () => {
   it("NAMED_SPACING is exactly the --spacing-<name> tokens defined in app/globals.css", () => {
@@ -89,6 +89,56 @@ describe("cn(): Stage 2 named tokens", () => {
     ["ease-out ease-emphasized", "ease-emphasized"],
   ])("resolves %s → %s", (input, expected) => {
     expect(cn(input)).toBe(expected);
+  });
+});
+
+describe("cn(): semantic motion utilities (Checkpoint 4, M1)", () => {
+  it("MOTION_UTILITIES is exactly the motion-* utilities app/globals.css defines", () => {
+    const css = readFileSync("app/globals.css", "utf8");
+    const defined = [...css.matchAll(/@utility\s+motion-([a-z]+)\s*\{/g)].map((m) => m[1]);
+    expect(defined.sort()).toEqual([...MOTION_UTILITIES].sort());
+  });
+
+  it.each([
+    // The semantic utility wins whichever side the raw class is on.
+    ["motion-feedback transition-all", "motion-feedback"],
+    ["transition-all motion-feedback", "motion-feedback"],
+    ["motion-feedback duration-300", "motion-feedback"],
+    ["duration-300 motion-feedback", "motion-feedback"],
+    ["motion-state transition-colors", "motion-state"],
+    ["motion-dialog duration-300", "motion-dialog"],
+    ["motion-drawer duration-200", "motion-drawer"],
+    ["motion-state ease-in", "motion-state"],
+    ["motion-dialog ease-emphasized", "motion-dialog"],
+    ["motion-feedback transition-discrete", "motion-feedback"],
+    ["motion-feedback transition-[width]", "motion-feedback"],
+    ["motion-feedback duration-[700ms]", "motion-feedback"],
+    // Between two motion utilities the last one wins, as for any class group.
+    ["motion-feedback motion-state", "motion-state"],
+    ["motion-dialog motion-drawer", "motion-drawer"],
+  ])("resolves %s → %s", (input, expected) => {
+    expect(cn(input)).toBe(expected);
+  });
+
+  it("keeps a raw transition class under different variants", () => {
+    expect(cn("motion-feedback md:transition-all")).toBe("motion-feedback md:transition-all");
+    expect(cn("hover:motion-feedback duration-300")).toBe("hover:motion-feedback duration-300");
+    expect(cn("hover:motion-feedback hover:duration-300")).toBe("hover:motion-feedback");
+  });
+
+  it("never drops a motion utility for unrelated classes", () => {
+    expect(cn("inline-flex motion-feedback rounded-control px-md", "text-error")).toBe("inline-flex motion-feedback rounded-control px-md text-error");
+    expect(cn("motion-state", "opacity-50", "delay-75")).toBe("motion-state opacity-50 delay-75");
+    expect(cn("motion-feedback", "motion-safe:animate-spin")).toBe("motion-feedback motion-safe:animate-spin");
+  });
+
+  it("lets a caller's className replace a component's motion utility", () => {
+    expect(cn("inline-flex motion-feedback", "motion-state")).toBe("inline-flex motion-state");
+  });
+
+  it("changes nothing when no motion utility is present", () => {
+    expect(cn("transition-colors duration-200 ease-out")).toBe("transition-colors duration-200 ease-out");
+    expect(cn("")).toBe("");
   });
 });
 

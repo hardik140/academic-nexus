@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Button, StatusBadge } from "@/components/ui/modal";
 import { StatsCard } from "@/components/ui/stats-card";
-import { AsyncResourceDemo, ButtonFormDemo, DataTableDemos, FormFieldDemos, ModalDemo } from "./demos";
+import { PlacementFunnelChart } from "@/components/charts/placement-funnel-chart";
+import { AsyncResourceDemo, ButtonFormDemo, DataTableDemos, FormFieldDemos, ModalDemo, MotionUtilityDemos } from "./demos";
 
 /**
  * Development-only component gallery — the browser-verification surface for
@@ -50,6 +51,15 @@ const TYPE_ROLES = [
 const LIFECYCLE = ["planned", "active", "closed", "reopened"];
 
 const CHARTS = [1, 2, 3, 4, 5, 6];
+
+// Fictional sample counts for the funnel chart.
+const SAMPLE_FUNNEL = [
+  { name: "Eligible", value: 420 },
+  { name: "Applied", value: 310 },
+  { name: "Shortlisted", value: 180 },
+  { name: "Interviewed", value: 96 },
+  { name: "Placed", value: 58 },
+];
 
 const MOTION_TOKENS = [
   "--duration-instant", "--duration-fast", "--duration-normal", "--duration-slow",
@@ -159,8 +169,18 @@ export default function ComponentGalleryPage() {
             ))}
           </ul>
           <p className="text-body-sm text-on-surface-variant">
-            Names only. With reduced motion requested, the durations are 0ms and animations stop.
+            Consumed through the motion utilities below. With reduced motion requested, the durations are 0ms and animations stop.
           </p>
+        </Section>
+
+        <Section id="motion-utilities" title="Motion utilities">
+          <MotionUtilityDemos />
+        </Section>
+
+        <Section id="funnel-chart" title="Placement funnel chart (never animated)">
+          <div data-testid="funnel-chart" className="rounded-panel border border-outline-variant bg-surface-container-lowest p-md">
+            <PlacementFunnelChart stages={SAMPLE_FUNNEL} />
+          </div>
         </Section>
 
         <Section id="buttons" title="Buttons">

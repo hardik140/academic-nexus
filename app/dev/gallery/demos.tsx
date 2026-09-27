@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Modal, Button, FormField } from "@/components/ui/modal";
 import { DataTable } from "@/components/ui/data-table";
 import { useAsyncResource } from "@/hooks/use-async-resource";
+import { cn } from "@/lib/utils";
 
 // Interactive halves of the development-only component gallery. Imported only
 // by app/dev/gallery/page.dev.tsx, which is not a route outside `next dev`
@@ -167,5 +168,98 @@ export function ModalDemo() {
         <FormField label="Reason" id="g-modal-reason" type="textarea" value={reason} onChange={setReason} required />
       </Modal>
     </>
+  );
+}
+
+/**
+ * Browser checks for the four motion utilities (Checkpoint 4, M1). These are
+ * bare elements carrying each utility — deliberately not the future Dialog
+ * or Drawer components — so Playwright can read the computed transitions,
+ * watch a native <dialog> enter and leave, and repeat it all with reduced
+ * motion requested.
+ */
+export function MotionUtilityDemos() {
+  const [approved, setApproved] = useState(false);
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const drawerRef = useRef<HTMLDialogElement>(null);
+
+  return (
+    <div className="space-y-md">
+      <div className="flex flex-wrap items-center gap-sm">
+        <button
+          type="button"
+          data-testid="motion-feedback-demo"
+          className="motion-feedback rounded-control border border-border-control bg-surface-container-lowest px-md py-sm text-body text-on-surface hover:bg-surface-container-high"
+        >
+          motion-feedback
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setApproved((a) => !a)}
+          className="motion-feedback rounded-control border border-border-control bg-surface-container-lowest px-md py-sm text-body text-on-surface hover:bg-surface-container-high"
+        >
+          Toggle state
+        </button>
+        <span
+          data-testid="motion-state-demo"
+          className={cn(
+            "motion-state inline-flex rounded-full px-sm py-xs text-caption font-semibold",
+            approved ? "bg-success-container text-on-success-container" : "bg-warning-container text-on-warning-container",
+          )}
+        >
+          {approved ? "Approved" : "Pending"}
+        </span>
+
+        <button
+          type="button"
+          onClick={() => dialogRef.current?.showModal()}
+          className="motion-feedback rounded-control border border-border-control bg-surface-container-lowest px-md py-sm text-body text-on-surface hover:bg-surface-container-high"
+        >
+          Open motion-dialog
+        </button>
+        <button
+          type="button"
+          onClick={() => drawerRef.current?.showModal()}
+          className="motion-feedback rounded-control border border-border-control bg-surface-container-lowest px-md py-sm text-body text-on-surface hover:bg-surface-container-high"
+        >
+          Open motion-drawer
+        </button>
+      </div>
+
+      <dialog
+        ref={dialogRef}
+        aria-labelledby="motion-dialog-title"
+        data-testid="motion-dialog-demo"
+        className="motion-dialog m-auto w-[min(28rem,calc(100%-2rem))] rounded-dialog border border-outline-variant bg-surface-container-lowest p-lg text-on-surface shadow-dialog backdrop:bg-black/40"
+      >
+        <h3 id="motion-dialog-title" className="text-section">motion-dialog</h3>
+        <p className="mt-xs text-body-sm text-on-surface-variant">A bare native dialog carrying the utility: 200ms in, 150ms out.</p>
+        <button
+          type="button"
+          onClick={() => dialogRef.current?.close()}
+          className="motion-feedback mt-md rounded-control border border-border-control px-md py-sm text-body hover:bg-surface-container-high"
+        >
+          Close
+        </button>
+      </dialog>
+
+      <dialog
+        ref={drawerRef}
+        aria-labelledby="motion-drawer-title"
+        data-testid="motion-drawer-demo"
+        className="motion-drawer m-0 h-dvh max-h-dvh w-[min(18rem,85vw)] border-r border-outline-variant bg-surface-container-lowest p-lg text-on-surface backdrop:bg-black/40"
+      >
+        <h3 id="motion-drawer-title" className="text-section">motion-drawer</h3>
+        <p className="mt-xs text-body-sm text-on-surface-variant">A bare native dialog carrying the utility: 300ms in, 200ms out.</p>
+        <button
+          type="button"
+          onClick={() => drawerRef.current?.close()}
+          className="motion-feedback mt-md rounded-control border border-border-control px-md py-sm text-body hover:bg-surface-container-high"
+        >
+          Close
+        </button>
+      </dialog>
+    </div>
   );
 }
