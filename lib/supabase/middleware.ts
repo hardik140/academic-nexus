@@ -27,7 +27,18 @@ const PUBLIC_ROUTES = [
   "/api",
 ];
 
-export async function updateSession(request: NextRequest) { 
+export async function updateSession(request: NextRequest) {
+  // Development-only component gallery (app/dev/**/page.dev.tsx). Those files
+  // are routes only under `next dev` — next.config.ts registers the `dev.tsx`
+  // page extension for that phase alone — so in any built deployment there is
+  // nothing at /dev/ and this branch is inert (NODE_ENV is "production" in
+  // every built bundle). The gallery renders static sample data and reads
+  // nothing, so it needs no session; returning before getUser() also means
+  // the browser-verification server never contacts Supabase or Redis.
+  if (process.env.NODE_ENV === "development" && request.nextUrl.pathname.startsWith("/dev/")) {
+    return NextResponse.next({ request });
+  }
+
   // Coarse, global first line of defense — checked before any Supabase call
   // so a flood doesn't even cost an auth lookup. Fails open (see
   // lib/rate-limit.ts) if Redis isn't configured or unreachable.
