@@ -265,3 +265,146 @@ test("the open motion dialog and drawer have no axe violations", async ({ page }
     await expect(demo).toBeHidden();
   }
 });
+
+// ─── M2: the shared primitives on the semantic utilities ─────────────────
+
+/**
+ * Clicks "Change status" and lists the transitions that start on the
+ * StatusBadge, read the moment React commits the new classes (a
+ * MutationObserver callback) — before any 150ms transition could finish,
+ * however slow the machine.
+ */
+async function changeStatus(page: Page) {
+  return page.evaluate(
+    () =>
+      new Promise<Array<{ property: string; ms: number }>>((resolve) => {
+        const section = document.querySelector('[data-testid="gallery-status-badges"]')!;
+        const badge = section.querySelector('[data-testid="status-change"] span')!;
+        const observer = new MutationObserver(() => {
+          observer.disconnect();
+          getComputedStyle(badge).backgroundColor; // flush style: start the transitions
+          resolve(
+            badge.getAnimations().map((a) => ({
+              property: (a as CSSTransition).transitionProperty,
+              ms: Number(a.effect?.getTiming().duration),
+            })),
+          );
+        });
+        observer.observe(badge, { attributes: true, attributeFilter: ["class"] });
+        [...section.querySelectorAll("button")].find((btn) => btn.textContent === "Change status")!.click();
+      }),
+  );
+}
+
+/** Each migrated primitive in the gallery, with the utility it must carry. */
+function primitives(page: Page): Array<{ name: string; locator: Locator; utility: "feedback" | "state" }> {
+  const table = page.getByTestId("gallery-data-table").locator("> div").first();
+  return [
+    { name: "Button", locator: page.getByTestId("gallery-buttons").getByRole("button", { name: "primary" }), utility: "feedback" },
+    { name: "Input", locator: page.locator("#g-text"), utility: "feedback" },
+    { name: "Select", locator: page.locator("#g-select"), utility: "feedback" },
+    { name: "Textarea", locator: page.locator("#g-textarea"), utility: "feedback" },
+    { name: "DataTable search", locator: table.getByRole("textbox"), utility: "feedback" },
+    { name: "DataTable sortable header", locator: table.locator("th").first(), utility: "feedback" },
+    { name: "DataTable row", locator: table.locator("tbody tr").first(), utility: "feedback" },
+    { name: "Pagination page", locator: table.getByRole("button", { name: "2", exact: true }), utility: "feedback" },
+    { name: "Pagination next", locator: table.getByRole("button", { name: "Next" }), utility: "feedback" },
+    { name: "StatusBadge", locator: page.getByTestId("status-change").locator("span").first(), utility: "state" },
+  ];
+}
+
+test.describe("M2 primitives: computed transitions", () => {
+  test("every migrated primitive transitions only colours (and opacity for state) at its token duration", async ({ page }) => {
+    await openGallery(page);
+    for (const { name, locator, utility } of primitives(page)) {
+      await expect(locator, name).toBeVisible();
+      const actual = await transitionOf(locator);
+      expect(actual.properties, name).not.toContain("all");
+      expect(actual.properties, name).not.toContain("box-shadow");
+      expectTransition(
+        actual,
+        utility === "feedback"
+          ? { properties: COLOURS, ms: 100, easing: EASE_OUT }
+          : { properties: [...COLOURS, "opacity"], ms: 150, easing: EASE_IN_OUT },
+      );
+    }
+  });
+
+  test("a StatsCard does not move: no transition, no hover shadow, and a static progress bar", async ({ page }) => {
+    await openGallery(page);
+    const card = page.getByTestId("gallery-stats-cards").locator("> div > div").nth(1); // "Attendance", with progress
+    const bar = card.locator('[style*="width"]');
+
+    for (const target of [card, bar]) {
+      const { durations } = await transitionOf(target);
+      for (const ms of durations) expect(ms).toBe(0);
+    }
+    const before = await card.evaluate((el) => getComputedStyle(el).boxShadow);
+    await card.hover();
+    expect(await card.evaluate((el) => getComputedStyle(el).boxShadow)).toBe(before);
+    expect(await bar.evaluate((el) => (el as HTMLElement).style.width)).toBe("86%");
+    expect(await bar.evaluate((el) => el.getAnimations().length)).toBe(0);
+  });
+
+  test("an input's focus ring appears at once — box-shadow is never transitioned", async ({ page }) => {
+    await openGallery(page);
+    const input = page.locator("#g-text");
+    const shadow = await input.evaluate((el: HTMLInputElement) => {
+      el.focus();
+      const style = getComputedStyle(el);
+      return { now: style.boxShadow, transitions: el.getAnimations().map((a) => (a as CSSTransition).transitionProperty) };
+    });
+    expect(shadow.now).toContain("rgb(0, 81, 213)"); // the ring is fully there in the same frame
+    expect(shadow.transitions).not.toContain("box-shadow");
+  });
+
+  test("StatusBadge: nothing moves on first render; a real status change runs a 150ms motion-state transition", async ({ page }) => {
+    await openGallery(page);
+    const badge = page.getByTestId("status-change").locator("span").first();
+    await expect(badge).toHaveText("pending");
+    expect(await badge.evaluate((el) => el.getAnimations().length)).toBe(0);
+
+    const started = await changeStatus(page);
+    expect(started.map((t) => t.property)).toEqual(expect.arrayContaining(["background-color", "color"]));
+    for (const t of started) expect(t.ms, t.property).toBe(150);
+    await expect(badge).toHaveText("approved");
+    await expect(badge).toHaveClass(/bg-success-container/);
+    await expect(badge).toBeVisible(); // the word stays readable throughout
+  });
+
+  test("keyboard: pagination is reachable and operable, and a disabled control stays disabled", async ({ page }) => {
+    await openGallery(page);
+    const table = page.getByTestId("gallery-data-table").locator("> div").first();
+    const previous = table.getByRole("button", { name: "Previous" });
+    await expect(previous).toBeDisabled();
+
+    const pageTwo = table.getByRole("button", { name: "2", exact: true });
+    await pageTwo.focus();
+    await expect(pageTwo).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(previous).toBeEnabled();
+    await expect(page.getByTestId("gallery-buttons").getByRole("button", { name: "Disabled" })).toBeDisabled();
+  });
+});
+
+test.describe("M2 primitives with reduced motion requested", () => {
+  test.use({ reducedMotion: "reduce" });
+
+  test("every migrated primitive finishes its transition immediately, and stays visible", async ({ page }) => {
+    await openGallery(page);
+    for (const { name, locator } of primitives(page)) {
+      await expect(locator, name).toBeVisible();
+      const { durations } = await transitionOf(locator);
+      for (const ms of durations) expect(ms, name).toBeLessThanOrEqual(0.01);
+    }
+  });
+
+  test("a StatusBadge change is immediate", async ({ page }) => {
+    await openGallery(page);
+    const badge = page.getByTestId("status-change").locator("span").first();
+    const started = await changeStatus(page);
+    for (const t of started) expect(t.ms, t.property).toBeLessThanOrEqual(0.01);
+    await expect(badge).toHaveText("approved");
+    await expect(badge).toHaveClass(/bg-success-container/);
+  });
+});

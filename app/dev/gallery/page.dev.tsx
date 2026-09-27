@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { Button, StatusBadge } from "@/components/ui/modal";
 import { StatsCard } from "@/components/ui/stats-card";
 import { PlacementFunnelChart } from "@/components/charts/placement-funnel-chart";
-import { AsyncResourceDemo, ButtonFormDemo, DataTableDemos, FormFieldDemos, ModalDemo, MotionUtilityDemos } from "./demos";
+import { AsyncResourceDemo, ButtonFormDemo, DataTableDemos, FormFieldDemos, ModalDemo, MotionUtilityDemos, StatusChangeDemo } from "./demos";
 
 /**
  * Development-only component gallery — the browser-verification surface for
@@ -207,6 +207,7 @@ export default function ComponentGalleryPage() {
               <StatusBadge key={status} status={status} />
             ))}
           </div>
+          <StatusChangeDemo />
         </Section>
 
         <Section id="stats-cards" title="Stats cards">

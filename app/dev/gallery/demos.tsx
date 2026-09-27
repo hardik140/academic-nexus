@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Modal, Button, FormField } from "@/components/ui/modal";
+import { Modal, Button, FormField, StatusBadge } from "@/components/ui/modal";
 import { DataTable } from "@/components/ui/data-table";
 import { useAsyncResource } from "@/hooks/use-async-resource";
 import { cn } from "@/lib/utils";
@@ -260,6 +260,24 @@ export function MotionUtilityDemos() {
           Close
         </button>
       </dialog>
+    </div>
+  );
+}
+
+/**
+ * Browser check for StatusBadge's motion-state (M2): the badge only
+ * transitions when its status actually changes — never on first render.
+ */
+export function StatusChangeDemo() {
+  const [status, setStatus] = useState("pending");
+  return (
+    <div className="flex flex-wrap items-center gap-sm">
+      <Button variant="outline" onClick={() => setStatus((s) => (s === "pending" ? "approved" : "pending"))}>
+        Change status
+      </Button>
+      <span data-testid="status-change">
+        <StatusBadge status={status} />
+      </span>
     </div>
   );
 }
