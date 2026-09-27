@@ -59,7 +59,7 @@ export default function DirectorDepartments() {
   ];
 
   return (
-    <div className="space-y-lg animate-[fade-in_0.3s_ease-out]">
+    <div className="space-y-lg">
       <div className="flex items-center justify-between gap-md flex-wrap">
         <div>
           <h1 className="text-2xl font-extrabold text-on-surface tracking-tight">Departments</h1>
@@ -81,7 +81,7 @@ export default function DirectorDepartments() {
             <button
               key={d.id}
               onClick={() => openEdit(d)}
-              className="text-left bg-surface-container-lowest border border-outline-variant rounded-2xl p-lg shadow-sm hover:shadow-md transition-all"
+              className="text-left bg-surface-container-lowest border border-outline-variant rounded-2xl p-lg shadow-sm hover:shadow-md"
             >
               <div className="flex items-center justify-between mb-md">
                 <span className="font-mono text-sm font-bold text-secondary">{d.code}</span>

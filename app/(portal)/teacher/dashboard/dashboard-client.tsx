@@ -33,7 +33,7 @@ export function TeacherDashboardClient({
   todayLabel,
 }: TeacherDashboardClientProps) {
   return (
-    <div className="space-y-lg animate-[fade-in_0.3s_ease-out]">
+    <div className="space-y-lg">
       <div>
         <h1 className="text-2xl font-extrabold text-on-surface tracking-tight">
           Welcome, {profile?.full_name?.split(" ")[0] || "Professor"} 👋
@@ -140,7 +140,7 @@ export function TeacherDashboardClient({
               <Link
                 key={offering.id}
                 href={`/teacher/courses/${offering.id}`}
-                className="bg-surface-container-low border border-outline-variant rounded-xl p-md hover:shadow-md transition-shadow block"
+                className="bg-surface-container-low border border-outline-variant rounded-xl p-md hover:shadow-md block"
               >
                 <div className="flex items-center gap-sm mb-sm">
                   <span className="text-xl">📚</span>

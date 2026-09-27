@@ -50,7 +50,7 @@ export default async function DirectorAnalytics() {
   const facultyStudentRatio = facultyCount > 0 && activeStudentsForRetention > 0 ? Math.round(activeStudentsForRetention / facultyCount) : null;
 
   return (
-    <div className="space-y-lg animate-[fade-in_0.3s_ease-out]">
+    <div className="space-y-lg">
       <div className="flex items-center justify-between gap-md flex-wrap">
         <div>
           <h1 className="text-2xl font-extrabold text-on-surface tracking-tight">Analytics</h1>
@@ -143,7 +143,7 @@ export default async function DirectorAnalytics() {
                 </div>
                 <div className="h-2 bg-surface-container-high rounded-full overflow-hidden">
                   <div
-                    className="h-full rounded-full bg-secondary transition-all duration-700"
+                    className="h-full rounded-full bg-secondary"
                     style={{ width: `${(dept.total_students / maxStudents) * 100}%` }}
                   />
                 </div>

@@ -31,7 +31,7 @@ export default async function TeacherCourses() {
   });
 
   return (
-    <div className="space-y-lg animate-[fade-in_0.3s_ease-out]">
+    <div className="space-y-lg">
       <div>
         <h1 className="text-2xl font-extrabold text-on-surface tracking-tight">My Classes</h1>
         <p className="text-sm text-on-surface-variant mt-xs">Each card is one section of one course in one semester</p>
@@ -39,7 +39,7 @@ export default async function TeacherCourses() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-md">
         {offeringList.map((o: any) => (
-          <div key={o.id} className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-lg shadow-sm hover:shadow-md transition-all group">
+          <div key={o.id} className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-lg shadow-sm group">
             <div className="flex items-center justify-between mb-sm">
               <span className="text-xs font-bold text-secondary uppercase tracking-wider">{o.courses?.code}</span>
               <span className={`text-xs font-semibold px-sm py-xs rounded-full capitalize ${

@@ -11,6 +11,7 @@ const SECTIONS = [
   "charts",
   "motion",
   "motion-utilities",
+  "loading-screen",
   "funnel-chart",
   "buttons",
   "form-fields",

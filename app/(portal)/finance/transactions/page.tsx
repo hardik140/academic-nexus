@@ -93,7 +93,7 @@ export default function FinanceTransactions() {
   };
 
   return (
-    <div className="space-y-lg animate-[fade-in_0.3s_ease-out]">
+    <div className="space-y-lg">
       <div>
         <h1 className="text-2xl font-extrabold text-on-surface tracking-tight">Finance Transactions</h1>
         <p className="text-sm text-on-surface-variant mt-xs">Track fee invoices and payment records</p>
@@ -122,7 +122,7 @@ export default function FinanceTransactions() {
       <div className="flex gap-xs border-b border-outline-variant">
         {(["invoices", "payments"] as const).map(t => (
           <button key={t} onClick={() => setTab(t)}
-            className={`px-md py-sm text-sm font-semibold capitalize transition-all border-b-2 -mb-[1px] ${
+            className={`px-md py-sm text-sm font-semibold capitalize motion-feedback border-b-2 -mb-[1px] ${
               tab === t ? "text-secondary border-secondary" : "text-outline border-transparent hover:text-on-surface-variant"
             }`}>{t}</button>
         ))}

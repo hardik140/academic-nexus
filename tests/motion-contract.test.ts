@@ -19,9 +19,9 @@ import { describe, expect, it } from "vitest";
  *   • a Recharts series with animation switched on — charts never animate,
  *     and Recharts animates in JavaScript, beyond the CSS reduced-motion rule.
  *
- * The class rules cover the shared UI (components/ui, components/portal,
- * components/charts); page code joins the scope once M3 has cleaned it. The
- * Recharts rule covers every file in app/ and components/.
+ * The class rules cover every page (app/, since M3) and the shared UI
+ * (components/ui, components/portal, components/charts). The Recharts rule
+ * covers every file in app/ and components/.
  *
  * Existing violations are listed in KNOWN_DEBT with their exact count and
  * the stage that removes them. A count must match exactly: one more fails
@@ -34,7 +34,7 @@ type Rule = "transition-all" | "shadow-transition" | "long-duration" | "keyframe
 
 const MAX_DURATION_MS = 300;
 
-const CLASS_RULE_SCOPE = ["components/ui", "components/portal", "components/charts"];
+const CLASS_RULE_SCOPE = ["app", "components/ui", "components/portal", "components/charts"];
 const CHART_RULE_SCOPE = ["app", "components"];
 
 // M2 removed the stats-card, FormField, DataTable-search and nav-item debt.
@@ -105,8 +105,12 @@ export function findViolations(source: string): Array<{ rule: Rule; match: strin
   for (const m of source.matchAll(/\b(?:transition|transitionProperty)\s*:\s*["'`]([^"'`]*)["'`]/g)) {
     if (/(^|[\s,])box-shadow\b/.test(m[1])) found.push({ rule: "shadow-transition", match: m[0] });
   }
+  // A template literal's ${…} expressions are code, not class text — a
+  // variable named `transition` there is not the utility — so they are
+  // dropped first, and the word must stand alone like a class would.
   for (const literal of source.matchAll(/"[^"\n]*"|'[^'\n]*'|`[^`]*`/g)) {
-    for (const m of literal[0].matchAll(new RegExp(`${B}!?transition!?(?=[\\s"'\\x60]|$)`, "g"))) {
+    const text = literal[0].replace(/\$\{[^}]*\}/g, " ");
+    for (const m of text.matchAll(/(?<=^|[\s"'`:])!?transition!?(?=[\s"'`]|$)/g)) {
       found.push({ rule: "shadow-transition", match: m[0] });
     }
   }
@@ -167,6 +171,7 @@ describe("motion guard: rule detection", () => {
     ["style={{ transitionProperty: 'box-shadow' }}", "shadow-transition"],
     ['className="rounded-lg transition hover:shadow-md"', "shadow-transition"],
     ["cn('transition', 'shadow-sm')", "shadow-transition"],
+    ["className={`${base} transition hover:shadow-md`}", "shadow-transition"],
     ['className="duration-500"', "long-duration"],
     ['className="duration-700 ease-out"', "long-duration"],
     ['className="duration-[400ms]"', "long-duration"],
@@ -196,6 +201,8 @@ describe("motion guard: rule detection", () => {
     'className="transition-colors transition-opacity transition-transform transition-none"',
     "// a lifecycle transition from planned to active",
     "<p>The transition happens when the semester closes.</p>",
+    "checkRateLimit(`${transition}:${table}:${userId}`, 30, 60);",
+    "logAudit(`${transition === 'activate' ? 'Activated' : 'Closed'} ${name}`);",
     'className="transition-[opacity,transform] transition-[color]"',
     "style={{ transitionProperty: 'opacity, transform' }}",
     'className="duration-150 duration-[250ms] duration-[0.3s]"',
@@ -223,10 +230,13 @@ describe("motion guard: repository", () => {
     expect(classFiles).toContain("components/ui/modal.tsx");
     expect(classFiles).toContain("components/portal/portal-shell.tsx");
     expect(classFiles).toContain("components/charts/placement-funnel-chart.tsx");
+    expect(classFiles).toContain("app/(portal)/admin/dashboard/page.tsx");
+    expect(classFiles).toContain("app/loading.tsx");
+    expect(classFiles).toContain("app/login/page.tsx");
     expect(chartFiles).toContain("app/(portal)/director/forecast/page.tsx");
   });
 
-  it("shared UI has no motion violations beyond the documented debt, and no debt left unclaimed", () => {
+  it("pages and shared UI have no motion violations beyond the documented debt, and no debt left unclaimed", () => {
     const found = countByRule(classFiles, classRules);
     const expected: Record<string, Partial<Record<Rule, number>>> = {};
     for (const [file, rules] of Object.entries(KNOWN_DEBT)) {
@@ -255,5 +265,77 @@ describe("motion guard: repository", () => {
     const deps = Object.keys({ ...pkg.dependencies, ...pkg.devDependencies });
     const banned = ["framer-motion", "motion", "gsap", "react-spring", "@react-spring/web", "@formkit/auto-animate", "animejs", "popmotion"];
     expect(deps.filter((d) => banned.includes(d))).toEqual([]);
+  });
+});
+
+// ─── M3: page motion cleanup ──────────────────────────────────────────────
+
+describe("motion guard: M3 page contract", () => {
+  const read = (file: string) => readFileSync(file, "utf8");
+  const pages = sourceFiles("app");
+
+  it("no page fades in: route changes do not animate", () => {
+    const withFade = pages.filter((f) => /animate-\[fade-in|(?<![\w-])animate-fade-in(?![\w-])/.test(read(f)));
+    expect(withFade).toEqual([]);
+  });
+
+  it("no page progress bar transitions its width", () => {
+    for (const file of [
+      "app/(portal)/director/analytics/page.tsx",
+      "app/(portal)/director/goals/page.tsx",
+      "app/(portal)/finance/reports/page.tsx",
+      "app/(portal)/placement-cell/reports/page.tsx",
+      "app/(portal)/student/attendance/page.tsx",
+      "app/(portal)/student/insights/insights-client.tsx",
+    ]) {
+      const bars = read(file).split(/\r?\n/).filter((line) => /h-full[^"`]*rounded-full|rounded-full[^"`]*h-full/.test(line));
+      expect(bars.length, file).toBeGreaterThan(0);
+      for (const bar of bars) expect(bar, file).not.toMatch(/transition|duration-|motion-|animate-/);
+    }
+  });
+
+  it("non-interactive page cards have no hover shadow and no transition", () => {
+    for (const file of [
+      "app/(portal)/admin/dashboard/page.tsx",
+      "app/(portal)/hod/faculty/page.tsx",
+      "app/(portal)/student/courses/page.tsx",
+      "app/(portal)/teacher/courses/page.tsx",
+    ]) {
+      expect(read(file), file).not.toMatch(/hover:shadow|transition-shadow|transition-all/);
+    }
+  });
+
+  it("interactive page cards keep a hover shadow, but it is not animated", () => {
+    for (const [file, element] of [
+      ["app/(portal)/director/departments/page.tsx", "<button"],
+      ["app/(portal)/teacher/dashboard/dashboard-client.tsx", "<Link"],
+    ]) {
+      const source = read(file);
+      const line = source.split(/\r?\n/).find((l) => l.includes("hover:shadow-md"));
+      expect(line, file).toBeDefined();
+      expect(line, file).not.toMatch(/transition|duration-|motion-/);
+      expect(source, file).toContain(element);
+    }
+  });
+
+  it("the route loading screen is static: nothing pulses or spins", () => {
+    const loading = read("app/loading.tsx");
+    expect(loading).not.toMatch(/animate-|transition|motion-/);
+    expect(loading).toContain("Loading Academic Nexus...");
+  });
+
+  it("the dead --animate-* tokens and their orphaned keyframes are gone", () => {
+    const css = read("app/globals.css");
+    expect(css).not.toMatch(/--animate-/);
+    expect(css).not.toMatch(/@keyframes\s+slide-in-right/);
+  });
+
+  it("every remaining @keyframes is used by something", () => {
+    const css = read("app/globals.css");
+    const names = [...css.matchAll(/@keyframes\s+([\w-]+)/g)].map((m) => m[1]);
+    const code = [...pages, ...CLASS_RULE_SCOPE.slice(1).flatMap(sourceFiles)].map(read).join("\n");
+    for (const name of names) {
+      expect(code.includes(`animate-[${name}_`) || new RegExp(`animation(?:-name)?:[^;]*\b${name}\b`).test(css), name).toBe(true);
+    }
   });
 });

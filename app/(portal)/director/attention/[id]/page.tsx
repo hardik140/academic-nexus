@@ -74,7 +74,7 @@ export default function DirectorAttentionDetail() {
   const canReview = flag.status === "resolved" && !flag.reviewed_at;
 
   return (
-    <div className="space-y-lg animate-[fade-in_0.3s_ease-out] max-w-[48rem]">
+    <div className="space-y-lg max-w-[48rem]">
       <button type="button" onClick={() => router.push("/director/attention")} className="text-sm text-secondary hover:underline">
         ← Back to Attention Center
       </button>

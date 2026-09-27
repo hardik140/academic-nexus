@@ -47,7 +47,7 @@ export default async function StudentCourses({
   const { data: enrollments } = await query;
 
   return (
-    <div className="space-y-lg animate-[fade-in_0.3s_ease-out]">
+    <div className="space-y-lg">
       <div>
         <h1 className="text-2xl font-extrabold text-on-surface tracking-tight">My Courses</h1>
         <p className="text-sm text-on-surface-variant mt-xs">All enrolled, completed, and dropped courses</p>
@@ -59,7 +59,7 @@ export default async function StudentCourses({
           <Link
             key={f.value}
             href={f.value === "all" ? "/student/courses" : `/student/courses?status=${f.value}`}
-            className={`px-md py-sm text-sm font-semibold capitalize transition-all border-b-2 -mb-[1px] ${
+            className={`px-md py-sm text-sm font-semibold capitalize motion-feedback border-b-2 -mb-[1px] ${
               activeFilter === f.value
                 ? "text-secondary border-secondary"
                 : "text-outline border-transparent hover:text-on-surface-variant"
@@ -75,7 +75,7 @@ export default async function StudentCourses({
           const offering = e.course_offerings;
           const course = offering?.courses;
           return (
-            <div key={e.id} className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-lg shadow-sm hover:shadow-md transition-all">
+            <div key={e.id} className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-lg shadow-sm">
               <div className="flex items-center justify-between mb-sm">
                 <span className="text-xs font-bold text-secondary uppercase tracking-wider">{course?.code}</span>
                 <span className={`text-xs font-semibold px-sm py-xs rounded-full capitalize ${
