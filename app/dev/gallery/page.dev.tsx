@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Button, StatusBadge } from "@/components/ui/modal";
 import { StatsCard } from "@/components/ui/stats-card";
-import { DataTableDemos, FormFieldDemos, ModalDemo } from "./demos";
+import { AsyncResourceDemo, ButtonFormDemo, DataTableDemos, FormFieldDemos, ModalDemo } from "./demos";
 
 /**
  * Development-only component gallery — the browser-verification surface for
@@ -126,6 +126,14 @@ export default function ComponentGalleryPage() {
 
         <Section id="modal" title="Modal">
           <ModalDemo />
+        </Section>
+
+        <Section id="button-form" title="Button inside a form">
+          <ButtonFormDemo />
+        </Section>
+
+        <Section id="async-resource" title="useAsyncResource">
+          <AsyncResourceDemo />
         </Section>
       </div>
     </main>

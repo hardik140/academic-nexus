@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Modal, Button, FormField } from "@/components/ui/modal";
 import { DataTable } from "@/components/ui/data-table";
+import { useAsyncResource } from "@/hooks/use-async-resource";
 
 // Interactive halves of the development-only component gallery. Imported only
 // by app/dev/gallery/page.dev.tsx, which is not a route outside `next dev`
@@ -75,6 +76,72 @@ export function FormFieldDemos() {
       <FormField label="Field with error" id="g-error" value="not-an-email" onChange={() => {}} error="Enter a valid email address." />
       <FormField label="Disabled field" id="g-disabled" value="Read-only value" onChange={() => {}} disabled />
       <FormField label="Textarea" id="g-textarea" type="textarea" value={area} onChange={setArea} rows={3} placeholder="Reason..." />
+    </div>
+  );
+}
+
+/** Browser check for Button's default type: only an explicit submit submits. */
+export function ButtonFormDemo() {
+  const [submits, setSubmits] = useState(0);
+  return (
+    <form
+      aria-label="Button form behaviour"
+      onSubmit={(e) => {
+        e.preventDefault();
+        setSubmits((n) => n + 1);
+      }}
+      className="flex flex-wrap items-center gap-sm"
+    >
+      <Button variant="outline">Untyped button</Button>
+      <Button type="submit">Explicit submit</Button>
+      <span className="text-sm text-on-surface" data-testid="submit-count">
+        Submissions: {submits}
+      </span>
+    </form>
+  );
+}
+
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+type SampleRequest = { id: number; label: string; delayMs: number; fail: boolean };
+
+/**
+ * Browser check for useAsyncResource: loading → success, loading → error,
+ * reload, and a slow request overtaken by a fast one (the slow result must
+ * never land). Data is fabricated by a timer; nothing is fetched.
+ */
+export function AsyncResourceDemo() {
+  const [request, setRequest] = useState<SampleRequest>({ id: 0, label: "initial", delayMs: 300, fail: false });
+  const resource = useAsyncResource(async () => {
+    await wait(request.delayMs);
+    if (request.fail) throw new Error("Sample failure");
+    return request.label;
+  }, [request.id]);
+
+  const next = (label: string, delayMs: number, fail = false) =>
+    setRequest((r) => ({ id: r.id + 1, label, delayMs, fail }));
+
+  return (
+    <div className="space-y-sm">
+      <div className="flex flex-wrap gap-sm">
+        <Button variant="outline" onClick={() => next("loaded", 300)}>Load (succeeds)</Button>
+        <Button variant="outline" onClick={() => next("never", 300, true)}>Load (fails)</Button>
+        <Button variant="outline" onClick={() => resource.reload()}>Reload</Button>
+        <Button
+          variant="outline"
+          onClick={() => {
+            next("slow", 1200);
+            setTimeout(() => next("fast", 100), 50);
+          }}
+        >
+          Slow then fast
+        </Button>
+      </div>
+      <p className="text-sm text-on-surface" role="status">
+        Status: <span data-testid="resource-status">{resource.status}</span> · Data:{" "}
+        <span data-testid="resource-data">{resource.data ?? "none"}</span>
+        {resource.status === "error" && <> · Error: {resource.error instanceof Error ? resource.error.message : "unknown"}</>}
+      </p>
     </div>
   );
 }
