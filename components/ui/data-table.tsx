@@ -156,7 +156,7 @@ export function DataTable<T extends Record<string, any>>({
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 placeholder={searchPlaceholder}
-                className="w-full max-w-[20rem] bg-surface-container-low border border-outline-variant rounded-lg px-md py-xs text-sm text-on-surface placeholder:text-outline focus:ring-2 focus:ring-secondary focus:border-secondary outline-none transition-all"
+                className="w-full max-w-[20rem] bg-surface-container-low border border-border-control rounded-lg px-md py-xs text-sm text-on-surface placeholder:text-outline focus:ring-2 focus:ring-secondary focus:border-secondary outline-none motion-feedback"
               />
             )}
             {headerAction}
@@ -174,7 +174,7 @@ export function DataTable<T extends Record<string, any>>({
                   key={col.key}
                   className={cn(
                     "text-left px-lg py-sm font-semibold text-xs uppercase tracking-wider",
-                    col.sortable && "cursor-pointer select-none hover:text-on-surface",
+                    col.sortable && "cursor-pointer select-none hover:text-on-surface motion-feedback",
                     col.className
                   )}
                   onClick={() => col.sortable && handleSort(col.key)}
@@ -211,7 +211,7 @@ export function DataTable<T extends Record<string, any>>({
                 <tr
                   key={keyExtractor(row)}
                   className={cn(
-                    "hover:bg-surface-container-low transition-colors",
+                    "hover:bg-surface-container-low motion-feedback",
                     onRowClick && "cursor-pointer"
                   )}
                   onClick={() => onRowClick?.(row)}
@@ -257,7 +257,7 @@ export function DataTable<T extends Record<string, any>>({
             <button
               disabled={page === 0}
               onClick={() => setPage(page - 1)}
-              className="px-sm py-xs text-xs font-medium rounded-lg bg-surface-container-low hover:bg-surface-container-high disabled:opacity-40 transition-colors"
+              className="px-sm py-xs text-xs font-medium rounded-lg bg-surface-container-low hover:bg-surface-container-high disabled:opacity-40 motion-feedback"
             >
               Previous
             </button>
@@ -271,7 +271,7 @@ export function DataTable<T extends Record<string, any>>({
                   key={pageNum}
                   onClick={() => setPage(pageNum)}
                   className={cn(
-                    "w-8 h-8 text-xs font-medium rounded-lg transition-colors",
+                    "w-8 h-8 text-xs font-medium rounded-lg motion-feedback",
                     page === pageNum
                       ? "bg-secondary text-on-secondary"
                       : "bg-surface-container-low hover:bg-surface-container-high text-on-surface-variant"
@@ -284,7 +284,7 @@ export function DataTable<T extends Record<string, any>>({
             <button
               disabled={page >= totalPages - 1}
               onClick={() => setPage(page + 1)}
-              className="px-sm py-xs text-xs font-medium rounded-lg bg-surface-container-low hover:bg-surface-container-high disabled:opacity-40 transition-colors"
+              className="px-sm py-xs text-xs font-medium rounded-lg bg-surface-container-low hover:bg-surface-container-high disabled:opacity-40 motion-feedback"
             >
               Next
             </button>

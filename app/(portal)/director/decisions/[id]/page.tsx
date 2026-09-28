@@ -76,7 +76,7 @@ export default function DirectorDecisionDetail() {
   const isPending = ["pending", "info_requested", "sent_back"].includes(decision.status);
 
   return (
-    <div className="space-y-lg animate-[fade-in_0.3s_ease-out] max-w-[48rem]">
+    <div className="space-y-lg max-w-[48rem]">
       <button type="button" onClick={() => router.push("/director/decisions")} className="text-sm text-secondary hover:underline">
         ← Back to Decision Inbox
       </button>

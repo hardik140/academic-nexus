@@ -93,7 +93,7 @@ export default async function TeacherCoursePulse({ params }: { params: Promise<{
   const needsAttention = studentsWithRisk.filter((s) => s.risk.level !== "low");
 
   return (
-    <div className="space-y-lg animate-[fade-in_0.3s_ease-out]">
+    <div className="space-y-lg">
       <div>
         <Link href="/teacher/courses" className="text-xs font-semibold text-secondary hover:underline">← My Classes</Link>
         <h1 className="text-2xl font-extrabold text-on-surface tracking-tight mt-xs">{course?.code} — {course?.name}</h1>

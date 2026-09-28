@@ -200,7 +200,7 @@ export default function TeacherAttendance() {
   };
 
   return (
-    <div className="space-y-lg animate-[fade-in_0.3s_ease-out]">
+    <div className="space-y-lg">
       <div>
         <h1 className="text-2xl font-extrabold text-on-surface tracking-tight">Mark Attendance</h1>
         <p className="text-sm text-on-surface-variant mt-xs">Select a class and mark student attendance</p>
@@ -328,7 +328,7 @@ export default function TeacherAttendance() {
                       )
                     )}
                     <button
-                      className={`px-md py-xs rounded-full text-xs font-bold min-w-[80px] text-center capitalize transition-all ${statusColors[attendance[s.id] || "present"]}`}
+                      className={`px-md py-xs rounded-full text-xs font-bold min-w-[80px] text-center capitalize motion-feedback ${statusColors[attendance[s.id] || "present"]}`}
                       onClick={() => toggleStatus(s.id)}
                     >
                       {attendance[s.id] || "present"}

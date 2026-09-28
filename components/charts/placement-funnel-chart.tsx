@@ -25,7 +25,9 @@ export function PlacementFunnelChart({ stages }: { stages: FunnelStage[] }) {
     <ResponsiveContainer width="100%" height={280}>
       <FunnelChart>
         <Tooltip />
-        <Funnel dataKey="value" data={stages} isAnimationActive>
+        {/* Never animated (Checkpoint 4). The animation flag used to be set,
+            which forced a 1.5 s grow-in even under prefers-reduced-motion. */}
+        <Funnel dataKey="value" data={stages} isAnimationActive={false}>
           <LabelList position="right" dataKey="name" fill="var(--color-on-surface)" stroke="none" />
           <LabelList position="center" dataKey="value" fill="#fff" stroke="none" />
           {stages.map((_, i) => (

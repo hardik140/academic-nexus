@@ -34,7 +34,7 @@ export default async function StudentGrades() {
   });
 
   return (
-    <div className="space-y-lg animate-[fade-in_0.3s_ease-out]">
+    <div className="space-y-lg">
       <div className="flex items-center justify-between flex-wrap gap-md">
         <div>
           <h1 className="text-2xl font-extrabold text-on-surface tracking-tight">Grades & Marks</h1>

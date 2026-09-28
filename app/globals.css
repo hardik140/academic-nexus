@@ -1,17 +1,33 @@
 @import "tailwindcss";
 
 /*
- * Academic Nexus — Design System Tokens
- * Source: stitch_comprehensive_sis_portal_ecosystem / DESIGN.md
+ * Academic Nexus — design tokens (Foundation Stage 2).
  *
- * Multi-tenant SaaS SIS Platform
- * Color palette, typography, spacing, and component tokens
+ * Direction: "Registrar's desk, done properly" — calm, exact, institutional.
+ * Hierarchy comes from type, spacing, contrast and a 1px border, not from
+ * shadows, gradients or motion.
+ *
+ * Every text/background pairing named here is checked against WCAG 2.2 AA:
+ * 4.5:1 for text, 3:1 for control boundaries, focus indicators and chart
+ * marks (ratios in the comments are against #ffffff unless stated).
+ *
+ * Components consume these tokens by name; migrating each component onto the
+ * semantic names (radius, elevation, type roles) belongs to the primitive
+ * stages, not here.
  */
 
-@theme {
-  /* ─── Color Tokens (from Stitch DESIGN.md) ─── */
+/* ─── Font families ───
+ * --font-inter / --font-jetbrains-mono are set on <html> by next/font
+ * (app/layout.tsx). `inline` makes the utilities reference them directly. */
+@theme inline {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
+}
 
-  /* Surface hierarchy */
+/* `static`: emitted as CSS variables even when no utility uses them yet, so
+ * charts, the gallery and later components can read them with var(). */
+@theme static {
+  /* ─── Surfaces ─── */
   --color-surface: #f8f9ff;
   --color-surface-dim: #cbdbf5;
   --color-surface-bright: #f8f9ff;
@@ -20,61 +36,107 @@
   --color-surface-container: #e5eeff;
   --color-surface-container-high: #dce9ff;
   --color-surface-container-highest: #d3e4fe;
+  --color-background: #f8f9ff;
+  --color-on-background: #0b1c30;
 
-  /* On-surface */
-  --color-on-surface: #0b1c30;
-  --color-on-surface-variant: #45464d;
+  /* ─── Text ─── */
+  --color-on-surface: #0b1c30;         /* 17.2:1 — primary text */
+  --color-on-surface-variant: #45464d; /*  9.4:1 — secondary text, labels */
+  --color-outline: #64656d;            /*  5.8:1 — muted text (4.7:1 on surface-container-high) */
   --color-inverse-surface: #213145;
   --color-inverse-on-surface: #eaf1ff;
 
-  /* Outline */
-  --color-outline: #76777d;
-  --color-outline-variant: #c6c6cd;
+  /* ─── Borders ─── */
+  --color-outline-variant: #c6c6cd;    /* dividers and panel edges — decorative, not a control boundary */
+  --color-border-control: #7a7b82;     /* input/select/textarea boundary — 4.2:1 on white, 3.8:1 on surface-container-low */
 
-  /* Primary */
-  --color-primary: #000000;
-  --color-on-primary: #ffffff;
-  --color-primary-container: #131b2e;
-  --color-on-primary-container: #7c839b;
-  --color-primary-fixed: #dae2fd;
-  --color-primary-fixed-dim: #bec6e0;
-
-  /* Secondary (Brand Blue) */
-  --color-secondary: #0051d5;
+  /* ─── Accent (the only one) ─── */
+  --color-secondary: #0051d5;          /* 6.7:1 */
   --color-on-secondary: #ffffff;
-  --color-secondary-container: #316bf3;
+  --color-secondary-container: #316bf3; /* hover fill under white text — 4.6:1 */
   --color-on-secondary-container: #fefcff;
   --color-secondary-fixed: #dbe1ff;
   --color-secondary-fixed-dim: #b4c5ff;
   --color-on-secondary-fixed: #00174b;
 
-  /* Tertiary */
+  /* Tertiary is kept only for its one existing consumer (admin dashboard). */
   --color-tertiary: #000000;
   --color-on-tertiary: #ffffff;
   --color-tertiary-container: #191c1e;
 
-  /* Error / Destructive */
-  --color-error: #ba1a1a;
+  /* ─── Focus ─── */
+  --color-focus-ring: #0051d5;         /* 6.7:1 on white, 6.1:1 on surface-container-low */
+
+  /* ─── Status ───
+   * Solid role: icons, text on white/surface, fills under white text.
+   * Container pair: tinted badges and callouts — always use the on-container
+   * text, not the solid role, on a container. Status colour is never the only
+   * signal: keep the word, and an icon where the state needs one. */
+  --color-success: #047857;            /* 5.5:1; white on it 5.5:1 */
+  --color-on-success: #ffffff;
+  --color-success-container: #e6f4ed;
+  --color-on-success-container: #065f46; /* 6.8:1 on its container */
+
+  --color-warning: #b45309;            /* 5.0:1; white on it 5.0:1 */
+  --color-on-warning: #ffffff;
+  --color-warning-container: #fdf1e3;
+  --color-on-warning-container: #92400e; /* 6.4:1 on its container */
+
+  --color-info: #1d4ed8;               /* 6.7:1; white on it 6.7:1 */
+  --color-on-info: #ffffff;
+  --color-info-container: #e8eefc;
+  --color-on-info-container: #1e40af;  /* 7.5:1 on its container */
+
+  --color-error: #ba1a1a;              /* 6.5:1; white on it 6.5:1 */
   --color-on-error: #ffffff;
   --color-error-container: #ffdad6;
-  --color-on-error-container: #93000a;
+  --color-on-error-container: #93000a; /* 7.2:1 on its container */
 
-  /* Semantic */
-  --color-success: #10b981;
-  --color-on-success: #ffffff;
-  --color-warning: #f59e0b;
-  --color-on-warning: #ffffff;
-  --color-info: #3b82f6;
+  /* Neutral (slate): states that are settled rather than good or bad — a
+   * closed academic period is read-only, not a failure. */
+  --color-neutral: #475569;            /* 7.6:1 */
+  --color-on-neutral: #ffffff;
+  --color-neutral-container: #eceff3;
+  --color-on-neutral-container: #334155; /* 9.0:1 on its container */
 
-  /* Background */
-  --color-background: #f8f9ff;
-  --color-on-background: #0b1c30;
+  /* ─── Charts ───
+   * Six series colours chosen to stay distinct under simulated protanopia,
+   * deuteranopia and tritanopia (min ΔE76 ≥ 18 between any two), each at
+   * least 4.1:1 on white so marks meet the 3:1 graphics minimum. Order is
+   * the assignment order; never rely on colour alone to identify a series. */
+  --color-chart-1: #1d5fd1; /* blue    5.8:1 */
+  --color-chart-2: #d1570c; /* orange  4.1:1 */
+  --color-chart-3: #11845b; /* green   4.7:1 */
+  --color-chart-4: #a4448c; /* magenta 5.6:1 */
+  --color-chart-5: #1e3a8a; /* navy   10.4:1 */
+  --color-chart-6: #9a3412; /* brown   7.3:1 */
 
-  /* ─── Typography ─── */
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  /* ─── Type roles ───
+   * Caption 12 · body-sm 13 · body 14 (also tables) · emphasis 16 ·
+   * section 18 · page-title 24 · metric 30 (dashboard numbers).
+   * Nothing smaller than 12px. */
+  --text-caption: 0.75rem;
+  --text-caption--line-height: 1rem;
+  --text-body-sm: 0.8125rem;
+  --text-body-sm--line-height: 1.125rem;
+  --text-body: 0.875rem;
+  --text-body--line-height: 1.25rem;
+  --text-emphasis: 1rem;
+  --text-emphasis--line-height: 1.5rem;
+  --text-section: 1.125rem;
+  --text-section--line-height: 1.625rem;
+  --text-section--font-weight: 600;
+  --text-page-title: 1.5rem;
+  --text-page-title--line-height: 2rem;
+  --text-page-title--font-weight: 600;
+  --text-page-title--letter-spacing: -0.015em;
+  --text-metric: 1.875rem;
+  --text-metric--line-height: 2.25rem;
+  --text-metric--font-weight: 600;
+  --text-metric--letter-spacing: -0.02em;
 
-  /* ─── Spacing Scale ─── */
+  /* ─── Spacing ─── xs 4 · sm 8 · md 16 · lg 24 · xl 32 · 2xl 48 · 3xl 64
+   * (lib/utils.ts teaches tailwind-merge these names.) */
   --spacing-xs: 4px;
   --spacing-sm: 8px;
   --spacing-md: 16px;
@@ -83,41 +145,179 @@
   --spacing-2xl: 48px;
   --spacing-3xl: 64px;
 
-  /* ─── Border Radius ─── */
+  /* ─── Radius ───
+   * Semantic: control 8 (inputs, buttons) · panel 12 (cards, tables) ·
+   * dialog 16. The size names below are the pre-Stage-2 overrides, kept so
+   * existing screens do not shift; components move to the semantic names in
+   * the primitive stages. */
+  --radius-control: 8px;
+  --radius-panel: 12px;
+  --radius-dialog: 16px;
+  --radius-full: 9999px;
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 16px;
   --radius-xl: 24px;
-  --radius-full: 9999px;
 
-  /* ─── Shadows ─── */
+  /* ─── Elevation ───
+   * panel: a 1px outline-variant border and no shadow.
+   * menu: popovers, dropdowns, menus.  dialog: modal dialogs and sheets.
+   * Nothing else floats; no hover shadows on static cards or primary actions.
+   * The size names are pre-Stage-2 values, kept for existing screens. */
+  --shadow-panel: 0 0 #0000;
+  --shadow-menu: 0 4px 12px -2px rgb(11 28 48 / 0.12), 0 2px 4px -2px rgb(11 28 48 / 0.08);
+  --shadow-dialog: 0 24px 48px -12px rgb(11 28 48 / 0.28), 0 8px 16px -8px rgb(11 28 48 / 0.12);
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
   --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.07), 0 2px 4px -2px rgb(0 0 0 / 0.07);
   --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.08);
   --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
 
-  /* ─── Animations ─── */
-  --animate-fade-in: fade-in 0.3s ease-out;
-  --animate-slide-up: slide-up 0.3s ease-out;
-  --animate-slide-in-right: slide-in-right 0.25s ease-out;
+  /* ─── Easing ─── out and in-out keep Tailwind's values, so existing
+   * `ease-out` / `ease-in-out` utilities do not change. */
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-emphasized: cubic-bezier(0.2, 0, 0, 1);
 }
 
-@keyframes fade-in {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
+/* Tokens with no Tailwind utility namespace: read with var() or the
+ * `z-(--z-header)` / `duration-(--duration-fast)` utility syntax. */
+:root {
+  /* Motion — consumed through the motion-* utilities below. */
+  --duration-instant: 100ms;
+  --duration-fast: 150ms;
+  --duration-normal: 200ms;
+  --duration-slow: 300ms;
+
+  /* Stacking. Dialogs and sheets use the browser top layer (<dialog>),
+   * not a larger number. */
+  --z-sticky: 10;
+  --z-header: 20;
+  --z-drawer-scrim: 40;
+  --z-drawer: 50;
+
+  /* Focus indicator geometry. */
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
 }
 
-@keyframes slide-up {
-  from { opacity: 0; transform: translateY(16px); }
-  to { opacity: 1; transform: translateY(0); }
+/* ─── Motion utilities (Checkpoint 4, M1) ───
+ * The only sanctioned way to make something move. Each utility is a
+ * complete transition for one semantic job — properties, duration and
+ * easing together — so callers never pick a duration. Only colour, opacity
+ * and transform are animated (plus the discrete display/overlay switch a
+ * native <dialog> needs to animate its exit); nothing here touches layout.
+ * lib/utils.ts makes cn() keep these over any raw transition-/duration-/
+ * ease- class, and tests/motion-contract.test.ts guards the rest.
+ *
+ * Reduced motion needs no code here: the durations are the Stage 2 tokens,
+ * which are 0 under prefers-reduced-motion, and the global rule in the base
+ * layer cuts every element's transitions to 0.01ms. */
+
+/* Hover, press and focus on high-frequency controls. */
+@utility motion-feedback {
+  transition-property: color, background-color, border-color, outline-color, fill, stroke;
+  transition-duration: var(--duration-instant);
+  transition-timing-function: var(--ease-out);
 }
 
-@keyframes slide-in-right {
-  from { opacity: 0; transform: translateX(16px); }
-  to { opacity: 1; transform: translateX(0); }
+/* The same element changing meaning: status, pending → done, enabled → disabled. */
+@utility motion-state {
+  transition-property: color, background-color, border-color, outline-color, fill, stroke, opacity;
+  transition-duration: var(--duration-fast);
+  transition-timing-function: var(--ease-in-out);
 }
 
-/* ─── Dark Mode Overrides ─── */
+/* A native <dialog> opened with showModal(): rises 8px and fades in, fades
+ * out on close. The closed state is the exit (150ms, ease-in-out); [open] is
+ * the enter (200ms, ease-emphasized); @starting-style is where an opening
+ * dialog starts from. allow-discrete keeps it rendered until the exit ends.
+ * The ::backdrop only fades; its colour belongs to the Dialog component. */
+@utility motion-dialog {
+  opacity: 0;
+  transform: translateY(8px);
+  transition-property: opacity, transform, display, overlay;
+  transition-behavior: allow-discrete;
+  transition-duration: var(--duration-fast);
+  transition-timing-function: var(--ease-in-out);
+
+  &[open] {
+    opacity: 1;
+    transform: translateY(0);
+    transition-duration: var(--duration-normal);
+    transition-timing-function: var(--ease-emphasized);
+  }
+
+  @starting-style {
+    &[open] {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+  }
+
+  &::backdrop {
+    opacity: 0;
+    transition-property: opacity, display, overlay;
+    transition-behavior: allow-discrete;
+    transition-duration: var(--duration-fast);
+    transition-timing-function: var(--ease-in-out);
+  }
+
+  &[open]::backdrop {
+    opacity: 1;
+    transition-duration: var(--duration-normal);
+    transition-timing-function: var(--ease-emphasized);
+  }
+
+  @starting-style {
+    &[open]::backdrop {
+      opacity: 0;
+    }
+  }
+}
+
+/* A native <dialog> used as the mobile navigation drawer: slides in from the
+ * inline start (300ms, ease-emphasized), out in 200ms (ease-in-out). */
+@utility motion-drawer {
+  transform: translateX(-100%);
+  transition-property: transform, display, overlay;
+  transition-behavior: allow-discrete;
+  transition-duration: var(--duration-normal);
+  transition-timing-function: var(--ease-in-out);
+
+  &[open] {
+    transform: translateX(0);
+    transition-duration: var(--duration-slow);
+    transition-timing-function: var(--ease-emphasized);
+  }
+
+  @starting-style {
+    &[open] {
+      transform: translateX(-100%);
+    }
+  }
+
+  &::backdrop {
+    opacity: 0;
+    transition-property: opacity, display, overlay;
+    transition-behavior: allow-discrete;
+    transition-duration: var(--duration-normal);
+    transition-timing-function: var(--ease-in-out);
+  }
+
+  &[open]::backdrop {
+    opacity: 1;
+    transition-duration: var(--duration-slow);
+    transition-timing-function: var(--ease-emphasized);
+  }
+
+  @starting-style {
+    &[open]::backdrop {
+      opacity: 0;
+    }
+  }
+}
+
+/* ─── Dark Mode Overrides ─── (not enabled anywhere yet) */
 .dark {
   --color-surface: #0b1c30;
   --color-surface-dim: #0a1625;
@@ -135,22 +335,81 @@
   --color-outline-variant: #45464d;
 }
 
-/* ─── Base Resets ─── */
-html {
-  scroll-behavior: smooth;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background-color: var(--color-background);
+    color: var(--color-on-background);
+  }
+
+  /* Figures in tables line up by column. */
+  table {
+    font-variant-numeric: tabular-nums;
+  }
+
+  ::selection {
+    background-color: var(--color-secondary);
+    color: var(--color-on-secondary);
+  }
+
+  /* ─── Keyboard focus ───
+   * A 2px ring offset from the element: a change of shape, not only of
+   * colour, and 6:1 against the light surfaces. In the base layer so a
+   * component that swaps it for its own ring (outline-none + focus:ring-*)
+   * still can; removing it with nothing in its place is not allowed. */
+  :focus-visible {
+    outline: var(--focus-ring-width) solid var(--color-focus-ring);
+    outline-offset: var(--focus-ring-offset);
+  }
+
+  /* Forced-colours modes drop box-shadow rings, so a component's replacement
+   * ring would vanish — restore a system-coloured outline there. */
+  @media (forced-colors: active) {
+    :focus-visible {
+      outline: var(--focus-ring-width) solid CanvasText !important;
+      outline-offset: var(--focus-ring-offset) !important;
+    }
+  }
 }
 
-body {
-  font-family: var(--font-sans);
-  background-color: var(--color-background);
-  color: var(--color-on-background);
+/* ─── Motion preferences ─── */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
 }
 
-::selection {
-  background-color: var(--color-secondary);
-  color: var(--color-on-secondary);
+/* With reduced motion requested, every token duration is zero and all
+ * transitions and animations finish immediately — except a progress spinner,
+ * whose rotation is the only sign that work is still under way. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-instant: 0ms;
+    --duration-fast: 0ms;
+    --duration-normal: 0ms;
+    --duration-slow: 0ms;
+  }
+
+  @layer base {
+    *,
+    ::before,
+    ::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+
+    .animate-spin {
+      animation-duration: 1s !important;
+      animation-iteration-count: infinite !important;
+    }
+  }
 }
 
 /* ─── Scrollbar ─── */

@@ -104,7 +104,7 @@ export function StudentDashboardClient({
   });
 
   return (
-    <div className="space-y-lg animate-[fade-in_0.3s_ease-out]">
+    <div className="space-y-lg">
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-md">
         <div>

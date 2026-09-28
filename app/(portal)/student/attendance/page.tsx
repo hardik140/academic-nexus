@@ -43,7 +43,7 @@ export default async function StudentAttendance() {
   const overallPct = overall.total > 0 ? (overall.present / overall.total) * 100 : 0;
 
   return (
-    <div className="space-y-lg animate-[fade-in_0.3s_ease-out]">
+    <div className="space-y-lg">
       <div>
         <h1 className="text-2xl font-extrabold text-on-surface tracking-tight">Attendance Report</h1>
         <p className="text-sm text-on-surface-variant mt-xs">Your attendance records across all courses</p>
@@ -104,7 +104,7 @@ export default async function StudentAttendance() {
                 </div>
                 <div className="h-1.5 bg-surface-container-high rounded-full overflow-hidden">
                   <div
-                    className={`h-full rounded-full transition-all duration-700 ${pct >= 75 ? "bg-success" : "bg-error"}`}
+                    className={`h-full rounded-full ${pct >= 75 ? "bg-success" : "bg-error"}`}
                     style={{ width: `${pct}%` }}
                   />
                 </div>

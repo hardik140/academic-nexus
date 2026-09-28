@@ -68,7 +68,7 @@ export default function StrategicGoalsPage() {
   };
 
   return (
-    <div className="space-y-lg animate-[fade-in_0.3s_ease-out]">
+    <div className="space-y-lg">
       <div className="flex items-start justify-between gap-md">
         <div>
           <h1 className="text-2xl font-extrabold text-on-surface tracking-tight">Strategic Goals</h1>
@@ -118,7 +118,7 @@ export default function StrategicGoalsPage() {
                   <>
                     <div className="h-2 bg-surface-container-high rounded-full overflow-hidden">
                       <div
-                        className={`h-full rounded-full transition-all duration-700 ${pct >= 100 ? "bg-success" : pct >= 50 ? "bg-secondary" : "bg-warning"}`}
+                        className={`h-full rounded-full ${pct >= 100 ? "bg-success" : pct >= 50 ? "bg-secondary" : "bg-warning"}`}
                         style={{ width: `${pct}%` }}
                       />
                     </div>
