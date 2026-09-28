@@ -1,31 +1,37 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { assertRead } from "@/lib/read-result-server";
+import { NO_MATCH_ID } from "@/lib/read-result";
 
 export default async function TeacherTimetable() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase.from("profiles").select("college_id").eq("id", user.id).single();
+  const { data: profile, error: profileError } = await supabase.from("profiles").select("college_id").eq("id", user.id).single();
+  assertRead(profileError);
 
   // timetable_slots has no instructor_id after 047 — a slot belongs to an
   // offering, and the offering names the instructor. Read-only page: this
   // phase deliberately adds no timetable WRITE policy.
-  const { data: myOfferings } = await supabase
+  const { data: myOfferings, error: myOfferingsError } = await supabase
     .from("course_offerings")
     .select("id")
     .eq("instructor_id", user.id);
+  assertRead(myOfferingsError);
   const myOfferingIds = ((myOfferings as any[]) || []).map((o) => o.id);
 
-  const { data: slots } = myOfferingIds.length
+  const slotsRes = myOfferingIds.length
     ? await supabase
         .from("timetable_slots")
         .select("*, course_offerings:offering_id(courses:course_id(name, code), sections:section_id(name))")
-        .eq("college_id", profile?.college_id || "")
+        .eq("college_id", profile?.college_id || NO_MATCH_ID)
         .in("offering_id", myOfferingIds)
         .order("day_of_week")
         .order("start_time")
-    : { data: [] };
+    : { data: [], error: null };
+  assertRead(slotsRes.error);
+  const slots = slotsRes.data;
 
   const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
   const todayIndex = new Date().getDay();

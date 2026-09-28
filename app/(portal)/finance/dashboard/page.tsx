@@ -3,17 +3,19 @@ import { redirect } from "next/navigation";
 import { getCached } from "@/lib/cache";
 import { computeEffectiveFeeStatus } from "@/lib/finance-status";
 import { getFinanceExceptions } from "../exceptions/actions";
+import { assertRead } from "@/lib/read-result-server";
 
 export default async function FinanceDashboard() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: viewerProfile } = await supabase
+  const { data: viewerProfile, error: viewerProfileError } = await supabase
     .from("profiles")
     .select("college_id")
     .eq("id", user.id)
     .single();
+  assertRead(viewerProfileError);
 
   // Fee stats — pulls every fee row to aggregate client-side (a known,
   // already-flagged cost; see Implementation Status.md), so caching this
@@ -22,7 +24,8 @@ export default async function FinanceDashboard() {
     `dashboard:finance:${viewerProfile?.college_id}:fee-stats`,
     60,
     async () => {
-      const { data: allFees } = await supabase.from("fees").select("amount, paid_amount, status, due_date");
+      const { data: allFees, error: allFeesError } = await supabase.from("fees").select("amount, paid_amount, status, due_date");
+      assertRead(allFeesError);
       const totalBilled = allFees?.reduce((s, f) => s + f.amount, 0) || 0;
       const totalCollected = allFees?.reduce((s, f) => s + f.paid_amount, 0) || 0;
       // Computed live — nothing ever sets fees.status = 'overdue' (see
@@ -37,11 +40,12 @@ export default async function FinanceDashboard() {
   const exceptions = await getFinanceExceptions();
 
   // Recent payments
-  const { data: recentPayments } = await supabase
+  const { data: recentPayments, error: recentPaymentsError } = await supabase
     .from("payments")
     .select("*, profiles:student_id(full_name)")
     .order("created_at", { ascending: false })
     .limit(10);
+  assertRead(recentPaymentsError);
 
   const formatCurr = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
 
@@ -163,7 +167,7 @@ export default async function FinanceDashboard() {
                   <td className="px-lg py-md">
                     <span className={`text-xs font-semibold px-sm py-xs rounded-full ${
                       p.status === "cleared" ? "bg-success/10 text-success" :
-                      p.status === "pending" ? "bg-warning/10 text-warning" :
+                      p.status === "pending" ? "bg-warning-container text-on-warning-container" :
                       "bg-error/10 text-error"
                     }`}>{p.status}</span>
                   </td>

@@ -58,6 +58,16 @@ export function isPlainPath(value: unknown): value is string {
   return !/[\\\s\u0000-\u001f\u007f]/.test(value);
 }
 
+/**
+ * The sign-in page, asked to return to `current` afterwards (session
+ * expiry, M6). `current` passes the "after-sign-in" check first; if it is
+ * not a destination one may return to, the link is plain /login.
+ */
+export function signInHref(current: string): string {
+  const next = safeRedirectPath(current, "after-sign-in");
+  return next && next !== "/" ? `/login?next=${encodeURIComponent(next)}` : "/login";
+}
+
 export function safeRedirectPath(value: unknown, policy: RedirectPolicy): string | null {
   if (!isPlainPath(value)) return null;
 

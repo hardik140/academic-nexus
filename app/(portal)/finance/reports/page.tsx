@@ -3,17 +3,19 @@ import { redirect } from "next/navigation";
 import { formatCurrency } from "@/lib/utils";
 import { getCached } from "@/lib/cache";
 import { computeEffectiveFeeStatus } from "@/lib/finance-status";
+import { assertRead } from "@/lib/read-result-server";
 
 export default async function FinanceReports() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: viewerProfile } = await supabase
+  const { data: viewerProfile, error: viewerProfileError } = await supabase
     .from("profiles")
     .select("college_id")
     .eq("id", user.id)
     .single();
+  assertRead(viewerProfileError);
 
   // NOTE: `fees` is intentionally unbounded — the department/status breakdowns
   // below sum over the full result set client-side. A naive .limit() would
@@ -29,6 +31,7 @@ export default async function FinanceReports() {
         supabase.from("mv_fee_summary").select("*").maybeSingle(),
         supabase.from("fees").select("amount, paid_amount, status, due_date, students(departments(name, code))"),
       ]);
+      for (const res of [summaryRes, feesRes]) assertRead(res.error);
       return { summary: summaryRes.data, fees: feesRes.data || [] };
     }
   );

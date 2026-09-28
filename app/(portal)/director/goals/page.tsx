@@ -1,6 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { Alert } from "@/components/ui/alert";
+import { ErrorAlert } from "@/components/ui/error-alert";
+import { StateView } from "@/components/ui/state-view";
+import { useAsyncResource } from "@/hooks/use-async-resource";
+import { toFeedbackError, type FeedbackError } from "@/lib/action-failure";
 import { Button, FormField, Modal, StatusBadge } from "@/components/ui/modal";
 import { addMilestone, createGoal, listGoalOwnerCandidates, listGoals, toggleMilestone, updateGoal, type CreateGoalParams } from "./actions";
 
@@ -21,40 +26,74 @@ function progressPct(baseline: number | null, current: number | null, target: nu
 }
 
 export default function StrategicGoalsPage() {
-  const [goals, setGoals] = useState<any[]>([]);
-  const [owners, setOwners] = useState<any[]>([]);
   const [showCreate, setShowCreate] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [milestoneTitle, setMilestoneTitle] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<FeedbackError | string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [form, setForm] = useState<Partial<CreateGoalParams>>({ trackingMode: "auto" });
   const [creating, setCreating] = useState(false);
+  // Inline actions on a goal: which one is running, and how the last one ended.
+  const [busy, setBusy] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<FeedbackError | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
-  const load = async () => {
-    const [g, o] = await Promise.all([listGoals(), listGoalOwnerCandidates()]);
-    setGoals(g);
-    setOwners(o);
+  // Goals and who may own them. A failed load is an error, never "No
+  // strategic goals yet." (owner decision D5).
+  const goalsResource = useAsyncResource(async () => {
+    const [goals, owners] = await Promise.all([listGoals(), listGoalOwnerCandidates()]);
+    return { goals: goals as any[], owners: owners as any[] };
+  }, []);
+  const goals = goalsResource.data?.goals ?? [];
+  const owners = goalsResource.data?.owners ?? [];
+
+  /** Runs one inline action: one at a time, its failure said, the list refreshed after. */
+  const act = async (key: string, fn: () => Promise<unknown>, done: string) => {
+    if (busy) return false;
+    setBusy(key);
+    setActionError(null);
+    setNotice(null);
+    try {
+      await fn();
+      setNotice(done);
+      goalsResource.reload();
+      return true;
+    } catch (e) {
+      setActionError(await toFeedbackError(e, "The change was not saved."));
+      return false;
+    } finally {
+      setBusy(null);
+    }
   };
 
-  useEffect(() => {
-    load();
-  }, []);
-
   const handleCreate = async () => {
-    if (!form.title || !form.metricLabel || !form.targetValue || !form.startDate || !form.targetDate) return;
-    if (form.trackingMode === "auto" && !form.metricKey) {
-      setError("Pick a metric for an auto-tracked goal.");
+    if (creating) return;
+    // Say which fields are missing, on the fields themselves and in a summary.
+    const missing: Record<string, string> = {};
+    if (!form.title?.trim()) missing["goal-title"] = "Enter a title.";
+    if (form.trackingMode === "auto" && !form.metricKey) missing["goal-metric"] = "Pick a metric for an auto-tracked goal.";
+    if (!form.metricLabel?.trim()) missing["goal-metric-label"] = "Enter a label for the metric.";
+    if (!form.targetValue) missing["goal-target"] = "Enter the target value.";
+    if (!form.startDate) missing["goal-start"] = "Choose a start date.";
+    if (!form.targetDate) missing["goal-target-date"] = "Choose a target date.";
+    setFieldErrors(missing);
+    const firstMissing = Object.keys(missing)[0];
+    if (firstMissing) {
+      setError(`Fill in ${Object.keys(missing).length === 1 ? "the highlighted field" : "the highlighted fields"} to create the goal.`);
+      document.getElementById(firstMissing)?.focus();
       return;
     }
     setCreating(true);
     setError(null);
+    setNotice(null);
     try {
       await createGoal(form as CreateGoalParams);
       setShowCreate(false);
+      setNotice(`Goal "${form.title}" created.`);
       setForm({ trackingMode: "auto" });
-      await load();
+      goalsResource.reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to create goal.");
+      setError(await toFeedbackError(e, "Failed to create goal."));
     } finally {
       setCreating(false);
     }
@@ -62,9 +101,9 @@ export default function StrategicGoalsPage() {
 
   const handleAddMilestone = async (goalId: string) => {
     if (!milestoneTitle.trim()) return;
-    await addMilestone({ goalId, title: milestoneTitle.trim() });
-    setMilestoneTitle("");
-    await load();
+    if (await act(`milestone-${goalId}`, () => addMilestone({ goalId, title: milestoneTitle.trim() }), "Milestone added.")) {
+      setMilestoneTitle("");
+    }
   };
 
   return (
@@ -74,11 +113,25 @@ export default function StrategicGoalsPage() {
           <h1 className="text-2xl font-extrabold text-on-surface tracking-tight">Strategic Goals</h1>
           <p className="text-sm text-on-surface-variant mt-xs">Institutional targets, tracked against real data where possible</p>
         </div>
-        <Button variant="outline" onClick={() => setShowCreate(true)}>
+        <Button
+          variant="outline"
+          onClick={() => {
+            setError(null);
+            setFieldErrors({});
+            setShowCreate(true);
+          }}
+        >
           + New Goal
         </Button>
       </div>
 
+      <Alert tone="success" onDismiss={() => setNotice(null)}>
+        {notice}
+      </Alert>
+      <ErrorAlert error={actionError} />
+
+      <StateView state={goalsResource} isEmpty={() => false} loadingLabel="Loading strategic goals…" empty={{ title: "No strategic goals yet" }}>
+        {() => (
       <div className="space-y-md">
         {goals.length === 0 && (
           <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-xl text-center text-sm text-outline">
@@ -93,7 +146,7 @@ export default function StrategicGoalsPage() {
                 <div className="flex-1">
                   <div className="flex items-center gap-sm mb-xs flex-wrap">
                     <StatusBadge status={g.status} />
-                    <span className={`text-[10px] font-semibold px-sm py-xs rounded-full uppercase tracking-wider ${g.tracking_mode === "auto" ? "bg-info/10 text-info" : "bg-surface-container-high text-on-surface-variant"}`}>
+                    <span className={`text-[10px] font-semibold px-sm py-xs rounded-full uppercase tracking-wider ${g.tracking_mode === "auto" ? "bg-info-container text-on-info-container" : "bg-surface-container-high text-on-surface-variant"}`}>
                       {g.tracking_mode === "auto" ? "Auto-tracked" : "Manual"}
                     </span>
                     {g.department && <span className="text-xs text-outline">· {g.department.name}</span>}
@@ -143,18 +196,24 @@ export default function StrategicGoalsPage() {
                       <Button
                         size="sm"
                         variant="outline"
+                        disabled={busy !== null}
+                        aria-busy={busy === `progress-${g.id}` || undefined}
                         onClick={async () => {
                           const v = prompt("New current value:", g.current_value ?? "");
                           if (v != null && !isNaN(Number(v))) {
-                            await updateGoal({ goalId: g.id, currentValue: Number(v) });
-                            await load();
+                            await act(`progress-${g.id}`, () => updateGoal({ goalId: g.id, currentValue: Number(v) }), "Progress updated.");
                           }
                         }}
                       >
                         Update Progress
                       </Button>
                     )}
-                    <Button size="sm" onClick={async () => { await updateGoal({ goalId: g.id, status: "achieved" }); await load(); }}>
+                    <Button
+                      size="sm"
+                      disabled={busy !== null}
+                      aria-busy={busy === `achieved-${g.id}` || undefined}
+                      onClick={() => act(`achieved-${g.id}`, () => updateGoal({ goalId: g.id, status: "achieved" }), `"${g.title}" marked achieved.`)}
+                    >
                       Mark Achieved
                     </Button>
                   </div>
@@ -168,10 +227,10 @@ export default function StrategicGoalsPage() {
                       <input
                         type="checkbox"
                         checked={m.status === "done"}
-                        onChange={async (e) => {
-                          await toggleMilestone(m.id, e.target.checked);
-                          await load();
-                        }}
+                        disabled={busy !== null}
+                        onChange={(e) =>
+                          act(`toggle-${m.id}`, () => toggleMilestone(m.id, e.target.checked), e.target.checked ? "Milestone done." : "Milestone reopened.")
+                        }
                         className="rounded"
                       />
                       <span className={m.status === "done" ? "line-through text-outline" : "text-on-surface"}>{m.title}</span>
@@ -184,7 +243,7 @@ export default function StrategicGoalsPage() {
                       placeholder="Add a milestone..."
                       className="flex-1 bg-surface-container-low border border-outline-variant rounded-xl px-md py-sm text-sm outline-none focus:ring-2 focus:ring-secondary"
                     />
-                    <Button size="sm" onClick={() => handleAddMilestone(g.id)}>
+                    <Button size="sm" onClick={() => handleAddMilestone(g.id)} disabled={busy !== null} aria-busy={busy === `milestone-${g.id}` || undefined}>
                       Add
                     </Button>
                   </div>
@@ -194,6 +253,8 @@ export default function StrategicGoalsPage() {
           );
         })}
       </div>
+        )}
+      </StateView>
 
       <Modal
         open={showCreate}
@@ -205,15 +266,15 @@ export default function StrategicGoalsPage() {
             <Button variant="outline" onClick={() => setShowCreate(false)}>
               Cancel
             </Button>
-            <Button onClick={handleCreate} disabled={creating}>
-              {creating ? "..." : "Create"}
+            <Button onClick={handleCreate} disabled={creating} aria-busy={creating || undefined}>
+              {creating ? "Creating…" : "Create"}
             </Button>
           </>
         }
       >
         <div className="space-y-md">
-          {error && <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium">{error}</div>}
-          <FormField label="Title" id="goal-title" value={form.title || ""} onChange={(v) => setForm({ ...form, title: v })} required />
+          <ErrorAlert error={error} />
+          <FormField label="Title" id="goal-title" value={form.title || ""} onChange={(v) => setForm({ ...form, title: v })} required error={fieldErrors["goal-title"]} />
           <FormField label="Description" id="goal-description" type="textarea" rows={2} value={form.description || ""} onChange={(v) => setForm({ ...form, description: v })} />
           <FormField
             label="Tracking Mode"
@@ -236,9 +297,10 @@ export default function StrategicGoalsPage() {
               onChange={(v) => setForm({ ...form, metricKey: v as CreateGoalParams["metricKey"] })}
               options={METRIC_OPTIONS}
               required
+              error={fieldErrors["goal-metric"]}
             />
           )}
-          <FormField label="Metric Label" id="goal-metric-label" value={form.metricLabel || ""} onChange={(v) => setForm({ ...form, metricLabel: v })} placeholder="e.g. Placement Rate" required />
+          <FormField label="Metric Label" id="goal-metric-label" value={form.metricLabel || ""} onChange={(v) => setForm({ ...form, metricLabel: v })} placeholder="e.g. Placement Rate" required error={fieldErrors["goal-metric-label"]} />
           <FormField label="Unit (optional)" id="goal-metric-unit" value={form.metricUnit || ""} onChange={(v) => setForm({ ...form, metricUnit: v })} placeholder="%" />
           <FormField
             label="Target Value"
@@ -247,6 +309,7 @@ export default function StrategicGoalsPage() {
             value={form.targetValue ?? ""}
             onChange={(v) => setForm({ ...form, targetValue: Number(v) })}
             required
+            error={fieldErrors["goal-target"]}
           />
           <FormField
             label="Owner"
@@ -257,8 +320,8 @@ export default function StrategicGoalsPage() {
             options={owners.map((o) => ({ value: o.id, label: `${o.full_name} (${o.role})` }))}
           />
           <div className="grid grid-cols-2 gap-md">
-            <FormField label="Start Date" id="goal-start" type="date" value={form.startDate || ""} onChange={(v) => setForm({ ...form, startDate: v })} required />
-            <FormField label="Target Date" id="goal-target-date" type="date" value={form.targetDate || ""} onChange={(v) => setForm({ ...form, targetDate: v })} required />
+            <FormField label="Start Date" id="goal-start" type="date" value={form.startDate || ""} onChange={(v) => setForm({ ...form, startDate: v })} required error={fieldErrors["goal-start"]} />
+            <FormField label="Target Date" id="goal-target-date" type="date" value={form.targetDate || ""} onChange={(v) => setForm({ ...form, targetDate: v })} required error={fieldErrors["goal-target-date"]} />
           </div>
         </div>
       </Modal>

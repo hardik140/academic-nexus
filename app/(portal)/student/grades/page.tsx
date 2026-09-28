@@ -1,22 +1,26 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { assertRead } from "@/lib/read-result-server";
+import { NO_MATCH_ID } from "@/lib/read-result";
 
 export default async function StudentGrades() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: student } = await supabase.from("students").select("id, cgpa").eq("user_id", user.id).single();
+  const { data: student, error: studentError } = await supabase.from("students").select("id, cgpa").eq("user_id", user.id).single();
+  assertRead(studentError);
 
-  const { data: marks } = await supabase
+  const { data: marks, error: marksError } = await supabase
     .from("marks")
     // marks.semester and marks.course_id were both dropped by 047 — the
     // academic period and the course now come from the offering.
     .select(
       "*, course_offerings:offering_id(courses:course_id(name, code, credits), sections:section_id(name), semesters:semester_id(name, start_date))"
     )
-    .eq("student_id", student?.id || "")
+    .eq("student_id", student?.id || NO_MATCH_ID)
     .order("created_at", { ascending: false });
+  assertRead(marksError);
 
   // Keyed by OFFERING so a retake is its own result block rather than
   // overwriting the earlier attempt.

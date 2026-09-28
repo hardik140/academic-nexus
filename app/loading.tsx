@@ -1,6 +1,9 @@
 export default function Loading() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-surface">
+    // role="status": a full page load is under way (first load, or entering
+    // the portal). Navigation inside the portal keeps the shell and shows the
+    // shell's own pending marker instead (components/portal/portal-shell.tsx).
+    <div role="status" className="min-h-screen flex items-center justify-center bg-surface">
       <div className="flex flex-col items-center gap-md">
         {/* Static by design (Checkpoint 4, M3): the route is loading, not
             doing measurable work, so nothing pulses or spins. */}

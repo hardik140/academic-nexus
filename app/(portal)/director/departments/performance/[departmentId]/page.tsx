@@ -1,9 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { StatusBadge } from "@/components/ui/modal";
+import { ErrorState } from "@/components/ui/error-state";
+import { LoadingState } from "@/components/ui/loading-state";
+import { useAsyncResource } from "@/hooks/use-async-resource";
+import { classifyError } from "@/lib/feedback-error";
 import { getDepartmentDetail } from "../actions";
 
 const FUNNEL_STAGES: { key: string; label: string }[] = [
@@ -19,20 +22,14 @@ export default function DepartmentExecutiveDetail() {
   const params = useParams();
   const router = useRouter();
   const departmentId = params.departmentId as string;
-  const [data, setData] = useState<any>(null);
-  const [error, setError] = useState<string | null>(null);
+  const detail = useAsyncResource(() => getDepartmentDetail(departmentId), [departmentId]);
+  const data: any = detail.data;
 
-  useEffect(() => {
-    getDepartmentDetail(departmentId)
-      .then(setData)
-      .catch((e) => setError(e instanceof Error ? e.message : "Failed to load department."));
-  }, [departmentId]);
-
-  if (error) {
-    return <div className="p-xl text-center text-sm text-error">{error}</div>;
+  if (detail.status === "error" && !data) {
+    return <ErrorState {...classifyError(detail.error)} title="This department couldn't be loaded" onRetry={detail.reload} />;
   }
   if (!data) {
-    return <div className="p-xl text-center text-sm text-outline">Loading...</div>;
+    return <LoadingState label="Loading department…" />;
   }
 
   const { department, health, funnel, openRisks } = data;

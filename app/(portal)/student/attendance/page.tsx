@@ -3,20 +3,24 @@ import { redirect } from "next/navigation";
 import { formatDate, formatPct } from "@/lib/utils";
 import { StatusBadge } from "@/components/ui/modal";
 import { DEFAULT_QUERY_LIMIT } from "@/lib/constants";
+import { assertRead } from "@/lib/read-result-server";
+import { NO_MATCH_ID } from "@/lib/read-result";
 
 export default async function StudentAttendance() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: student } = await supabase.from("students").select("id").eq("user_id", user.id).single();
+  const { data: student, error: studentError } = await supabase.from("students").select("id").eq("user_id", user.id).single();
+  assertRead(studentError);
 
-  const { data: records } = await supabase
+  const { data: records, error: recordsError } = await supabase
     .from("attendance")
     .select("*, course_offerings:offering_id(courses:course_id(name, code), sections:section_id(name))")
-    .eq("student_id", student?.id || "")
+    .eq("student_id", student?.id || NO_MATCH_ID)
     .order("date", { ascending: false })
     .limit(DEFAULT_QUERY_LIMIT);
+  assertRead(recordsError);
 
   // Grouped per CLASS, not per course: a student retaking a course, or
   // taking two sections of one, has separate attendance in each and merging

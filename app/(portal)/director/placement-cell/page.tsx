@@ -1,8 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useRef, useState } from "react";
 import { Modal, Button, FormField, StatusBadge } from "@/components/ui/modal";
 import { StatsCard } from "@/components/ui/stats-card";
+import { Alert } from "@/components/ui/alert";
+import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
+import { ErrorAlert } from "@/components/ui/error-alert";
+import { StateView } from "@/components/ui/state-view";
+import { useAsyncResource } from "@/hooks/use-async-resource";
+import { toFeedbackError, type FeedbackError } from "@/lib/action-failure";
 import {
   listPlacementCellUsers,
   listPlacementCellCandidates,
@@ -16,30 +22,30 @@ import {
 type AssignMode = "invite" | "existing";
 
 export default function DirectorPlacementCell() {
-  const [users, setUsers] = useState<any[]>([]);
-  const [candidates, setCandidates] = useState<any[]>([]);
-  const [overview, setOverview] = useState<any>(null);
   const [showAssign, setShowAssign] = useState(false);
   const [mode, setMode] = useState<AssignMode>("invite");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<FeedbackError | null>(null);
   const [inviteForm, setInviteForm] = useState({ fullName: "", email: "" });
   const [selectedCandidate, setSelectedCandidate] = useState("");
+  const [notice, setNotice] = useState<string | null>(null);
+  const noticeRef = useRef<HTMLDivElement>(null);
+  const [revokeTarget, setRevokeTarget] = useState<{ id: string; name: string } | null>(null);
+  const [revokePending, setRevokePending] = useState(false);
+  const [revokeError, setRevokeError] = useState<FeedbackError | null>(null);
+  const [reactivating, setReactivating] = useState<string | null>(null);
 
-  const load = async () => {
-    const [usersData, candidatesData, overviewData] = await Promise.all([
+  // Users, candidates and the overview load together. A failed load is an
+  // error, never "No Placement Cell user assigned yet." or zeros (D5).
+  const cell = useAsyncResource(async () => {
+    const [users, candidates, overview] = await Promise.all([
       listPlacementCellUsers(),
       listPlacementCellCandidates(),
       getPlacementOverview(),
     ]);
-    setUsers(usersData);
-    setCandidates(candidatesData);
-    setOverview(overviewData);
-  };
-
-  useEffect(() => {
-    load();
+    return { users: users as any[], candidates: candidates as any[], overview: overview as any };
   }, []);
+  const candidates = cell.data?.candidates ?? [];
 
   const openAssign = () => {
     setMode("invite");
@@ -60,31 +66,44 @@ export default function DirectorPlacementCell() {
         await promoteToPlacementCell(selectedCandidate);
       }
       setShowAssign(false);
-      await load();
+      setNotice(mode === "invite" ? `Invitation sent to ${inviteForm.email}.` : "Staff member promoted to Placement Cell.");
+      cell.reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to assign Placement Cell.");
+      setError(await toFeedbackError(e, "Failed to assign Placement Cell."));
     } finally {
       setLoading(false);
     }
   };
 
-  const handleRevoke = async (userId: string) => {
-    setError(null);
+  // Removing someone's access is asked first; a failure stays in the dialog.
+  const confirmRevoke = async () => {
+    if (!revokeTarget) return;
+    setRevokePending(true);
+    setRevokeError(null);
     try {
-      await revokePlacementCell(userId);
-      await load();
+      await revokePlacementCell(revokeTarget.id);
+      setNotice(`Placement Cell access revoked for ${revokeTarget.name}.`);
+      setRevokeTarget(null);
+      cell.reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to revoke access.");
+      setRevokeError(await toFeedbackError(e, "Failed to revoke access."));
+    } finally {
+      setRevokePending(false);
     }
   };
 
-  const handleReactivate = async (userId: string) => {
+  const handleReactivate = async (user: { id: string; full_name: string }) => {
+    if (reactivating) return;
+    setReactivating(user.id);
     setError(null);
     try {
-      await reactivatePlacementCell(userId);
-      await load();
+      await reactivatePlacementCell(user.id);
+      setNotice(`Placement Cell access restored for ${user.full_name}.`);
+      cell.reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to re-activate access.");
+      setError(await toFeedbackError(e, "Failed to re-activate access."));
+    } finally {
+      setReactivating(null);
     }
   };
 
@@ -105,10 +124,18 @@ export default function DirectorPlacementCell() {
         <Button onClick={openAssign}>+ Assign Placement Cell</Button>
       </div>
 
-      {error && !showAssign && (
-        <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium">{error}</div>
-      )}
+      <div ref={noticeRef}>
+        <Alert tone="success" onDismiss={() => setNotice(null)}>
+          {notice}
+        </Alert>
+      </div>
 
+      {/* The assign dialog shows its own failure. */}
+      <ErrorAlert error={!showAssign ? error : null} />
+
+      <StateView state={cell} isEmpty={() => false} loadingLabel="Loading the Placement Cell…" empty={{ title: "No Placement Cell user assigned yet" }}>
+        {({ users, overview }) => (
+          <>
       {/* Placement Overview — oversight, not operational control */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-md">
         <StatsCard label="Students Placed" value={overview?.totalPlaced ?? 0} icon="🎓" color="success" />
@@ -146,17 +173,24 @@ export default function DirectorPlacementCell() {
                   <StatusBadge status={u.status} />
                   {u.status === "active" ? (
                     <button
-                      onClick={() => handleRevoke(u.id)}
+                      type="button"
+                      onClick={() => {
+                        setRevokeError(null);
+                        setRevokeTarget({ id: u.id, name: u.full_name });
+                      }}
                       className="text-xs text-error hover:underline font-medium"
                     >
                       Revoke Access
                     </button>
                   ) : (
                     <button
-                      onClick={() => handleReactivate(u.id)}
-                      className="text-xs text-success hover:underline font-medium"
+                      type="button"
+                      onClick={() => handleReactivate(u)}
+                      disabled={reactivating !== null}
+                      aria-busy={reactivating === u.id || undefined}
+                      className="text-xs text-success hover:underline font-medium disabled:opacity-50"
                     >
-                      Re-activate
+                      {reactivating === u.id ? "Re-activating…" : "Re-activate"}
                     </button>
                   )}
                 </div>
@@ -165,6 +199,9 @@ export default function DirectorPlacementCell() {
           )}
         </div>
       </div>
+          </>
+        )}
+      </StateView>
 
       <Modal
         open={showAssign}
@@ -180,15 +217,14 @@ export default function DirectorPlacementCell() {
                 loading ||
                 (mode === "invite" ? !inviteForm.email || !inviteForm.fullName : !selectedCandidate)
               }
+              aria-busy={loading || undefined}
             >
               {loading ? "Saving..." : mode === "invite" ? "Send Invitation" : "Promote to Placement Cell"}
             </Button>
           </>
         }
       >
-        {error && (
-          <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium mb-md">{error}</div>
-        )}
+        <ErrorAlert error={error} className="mb-md" />
 
         <div className="flex gap-xs mb-md bg-surface-container-low rounded-xl p-xs">
           <button
@@ -241,6 +277,23 @@ export default function DirectorPlacementCell() {
           />
         )}
       </Modal>
+
+      <ConfirmationDialog
+        open={!!revokeTarget}
+        title="Revoke Placement Cell access?"
+        description={
+          revokeTarget
+            ? `${revokeTarget.name} will lose access to the Placement Cell portal at once. You can re-activate them later.`
+            : undefined
+        }
+        confirmLabel="Revoke access"
+        pendingLabel="Revoking…"
+        pending={revokePending}
+        error={revokeError}
+        onConfirm={confirmRevoke}
+        onCancel={() => setRevokeTarget(null)}
+        returnFocusTo={() => noticeRef.current?.querySelector<HTMLElement>('[role="status"]') ?? null}
+      />
     </div>
   );
 }

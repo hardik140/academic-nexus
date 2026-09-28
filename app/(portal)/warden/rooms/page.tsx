@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { DataTable, type DataTableQuery } from "@/components/ui/data-table";
 import { listWardenRooms } from "./actions";
 
@@ -9,18 +9,30 @@ const ROOMS_PAGE_SIZE = 10;
 export default function WardenRooms() {
   const [rooms, setRooms] = useState<any[]>([]);
   const [roomsLoading, setRoomsLoading] = useState(false);
+  const [roomsError, setRoomsError] = useState<unknown>(null);
   const [totalRooms, setTotalRooms] = useState(0);
+  const latestLoad = useRef(0);
   const [query, setQuery] = useState<DataTableQuery>({ search: "", sortKey: null, sortDir: "asc", page: 0 });
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { loadRooms(query); }, [query]);
 
+  // The latest query's page; a failed load is an error in the table, never
+  // "No rooms found" (owner decision D5).
   const loadRooms = async (q: DataTableQuery) => {
+    const run = ++latestLoad.current;
     setRoomsLoading(true);
-    const { data, count } = await listWardenRooms(q);
-    setRooms(data);
-    setTotalRooms(count);
-    setRoomsLoading(false);
+    setRoomsError(null);
+    try {
+      const { data, count } = await listWardenRooms(q);
+      if (run !== latestLoad.current) return;
+      setRooms(data);
+      setTotalRooms(count);
+    } catch (e) {
+      if (run === latestLoad.current) setRoomsError(e);
+    } finally {
+      if (run === latestLoad.current) setRoomsLoading(false);
+    }
   };
 
   return (
@@ -51,8 +63,8 @@ export default function WardenRooms() {
             header: "Status",
             render: (row: any) => (
               <span className={`text-xs font-semibold px-sm py-xs rounded-full capitalize ${
-                row.status === "available" ? "bg-success/10 text-success" :
-                row.status === "full" ? "bg-warning/10 text-warning" : "bg-error/10 text-error"
+                row.status === "available" ? "bg-success-container text-on-success-container" :
+                row.status === "full" ? "bg-warning-container text-on-warning-container" : "bg-error-container text-on-error-container"
               }`}>{row.status}</span>
             ),
           },
@@ -65,6 +77,8 @@ export default function WardenRooms() {
         serverMode
         totalCount={totalRooms}
         loading={roomsLoading}
+        error={roomsError}
+        onRetry={() => loadRooms(query)}
         onQueryChange={setQuery}
         pageSize={ROOMS_PAGE_SIZE}
       />

@@ -225,7 +225,8 @@ test.describe("StateView", () => {
     await expect(view(page)).toContainText("Loading refund requests…");
 
     await expectView(view(page), "error", false);
-    const alert = view(page).getByRole("alert");
+    const alert = view(page).locator("[data-error-state]");
+    await expect(alert).toHaveAttribute("role", "alert");
     await expect(alert).toContainText("This couldn't be loaded");
     await expect(view(page)).not.toContainText("No refund requests");
 
@@ -240,7 +241,10 @@ test.describe("StateView", () => {
     await load(page, "Fresh load: nothing");
     await expectView(view(page), "empty", false);
     await expect(view(page)).toContainText("No refund requests");
-    await expect(view(page).getByRole("alert")).toHaveCount(0);
+    // No alert shown: the refresh-error region is there, empty, and nothing else alerts.
+    await expect(view(page).getByRole("alert")).toHaveCount(1);
+    await expect(view(page).getByRole("alert")).toHaveText("");
+    await expect(view(page).locator("[data-error-state], [role=alert] [data-tone]")).toHaveCount(0);
   });
 
   test("a refresh keeps earlier records while busy; if it fails they stay, beside an error with Try again", async ({ page }) => {
@@ -268,7 +272,9 @@ test.describe("StateView", () => {
     await load(page, "Refresh: fails");
     await expectView(view(page), "error", false);
     await expect(view(page)).not.toContainText("No refund requests");
-    await expect(view(page).getByRole("alert")).toContainText("This couldn't be loaded");
+    const failed = view(page).locator("[data-error-state]");
+    await expect(failed).toHaveAttribute("role", "alert");
+    await expect(failed).toContainText("This couldn't be loaded");
   });
 
   test("only a load the user asked for is announced, from a status region that is always there", async ({ page }) => {

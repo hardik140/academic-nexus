@@ -1,50 +1,55 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Button, StatusBadge } from "@/components/ui/modal";
+import { Alert } from "@/components/ui/alert";
+import { ErrorAlert } from "@/components/ui/error-alert";
+import { StateView } from "@/components/ui/state-view";
+import { useAsyncResource } from "@/hooks/use-async-resource";
+import { toFeedbackError, type FeedbackError } from "@/lib/action-failure";
 import { formatCurrency } from "@/lib/utils";
 import { listRefundRequests, approveRefund, rejectRefund } from "./actions";
 
 export default function FinanceRefunds() {
-  const [pending, setPending] = useState<any[]>([]);
-  const [processed, setProcessed] = useState<any[]>([]);
   const [rejectTarget, setRejectTarget] = useState<string | null>(null);
   const [rejectNotes, setRejectNotes] = useState("");
   const [loading, setLoading] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<FeedbackError | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
-  useEffect(() => { load(); }, []);
-
-  const load = async () => {
-    const { pending, processed } = await listRefundRequests();
-    setPending(pending);
-    setProcessed(processed);
-  };
+  // The refund queue. A failed load is an error, never "No pending refund
+  // requests" — an empty-looking queue would read as all refunds handled (D5).
+  const refunds = useAsyncResource(() => listRefundRequests(), []);
 
   const handleApprove = async (id: string) => {
+    if (loading) return;
     setLoading(id);
     setError(null);
+    setNotice(null);
     try {
       await approveRefund(id);
-      await load();
+      setNotice("Refund approved.");
+      refunds.reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to approve refund.");
+      setError(await toFeedbackError(e, "Failed to approve refund."));
     } finally {
       setLoading(null);
     }
   };
 
   const handleReject = async () => {
-    if (!rejectTarget || !rejectNotes.trim()) return;
+    if (!rejectTarget || !rejectNotes.trim() || loading) return;
     setLoading(rejectTarget);
     setError(null);
+    setNotice(null);
     try {
       await rejectRefund(rejectTarget, rejectNotes);
       setRejectTarget(null);
       setRejectNotes("");
-      await load();
+      setNotice("Refund rejected. The student will see your reason.");
+      refunds.reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to reject refund.");
+      setError(await toFeedbackError(e, "Failed to reject refund."));
     } finally {
       setLoading(null);
     }
@@ -57,10 +62,15 @@ export default function FinanceRefunds() {
         <p className="text-sm text-on-surface-variant mt-xs">Student-requested refunds against cleared payments</p>
       </div>
 
-      {error && (
-        <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium">{error}</div>
-      )}
+      <Alert tone="success" onDismiss={() => setNotice(null)}>
+        {notice}
+      </Alert>
 
+      <ErrorAlert error={error} />
+
+      <StateView state={refunds} isEmpty={() => false} loadingLabel="Loading refund requests…" empty={{ title: "No refund requests" }}>
+        {({ pending, processed }) => (
+          <>
       <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-sm">
         <div className="px-lg py-md border-b border-outline-variant">
           <h2 className="text-sm font-bold text-on-surface flex items-center gap-sm">💸 Pending Requests ({pending.length})</h2>
@@ -84,7 +94,7 @@ export default function FinanceRefunds() {
                   <Button size="sm" variant="destructive" onClick={() => setRejectTarget(req.id)} disabled={loading === req.id}>
                     Reject
                   </Button>
-                  <Button size="sm" onClick={() => handleApprove(req.id)} disabled={loading === req.id}>
+                  <Button size="sm" onClick={() => handleApprove(req.id)} disabled={loading === req.id} aria-busy={loading === req.id || undefined}>
                     {loading === req.id ? "..." : "Approve"}
                   </Button>
                 </div>
@@ -98,7 +108,7 @@ export default function FinanceRefunds() {
                     placeholder="Reason for rejection (shown to the student)"
                     className="flex-1 bg-surface-container-low border border-outline-variant rounded-xl px-md py-sm text-sm text-on-surface focus:ring-2 focus:ring-secondary outline-none"
                   />
-                  <Button size="sm" variant="destructive" onClick={handleReject} disabled={!rejectNotes.trim() || loading === req.id}>
+                  <Button size="sm" variant="destructive" onClick={handleReject} disabled={!rejectNotes.trim() || loading === req.id} aria-busy={loading === req.id || undefined}>
                     Confirm Reject
                   </Button>
                   <Button size="sm" variant="outline" onClick={() => { setRejectTarget(null); setRejectNotes(""); }}>
@@ -137,6 +147,9 @@ export default function FinanceRefunds() {
           )}
         </div>
       </div>
+          </>
+        )}
+      </StateView>
     </div>
   );
 }

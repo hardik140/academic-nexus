@@ -1,9 +1,18 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { DataTable, type DataTableQuery } from "@/components/ui/data-table";
 import { Modal, Button, FormField } from "@/components/ui/modal";
+import { Alert } from "@/components/ui/alert";
+import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
+import { ErrorAlert } from "@/components/ui/error-alert";
+import { ErrorState } from "@/components/ui/error-state";
+import { useToast } from "@/components/ui/toast";
+import { useAsyncResource } from "@/hooks/use-async-resource";
+import { toFeedbackError, type FeedbackError } from "@/lib/action-failure";
+import { classifyError } from "@/lib/feedback-error";
+import { requireRows } from "@/lib/read-result";
 import { createCollege, listColleges, inviteUser, resendInvitation, revokeInvitation } from "./actions";
 
 const COLLEGES_PAGE_SIZE = 10;
@@ -12,54 +21,83 @@ export default function SuperAdminCollegesPage() {
   const supabase = createClient();
   const [colleges, setColleges] = useState<any[]>([]);
   const [collegesLoading, setCollegesLoading] = useState(false);
+  const [collegesError, setCollegesError] = useState<unknown>(null);
   const [totalColleges, setTotalColleges] = useState(0);
   const [query, setQuery] = useState<DataTableQuery>({ search: "", sortKey: null, sortDir: "asc", page: 0 });
-  const [invitations, setInvitations] = useState<any[]>([]);
   const [showCreate, setShowCreate] = useState(false);
   const [inviteFor, setInviteFor] = useState<any>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<FeedbackError | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const noticeRef = useRef<HTMLDivElement>(null);
+  const [revokeTarget, setRevokeTarget] = useState<{ id: string; email: string } | null>(null);
+  const [revokePending, setRevokePending] = useState(false);
+  const [revokeError, setRevokeError] = useState<FeedbackError | null>(null);
+  const latestLoad = useRef(0);
+  const toast = useToast();
   const [createForm, setCreateForm] = useState({ name: "", code: "", city: "", state: "", country: "India" });
   const [inviteForm, setInviteForm] = useState({ email: "", fullName: "" });
 
-  useEffect(() => { loadInvitations(); }, []);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load(query); }, [query]);
 
+  // The latest query's page: an earlier, slower one must not replace it. A
+  // failed load is an error in the table, never "no colleges yet" (D5).
   const load = async (q: DataTableQuery) => {
+    const run = ++latestLoad.current;
     setCollegesLoading(true);
-    const { data, count } = await listColleges(q);
-    setColleges(data);
-    setTotalColleges(count);
-    setCollegesLoading(false);
-  };
-
-  const loadInvitations = async () => {
-    const { data } = await supabase
-      .from("invitations")
-      .select("*, colleges:college_id(name)")
-      .eq("status", "pending")
-      .order("created_at", { ascending: false });
-    setInvitations(data || []);
-  };
-
-  const handleResend = async (invitationId: string) => {
-    setError(null);
+    setCollegesError(null);
     try {
-      await resendInvitation(invitationId);
-      await loadInvitations();
+      const { data, count } = await listColleges(q);
+      if (run !== latestLoad.current) return;
+      setColleges(data);
+      setTotalColleges(count);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to resend invitation.");
+      if (run === latestLoad.current) setCollegesError(e);
+    } finally {
+      if (run === latestLoad.current) setCollegesLoading(false);
     }
   };
 
-  const handleRevoke = async (invitationId: string) => {
+  const invitationsResource = useAsyncResource(
+    async () =>
+      requireRows(
+        await supabase
+          .from("invitations")
+          .select("*, colleges:college_id(name)")
+          .eq("status", "pending")
+          .order("created_at", { ascending: false })
+      ),
+    []
+  );
+  const invitations: any[] = invitationsResource.data ?? [];
+
+  // Low stakes, nothing else to show it: a toast.
+  const handleResend = async (invitation: { id: string; email: string }) => {
     setError(null);
     try {
-      await revokeInvitation(invitationId);
-      await loadInvitations();
+      await resendInvitation(invitation.id);
+      toast.success(`Invitation resent to ${invitation.email}.`, { id: `resend-${invitation.id}` });
+      invitationsResource.reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to revoke invitation.");
+      setError(await toFeedbackError(e, "Failed to resend invitation."));
+    }
+  };
+
+  // Asked first (ConfirmationDialog); a failure stays in the dialog.
+  const confirmRevoke = async () => {
+    if (!revokeTarget) return;
+    setRevokePending(true);
+    setRevokeError(null);
+    try {
+      await revokeInvitation(revokeTarget.id);
+      setNotice(`Invitation for ${revokeTarget.email} revoked.`);
+      setRevokeTarget(null);
+      invitationsResource.reload();
+    } catch (e) {
+      setRevokeError(await toFeedbackError(e, "Failed to revoke invitation."));
+    } finally {
+      setRevokePending(false);
     }
   };
 
@@ -70,9 +108,10 @@ export default function SuperAdminCollegesPage() {
       await createCollege(createForm, query);
       setCreateForm({ name: "", code: "", city: "", state: "", country: "India" });
       setShowCreate(false);
-      await load(query);
+      setNotice(`College ${createForm.name} created. Invite its first Admin next.`);
+      void load(query);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to create college.");
+      setError(await toFeedbackError(e, "Failed to create college."));
     } finally {
       setLoading(false);
     }
@@ -91,9 +130,10 @@ export default function SuperAdminCollegesPage() {
       });
       setInviteForm({ email: "", fullName: "" });
       setInviteFor(null);
-      await loadInvitations();
+      setNotice(`Invitation sent to ${inviteForm.email}.`);
+      invitationsResource.reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to send invitation.");
+      setError(await toFeedbackError(e, "Failed to send invitation."));
     } finally {
       setLoading(false);
     }
@@ -109,8 +149,22 @@ export default function SuperAdminCollegesPage() {
         <Button onClick={() => setShowCreate(true)}>+ Create College</Button>
       </div>
 
-      {error && !showCreate && !inviteFor && (
-        <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium">{error}</div>
+      <div ref={noticeRef}>
+        <Alert tone="success" onDismiss={() => setNotice(null)}>
+          {notice}
+        </Alert>
+      </div>
+
+      {/* A dialog's own failure is shown inside it. */}
+      <ErrorAlert error={!showCreate && !inviteFor ? error : null} />
+
+      {invitationsResource.status === "error" && (
+        <ErrorState
+          {...classifyError(invitationsResource.error)}
+          title="Pending invitations couldn't be loaded"
+          onRetry={invitationsResource.reload}
+          className="rounded-2xl border border-outline-variant bg-surface-container-lowest"
+        />
       )}
 
       {invitations.length > 0 && (
@@ -128,10 +182,17 @@ export default function SuperAdminCollegesPage() {
                   </div>
                 </div>
                 <div className="flex gap-md">
-                  <button onClick={() => handleResend(inv.id)} className="text-xs text-secondary hover:underline font-medium">
+                  <button type="button" onClick={() => handleResend(inv)} className="text-xs text-secondary hover:underline font-medium">
                     Resend
                   </button>
-                  <button onClick={() => handleRevoke(inv.id)} className="text-xs text-error hover:underline font-medium">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRevokeError(null);
+                      setRevokeTarget({ id: inv.id, email: inv.email });
+                    }}
+                    className="text-xs text-error hover:underline font-medium"
+                  >
                     Revoke
                   </button>
                 </div>
@@ -165,6 +226,8 @@ export default function SuperAdminCollegesPage() {
         serverMode
         totalCount={totalColleges}
         loading={collegesLoading}
+        error={collegesError}
+        onRetry={() => load(query)}
         onQueryChange={setQuery}
         pageSize={COLLEGES_PAGE_SIZE}
         actions={(row: any) => (
@@ -185,15 +248,13 @@ export default function SuperAdminCollegesPage() {
         footer={
           <>
             <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
-            <Button onClick={handleCreate} disabled={loading || !createForm.name || !createForm.code}>
+            <Button onClick={handleCreate} disabled={loading || !createForm.name || !createForm.code} aria-busy={loading || undefined}>
               {loading ? "Creating..." : "Create College"}
             </Button>
           </>
         }
       >
-        {error && (
-          <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium mb-md">{error}</div>
-        )}
+        <ErrorAlert error={error} className="mb-md" />
         <div className="space-y-md">
           <FormField label="College Name" id="college_name" value={createForm.name} onChange={(v) => setCreateForm({ ...createForm, name: v })} placeholder="e.g. Springfield Institute of Technology" required />
           <FormField label="College Code" id="college_code" value={createForm.code} onChange={(v) => setCreateForm({ ...createForm, code: v })} placeholder="e.g. SIT" required />
@@ -210,20 +271,31 @@ export default function SuperAdminCollegesPage() {
         footer={
           <>
             <Button variant="outline" onClick={() => setInviteFor(null)}>Cancel</Button>
-            <Button onClick={handleInviteAdmin} disabled={loading || !inviteForm.email || !inviteForm.fullName}>
+            <Button onClick={handleInviteAdmin} disabled={loading || !inviteForm.email || !inviteForm.fullName} aria-busy={loading || undefined}>
               {loading ? "Sending..." : "Send Invitation"}
             </Button>
           </>
         }
       >
-        {error && (
-          <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium mb-md">{error}</div>
-        )}
+        <ErrorAlert error={error} className="mb-md" />
         <div className="space-y-md">
           <FormField label="Full Name" id="admin_name" value={inviteForm.fullName} onChange={(v) => setInviteForm({ ...inviteForm, fullName: v })} placeholder="e.g. Jane Doe" required />
           <FormField label="Email" id="admin_email" type="email" value={inviteForm.email} onChange={(v) => setInviteForm({ ...inviteForm, email: v })} placeholder="jane@college.edu" required />
         </div>
       </Modal>
+
+      <ConfirmationDialog
+        open={!!revokeTarget}
+        title="Revoke this invitation?"
+        description={revokeTarget ? `${revokeTarget.email} will no longer be able to use the invitation link. You can invite them again later.` : undefined}
+        confirmLabel="Revoke invitation"
+        pendingLabel="Revoking…"
+        pending={revokePending}
+        error={revokeError}
+        onConfirm={confirmRevoke}
+        onCancel={() => setRevokeTarget(null)}
+        returnFocusTo={() => noticeRef.current?.querySelector<HTMLElement>('[role="status"]') ?? null}
+      />
     </div>
   );
 }

@@ -113,11 +113,13 @@ export function StateView<T>({
       <div aria-busy={busy || undefined} data-view={view} className={cn("space-y-md", className)}>
         {view === "loading" && <LoadingState label={loadingLabel} />}
         {busy && view !== "loading" && <LoadingState variant="inline" label="Refreshing…" />}
-        {staleError && (
-          <Alert tone="error" action={retry}>
-            This couldn&apos;t be refreshed. Showing what was loaded earlier.
-          </Alert>
-        )}
+        <Alert tone="error" action={retry}>
+          {staleError ? (
+            <>
+              This couldn&apos;t be refreshed. Showing what was loaded earlier.
+            </>
+          ) : null}
+        </Alert>
         {view === "error" && (
           <ErrorState kind={errorKind ?? failure?.kind} reference={failure?.reference} onRetry={onRetry} />
         )}

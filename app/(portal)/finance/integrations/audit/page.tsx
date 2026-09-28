@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { StateView } from "@/components/ui/state-view";
+import { useAsyncResource } from "@/hooks/use-async-resource";
 import Link from "next/link";
 import { integrationAuditTrail } from "../actions";
 
@@ -50,14 +51,8 @@ const ACTION_LABEL: Record<string, string> = {
 };
 
 export default function IntegrationAuditPage() {
-  const [entries, setEntries] = useState<Entry[]>([]);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    integrationAuditTrail()
-      .then((rows) => setEntries(rows as unknown as Entry[]))
-      .catch((e) => setError(e instanceof Error ? e.message : "Could not load the audit trail."));
-  }, []);
+  // A failed load is an error, never "Nothing recorded yet." (owner decision D5).
+  const trail = useAsyncResource(async () => (await integrationAuditTrail()) as unknown as Entry[], []);
 
   return (
     <div className="space-y-lg">
@@ -69,11 +64,8 @@ export default function IntegrationAuditPage() {
         </p>
       </div>
 
-      {error && <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium">{error}</div>}
-
-      {entries.length === 0 ? (
-        <p className="text-sm text-on-surface-variant">Nothing recorded yet.</p>
-      ) : (
+      <StateView state={trail} loadingLabel="Loading the audit trail…" empty={{ title: "Nothing recorded yet" }}>
+        {(entries) => (
         <div className="overflow-x-auto rounded-2xl border border-outline-variant">
           <table className="w-full text-sm min-w-[860px]">
             <thead className="bg-surface-container-low text-xs uppercase tracking-wide text-on-surface-variant">
@@ -108,7 +100,8 @@ export default function IntegrationAuditPage() {
             </tbody>
           </table>
         </div>
-      )}
+        )}
+      </StateView>
     </div>
   );
 }

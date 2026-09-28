@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { getCached } from "@/lib/cache";
+import { assertRead } from "@/lib/read-result-server";
 
 export default async function AdminDashboard() {
   const supabase = await createClient();
@@ -10,11 +11,12 @@ export default async function AdminDashboard() {
 
   if (!user) redirect("/login");
 
-  const { data: viewerProfile } = await supabase
+  const { data: viewerProfile, error: viewerProfileError } = await supabase
     .from("profiles")
     .select("college_id")
     .eq("id", user.id)
     .single();
+  assertRead(viewerProfileError);
 
   // Cache key is college-scoped — this table is multi-tenant, and a cached
   // count from one college must never be served to another's admin.
@@ -29,14 +31,7 @@ export default async function AdminDashboard() {
     `dashboard:admin:${viewerProfile?.college_id}:counts`,
     60,
     async () => {
-      const [
-        { count: totalStudents },
-        { count: totalTeachers },
-        { count: totalCourses },
-        { count: totalDepartments },
-        { count: pendingComplaints },
-        { count: pendingGatePasses },
-      ] = await Promise.all([
+      const results = await Promise.all([
         supabase.from("profiles").select("*", { count: "exact", head: true }).eq("role", "student"),
         supabase.from("profiles").select("*", { count: "exact", head: true }).eq("role", "teacher"),
         supabase.from("courses").select("*", { count: "exact", head: true }),
@@ -44,22 +39,33 @@ export default async function AdminDashboard() {
         supabase.from("complaints").select("*", { count: "exact", head: true }).eq("status", "open"),
         supabase.from("gate_passes").select("*", { count: "exact", head: true }).eq("status", "pending"),
       ]);
+      // A failed count is an error, never a zero — and never cached as one.
+      for (const res of results) assertRead(res.error);
+      const [
+        { count: totalStudents },
+        { count: totalTeachers },
+        { count: totalCourses },
+        { count: totalDepartments },
+        { count: pendingComplaints },
+        { count: pendingGatePasses },
+      ] = results;
       return [totalStudents, totalTeachers, totalCourses, totalDepartments, pendingComplaints, pendingGatePasses];
     }
   );
 
   // Recent audit logs
-  const { data: recentLogs } = await supabase
+  const { data: recentLogs, error: recentLogsError } = await supabase
     .from("audit_logs")
     .select("*, profiles:user_id(full_name)")
     .order("created_at", { ascending: false })
     .limit(8);
+  assertRead(recentLogsError);
 
   const stats = [
     { label: "Total Students", value: totalStudents || 0, icon: "🎓", color: "bg-secondary/10 text-secondary" },
     { label: "Faculty Members", value: totalTeachers || 0, icon: "👨‍🏫", color: "bg-success/10 text-success" },
     { label: "Active Courses", value: totalCourses || 0, icon: "📚", color: "bg-info/10 text-info" },
-    { label: "Departments", value: totalDepartments || 0, icon: "🏢", color: "bg-warning/10 text-warning" },
+    { label: "Departments", value: totalDepartments || 0, icon: "🏢", color: "bg-warning-container text-on-warning-container" },
     { label: "Open Complaints", value: pendingComplaints || 0, icon: "🛠️", color: "bg-error/10 text-error" },
     { label: "Pending Gate Passes", value: pendingGatePasses || 0, icon: "🚪", color: "bg-tertiary-container text-on-tertiary-container" },
   ];

@@ -4,25 +4,30 @@ import { formatCurrency, formatDate } from "@/lib/utils";
 import { StatusBadge } from "@/components/ui/modal";
 import { computeEffectiveFeeStatus } from "@/lib/finance-status";
 import { FinanceRequestsPanel } from "./finance-requests-panel";
+import { assertRead } from "@/lib/read-result-server";
+import { NO_MATCH_ID } from "@/lib/read-result";
 
 export default async function StudentFees() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: student } = await supabase.from("students").select("id").eq("user_id", user.id).single();
+  const { data: student, error: studentError } = await supabase.from("students").select("id").eq("user_id", user.id).single();
+  assertRead(studentError);
 
-  const { data: fees } = await supabase
+  const { data: fees, error: feesError } = await supabase
     .from("fees")
     .select("*")
-    .eq("student_id", student?.id || "")
+    .eq("student_id", student?.id || NO_MATCH_ID)
     .order("due_date", { ascending: false });
+  assertRead(feesError);
 
-  const { data: payments } = await supabase
+  const { data: payments, error: paymentsError } = await supabase
     .from("payments")
     .select("*")
-    .eq("student_id", student?.id || "")
+    .eq("student_id", student?.id || NO_MATCH_ID)
     .order("created_at", { ascending: false });
+  assertRead(paymentsError);
 
   const totalBilled = (fees || []).reduce((s, f) => s + f.amount, 0);
   const totalPaid = (fees || []).reduce((s, f) => s + f.paid_amount, 0);

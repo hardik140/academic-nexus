@@ -22,7 +22,7 @@ function ExceptionSection({
         <h2 className="text-sm font-bold text-on-surface flex items-center gap-sm">
           {icon} {title}
         </h2>
-        <span className={`text-xs font-semibold px-sm py-xs rounded-full ${severity === "high" ? "bg-error/10 text-error" : "bg-warning/10 text-warning"}`}>
+        <span className={`text-xs font-semibold px-sm py-xs rounded-full ${severity === "high" ? "bg-error/10 text-error" : "bg-warning-container text-on-warning-container"}`}>
           {items.length}
         </span>
       </div>

@@ -192,6 +192,7 @@
    * not a larger number. */
   --z-sticky: 10;
   --z-header: 20;
+  --z-toast: 30;
   --z-drawer-scrim: 40;
   --z-drawer: 50;
 

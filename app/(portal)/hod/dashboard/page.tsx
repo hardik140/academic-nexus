@@ -8,6 +8,8 @@ import { listHodApprovals, listCorrectionApprovals } from "../approvals/actions"
 import { listSubstitutionNeeds } from "../substitutions/actions";
 import { listDepartmentFacultyWorkload } from "../faculty/actions";
 import { listRiskFlags } from "@/app/(portal)/director/attention/actions";
+import { assertRead } from "@/lib/read-result-server";
+import { NO_MATCH_ID } from "@/lib/read-result";
 
 interface AttentionItem {
   label: string;
@@ -21,23 +23,26 @@ export default async function HodDashboard() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single();
+  const { data: profile, error: profileError } = await supabase.from("profiles").select("*").eq("id", user.id).single();
+  assertRead(profileError);
 
   // Get HOD's department
-  const { data: department } = await supabase
+  const { data: department, error: departmentError } = await supabase
     .from("departments")
     .select("*")
     .eq("hod_id", user.id)
     .single();
+  assertRead(departmentError);
 
   const { faculty, courses } = await getCached(
     `dashboard:hod:${department?.id}:faculty-courses`,
     60,
     async () => {
       const [facultyRes, coursesRes] = await Promise.all([
-        supabase.from("profiles").select("*").eq("role", "teacher").eq("department_id", department?.id || ""),
-        supabase.from("courses").select("*").eq("department_id", department?.id || ""),
+        supabase.from("profiles").select("*").eq("role", "teacher").eq("department_id", department?.id || NO_MATCH_ID),
+        supabase.from("courses").select("*").eq("department_id", department?.id || NO_MATCH_ID),
       ]);
+      for (const res of [facultyRes, coursesRes]) assertRead(res.error);
       return { faculty: facultyRes.data, courses: coursesRes.data };
     }
   );

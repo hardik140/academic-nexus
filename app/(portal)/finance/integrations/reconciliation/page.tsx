@@ -1,6 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { Alert } from "@/components/ui/alert";
+import { ErrorAlert } from "@/components/ui/error-alert";
+import { ErrorState } from "@/components/ui/error-state";
+import { LoadingState } from "@/components/ui/loading-state";
+import { toFeedbackError, type FeedbackError } from "@/lib/action-failure";
+import { classifyError } from "@/lib/feedback-error";
 import Link from "next/link";
 import { Button, FormField, Modal, StatusBadge } from "@/components/ui/modal";
 import { listConnections, listReconciliation, resolveReconciliationItem, runReconciliation } from "../actions";
@@ -28,7 +34,11 @@ const money = (n: number | null | undefined) =>
 export default function ReconciliationPage() {
   const [data, setData] = useState<Data>({ runs: [], openItems: [] });
   const [connections, setConnections] = useState<Connection[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  // Loading and acting fail separately; findings that could not be loaded
+  // are never "Nothing outstanding." (owner decision D5).
+  const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState<unknown>(null);
+  const [error, setError] = useState<FeedbackError | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
   const today = new Date().toISOString().slice(0, 10);
@@ -42,8 +52,10 @@ export default function ReconciliationPage() {
       setData(d);
       setConnections(c);
       if (!form.connectionId && c.length > 0) setForm((f) => ({ ...f, connectionId: c[0].id }));
+      setLoaded(true);
+      setLoadError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not load reconciliation.");
+      setLoadError(e);
     }
     // form.connectionId intentionally omitted: this only seeds the first value
   }, [form.connectionId]);
@@ -53,13 +65,15 @@ export default function ReconciliationPage() {
   }, [load]);
 
   const run = async (key: string, fn: () => Promise<unknown>) => {
+    if (busy) return;
     setBusy(key);
     setError(null);
     try {
       await fn();
-      await load();
+      // Reloading reports its own failure, never as a failed action.
+      void load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "The action did not complete.");
+      setError(await toFeedbackError(e, "The action did not complete."));
     } finally {
       setBusy(null);
     }
@@ -77,7 +91,16 @@ export default function ReconciliationPage() {
         </p>
       </div>
 
-      {error && <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium">{error}</div>}
+      {/* The resolve dialog shows its own failure. */}
+      <ErrorAlert error={resolving === null ? error : null} />
+
+      <Alert tone="error" action={<Button variant="outline" size="sm" onClick={() => void load()}>Try again</Button>}>
+        {loadError !== null && loaded ? (
+          <>
+            This couldn&apos;t be refreshed. Showing what was loaded earlier.
+          </>
+        ) : null}
+      </Alert>
 
       <div className="rounded-2xl border border-outline-variant bg-surface-container-lowest p-lg space-y-md">
         <h2 className="text-sm font-bold uppercase tracking-wide text-on-surface-variant">Run a comparison</h2>
@@ -97,6 +120,7 @@ export default function ReconciliationPage() {
         </div>
         <Button
           disabled={!form.connectionId || busy === "run"}
+          aria-busy={busy === "run" || undefined}
           onClick={() => run("run", () => runReconciliation({ connectionId: form.connectionId, from: form.from, to: form.to }))}
         >
           {busy === "run" ? "Comparing..." : "Reconcile"}
@@ -140,7 +164,13 @@ export default function ReconciliationPage() {
         <h2 className="text-sm font-bold uppercase tracking-wide text-on-surface-variant mb-md">
           Open findings ({data.openItems.length})
         </h2>
-        {data.openItems.length === 0 ? (
+        {!loaded ? (
+          loadError !== null ? (
+            <ErrorState {...classifyError(loadError)} title="Findings couldn't be loaded" onRetry={() => void load()} />
+          ) : (
+            <LoadingState label="Loading findings…" />
+          )
+        ) : data.openItems.length === 0 ? (
           <p className="text-sm text-on-surface-variant">Nothing outstanding.</p>
         ) : (
           <div className="space-y-sm">
@@ -172,6 +202,7 @@ export default function ReconciliationPage() {
             <Button variant="outline" onClick={() => setResolving(null)}>Cancel</Button>
             <Button
               disabled={!resolution.trim() || busy === resolving?.id}
+              aria-busy={busy === resolving?.id || undefined}
               onClick={() =>
                 resolving &&
                 run(resolving.id, async () => {
@@ -186,6 +217,7 @@ export default function ReconciliationPage() {
         }
       >
         <div className="space-y-md">
+          <ErrorAlert error={error} />
           <p className="text-sm text-on-surface">{resolving?.detail}</p>
           <FormField
             label="What was done about it"

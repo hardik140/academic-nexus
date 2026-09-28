@@ -1,37 +1,59 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { Alert } from "@/components/ui/alert";
+import { ErrorAlert } from "@/components/ui/error-alert";
+import { safeRedirectPath } from "@/lib/auth/safe-redirect";
+
+/**
+ * Where to go once signed in: the page the user was on when their session
+ * ended (`/login?next=…`, see components/ui/sign-in-again.tsx), if it is a
+ * same-site page one may return to (lib/auth/safe-redirect.ts), else null.
+ * Read from the address bar when used, so nothing stale is kept.
+ */
+function returnPath(): string | null {
+  return safeRedirectPath(new URLSearchParams(window.location.search).get("next"), "after-sign-in");
+}
+
+const noSubscription = () => () => {};
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  // Returning to a page after the session ended? (Only known in the browser.)
+  const returning = useSyncExternalStore(noSubscription, () => returnPath() !== null, () => false);
   const [mode, setMode] = useState<"sign-in" | "forgot-password">("sign-in");
   const supabase = createClient();
 
   const handleGoogleLogin = async () => {
     setLoading(true);
+    setError(null);
+    const next = returnPath();
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        // /auth/callback checks `next` again before following it.
+        redirectTo: `${window.location.origin}/auth/callback${next ? `?next=${encodeURIComponent(next)}` : ""}`,
       },
     });
-    if (error) setMessage(error.message);
+    if (error) setError(error.message);
     setLoading(false);
   };
 
   const handlePasswordLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setMessage("");
+    setError(null);
+    setNotice(null);
 
     const { error } = await supabase.auth.signInWithPassword({ email, password });
 
     if (error) {
-      setMessage(error.message);
+      setError(error.message);
       setLoading(false);
       return;
     }
@@ -40,23 +62,25 @@ export default function LoginPage() {
     // anywhere by itself. A hard reload (rather than router.push) ensures
     // the server re-reads the fresh cookie rather than serving a cached
     // pre-login response for "/". app/page.tsx then does the role-based
-    // redirect server-side.
-    window.location.href = "/";
+    // redirect server-side. After an expired session, back to the page the
+    // user was on instead; the proxy still decides whether they may see it.
+    window.location.href = returnPath() ?? "/";
   };
 
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setMessage("");
+    setError(null);
+    setNotice(null);
 
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/auth/callback?next=/auth/reset-password`,
     });
 
     if (error) {
-      setMessage(error.message);
+      setError(error.message);
     } else {
-      setMessage("Check your email for a password reset link.");
+      setNotice("Check your email for a password reset link.");
     }
     setLoading(false);
   };
@@ -102,6 +126,14 @@ export default function LoginPage() {
           <h2 className="text-xl font-bold text-on-surface mb-lg">
             {mode === "sign-in" ? "Sign in to your portal" : "Reset your password"}
           </h2>
+
+          <Alert tone="info" className="mb-lg">
+            {mode === "sign-in" && returning ? (
+              <>
+                Your session ended. Sign in to return to the page you were on.
+              </>
+            ) : null}
+          </Alert>
 
           {mode === "sign-in" && (
             <>
@@ -182,6 +214,7 @@ export default function LoginPage() {
                 <button
                   type="submit"
                   disabled={loading}
+                  aria-busy={loading || undefined}
                   className="w-full px-lg py-md bg-secondary text-on-secondary rounded-xl font-semibold text-sm hover:bg-secondary-container transition-colors disabled:opacity-50 shadow-md"
                 >
                   {loading ? "Signing in..." : "Sign In"}
@@ -191,7 +224,8 @@ export default function LoginPage() {
                   type="button"
                   onClick={() => {
                     setMode("forgot-password");
-                    setMessage("");
+                    setError(null);
+                    setNotice(null);
                   }}
                   className="w-full text-center text-sm text-secondary hover:underline"
                 >
@@ -224,6 +258,7 @@ export default function LoginPage() {
               <button
                 type="submit"
                 disabled={loading}
+                aria-busy={loading || undefined}
                 className="w-full px-lg py-md bg-secondary text-on-secondary rounded-xl font-semibold text-sm hover:bg-secondary-container transition-colors disabled:opacity-50 shadow-md"
               >
                 {loading ? "Sending..." : "Send Reset Link"}
@@ -233,7 +268,8 @@ export default function LoginPage() {
                 type="button"
                 onClick={() => {
                   setMode("sign-in");
-                  setMessage("");
+                  setError(null);
+                  setNotice(null);
                 }}
                 className="w-full text-center text-sm text-secondary hover:underline"
               >
@@ -242,20 +278,11 @@ export default function LoginPage() {
             </form>
           )}
 
-          {/* Status message */}
-          {message && (
-            <div
-              role="status"
-              aria-live="polite"
-              className={`mt-md p-md rounded-xl text-sm font-medium ${
-                message.includes("Check")
-                  ? "bg-success/10 text-success border border-success/20"
-                  : "bg-error-container text-on-error-container border border-error/20"
-              }`}
-            >
-              {message}
-            </div>
-          )}
+          {/* Result: a failure is an alert; the reset link being sent is a status. */}
+          <ErrorAlert error={error} className="mt-md" />
+          <Alert tone="success" className="mt-md">
+            {notice}
+          </Alert>
         </div>
 
         {/* Footer */}

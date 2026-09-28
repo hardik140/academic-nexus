@@ -275,7 +275,7 @@ export function StudentDashboardClient({
             <h2 className="text-sm font-bold text-on-surface">
               Pending Fee Payments
             </h2>
-            <span className="text-xs font-semibold text-warning bg-warning/10 px-sm py-xs rounded-full">
+            <span className="text-xs font-semibold text-on-warning-container bg-warning-container px-sm py-xs rounded-full">
               {fees.length} pending
             </span>
           </div>

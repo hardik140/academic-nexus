@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useToast } from "@/components/ui/toast";
 
 // Interactive half of the development-only portal-shell harness. Imported
 // only by app/dev/shell/page.dev.tsx, which is not a route outside
@@ -8,6 +9,7 @@ import { useState } from "react";
 
 export function ShellHarnessPage({ title }: { title: string }) {
   const [clicks, setClicks] = useState(0);
+  const toast = useToast();
   return (
     <div className="space-y-lg">
       <h1 className="text-page-title text-on-surface">{title}</h1>
@@ -18,6 +20,15 @@ export function ShellHarnessPage({ title }: { title: string }) {
           className="motion-feedback rounded-control border border-border-control bg-surface-container-lowest px-md py-sm text-body text-on-surface hover:bg-surface-container-high"
         >
           Background action
+        </button>
+        <button
+          type="button"
+          // Confirms a stand-in save one second later, so a test can open the
+          // drawer in between: the toast must wait until the drawer closes.
+          onClick={() => setTimeout(() => toast.success("Semester review saved."), 1000)}
+          className="motion-feedback rounded-control border border-border-control bg-surface-container-lowest px-md py-sm text-body text-on-surface hover:bg-surface-container-high"
+        >
+          Save review (toast in 1s)
         </button>
         <span className="text-body text-on-surface" data-testid="shell-log">
           Background clicks: {clicks}

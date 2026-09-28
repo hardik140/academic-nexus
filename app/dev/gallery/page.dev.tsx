@@ -18,6 +18,14 @@ import {
   StateViewDemo,
   StatusChangeDemo,
 } from "./demos";
+import {
+  ConfirmationDemos,
+  DataTableErrorDemo,
+  FieldValidationDemo,
+  RequestDecisionDemo,
+  SessionDemos,
+  ToastDemos,
+} from "./m6-demos";
 
 /**
  * Development-only component gallery — the browser-verification surface for
@@ -265,6 +273,30 @@ export default function ComponentGalleryPage() {
           <AlertToneExamples />
           <StateViewDemo />
           <StateExamples />
+        </Section>
+
+        <Section id="toast" title="Toast">
+          <ToastDemos />
+        </Section>
+
+        <Section id="confirmation" title="Confirmation dialog">
+          <ConfirmationDemos />
+        </Section>
+
+        <Section id="request-decision" title="Request a Director decision">
+          <RequestDecisionDemo />
+        </Section>
+
+        <Section id="field-validation" title="Field validation">
+          <FieldValidationDemo />
+        </Section>
+
+        <Section id="table-error" title="Data table: failed loads">
+          <DataTableErrorDemo />
+        </Section>
+
+        <Section id="session" title="Session expiry">
+          <SessionDemos />
         </Section>
       </div>
     </main>

@@ -1,8 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { DataTable, type DataTableQuery } from "@/components/ui/data-table";
 import { StatusBadge } from "@/components/ui/modal";
+import { Alert } from "@/components/ui/alert";
+import { ErrorAlert } from "@/components/ui/error-alert";
+import { toFeedbackError, type FeedbackError } from "@/lib/action-failure";
 import { updateComplaintStatus, listHostelComplaints } from "./actions";
 
 const COMPLAINTS_PAGE_SIZE = 10;
@@ -10,30 +13,46 @@ const COMPLAINTS_PAGE_SIZE = 10;
 export default function WardenComplaints() {
   const [complaints, setComplaints] = useState<any[]>([]);
   const [complaintsLoading, setComplaintsLoading] = useState(false);
+  const [complaintsError, setComplaintsError] = useState<unknown>(null);
   const [totalComplaints, setTotalComplaints] = useState(0);
   const [query, setQuery] = useState<DataTableQuery>({ search: "", sortKey: null, sortDir: "asc", page: 0 });
   const [loading, setLoading] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<FeedbackError | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const latestLoad = useRef(0);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { loadComplaints(query); }, [query]);
 
+  // The latest query's page; a failed load is an error in the table, never
+  // "No hostel complaints found." (owner decision D5).
   const loadComplaints = async (q: DataTableQuery) => {
+    const run = ++latestLoad.current;
     setComplaintsLoading(true);
-    const { data, count } = await listHostelComplaints(q);
-    setComplaints(data);
-    setTotalComplaints(count);
-    setComplaintsLoading(false);
+    setComplaintsError(null);
+    try {
+      const { data, count } = await listHostelComplaints(q);
+      if (run !== latestLoad.current) return;
+      setComplaints(data);
+      setTotalComplaints(count);
+    } catch (e) {
+      if (run === latestLoad.current) setComplaintsError(e);
+    } finally {
+      if (run === latestLoad.current) setComplaintsLoading(false);
+    }
   };
 
   const updateStatus = async (id: string, status: "in_progress" | "resolved") => {
+    if (loading) return;
     setLoading(id);
     setError(null);
+    setNotice(null);
     try {
       await updateComplaintStatus(id, status, query);
-      await loadComplaints(query);
+      setNotice(status === "resolved" ? "Complaint marked resolved." : "Complaint marked in progress.");
+      void loadComplaints(query);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to update complaint.");
+      setError(await toFeedbackError(e, "Failed to update complaint."));
     } finally {
       setLoading(null);
     }
@@ -46,9 +65,10 @@ export default function WardenComplaints() {
         <p className="text-sm text-on-surface-variant mt-xs">Maintenance and hostel-related complaints</p>
       </div>
 
-      {error && (
-        <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium">{error}</div>
-      )}
+      <Alert tone="success" onDismiss={() => setNotice(null)}>
+        {notice}
+      </Alert>
+      <ErrorAlert error={error} />
 
       <DataTable
         columns={[
@@ -60,8 +80,8 @@ export default function WardenComplaints() {
             header: "Priority",
             render: (row: any) => (
               <span className={`text-xs font-semibold px-sm py-xs rounded-full capitalize ${
-                row.priority === "critical" ? "bg-error/10 text-error" :
-                row.priority === "high" ? "bg-warning/10 text-warning" : "bg-info/10 text-info"
+                row.priority === "critical" ? "bg-error-container text-on-error-container" :
+                row.priority === "high" ? "bg-warning-container text-on-warning-container" : "bg-info-container text-on-info-container"
               }`}>{row.priority}</span>
             ),
           },
@@ -75,17 +95,19 @@ export default function WardenComplaints() {
         serverMode
         totalCount={totalComplaints}
         loading={complaintsLoading}
+        error={complaintsError}
+        onRetry={() => loadComplaints(query)}
         onQueryChange={setQuery}
         pageSize={COMPLAINTS_PAGE_SIZE}
         actions={(row: any) => (
           <div className="flex gap-xs justify-end">
             {row.status === "open" && (
-              <button onClick={() => updateStatus(row.id, "in_progress")} disabled={loading === row.id} className="text-xs text-secondary hover:underline font-medium disabled:opacity-40">
+              <button type="button" onClick={() => updateStatus(row.id, "in_progress")} disabled={loading === row.id} aria-busy={loading === row.id || undefined} className="text-xs text-secondary hover:underline font-medium disabled:opacity-40">
                 {loading === row.id ? "..." : "Start"}
               </button>
             )}
             {row.status === "in_progress" && (
-              <button onClick={() => updateStatus(row.id, "resolved")} disabled={loading === row.id} className="text-xs text-success hover:underline font-medium disabled:opacity-40">
+              <button type="button" onClick={() => updateStatus(row.id, "resolved")} disabled={loading === row.id} aria-busy={loading === row.id || undefined} className="text-xs text-success hover:underline font-medium disabled:opacity-40">
                 {loading === row.id ? "..." : "Resolve"}
               </button>
             )}

@@ -111,6 +111,8 @@ export function Modal({
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: "primary" | "secondary" | "outline" | "ghost" | "destructive";
   size?: "sm" | "md" | "lg";
+  /** Passed through to the <button> (React 19 hands `ref` over as a prop). */
+  ref?: React.Ref<HTMLButtonElement>;
 }
 
 const buttonVariants = {
@@ -306,7 +308,11 @@ export function FormField({
   disabled,
 }: FormFieldProps) {
   const baseClasses =
-    "w-full bg-surface-container-low border border-border-control rounded-xl px-md py-sm text-sm text-on-surface placeholder:text-outline focus:ring-2 focus:ring-secondary focus:border-secondary outline-none motion-feedback disabled:opacity-50";
+    "w-full bg-surface-container-low border border-border-control rounded-xl px-md py-sm text-sm text-on-surface placeholder:text-outline focus:ring-2 focus:ring-secondary focus:border-secondary outline-none motion-feedback disabled:opacity-50 aria-[invalid=true]:border-error";
+  // A field with an error says so to assistive technology, and names the
+  // message that explains it.
+  const errorId = error ? `${id}-error` : undefined;
+  const invalid = error ? { "aria-invalid": true, "aria-describedby": errorId } : {};
 
   return (
     <div className="space-y-xs">
@@ -321,6 +327,7 @@ export function FormField({
       {type === "select" && options ? (
         <select
           id={id}
+          {...invalid}
           value={String(value)}
           onChange={(e) => onChange(e.target.value)}
           required={required}
@@ -337,6 +344,7 @@ export function FormField({
       ) : type === "textarea" ? (
         <textarea
           id={id}
+          {...invalid}
           value={String(value)}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
@@ -348,6 +356,7 @@ export function FormField({
       ) : (
         <input
           id={id}
+          {...invalid}
           type={type}
           value={String(value)}
           onChange={(e) => onChange(e.target.value)}
@@ -359,7 +368,7 @@ export function FormField({
       )}
 
       {error && (
-        <p className="text-xs text-error font-medium">{error}</p>
+        <p id={errorId} className="text-xs text-error font-medium">{error}</p>
       )}
     </div>
   );

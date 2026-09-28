@@ -23,6 +23,12 @@ const SECTIONS = [
   "button-form",
   "async-resource",
   "feedback",
+  "toast",
+  "confirmation",
+  "request-decision",
+  "field-validation",
+  "table-error",
+  "session",
 ];
 
 test("gallery renders every section without runtime errors", async ({ page }) => {
@@ -37,6 +43,9 @@ test("gallery renders every section without runtime errors", async ({ page }) =>
   for (const id of SECTIONS) {
     await expect(page.getByTestId(`gallery-${id}`)).toBeVisible();
   }
+  // No section widens the page: sideways scrolling, and on a phone a zoomed-out
+  // layout viewport (which grows clientWidth too, so compare with the viewport).
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(page.viewportSize()!.width);
 
   expect(pageErrors).toEqual([]);
 });

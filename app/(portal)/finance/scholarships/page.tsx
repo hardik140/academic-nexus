@@ -1,9 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { DataTable, type DataTableQuery } from "@/components/ui/data-table";
 import { Modal, Button, FormField, StatusBadge } from "@/components/ui/modal";
+import { Alert } from "@/components/ui/alert";
+import { ErrorAlert } from "@/components/ui/error-alert";
+import { useAsyncResource } from "@/hooks/use-async-resource";
+import { toFeedbackError, type FeedbackError } from "@/lib/action-failure";
+import { requireRows } from "@/lib/read-result";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { createScholarship, listScholarships } from "./actions";
 import type { Database } from "@/types/database";
@@ -25,12 +30,14 @@ export default function FinanceScholarships() {
   const supabase = createClient();
   const [scholarships, setScholarships] = useState<any[]>([]);
   const [scholarshipsLoading, setScholarshipsLoading] = useState(false);
+  const [scholarshipsError, setScholarshipsError] = useState<unknown>(null);
   const [totalScholarships, setTotalScholarships] = useState(0);
   const [query, setQuery] = useState<DataTableQuery>({ search: "", sortKey: null, sortDir: "asc", page: 0 });
-  const [students, setStudents] = useState<any[]>([]);
   const [showCreate, setShowCreate] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<FeedbackError | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const latestLoad = useRef(0);
   const [form, setForm] = useState<{ student_id: string; name: string; amount: string; type: ScholarshipType; academic_year: string }>({
     student_id: "",
     name: "",
@@ -39,25 +46,38 @@ export default function FinanceScholarships() {
     academic_year: "",
   });
 
-  useEffect(() => { loadStudents(); }, []);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { loadScholarships(query); }, [query]);
 
+  // The latest query's page; a failed load is an error in the table, never
+  // "No scholarships awarded yet." (owner decision D5).
   const loadScholarships = async (q: DataTableQuery) => {
+    const run = ++latestLoad.current;
     setScholarshipsLoading(true);
-    const { data, count } = await listScholarships(q);
-    setScholarships(data);
-    setTotalScholarships(count);
-    setScholarshipsLoading(false);
+    setScholarshipsError(null);
+    try {
+      const { data, count } = await listScholarships(q);
+      if (run !== latestLoad.current) return;
+      setScholarships(data);
+      setTotalScholarships(count);
+    } catch (e) {
+      if (run === latestLoad.current) setScholarshipsError(e);
+    } finally {
+      if (run === latestLoad.current) setScholarshipsLoading(false);
+    }
   };
 
-  const loadStudents = async () => {
-    const { data } = await supabase
-      .from("students")
-      .select("id, enrollment_number, profiles:user_id(full_name)")
-      .order("enrollment_number");
-    setStudents(data || []);
-  };
+  const studentsResource = useAsyncResource(
+    async () =>
+      requireRows(
+        await supabase
+          .from("students")
+          .select("id, enrollment_number, profiles:user_id(full_name)")
+          .order("enrollment_number")
+      ),
+    []
+  );
+  const students: any[] = studentsResource.data ?? [];
 
   const handleCreate = async () => {
     setLoading(true);
@@ -66,9 +86,10 @@ export default function FinanceScholarships() {
       await createScholarship(form.student_id, form.name, form.type, Number(form.amount), form.academic_year || undefined, query);
       setForm({ student_id: "", name: "", amount: "", type: "merit", academic_year: "" });
       setShowCreate(false);
-      await loadScholarships(query);
+      setNotice(`Scholarship ${form.name} awarded.`);
+      void loadScholarships(query);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to award scholarship.");
+      setError(await toFeedbackError(e, "Failed to award scholarship."));
     } finally {
       setLoading(false);
     }
@@ -89,9 +110,12 @@ export default function FinanceScholarships() {
         <Button onClick={() => setShowCreate(true)}>+ Award Scholarship</Button>
       </div>
 
-      {error && !showCreate && (
-        <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium">{error}</div>
-      )}
+      <Alert tone="success" onDismiss={() => setNotice(null)}>
+        {notice}
+      </Alert>
+
+      {/* The award dialog shows its own failure. */}
+      <ErrorAlert error={!showCreate ? error : null} />
 
       <DataTable
         columns={[
@@ -110,6 +134,8 @@ export default function FinanceScholarships() {
         serverMode
         totalCount={totalScholarships}
         loading={scholarshipsLoading}
+        error={scholarshipsError}
+        onRetry={() => loadScholarships(query)}
         onQueryChange={setQuery}
         pageSize={SCHOLARSHIPS_PAGE_SIZE}
       />
@@ -121,13 +147,22 @@ export default function FinanceScholarships() {
         footer={
           <>
             <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
-            <Button onClick={handleCreate} disabled={loading || !form.student_id}>{loading ? "Saving..." : "Award Scholarship"}</Button>
+            <Button onClick={handleCreate} disabled={loading || !form.student_id} aria-busy={loading || undefined}>{loading ? "Saving..." : "Award Scholarship"}</Button>
           </>
         }
       >
-        {error && (
-          <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium mb-md">{error}</div>
-        )}
+        <ErrorAlert error={error} className="mb-md" />
+        <Alert
+          tone="error"
+          className="mb-md"
+          action={<Button variant="outline" size="sm" onClick={studentsResource.reload}>Try again</Button>}
+        >
+          {studentsResource.status === "error" ? (
+            <>
+              Students couldn&apos;t be loaded, so none can be chosen yet.
+            </>
+          ) : null}
+        </Alert>
         <div className="space-y-md">
           <FormField label="Student" id="student" type="select" value={form.student_id} onChange={(v) => setForm({ ...form, student_id: v })} options={studentOptions} required />
           <FormField label="Scholarship Name" id="name" value={form.name} onChange={(v) => setForm({ ...form, name: v })} placeholder="e.g. Dean's Merit Award" required />
