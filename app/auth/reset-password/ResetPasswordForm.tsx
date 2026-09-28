@@ -41,7 +41,7 @@ export default function ResetPasswordForm() {
           placeholder="At least 8 characters"
           required
           minLength={8}
-          className="w-full bg-surface-container-low border border-outline-variant rounded-xl px-md py-md text-sm text-on-surface placeholder:text-outline focus:ring-2 focus:ring-secondary focus:border-secondary outline-none transition-all"
+          className="w-full bg-surface-container-low border border-outline-variant rounded-xl px-md py-md text-sm text-on-surface placeholder:text-outline focus:ring-2 focus:ring-secondary focus:border-secondary outline-none motion-feedback"
         />
       </div>
 
@@ -57,7 +57,7 @@ export default function ResetPasswordForm() {
           placeholder="Re-enter your new password"
           required
           minLength={8}
-          className="w-full bg-surface-container-low border border-outline-variant rounded-xl px-md py-md text-sm text-on-surface placeholder:text-outline focus:ring-2 focus:ring-secondary focus:border-secondary outline-none transition-all"
+          className="w-full bg-surface-container-low border border-outline-variant rounded-xl px-md py-md text-sm text-on-surface placeholder:text-outline focus:ring-2 focus:ring-secondary focus:border-secondary outline-none motion-feedback"
         />
       </div>
 

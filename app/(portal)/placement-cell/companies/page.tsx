@@ -81,7 +81,7 @@ export default function PlacementCellCompanies() {
   };
 
   return (
-    <div className="space-y-lg animate-[fade-in_0.3s_ease-out]">
+    <div className="space-y-lg">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-extrabold text-on-surface tracking-tight">Companies</h1>

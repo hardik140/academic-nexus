@@ -51,7 +51,7 @@ export default function FinanceRefunds() {
   };
 
   return (
-    <div className="space-y-lg animate-[fade-in_0.3s_ease-out]">
+    <div className="space-y-lg">
       <div>
         <h1 className="text-2xl font-extrabold text-on-surface tracking-tight">Refund Center</h1>
         <p className="text-sm text-on-surface-variant mt-xs">Student-requested refunds against cleared payments</p>

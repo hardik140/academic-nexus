@@ -25,7 +25,7 @@ const eslintConfig = [
     // ("could not find plugin jsx-a11y") rather than just producing
     // findings, since generated files there don't match this config's
     // plugin-registration entry the way real source files do.
-    ignores: [".next/**", ".open-next/**", ".wrangler/**", "node_modules/**", "supabase/**", "mobile/**"],
+    ignores: [".next/**", ".open-next/**", ".wrangler/**", "node_modules/**", "supabase/**", "mobile/**", "playwright-report/**", "test-results/**"],
   },
   {
     // Scoped to the same files next/typescript's own entry applies to —

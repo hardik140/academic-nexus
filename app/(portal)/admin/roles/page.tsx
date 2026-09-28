@@ -39,7 +39,7 @@ export default async function AdminRoles() {
   });
 
   return (
-    <div className="space-y-lg animate-[fade-in_0.3s_ease-out]">
+    <div className="space-y-lg">
       <div>
         <h1 className="text-2xl font-extrabold text-on-surface tracking-tight">Roles & Permissions</h1>
         <p className="text-sm text-on-surface-variant mt-xs">Configure what each role can access in the system</p>

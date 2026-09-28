@@ -156,7 +156,7 @@ export default function FinanceIntegrationsPage() {
   const connections = health?.connections ?? [];
 
   return (
-    <div className="space-y-lg animate-[fade-in_0.3s_ease-out]">
+    <div className="space-y-lg">
       <div className="flex items-start justify-between gap-md">
         <div>
           <h1 className="text-2xl font-extrabold text-on-surface tracking-tight">Accounting Integrations</h1>

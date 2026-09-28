@@ -17,7 +17,7 @@ export default function ExecutiveBriefingPage() {
   }
 
   return (
-    <div className="space-y-lg animate-[fade-in_0.3s_ease-out] max-w-[52rem] print:max-w-none">
+    <div className="space-y-lg max-w-[52rem] print:max-w-none">
       <div className="flex items-start justify-between gap-md print:hidden">
         <div>
           <h1 className="text-2xl font-extrabold text-on-surface tracking-tight">Executive Briefing</h1>

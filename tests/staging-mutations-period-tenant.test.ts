@@ -1,15 +1,38 @@
 import { describe, it, expect, vi } from "vitest";
 import { as, scalar, verify, U, OFF, COLLEGE_A, COLLEGE_B, SEM_3, SEM_5, SEM_PAST } from "./staging/harness";
-import { mutated } from "./staging/mutate";
+import { mutated, mutatedFile, mutatedFiles } from "./staging/mutate";
 
 /**
  * Mutation resistance for 047 §7k (academic period lifecycle) and §7l
  * (tenant consistency). Each test weakens one control, rebuilds the whole
  * database, and asserts the attack that control exists to stop now
  * SUCCEEDS.
+ *
+ * WHERE THE LIFECYCLE RULES LIVE. 052 redefines guard_academic_period() with
+ * CREATE OR REPLACE to admit the controlled reopen, so 052's text is what
+ * survives the chain and 047's is overwritten. Mutating 047's copy therefore
+ * changes nothing that runs — these four cases FAILED the moment 052 landed,
+ * which is precisely what the harness exists to catch, and they now target
+ * the authoritative definition. The RLS policies are still 047's, so the case
+ * that spans both mutates both files. No assertion below was changed.
  */
 
 vi.setConfig({ testTimeout: 240_000, hookTimeout: 300_000 });
+
+/** The migration that now owns guard_academic_period(). */
+const LIFECYCLE = "052_controlled_reopen_and_audit.sql";
+
+/** Take both of 052's refusals out of the closed branch. */
+const unsealClosed = (sql: string) =>
+  sql
+    .replace(
+      "    IF NOT v_sanctioned THEN\n      RAISE EXCEPTION '%: a closed period is immutable', TG_TABLE_NAME\n        USING ERRCODE = 'check_violation';\n    END IF;\n",
+      ""
+    )
+    .replace(
+      "    IF to_jsonb(NEW) - 'status' - 'is_current' - 'updated_at'\n       IS DISTINCT FROM\n       to_jsonb(OLD) - 'status' - 'is_current' - 'updated_at' THEN\n      RAISE EXCEPTION 'semesters: a controlled reopen may change only status'\n        USING ERRCODE = 'check_violation';\n    END IF;\n",
+      ""
+    );
 
 const SEM_1 = "00000006-0000-4000-8000-000000000001";
 const AY_2026 = "00000005-0000-4000-8000-000000000001";
@@ -18,12 +41,13 @@ const S_B = "00000004-0000-4000-8000-000000000007";
 
 describe("lifecycle mutations", () => {
   it("detects: transition table removed — planned may jump straight to closed", async () => {
-    const d = await mutated("transitions", (sql) =>
-      sql.replace(
-        "      (OLD.status = 'planned' AND NEW.status = 'active')\n      OR (OLD.status = 'active' AND NEW.status = 'closed')\n    ) THEN",
-        "      true\n    ) THEN"
-      )
-    );
+    const d = await mutatedFiles("transitions", {
+      [LIFECYCLE]: (sql) =>
+        sql.replace(
+          "      (OLD.status = 'planned' AND NEW.status = 'active')\n      OR (OLD.status = 'active' AND NEW.status = 'closed')\n    ) THEN",
+          "      true\n    ) THEN"
+        ),
+    });
     try {
       const r = await as(d, U.admin, `UPDATE public.semesters SET status='closed' WHERE id='${SEM_5}' RETURNING id`);
       expect(r.rows, "mutation not detected — planned->closed accepted").toBe(1);
@@ -32,12 +56,12 @@ describe("lifecycle mutations", () => {
   });
 
   it("detects: closed-is-immutable removed — console can reopen history", async () => {
-    const d = await mutated("closed immutable", (sql) =>
-      sql.replace(
-        "  IF OLD.status = 'closed' THEN\n    RAISE EXCEPTION '%: a closed period is immutable', TG_TABLE_NAME\n      USING ERRCODE = 'check_violation';\n  END IF;\n",
-        ""
-      )
-    );
+    // 052 put TWO refusals in the closed branch: the immutability raise, and
+    // the column freeze that holds a sanctioned reopen to the status column
+    // alone. A rename has to get past both, so this removes both — the same
+    // "there is more than one control here" result the fee-ledger mutation
+    // ran into.
+    const d = await mutatedFiles("closed immutable", { [LIFECYCLE]: unsealClosed });
     try {
       // The RLS USING (status <> 'closed') still hides it from admin, so the
       // probe is the console path the trigger alone guards.
@@ -53,17 +77,16 @@ describe("lifecycle mutations", () => {
     // the trigger also covers: a rename. Both must be removed for the rename
     // to land, so this mutation removes both — proving they are two layers,
     // not one written twice.
-    const d = await mutated("rls closed guard", (sql) =>
-      sql
-        .replace(
+    const d = await mutatedFiles("rls closed guard", {
+      // The RLS policy half is still 047's …
+      "047_academic_transactions_on_offerings.sql": (sql) =>
+        sql.replace(
           "    AND public.get_my_role() IN ('admin', 'director')\n    AND status <> 'closed'\n  )\n  WITH CHECK (\n    college_id = public.get_my_college_id()\n    AND public.get_my_role() IN ('admin', 'director')\n  );\n\nDROP POLICY IF EXISTS \"semesters_delete_manage\"",
           "    AND public.get_my_role() IN ('admin', 'director')\n  )\n  WITH CHECK (\n    college_id = public.get_my_college_id()\n    AND public.get_my_role() IN ('admin', 'director')\n  );\n\nDROP POLICY IF EXISTS \"semesters_delete_manage\""
-        )
-        .replace(
-          "  IF OLD.status = 'closed' THEN\n    RAISE EXCEPTION '%: a closed period is immutable', TG_TABLE_NAME\n      USING ERRCODE = 'check_violation';\n  END IF;\n",
-          ""
-        )
-    );
+        ),
+      // … and the trigger half is 052's.
+      [LIFECYCLE]: unsealClosed,
+    });
     try {
       const r = await as(d, U.admin, `UPDATE public.semesters SET name='Rewritten' WHERE id='${SEM_PAST}' RETURNING id`);
       expect(r.rows, "mutation not detected").toBe(1);
@@ -89,12 +112,13 @@ describe("lifecycle mutations", () => {
   });
 
   it("detects: year-must-be-active rule removed", async () => {
-    const d = await mutated("year active", (sql) =>
-      sql.replace(
-        "      IF NEW.academic_year_id IS NULL OR NOT EXISTS (\n        SELECT 1 FROM public.academic_years ay\n        WHERE ay.id = NEW.academic_year_id AND ay.status = 'active'\n      ) THEN",
-        "      IF false THEN"
-      )
-    );
+    const d = await mutatedFiles("year active", {
+      [LIFECYCLE]: (sql) =>
+        sql.replace(
+          "      IF NEW.academic_year_id IS NULL OR NOT EXISTS (\n        SELECT 1 FROM public.academic_years ay\n        WHERE ay.id = NEW.academic_year_id AND ay.status = 'active'\n      ) THEN",
+          "      IF false THEN"
+        ),
+    });
     try {
       await verify(d, `UPDATE semesters SET status='closed' WHERE id=$1`, [SEM_3]);
       const y = await as(d, U.admin, `INSERT INTO public.academic_years (college_id, name) VALUES ('${COLLEGE_A}','Planned Year') RETURNING id`);
@@ -140,7 +164,12 @@ describe("tenant-consistency mutations", () => {
     } finally { await d.close(); }
   });
 
-  it("detects: attendance student tenant key removed — college B student marked in college A", async () => {
+  it("attendance tenant key removed: a college B student is still refused (051 enrolment binding backstops it)", async () => {
+    // Before 051 this FK was the only thing between an admin and a college-B
+    // student's attendance row in college A. Migration 051's
+    // guard_enrolled_student() now also requires the student to be enrolled
+    // in the offering, and a college-B student cannot be (the enrolment's own
+    // tenant FK refuses it) — so with this FK removed the write still fails.
     const d = await mutated("attendance tenant fk", (sql) =>
       sql.replace(
         ",\n  ADD CONSTRAINT attendance_student_tenant_fkey\n    FOREIGN KEY (student_id, college_id) REFERENCES public.students (id, college_id);",
@@ -148,11 +177,13 @@ describe("tenant-consistency mutations", () => {
       )
     );
     try {
+      expect(await scalar(d, `SELECT count(*)::int FROM pg_constraint WHERE conname='attendance_student_tenant_fkey'`)).toBe(0);
       const r = await as(d, U.admin,
         `INSERT INTO public.attendance (college_id, offering_id, student_id, date, status, marked_by)
            VALUES ('${COLLEGE_A}','${OFF.dsA3}','${S_B}','2026-09-01','present',auth.uid()) RETURNING id`);
-      expect(r.ok, "mutation not detected").toBe(true);
-      expect(await scalar(d, `SELECT college_id FROM attendance WHERE student_id=$1`, [S_B])).toBe(COLLEGE_A);
+      expect(r.ok).toBe(false);
+      expect(r.error).toMatch(/not enrolled/);
+      expect(await scalar(d, `SELECT count(*)::int FROM attendance WHERE student_id=$1`, [S_B])).toBe(0);
     } finally { await d.close(); }
   });
 
@@ -291,7 +322,9 @@ describe("request-integrity mutations (§7n)", () => {
 
 describe("refund atomicity mutations (§7o)", () => {
   it("detects: refundable-balance check removed — refunds exceed the payment", async () => {
-    const d = await mutated("refundable", (sql) =>
+    // approve_refund's final definition is migration 051's (it adds the
+    // fee-ledger flag), so the mutation is applied there.
+    const d = await mutatedFile("051_phase3_hardening.sql", "refundable", (sql) =>
       sql.replace(
         "  IF v_req.amount > v_pay.amount - v_refunded THEN\n    RAISE EXCEPTION 'This refund (%) exceeds the refundable balance of %.',\n      v_req.amount, v_pay.amount - v_refunded USING ERRCODE = 'check_violation';\n  END IF;\n",
         ""

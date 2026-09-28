@@ -26,10 +26,24 @@ describe("inventory", () => {
     // Adding a definer function means adding it to this list AND deciding
     // its grant below — the test fails until both happen.
     expect(names).toEqual([
+      // 052: AFTER-trigger audit writers. Definer because audit_logs'
+      // INSERT policy pins user_id to auth.uid() and college_id to the
+      // actor's own college, which an admin acting on another row cannot
+      // always satisfy. They take no arguments and write only about the row
+      // the trigger fired for, so there is nothing for a caller to point
+      // elsewhere; they are also trigger-only (no EXECUTE grant below).
+      "audit_academic_period_status", "audit_marks_change", "audit_profile_privilege",
+      "can_invite_role", // 051: invitation-tier check, mirrors lib/auth/invite-tiers.ts
       "can_record_attendance", "can_write_offering_records", "enforce_profile_privileged_columns",
       // 050: service_role only — housekeeping that moves other people's rows.
       "expire_stale_gate_credentials",
       "get_my_college_id", "get_my_email", "get_my_role",
+      // 051: BEFORE-trigger guards — attendance window, closed-semester
+      // immutability, enrolment binding, the finance-ledger protections, and
+      // the cross-tenant row guards for fees and hostel allocations.
+      "guard_allocation_tenant", "guard_attendance_date", "guard_closed_semester",
+      "guard_enrolled_student", "guard_fee_delete", "guard_fee_ledger_columns",
+      "guard_row_student_tenant",
       "handle_new_user", "heads_course_department", "heads_offering_department", "heads_programme_department",
       "heads_user_department",
       // 050: trigger-only — the credential issuer.
@@ -41,7 +55,13 @@ describe("inventory", () => {
       // re-derives the actor from auth.uid(); see the gate security block below.
       "my_gate_pass_credential", "my_security_personnel_id",
       "record_gate_movement", "record_manual_gate_movement",
-      "refresh_analytics", "revoke_gate_pass_credential",
+      "refresh_analytics",
+      // 052: the ONE sanctioned path to a closed semester. Definer because
+      // semesters_update_manage excludes a closed row from any ordinary
+      // UPDATE, so it cannot inherit authorization and does its own — see
+      // the §6 block at the end of this file.
+      "reopen_semester",
+      "revoke_gate_pass_credential",
       "security_has_permission", "security_operates_gate", "security_outside_now", "security_scan_feed",
       "wardens_block", "wardens_room", "wardens_student", "wardens_student_profile",
     ]);
@@ -240,5 +260,38 @@ describe("gate security definer functions (050)", () => {
     try {
       await expect(db.query(`SELECT * FROM public.revoke_gate_pass_credential('${PASS_A}','x reason')`)).rejects.toThrow(/permission denied/);
     } finally { await db.exec(`RESET ROLE`); }
+  });
+});
+
+describe("§6 reopen_semester — the one sanctioned path into sealed history", () => {
+  // It is SECURITY DEFINER and RLS cannot help it: semesters_update_manage
+  // excludes a closed row from any ordinary UPDATE, so every check this
+  // function makes is its own. These probes invoke it DIRECTLY, which is the
+  // shape §22 asks for. None of them change state, so they are safe to run
+  // against the shared database.
+  const SEM_PAST_ID = "00000006-0000-4000-8000-000000000009";
+  const REASON = "Registrar correction: a stated, sufficiently long reason";
+
+  it("refuses every role that is not an admin, invoked directly", async () => {
+    for (const uid of [U.studentA, U.teacherA, U.warden, U.director, U.hodCse]) {
+      const r = await as(db, uid,
+        `SELECT status FROM public.reopen_semester('${SEM_PAST_ID}', '${REASON}')`);
+      expect(r.ok, `${uid} reopened a closed semester`).toBe(false);
+      expect(r.error, uid).toMatch(/may not reopen/i);
+    }
+  });
+
+  it("is not executable by anon at all", async () => {
+    await db.exec(`SET ROLE anon`);
+    try {
+      await expect(
+        db.query(`SELECT * FROM public.reopen_semester('${SEM_PAST_ID}', '${REASON}')`)
+      ).rejects.toThrow(/permission denied/);
+    } finally { await db.exec(`RESET ROLE`); }
+  });
+
+  it("left the semester closed after all of that", async () => {
+    expect(await verify<{ status: string }>(db,
+      `SELECT status FROM public.semesters WHERE id='${SEM_PAST_ID}'`)).toEqual([{ status: "closed" }]);
   });
 });

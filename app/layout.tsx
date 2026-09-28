@@ -1,5 +1,31 @@
 import type { Metadata } from "next";
+import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
+
+/**
+ * Self-hosted by next/font: the files are downloaded at build time and served
+ * from this deployment, so the browser never contacts Google (the old <link>
+ * tags also fell outside the CSP's font-src/style-src). Only the approved
+ * weights are loaded — Inter 400–700 and JetBrains Mono 400/500 — and each is
+ * exposed as a CSS variable that app/globals.css maps onto --font-sans /
+ * --font-mono.
+ */
+const inter = Inter({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  display: "swap",
+  variable: "--font-inter",
+});
+
+// Identifiers, reference numbers and codes only — not body copy. Not
+// preloaded: most pages show none, so it loads only where it is used.
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500"],
+  display: "swap",
+  preload: false,
+  variable: "--font-jetbrains-mono",
+});
 
 export const metadata: Metadata = {
   title: "Academic Nexus — Enterprise SIS & College ERP",
@@ -20,19 +46,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link
-          rel="preconnect"
-          href="https://fonts.gstatic.com"
-          crossOrigin="anonymous"
-        />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap"
-          rel="stylesheet"
-        />
-      </head>
+    <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
       <body className="min-h-screen bg-background text-on-background antialiased">
         {children}
       </body>

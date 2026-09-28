@@ -44,3 +44,9 @@ supabase/.temp/
 # npm pack debris (package/ above is this tarball extracted)
 blake3-internal.tgz
 package/
+
+# Playwright (browser verification) output
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/

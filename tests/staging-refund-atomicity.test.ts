@@ -51,29 +51,25 @@ async function refundRequest(d: PGlite, paymentId: string, amount: number): Prom
 }
 
 describe("the old three-statement sequence", () => {
-  it("REPRODUCED: two approvers' interleaving debits the fee twice for one approval", async () => {
+  it("the old sequence is no longer reachable: a hand debit of fees.paid_amount is refused (051 P1-2)", async () => {
+    // This test used to REPRODUCE the double-debit race by driving the old
+    // three-statement sequence (hand CAS on fees.paid_amount, then claim the
+    // request). Migration 051's guard_fee_ledger_columns() makes paid_amount
+    // writable only by the ledger trigger and approve_refund(), so step 1 of
+    // that sequence is now refused outright — the race cannot be started
+    // through the API at all, and approve_refund() is the only refund path.
     const d = await fresh();
     try {
       const payment = await clearedPayment(d, 4000);
       const request = await refundRequest(d, payment, 1000);
       const X = await paid(d); // 4000
 
-      // A1 and A2 both read: request pending, fee paid = X.
-      // A1 step 1 — CAS on X succeeds.
-      expect((await as(d, U.finance, `UPDATE public.fees SET paid_amount=${X - 1000}, status='partial' WHERE id='${FEE_A}' AND paid_amount=${X} RETURNING id`)).rows).toBe(1);
-      // A2 step 1 — CAS on X loses; the app tells A2 to retry.
-      expect((await as(d, U.finance, `UPDATE public.fees SET paid_amount=${X - 1000}, status='partial' WHERE id='${FEE_A}' AND paid_amount=${X} RETURNING id`)).rows).toBe(0);
-      // A2 retries: the request is still pending (A1 has not reached step 3).
+      const step1 = await as(d, U.finance, `UPDATE public.fees SET paid_amount=${X - 1000}, status='partial' WHERE id='${FEE_A}' AND paid_amount=${X} RETURNING id`);
+      expect(step1.ok).toBe(false);
+      expect(step1.error).toMatch(/derived from the payment ledger/);
+      expect(await paid(d)).toBe(X);
       expect(await scalar(d, `SELECT status FROM refund_requests WHERE id=$1`, [request])).toBe("pending");
-      // A2 re-reads fee (X-1000) and its CAS now succeeds.
-      expect((await as(d, U.finance, `UPDATE public.fees SET paid_amount=${X - 2000}, status='partial' WHERE id='${FEE_A}' AND paid_amount=${X - 1000} RETURNING id`)).rows).toBe(1);
-      // A1 step 3 claims the request; A2's claim then loses and throws.
-      expect((await as(d, U.finance, `UPDATE public.refund_requests SET status='approved', reviewed_by=auth.uid(), reviewed_at=now() WHERE id='${request}' AND status='pending' RETURNING id`)).rows).toBe(1);
-      expect((await as(d, U.finance, `UPDATE public.refund_requests SET status='approved', reviewed_by=auth.uid(), reviewed_at=now() WHERE id='${request}' AND status='pending' RETURNING id`)).rows).toBe(0);
-
-      // One approved refund of 1000; the fee lost 2000.
-      expect(await paid(d)).toBe(X - 2000);
-      expect(await scalar(d, `SELECT count(*)::int FROM refund_requests WHERE payment_id=$1 AND status='approved'`, [payment])).toBe(1);
+      expect(await scalar(d, `SELECT count(*)::int FROM refund_requests WHERE payment_id=$1 AND status='approved'`, [payment])).toBe(0);
     } finally { await d.close(); }
   });
 });

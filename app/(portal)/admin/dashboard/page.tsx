@@ -65,7 +65,7 @@ export default async function AdminDashboard() {
   ];
 
   return (
-    <div className="space-y-lg animate-[fade-in_0.3s_ease-out]">
+    <div className="space-y-lg">
       <div>
         <h1 className="text-2xl font-extrabold text-on-surface tracking-tight">
           System Administration
@@ -80,7 +80,7 @@ export default async function AdminDashboard() {
         {stats.map((stat) => (
           <div
             key={stat.label}
-            className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-lg shadow-sm hover:shadow-md transition-shadow"
+            className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-lg shadow-sm"
           >
             <div className="flex items-center justify-between mb-sm">
               <span className="text-xs font-semibold text-outline uppercase tracking-wider">

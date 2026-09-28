@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib/rbac";
+import { PERMISSIONS } from "@/lib/permissions";
 import { checkRateLimit } from "@/lib/rate-limit";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
@@ -46,7 +47,7 @@ export async function createDepartmentCore(
 }
 
 export async function createDepartment(params: CreateDepartmentParams) {
-  const actor = await requireRole(["admin"]);
+  const actor = await requireRole(PERMISSIONS.create_department);
   const supabase = await createClient();
   await createDepartmentCore(supabase, actor, params);
   revalidatePath("/admin/departments");
@@ -55,7 +56,7 @@ export async function createDepartment(params: CreateDepartmentParams) {
 
 /** Called by app/api/mobile/admin/create-department/route.ts. */
 export async function createDepartmentViaRequest(request: Request, params: CreateDepartmentParams) {
-  const { supabase, ...actor } = await requireRoleFromRequest(request, ["admin"]);
+  const { supabase, ...actor } = await requireRoleFromRequest(request, PERMISSIONS.create_department);
   await createDepartmentCore(supabase, actor, params);
 }
 

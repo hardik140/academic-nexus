@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib/rbac";
+import { PERMISSIONS } from "@/lib/permissions";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { logAudit } from "@/lib/audit";
 import { getCached, invalidateCache } from "@/lib/cache";
@@ -118,7 +119,7 @@ export async function createCourse(
   description?: string,
   viewQuery?: DataTableQuery
 ) {
-  const actor = await requireRole(["admin", "hod", "director"]);
+  const actor = await requireRole(PERMISSIONS.create_course);
   const supabase = await createClient();
   await createCourseCore(supabase, actor, { name, code, departmentId, credits, semester, type, description });
   revalidatePath("/admin/courses");
@@ -130,6 +131,6 @@ export async function createCourse(
 
 /** Called by app/api/mobile/admin/create-course/route.ts. */
 export async function createCourseViaRequest(request: Request, params: CreateCourseParams) {
-  const { supabase, ...actor } = await requireRoleFromRequest(request, ["admin", "hod", "director"]);
+  const { supabase, ...actor } = await requireRoleFromRequest(request, PERMISSIONS.create_course);
   await createCourseCore(supabase, actor, params);
 }

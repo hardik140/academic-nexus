@@ -38,7 +38,7 @@ export default function DepartmentExecutiveDetail() {
   const { department, health, funnel, openRisks } = data;
 
   return (
-    <div className="space-y-lg animate-[fade-in_0.3s_ease-out]">
+    <div className="space-y-lg">
       <button type="button" onClick={() => router.push("/director/departments/performance")} className="text-sm text-secondary hover:underline">
         ← Back to Department Performance
       </button>

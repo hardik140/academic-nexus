@@ -153,7 +153,7 @@ export default function PlacementCellDrives() {
 
   if (view === "applicants" && selectedDrive) {
     return (
-      <div className="space-y-lg animate-[fade-in_0.3s_ease-out]">
+      <div className="space-y-lg">
         <div className="flex items-center justify-between">
           <div>
             <button onClick={() => setView("list")} className="text-xs text-secondary hover:underline font-medium mb-xs">
@@ -213,7 +213,7 @@ export default function PlacementCellDrives() {
   }
 
   return (
-    <div className="space-y-lg animate-[fade-in_0.3s_ease-out]">
+    <div className="space-y-lg">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-extrabold text-on-surface tracking-tight">Placement Drives</h1>

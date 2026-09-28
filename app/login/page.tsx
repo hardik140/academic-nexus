@@ -157,7 +157,7 @@ export default function LoginPage() {
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="you@university.edu"
                     required
-                    className="w-full bg-surface-container-low border border-outline-variant rounded-xl px-md py-md text-sm text-on-surface placeholder:text-outline focus:ring-2 focus:ring-secondary focus:border-secondary outline-none transition-all"
+                    className="w-full bg-surface-container-low border border-border-control rounded-xl px-md py-md text-sm text-on-surface placeholder:text-outline focus:ring-2 focus:ring-secondary focus:border-secondary outline-none motion-feedback"
                   />
                 </div>
 
@@ -175,7 +175,7 @@ export default function LoginPage() {
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Your password"
                     required
-                    className="w-full bg-surface-container-low border border-outline-variant rounded-xl px-md py-md text-sm text-on-surface placeholder:text-outline focus:ring-2 focus:ring-secondary focus:border-secondary outline-none transition-all"
+                    className="w-full bg-surface-container-low border border-border-control rounded-xl px-md py-md text-sm text-on-surface placeholder:text-outline focus:ring-2 focus:ring-secondary focus:border-secondary outline-none motion-feedback"
                   />
                 </div>
 
@@ -217,7 +217,7 @@ export default function LoginPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@university.edu"
                   required
-                  className="w-full bg-surface-container-low border border-outline-variant rounded-xl px-md py-md text-sm text-on-surface placeholder:text-outline focus:ring-2 focus:ring-secondary focus:border-secondary outline-none transition-all"
+                  className="w-full bg-surface-container-low border border-border-control rounded-xl px-md py-md text-sm text-on-surface placeholder:text-outline focus:ring-2 focus:ring-secondary focus:border-secondary outline-none motion-feedback"
                 />
               </div>
 

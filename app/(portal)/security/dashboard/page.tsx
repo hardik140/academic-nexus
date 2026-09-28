@@ -42,7 +42,7 @@ export default async function SecurityDashboard() {
   const overdue = outside.filter((s) => s.overdue);
 
   return (
-    <div className="space-y-lg animate-[fade-in_0.3s_ease-out]">
+    <div className="space-y-lg">
       <div className="flex items-start justify-between gap-md flex-wrap">
         <div>
           <h1 className="text-2xl font-extrabold text-on-surface tracking-tight">Gate Security</h1>
