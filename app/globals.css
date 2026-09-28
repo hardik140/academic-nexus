@@ -227,6 +227,20 @@
   transition-timing-function: var(--ease-in-out);
 }
 
+/* Feedback appearing (M6.1): a success, info or warning message fades in
+ * once, 150ms, when it is inserted. Opacity only — the space the message
+ * takes is there at once and is never animated. Errors do not use it: an
+ * error appears immediately. */
+@utility motion-appear {
+  transition-property: opacity;
+  transition-duration: var(--duration-fast);
+  transition-timing-function: var(--ease-out);
+
+  @starting-style {
+    opacity: 0;
+  }
+}
+
 /* A native <dialog> opened with showModal(): rises 8px and fades in, fades
  * out on close. The closed state is the exit (150ms, ease-in-out); [open] is
  * the enter (200ms, ease-emphasized); @starting-style is where an opening

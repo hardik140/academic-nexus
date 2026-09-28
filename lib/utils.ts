@@ -30,7 +30,7 @@ export const NAMED_EASE = ["emphasized"] as const;
  * and transition-behaviour class. Kept in step with globals.css by
  * tests/cn.test.ts.
  */
-export const MOTION_UTILITIES = ["feedback", "state", "dialog", "drawer"] as const;
+export const MOTION_UTILITIES = ["feedback", "state", "appear", "dialog", "drawer"] as const;
 
 const twMerge = extendTailwindMerge<"motion">({
   extend: {

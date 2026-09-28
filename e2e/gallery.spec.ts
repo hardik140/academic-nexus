@@ -22,6 +22,7 @@ const SECTIONS = [
   "modal-behaviour",
   "button-form",
   "async-resource",
+  "feedback",
 ];
 
 test("gallery renders every section without runtime errors", async ({ page }) => {

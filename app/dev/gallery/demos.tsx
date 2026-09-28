@@ -4,6 +4,12 @@ import { useRef, useState } from "react";
 import { Modal, Button, FormField, StatusBadge } from "@/components/ui/modal";
 import { DataTable } from "@/components/ui/data-table";
 import { useAsyncResource } from "@/hooks/use-async-resource";
+import { Alert } from "@/components/ui/alert";
+import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/error-state";
+import { LoadingState } from "@/components/ui/loading-state";
+import { StateView } from "@/components/ui/state-view";
+import { formatMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 // Interactive halves of the development-only component gallery. Imported only
@@ -428,6 +434,165 @@ export function StatusChangeDemo() {
       <span data-testid="status-change">
         <StatusBadge status={status} />
       </span>
+    </div>
+  );
+}
+
+// ─── M6.1: feedback foundation ───────────────────────────────────────────
+
+/**
+ * Browser check for Alert: each tone shown on demand into an Alert that is
+ * always rendered, so its live region exists before the message arrives;
+ * Dismiss by mouse or keyboard. Messages are fictional.
+ */
+export function AlertDemos() {
+  const [status, setStatus] = useState<{ tone: "success" | "info" | "warning"; text: string } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  return (
+    <div className="space-y-md" data-testid="alert-demo">
+      <div className="flex flex-wrap gap-sm">
+        <Button variant="outline" onClick={() => setStatus({ tone: "success", text: "Leave application submitted for 12–14 March." })}>
+          Show success
+        </Button>
+        <Button variant="outline" onClick={() => setStatus({ tone: "info", text: "Attendance for CS301 closes at 6:00 pm today." })}>
+          Show info
+        </Button>
+        <Button variant="outline" onClick={() => setStatus({ tone: "warning", text: "3 students in this section are below 75% attendance." })}>
+          Show warning
+        </Button>
+        <Button variant="outline" onClick={() => setError("Marks could not be saved. Your entries are still here; try again.")}>
+          Show error
+        </Button>
+      </div>
+      <div data-testid="alert-demo-status">
+        <Alert tone={status?.tone ?? "success"} onDismiss={() => setStatus(null)}>
+          {status?.text}
+        </Alert>
+      </div>
+      <div data-testid="alert-demo-error">
+        <Alert tone="error" onDismiss={() => setError(null)}>
+          {error}
+        </Alert>
+      </div>
+    </div>
+  );
+}
+
+/** Every tone at rest, with a title and an action where the tone uses one. */
+export function AlertToneExamples() {
+  return (
+    <div className="grid gap-sm md:grid-cols-2" data-testid="alert-examples">
+      <Alert tone="success" title="Attendance saved">
+        42 students marked for CS301, Monday 10 March.
+      </Alert>
+      <Alert tone="info" title="Registration opens soon">
+        Semester 6 course registration opens on 1 April.
+      </Alert>
+      <Alert tone="warning" title="Fee due in 3 days">
+        {formatMoney(18500)} is due by 15 March.
+      </Alert>
+      <Alert tone="error" title="Payment not recorded" action={<Button variant="outline" size="sm">Try again</Button>}>
+        The receipt could not be saved.
+      </Alert>
+    </div>
+  );
+}
+
+type SampleRefund = { id: string; student: string; amount: number };
+
+const SAMPLE_REFUNDS: SampleRefund[] = [
+  { id: "RF-1042", student: "Asha Rao", amount: 12500 },
+  { id: "RF-1043", student: "Rohan Mehta", amount: 4200 },
+];
+
+type Outcome = "records" | "nothing" | "fails" | "fails-once";
+
+/**
+ * Browser check for StateView: a fresh load (no earlier data) and a refresh
+ * (keeps earlier data) that returns records, returns nothing or fails. Data
+ * is fabricated by a timer; nothing is fetched.
+ */
+export function StateViewDemo() {
+  const outcome = useRef<Outcome>("records");
+  const [fresh, setFresh] = useState(0);
+  const [announce, setAnnounce] = useState(false);
+  const resource = useAsyncResource(async () => {
+    await wait(600);
+    const now = outcome.current;
+    if (now === "fails-once") outcome.current = "records";
+    if (now === "fails" || now === "fails-once") throw new Error("Sample failure");
+    return now === "nothing" ? [] : SAMPLE_REFUNDS;
+  }, [fresh]);
+
+  const freshLoad = (next: Outcome) => {
+    outcome.current = next;
+    setAnnounce(false);
+    setFresh((n) => n + 1);
+  };
+  const refresh = (next: Outcome) => {
+    outcome.current = next;
+    setAnnounce(true);
+    resource.reload();
+  };
+
+  return (
+    <div className="space-y-md" data-testid="state-view-demo">
+      <div className="flex flex-wrap gap-sm">
+        <Button variant="outline" onClick={() => freshLoad("records")}>Fresh load: records</Button>
+        <Button variant="outline" onClick={() => freshLoad("nothing")}>Fresh load: nothing</Button>
+        <Button variant="outline" onClick={() => freshLoad("fails-once")}>Fresh load: fails once</Button>
+        <Button variant="outline" onClick={() => refresh("records")}>Refresh: records</Button>
+        <Button variant="outline" onClick={() => refresh("nothing")}>Refresh: nothing</Button>
+        <Button variant="outline" onClick={() => refresh("fails")}>Refresh: fails</Button>
+      </div>
+      <div className="rounded-panel border border-outline-variant bg-surface-container-lowest p-md">
+        <StateView
+          state={resource}
+          announceLoading={announce}
+          loadingLabel="Loading refund requests…"
+          empty={{ title: "No refund requests", description: "Requests students raise will appear here." }}
+        >
+          {(refunds) => (
+            <ul className="divide-y divide-outline-variant" data-testid="state-view-records">
+              {refunds.map((r) => (
+                <li key={r.id} className="flex justify-between gap-md py-sm text-body text-on-surface">
+                  <span>
+                    <span className="font-mono">{r.id}</span> · {r.student}
+                  </span>
+                  <span className="tabular-nums">{formatMoney(r.amount)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </StateView>
+      </div>
+    </div>
+  );
+}
+
+/** LoadingState, EmptyState and ErrorState at rest. */
+export function StateExamples() {
+  return (
+    <div className="grid gap-md md:grid-cols-2 lg:grid-cols-3" data-testid="state-examples">
+      <div className="rounded-panel border border-outline-variant bg-surface-container-lowest" data-testid="example-loading">
+        <LoadingState label="Loading attendance register…" />
+      </div>
+      <div className="rounded-panel border border-outline-variant bg-surface-container-lowest">
+        <EmptyState title="No pending gate passes" description="New requests from students will appear here." />
+      </div>
+      <div className="rounded-panel border border-outline-variant bg-surface-container-lowest">
+        <ErrorState kind="load" onRetry={() => {}} reference="1839204761" />
+      </div>
+      <div className="rounded-panel border border-outline-variant bg-surface-container-lowest">
+        <ErrorState kind="network" onRetry={() => {}} />
+      </div>
+      <div className="rounded-panel border border-outline-variant bg-surface-container-lowest">
+        <ErrorState kind="forbidden" onRetry={() => {}} />
+      </div>
+      <div className="rounded-panel border border-outline-variant bg-surface-container-lowest">
+        <ErrorState kind="session" />
+      </div>
     </div>
   );
 }

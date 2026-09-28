@@ -4,7 +4,20 @@ import { Button, StatusBadge } from "@/components/ui/modal";
 import { StatsCard } from "@/components/ui/stats-card";
 import { PlacementFunnelChart } from "@/components/charts/placement-funnel-chart";
 import Loading from "@/app/loading";
-import { AsyncResourceDemo, ButtonFormDemo, DataTableDemos, FormFieldDemos, ModalBehaviourDemos, ModalDemo, MotionUtilityDemos, StatusChangeDemo } from "./demos";
+import {
+  AlertDemos,
+  AlertToneExamples,
+  AsyncResourceDemo,
+  ButtonFormDemo,
+  DataTableDemos,
+  FormFieldDemos,
+  ModalBehaviourDemos,
+  ModalDemo,
+  MotionUtilityDemos,
+  StateExamples,
+  StateViewDemo,
+  StatusChangeDemo,
+} from "./demos";
 
 /**
  * Development-only component gallery — the browser-verification surface for
@@ -245,6 +258,13 @@ export default function ComponentGalleryPage() {
 
         <Section id="async-resource" title="useAsyncResource">
           <AsyncResourceDemo />
+        </Section>
+
+        <Section id="feedback" title="Feedback: alerts and loading, empty and error states">
+          <AlertDemos />
+          <AlertToneExamples />
+          <StateViewDemo />
+          <StateExamples />
         </Section>
       </div>
     </main>

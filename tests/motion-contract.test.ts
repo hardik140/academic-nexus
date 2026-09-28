@@ -5,9 +5,10 @@ import { describe, expect, it } from "vitest";
 /**
  * Motion contract guard (Checkpoint 4, M1).
  *
- * Motion is CSS-first and goes through four semantic utilities in
- * app/globals.css (motion-feedback, motion-state, motion-dialog,
- * motion-drawer). This static scan stops the contract from eroding:
+ * Motion is CSS-first and goes through five semantic utilities in
+ * app/globals.css (motion-feedback, motion-state, motion-appear,
+ * motion-dialog, motion-drawer). This static scan stops the contract from
+ * eroding:
  *
  *   • transition-all — animates whatever changes, layout included; also its
  *     arbitrary spellings (transition-[all], transition-[width], …).
@@ -396,5 +397,58 @@ describe("motion guard: M5 sidebar and drawer", () => {
 
   it("no simulated drawer: no fixed layer, z-index, translate, manual inert, focus trap or global Escape listener", () => {
     expect(shell).not.toMatch(/\bfixed\b|inset-0|\bz-(?:\d|\[)|translate-x|\binert\b|aria-modal|role="dialog"|addEventListener\(\s*["']keydown|\.focus\(/);
+  });
+});
+
+// ─── M6.1: feedback entrance ─────────────────────────────────────────────
+
+describe("motion guard: M6.1 feedback", () => {
+  const css = readFileSync("app/globals.css", "utf8");
+  // The utility's body: from its opening brace to the brace that closes it.
+  const start = css.indexOf("@utility motion-appear {");
+  let end = start + "@utility motion-appear {".length;
+  for (let depth = 1; depth > 0 && end < css.length; end++) {
+    if (css[end] === "{") depth++;
+    else if (css[end] === "}") depth--;
+  }
+  const appear = start < 0 ? "" : css.slice(start, end);
+
+  const FEEDBACK = {
+    alert: readFileSync("components/ui/alert.tsx", "utf8"),
+    loading: readFileSync("components/ui/loading-state.tsx", "utf8"),
+    empty: readFileSync("components/ui/empty-state.tsx", "utf8"),
+    error: readFileSync("components/ui/error-state.tsx", "utf8"),
+    stateView: readFileSync("components/ui/state-view.tsx", "utf8"),
+  };
+
+  it("motion-appear fades opacity only, on the fast token, from @starting-style", () => {
+    expect(appear).not.toBe("");
+    expect(appear).toMatch(/transition-property:\s*opacity;/);
+    expect(appear).toMatch(/transition-duration:\s*var\(--duration-fast\);/);
+    expect(appear).toMatch(/transition-timing-function:\s*var\(--ease-out\);/);
+    expect(appear).toMatch(/@starting-style\s*\{\s*opacity:\s*0;\s*\}/);
+    expect(appear).not.toMatch(/transform|translate|scale|height|width|margin|padding|top|left|allow-discrete|animation|@keyframes|\ball\b/);
+  });
+
+  it("with reduced motion requested, its duration is 0", () => {
+    const reduce = /@media \(prefers-reduced-motion: reduce\)\s*\{\s*:root\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
+    expect(reduce).toMatch(/--duration-fast:\s*0ms;/);
+  });
+
+  it("the feedback components carry no local timing and no JavaScript animation: only motion-appear and motion-feedback", () => {
+    for (const [name, source] of Object.entries(FEEDBACK)) {
+      // .animate() would run outside the stylesheet's reduced-motion rule.
+      expect(source, name).not.toMatch(/transition-|duration-|animate-|\.animate\(|delay-|ease-(?:in|out|linear|\[)|\btransition\b(?=[\s"'`])/);
+      const utilities = [...source.matchAll(/(?<![\w-])motion-(\w+)/g)].map((m) => m[1]);
+      expect(utilities.filter((u) => u !== "appear" && u !== "feedback"), name).toEqual([]);
+    }
+  });
+
+  it("only the Alert enters with motion-appear, and never for an error", () => {
+    const uses = FEEDBACK.alert.split(/\r?\n/).filter((line) => line.includes("motion-appear") && !line.trim().startsWith("*"));
+    expect(uses).toEqual(['            tone !== "error" && "motion-appear"']);
+    for (const name of ["loading", "empty", "error", "stateView"] as const) {
+      expect(FEEDBACK[name], name).not.toContain("motion-");
+    }
   });
 });
