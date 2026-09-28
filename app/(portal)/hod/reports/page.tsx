@@ -1,17 +1,20 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { getCached } from "@/lib/cache";
+import { assertRead } from "@/lib/read-result-server";
+import { NO_MATCH_ID } from "@/lib/read-result";
 
 export default async function HodReports() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: dept } = await supabase
+  const { data: dept, error: deptError } = await supabase
     .from("departments")
     .select("id, name, code")
     .eq("hod_id", user.id)
     .single();
+  assertRead(deptError);
 
   const deptId = dept?.id || "";
 
@@ -20,21 +23,24 @@ export default async function HodReports() {
     60,
     async () => {
       const [enrollRes, attendanceRes, coursesRes] = await Promise.all([
-        supabase.from("mv_department_enrollment").select("*").eq("department_id", deptId).maybeSingle(),
-        supabase.from("mv_attendance_summary").select("*").eq("department_id", deptId),
-        supabase.from("courses").select("id, name, code").eq("department_id", deptId),
+        supabase.from("mv_department_enrollment").select("*").eq("department_id", deptId || NO_MATCH_ID).maybeSingle(),
+        supabase.from("mv_attendance_summary").select("*").eq("department_id", deptId || NO_MATCH_ID),
+        supabase.from("courses").select("id, name, code").eq("department_id", deptId || NO_MATCH_ID),
       ]);
+      for (const res of [enrollRes, attendanceRes, coursesRes]) assertRead(res.error);
       const courseIds = (coursesRes.data || []).map((c) => c.id);
 
       // Enrollment hangs off the offering (047), and its student_id points at
       // students(id) rather than profiles(id) — the old profiles join silently
       // matched nothing.
-      const { data: deptOfferings } = courseIds.length
+      const deptOfferingsRes = courseIds.length
         ? await supabase.from("course_offerings").select("id").in("course_id", courseIds)
-        : { data: [] };
+        : { data: [], error: null };
+      assertRead(deptOfferingsRes.error);
+      const deptOfferings = deptOfferingsRes.data;
       const offeringIds = ((deptOfferings as { id: string }[] | null) || []).map((o) => o.id);
 
-      const { data: backlogs } = offeringIds.length
+      const backlogsRes = offeringIds.length
         ? await supabase
             .from("course_enrollments")
             .select(
@@ -42,7 +48,9 @@ export default async function HodReports() {
             )
             .in("offering_id", offeringIds)
             .eq("status", "failed")
-        : { data: [] };
+        : { data: [], error: null };
+      assertRead(backlogsRes.error);
+      const backlogs = backlogsRes.data;
 
       return { enrollment: enrollRes.data, attendance: attendanceRes.data || [], backlogs: backlogs || [] };
     }

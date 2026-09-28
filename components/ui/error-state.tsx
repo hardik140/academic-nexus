@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/modal";
+import { SignInAgainLink } from "@/components/ui/sign-in-again";
 import type { ErrorKind } from "@/lib/feedback-error";
 import { cn } from "@/lib/utils";
 
@@ -44,6 +45,8 @@ export interface ErrorStateProps {
 export function ErrorState({ kind = "load", title, description, onRetry, retryLabel = "Try again", reference, action, className }: ErrorStateProps) {
   const copy = COPY[kind];
   const showRetry = Boolean(onRetry) && copy.retryable;
+  // An expired session's way forward is signing in again, in the same tab.
+  const next = action ?? (kind === "session" ? <SignInAgainLink /> : undefined);
   return (
     <div role="alert" data-error-state={kind} className={cn("flex flex-col items-center justify-center gap-sm py-xl text-center", className)}>
       <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-error">
@@ -58,14 +61,14 @@ export function ErrorState({ kind = "load", title, description, onRetry, retryLa
           Reference: <span className="font-mono">{reference}</span>
         </p>
       )}
-      {(showRetry || action) && (
+      {(showRetry || next) && (
         <div className="flex flex-wrap items-center justify-center gap-sm pt-xs">
           {showRetry && (
             <Button variant="outline" size="sm" onClick={onRetry}>
               {retryLabel}
             </Button>
           )}
-          {action}
+          {next}
         </div>
       )}
     </div>

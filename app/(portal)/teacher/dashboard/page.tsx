@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { TeacherDashboardClient, type PriorityAction } from "./dashboard-client";
 import type { Database } from "@/types/database";
+import { assertRead } from "@/lib/read-result-server";
 
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -32,20 +33,22 @@ export default async function TeacherDashboard() {
 
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase
+  const { data: profile, error: profileError } = await supabase
     .from("profiles")
     .select("*")
     .eq("id", user.id)
     .single();
+  assertRead(profileError);
 
   // The teacher's DELIVERIES this term, not the catalog rows they own. Two
   // sections of one course are two entries here, each with its own roll,
   // register and marks sheet — which is the whole point of the offering
   // model and was inexpressible before it.
-  const { data: offeringsData } = await supabase
+  const { data: offeringsData, error: offeringsDataError } = await supabase
     .from("course_offerings")
     .select("id, status, courses:course_id(id, name, code), sections:section_id(name)")
     .eq("instructor_id", user.id);
+  assertRead(offeringsDataError);
   const offerings = ((offeringsData as unknown as OfferingSummary[]) || []).filter(
     (o) => o.status !== "cancelled"
   );
@@ -83,6 +86,7 @@ export default async function TeacherDashboard() {
         .order("created_at", { ascending: false })
         .limit(5),
     ]);
+  for (const res of [enrollmentsRes, attendanceRes, marksRes, todaySlotsRes, leaveRes, correctionsRes, notificationsRes]) assertRead("error" in res ? res.error : null);
 
   const enrollments = enrollmentsRes.data || [];
   const attendance = attendanceRes.data || [];

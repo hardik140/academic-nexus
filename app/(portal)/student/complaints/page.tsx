@@ -1,9 +1,16 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button, FormField, StatusBadge } from "@/components/ui/modal";
+import { Alert } from "@/components/ui/alert";
+import { ErrorAlert } from "@/components/ui/error-alert";
+import { StateView } from "@/components/ui/state-view";
+import { useAsyncResource } from "@/hooks/use-async-resource";
+import { toFeedbackError, type FeedbackError } from "@/lib/action-failure";
+import { SessionExpiredError } from "@/lib/feedback-error";
+import { requireRows } from "@/lib/read-result";
 import { submitComplaint } from "./actions";
 import type { Database } from "@/types/database";
 
@@ -19,11 +26,10 @@ export default function StudentComplaints() {
   const supabase = createClient();
   const searchParams = useSearchParams();
   const prefillCategory = searchParams.get("category");
-  const [complaints, setComplaints] = useState<any[]>([]);
   const [showForm, setShowForm] = useState(!!prefillCategory);
   const [loading, setLoading] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [error, setError] = useState<FeedbackError | null>(null);
   const [form, setForm] = useState({
     category: prefillCategory && VALID_CATEGORIES.includes(prefillCategory) ? prefillCategory : "",
     title: "",
@@ -32,23 +38,24 @@ export default function StudentComplaints() {
     priority: "medium",
   });
 
-  const loadComplaints = async () => {
+  // A failed load is an error, never "no complaints" (owner decision D5).
+  const complaintsResource = useAsyncResource(async () => {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    const { data } = await supabase
-      .from("complaints")
-      .select("*")
-      .eq("submitted_by", user.id)
-      .order("created_at", { ascending: false });
-    setComplaints(data || []);
-  };
-
-  useEffect(() => { loadComplaints(); }, []);
+    if (!user) throw new SessionExpiredError();
+    return requireRows(
+      await supabase
+        .from("complaints")
+        .select("*")
+        .eq("submitted_by", user.id)
+        .order("created_at", { ascending: false })
+    );
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setSuccess(null);
     try {
       await submitComplaint({
         category: form.category as ComplaintCategory,
@@ -59,11 +66,12 @@ export default function StudentComplaints() {
       });
       setForm({ category: "", title: "", description: "", location: "", priority: "medium" });
       setShowForm(false);
-      setSubmitted(true);
-      await loadComplaints();
-      setTimeout(() => setSubmitted(false), 3000);
+      // Stays until dismissed: the record of a complaint the student just made.
+      setSuccess("Complaint submitted. You will be updated as it is handled.");
+      // A failure to refresh the list shows on the list, not as a failed complaint.
+      complaintsResource.reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to submit complaint.");
+      setError(await toFeedbackError(e, "Failed to submit complaint."));
     } finally {
       setLoading(false);
     }
@@ -102,15 +110,11 @@ export default function StudentComplaints() {
         </Button>
       </div>
 
-      {submitted && (
-        <div className="bg-success/10 border border-success/20 text-success rounded-xl p-md text-sm font-medium">
-          ✅ Complaint submitted successfully! We&apos;ll get back to you soon.
-        </div>
-      )}
+      <Alert tone="success" focusOnShow onDismiss={() => setSuccess(null)}>
+        {success}
+      </Alert>
 
-      {error && (
-        <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium">{error}</div>
-      )}
+      <ErrorAlert error={error} />
 
       {showForm && (
         <form onSubmit={handleSubmit} className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-xl shadow-sm space-y-md">
@@ -128,7 +132,7 @@ export default function StudentComplaints() {
           </div>
           <div className="flex justify-end gap-sm">
             <Button variant="outline" type="button" onClick={() => setShowForm(false)}>Cancel</Button>
-            <Button type="submit" disabled={loading}>{loading ? "Submitting..." : "Submit Complaint"}</Button>
+            <Button type="submit" disabled={loading} aria-busy={loading || undefined}>{loading ? "Submitting..." : "Submit Complaint"}</Button>
           </div>
         </form>
       )}
@@ -138,6 +142,13 @@ export default function StudentComplaints() {
         <div className="px-lg py-md border-b border-outline-variant">
           <h2 className="text-sm font-bold text-on-surface flex items-center gap-sm">🛠️ My Complaints</h2>
         </div>
+        <StateView
+          state={complaintsResource}
+          isEmpty={() => false}
+          loadingLabel="Loading your complaints…"
+          empty={{ title: "No complaints submitted" }}
+        >
+          {(complaints) => (
         <div className="divide-y divide-outline-variant">
           {complaints.length > 0 ? complaints.map((c: any) => (
             <div key={c.id} className="px-lg py-md hover:bg-surface-container-low transition-colors">
@@ -145,9 +156,9 @@ export default function StudentComplaints() {
                 <div className="flex items-center gap-sm">
                   <span className="text-xs font-semibold px-sm py-xs rounded-full bg-surface-container-high text-on-surface-variant capitalize">{c.category?.replace(/_/g, " ")}</span>
                   <span className={`text-xs font-semibold px-sm py-xs rounded-full ${
-                    c.priority === "critical" ? "bg-error/10 text-error" :
-                    c.priority === "high" ? "bg-warning/10 text-warning" :
-                    c.priority === "low" ? "bg-info/10 text-info" : "bg-surface-container-high text-on-surface-variant"
+                    c.priority === "critical" ? "bg-error-container text-on-error-container" :
+                    c.priority === "high" ? "bg-warning-container text-on-warning-container" :
+                    c.priority === "low" ? "bg-info-container text-on-info-container" : "bg-surface-container-high text-on-surface-variant"
                   }`}>{c.priority}</span>
                 </div>
                 <StatusBadge status={c.status} />
@@ -161,6 +172,8 @@ export default function StudentComplaints() {
             <div className="p-xl text-center text-sm text-outline">No complaints submitted.</div>
           )}
         </div>
+          )}
+        </StateView>
       </div>
     </div>
   );

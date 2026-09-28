@@ -1,8 +1,16 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Button, Modal, FormField, StatusBadge } from "@/components/ui/modal";
+import { Alert } from "@/components/ui/alert";
+import { ErrorAlert } from "@/components/ui/error-alert";
+import { ErrorState } from "@/components/ui/error-state";
+import { LoadingState } from "@/components/ui/loading-state";
+import { useAsyncResource } from "@/hooks/use-async-resource";
+import { toFeedbackError, type FeedbackError } from "@/lib/action-failure";
+import { classifyError, SessionExpiredError } from "@/lib/feedback-error";
+import { requireRows } from "@/lib/read-result";
 import { saveAttendance, requestAttendanceCorrection, listMyCorrectionRequests } from "./actions";
 import type { Database } from "@/types/database";
 
@@ -14,10 +22,6 @@ export default function TeacherAttendance() {
   const supabase = createClient();
   // Offerings, not courses: a teacher can hold two sections of one course,
   // and the register belongs to the section — see lib/offerings.ts.
-  const [offerings, setOfferings] = useState<any[]>([]);
-  // Offering ids this teacher covers as a HOD-assigned substitute rather
-  // than as the assigned instructor — used only to label the option.
-  const [substituteOfferingIds, setSubstituteOfferingIds] = useState<Set<string>>(new Set());
   const [selectedOffering, setSelectedOffering] = useState<string>("");
   const [students, setStudents] = useState<any[]>([]);
   // Keyed by students.id throughout. course_enrollments.student_id now
@@ -28,27 +32,26 @@ export default function TeacherAttendance() {
   const [attendance, setAttendance] = useState<Record<string, string>>({});
   const [attendanceRecordIds, setAttendanceRecordIds] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [error, setError] = useState<FeedbackError | null>(null);
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+  // The class roll: loading, loaded, or failed — never "no students" when the read failed.
+  const [studentsLoading, setStudentsLoading] = useState(false);
+  const [studentsError, setStudentsError] = useState<unknown>(null);
+  // The latest class and date picked: an earlier, slower load must not replace its roll.
+  const latestLoad = useRef(0);
 
-  const [myCorrections, setMyCorrections] = useState<any[]>([]);
   const [correctionTarget, setCorrectionTarget] = useState<{ studentId: string; name: string } | null>(null);
   const [correctionForm, setCorrectionForm] = useState({ requestedStatus: "present", reason: "", evidenceNote: "" });
   const [correctionSubmitting, setCorrectionSubmitting] = useState(false);
-  const [correctionError, setCorrectionError] = useState<string | null>(null);
-
-  useEffect(() => {
-    loadOfferings();
-    loadMyCorrections();
-  }, []);
+  const [correctionError, setCorrectionError] = useState<FeedbackError | null>(null);
 
   const OFFERING_LABEL_COLS =
     "id, status, courses:course_id(id, name, code), sections:section_id(name), semesters:semester_id(name)";
 
-  const loadOfferings = async () => {
+  const offeringsResource = useAsyncResource(async () => {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    if (!user) throw new SessionExpiredError();
     const [ownRes, substitutionsRes] = await Promise.all([
       supabase.from("course_offerings").select(OFFERING_LABEL_COLS).eq("instructor_id", user.id),
       supabase
@@ -60,14 +63,23 @@ export default function TeacherAttendance() {
 
     // A cancelled offering has no class to mark; the server refuses the write
     // anyway, so keeping it in the picker would only produce a dead option.
-    const own = ((ownRes.data as any[]) || []).filter((o) => o.status !== "cancelled");
-    const covered = ((substitutionsRes.data as any[]) || [])
+    const own = (requireRows(ownRes) as any[]).filter((o) => o.status !== "cancelled");
+    const covered = (requireRows(substitutionsRes) as any[])
       .map((s) => s.course_offerings)
       .filter((o: any) => o && o.status !== "cancelled" && !own.some((mine) => mine.id === o.id));
 
-    setSubstituteOfferingIds(new Set(covered.map((o: any) => o.id)));
-    setOfferings([...own, ...covered]);
-  };
+    return {
+      offerings: [...own, ...covered],
+      // Offering ids this teacher covers as a HOD-assigned substitute rather
+      // than as the assigned instructor — used only to label the option.
+      substituteIds: new Set<string>(covered.map((o: any) => o.id)),
+    };
+  }, []);
+  const offerings = offeringsResource.data?.offerings ?? [];
+  const substituteOfferingIds = offeringsResource.data?.substituteIds ?? new Set<string>();
+
+  const correctionsResource = useAsyncResource(() => listMyCorrectionRequests(), []);
+  const myCorrections: any[] = correctionsResource.data ?? [];
 
   /**
    * "Data Structures · CSE-A · Fall 2026" rather than a bare course name.
@@ -83,52 +95,66 @@ export default function TeacherAttendance() {
     return parts.join(" · ");
   };
 
-  const loadMyCorrections = async () => {
-    const data = await listMyCorrectionRequests();
-    setMyCorrections(data);
-  };
-
-  const loadStudents = async (offeringId: string, forDate: string = date) => {
+  const loadStudents = async (offeringId: string, forDate: string = date, { keepFeedback = false } = {}) => {
+    const load = ++latestLoad.current;
     setSelectedOffering(offeringId);
+    // A result shown for one class or day is not a result for the next.
+    if (!keepFeedback) {
+      setSuccess(null);
+      setError(null);
+    }
+    setStudents([]);
+    setAttendance({});
+    setAttendanceRecordIds({});
+    setStudentsError(null);
     if (!offeringId) {
-      setStudents([]);
-      setAttendance({});
-      setAttendanceRecordIds({});
+      setStudentsLoading(false);
       return;
     }
 
-    // Enrollment is per OFFERING, so this is the roll for this section in
-    // this semester — not everyone who has ever taken the course.
-    const { data: enrollments } = await supabase
-      .from("course_enrollments")
-      .select("student_id, students:student_id(id, enrollment_number, profiles:user_id(full_name, email))")
-      .eq("offering_id", offeringId)
-      .eq("status", "enrolled");
+    setStudentsLoading(true);
+    try {
+      // Enrollment is per OFFERING, so this is the roll for this section in
+      // this semester — not everyone who has ever taken the course.
+      const enrollments = requireRows(
+        await supabase
+          .from("course_enrollments")
+          .select("student_id, students:student_id(id, enrollment_number, profiles:user_id(full_name, email))")
+          .eq("offering_id", offeringId)
+          .eq("status", "enrolled")
+      );
 
-    const studentList = ((enrollments as any[]) || []).map((e) => ({
-      id: e.student_id,
-      full_name: e.students?.profiles?.full_name || "Unknown",
-      email: e.students?.profiles?.email || "",
-      enrollment_number: e.students?.enrollment_number || "",
-    }));
+      const studentList = (enrollments as any[]).map((e) => ({
+        id: e.student_id,
+        full_name: e.students?.profiles?.full_name || "Unknown",
+        email: e.students?.profiles?.email || "",
+        enrollment_number: e.students?.enrollment_number || "",
+      }));
 
-    setStudents(studentList);
+      const existing = requireRows(
+        await supabase
+          .from("attendance")
+          .select("id, student_id, status")
+          .eq("offering_id", offeringId)
+          .eq("date", forDate)
+      );
 
-    const { data: existing } = await supabase
-      .from("attendance")
-      .select("id, student_id, status")
-      .eq("offering_id", offeringId)
-      .eq("date", forDate);
-
-    const att: Record<string, string> = {};
-    const recIds: Record<string, string> = {};
-    studentList.forEach((s) => {
-      const record = ((existing as any[]) || []).find((a) => a.student_id === s.id);
-      att[s.id] = record?.status || "present";
-      if (record) recIds[s.id] = record.id;
-    });
-    setAttendance(att);
-    setAttendanceRecordIds(recIds);
+      const att: Record<string, string> = {};
+      const recIds: Record<string, string> = {};
+      studentList.forEach((s) => {
+        const record = (existing as any[]).find((a) => a.student_id === s.id);
+        att[s.id] = record?.status || "present";
+        if (record) recIds[s.id] = record.id;
+      });
+      if (load !== latestLoad.current) return;
+      setStudents(studentList);
+      setAttendance(att);
+      setAttendanceRecordIds(recIds);
+    } catch (e) {
+      if (load === latestLoad.current) setStudentsError(e);
+    } finally {
+      if (load === latestLoad.current) setStudentsLoading(false);
+    }
   };
 
   const toggleStatus = (studentId: string) => {
@@ -141,6 +167,7 @@ export default function TeacherAttendance() {
   const handleSaveAttendance = async () => {
     setLoading(true);
     setError(null);
+    setSuccess(null);
     try {
       // The map is already keyed by students.id, which is what the server
       // expects — no id-space translation left to get wrong.
@@ -150,11 +177,13 @@ export default function TeacherAttendance() {
       }));
 
       await saveAttendance({ offeringId: selectedOffering, date, entries });
-      setSaved(true);
-      setTimeout(() => setSaved(false), 3000);
-      await loadStudents(selectedOffering);
+      // Stays until dismissed or the class or day changes.
+      setSuccess(`Attendance saved for ${date}.`);
+      // Reloading the roll is not part of saving: if it fails, the roll says
+      // so — the save itself did not fail.
+      void loadStudents(selectedOffering, date, { keepFeedback: true });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to save attendance.");
+      setError(await toFeedbackError(e, "Failed to save attendance."));
     } finally {
       setLoading(false);
     }
@@ -180,9 +209,11 @@ export default function TeacherAttendance() {
         evidenceNote: correctionForm.evidenceNote || undefined,
       });
       setCorrectionTarget(null);
-      await loadMyCorrections();
+      // The dialog has closed: the page reports the result.
+      setSuccess("Correction request sent to your HOD. The record changes only once it is approved.");
+      correctionsResource.reload();
     } catch (e) {
-      setCorrectionError(e instanceof Error ? e.message : "Failed to submit correction request.");
+      setCorrectionError(await toFeedbackError(e, "Failed to submit correction request."));
     } finally {
       setCorrectionSubmitting(false);
     }
@@ -206,14 +237,19 @@ export default function TeacherAttendance() {
         <p className="text-sm text-on-surface-variant mt-xs">Select a class and mark student attendance</p>
       </div>
 
-      {saved && (
-        <div className="bg-success/10 border border-success/20 text-success rounded-xl p-md text-sm font-medium">
-          ✅ Attendance saved successfully for {date}!
-        </div>
-      )}
+      <Alert tone="success" onDismiss={() => setSuccess(null)}>
+        {success}
+      </Alert>
 
-      {error && (
-        <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium">{error}</div>
+      <ErrorAlert error={error} />
+
+      {offeringsResource.status === "error" && (
+        <ErrorState
+          {...classifyError(offeringsResource.error)}
+          title="Your classes couldn't be loaded"
+          onRetry={offeringsResource.reload}
+          className="rounded-2xl border border-outline-variant bg-surface-container-lowest"
+        />
       )}
 
       {/* Live Counts */}
@@ -242,9 +278,10 @@ export default function TeacherAttendance() {
             id="attendance-offering"
             value={selectedOffering}
             onChange={(e) => loadStudents(e.target.value)}
+            disabled={offeringsResource.status !== "success"}
             className="bg-surface-container-low border border-outline-variant rounded-xl px-md py-sm text-sm text-on-surface focus:ring-2 focus:ring-secondary outline-none min-w-[280px]"
           >
-            <option value="">Select class...</option>
+            <option value="">{offeringsResource.status === "loading" ? "Loading classes…" : "Select class..."}</option>
             {offerings.map((o) => (
               <option key={o.id} value={o.id}>
                 {offeringLabel(o)}{substituteOfferingIds.has(o.id) ? " (Substitute)" : ""}
@@ -265,8 +302,8 @@ export default function TeacherAttendance() {
             className="bg-surface-container-low border border-outline-variant rounded-xl px-md py-sm text-sm text-on-surface focus:ring-2 focus:ring-secondary outline-none"
           />
         </div>
-        {selectedOffering && students.length > 0 && (
-          <Button onClick={handleSaveAttendance} disabled={loading}>
+        {selectedOffering && !studentsLoading && !studentsError && students.length > 0 && (
+          <Button onClick={handleSaveAttendance} disabled={loading} aria-busy={loading || undefined}>
             {loading ? "Saving..." : "Save Attendance"}
           </Button>
         )}
@@ -295,6 +332,15 @@ export default function TeacherAttendance() {
               <span className="text-warning font-semibold">{Object.values(attendance).filter(v => v === "late").length}L</span>
             </div>
           </div>
+          {studentsLoading ? (
+            <LoadingState label="Loading the class roll…" />
+          ) : studentsError ? (
+            <ErrorState
+              {...classifyError(studentsError)}
+              title="The class roll couldn't be loaded"
+              onRetry={() => loadStudents(selectedOffering, date)}
+            />
+          ) : (
           <div className="divide-y divide-outline-variant">
             {students.map((s: any, i: number) => {
               const recordId = attendanceRecordIds[s.id];
@@ -343,7 +389,17 @@ export default function TeacherAttendance() {
               </div>
             )}
           </div>
+          )}
         </div>
+      )}
+
+      {correctionsResource.status === "error" && (
+        <ErrorState
+          {...classifyError(correctionsResource.error)}
+          title="Your correction requests couldn't be loaded"
+          onRetry={correctionsResource.reload}
+          className="rounded-2xl border border-outline-variant bg-surface-container-lowest"
+        />
       )}
 
       {/* My Correction Requests */}
@@ -378,15 +434,17 @@ export default function TeacherAttendance() {
         footer={
           <>
             <Button variant="outline" onClick={() => setCorrectionTarget(null)}>Cancel</Button>
-            <Button onClick={submitCorrection} disabled={correctionSubmitting || !correctionForm.reason.trim()}>
+            <Button
+              onClick={submitCorrection}
+              disabled={correctionSubmitting || !correctionForm.reason.trim()}
+              aria-busy={correctionSubmitting || undefined}
+            >
               {correctionSubmitting ? "Submitting..." : "Submit Request"}
             </Button>
           </>
         }
       >
-        {correctionError && (
-          <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium mb-md">{correctionError}</div>
-        )}
+        <ErrorAlert error={correctionError} className="mb-md" />
         <div className="space-y-md">
           <FormField
             label="Requested Status"

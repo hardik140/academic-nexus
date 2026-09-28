@@ -1,8 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button, FormField, Modal, StatusBadge } from "@/components/ui/modal";
+import { Alert } from "@/components/ui/alert";
+import { ErrorAlert } from "@/components/ui/error-alert";
+import { ErrorState } from "@/components/ui/error-state";
+import { LoadingState } from "@/components/ui/loading-state";
+import { useAsyncResource } from "@/hooks/use-async-resource";
+import { toFeedbackError, type FeedbackError } from "@/lib/action-failure";
+import { classifyError } from "@/lib/feedback-error";
 import { LifecycleTimeline } from "@/components/ui/lifecycle-timeline";
 import { assignRiskFlag, getRiskFlag, listAssignableStaff, reviewRiskFlag } from "../actions";
 
@@ -11,63 +18,66 @@ export default function DirectorAttentionDetail() {
   const router = useRouter();
   const flagId = params.id as string;
 
-  const [flag, setFlag] = useState<any>(null);
-  const [staff, setStaff] = useState<any[]>([]);
   const [showAssign, setShowAssign] = useState(false);
   const [assigneeId, setAssigneeId] = useState("");
   const [showReview, setShowReview] = useState<"accept" | "reopen" | null>(null);
   const [reviewReason, setReviewReason] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<FeedbackError | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
-  const load = async () => {
-    try {
-      const [f, s] = await Promise.all([getRiskFlag(flagId), listAssignableStaff()]);
-      setFlag(f);
-      setStaff(s);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load.");
-    }
-  };
-
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // The flag and who it can go to. A failed load is an error with Try
+  // again, never the error message as page text (owner decision D5).
+  const detail = useAsyncResource(async () => {
+    const [flag, staff] = await Promise.all([getRiskFlag(flagId), listAssignableStaff()]);
+    return { flag: flag as any, staff: staff as any[] };
   }, [flagId]);
+  const flag = detail.data?.flag ?? null;
+  const staff = detail.data?.staff ?? [];
 
   const handleAssign = async () => {
-    if (!assigneeId) return;
+    if (!assigneeId || loading) return;
     setLoading(true);
     setError(null);
+    setNotice(null);
     try {
       await assignRiskFlag({ flagId, assigneeId });
+      const assignee = staff.find((p) => p.id === assigneeId);
+      setNotice(`Escalation assigned${assignee ? ` to ${assignee.full_name}` : ""}.`);
       setShowAssign(false);
       setAssigneeId("");
-      await load();
+      detail.reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to assign.");
+      setError(await toFeedbackError(e, "Failed to assign."));
     } finally {
       setLoading(false);
     }
   };
 
   const handleReview = async (outcome: "accept" | "reopen") => {
+    if (loading) return;
     setLoading(true);
     setError(null);
+    setNotice(null);
     try {
       await reviewRiskFlag({ flagId, outcome, reason: reviewReason.trim() || undefined });
+      setNotice(outcome === "accept" ? "Resolution accepted." : "Escalation reopened.");
       setShowReview(null);
       setReviewReason("");
-      await load();
+      detail.reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to review.");
+      setError(await toFeedbackError(e, "Failed to review."));
     } finally {
       setLoading(false);
     }
   };
 
   if (!flag) {
-    return <div className="p-xl text-center text-sm text-outline">{error || "Loading..."}</div>;
+    return detail.status === "error" ? (
+      <ErrorState {...classifyError(detail.error)} title="This escalation couldn't be loaded" onRetry={detail.reload} />
+    ) : (
+      <LoadingState label="Loading the escalation…" />
+    );
   }
 
   const canAssign = ["open", "assigned"].includes(flag.status);
@@ -128,9 +138,11 @@ export default function DirectorAttentionDetail() {
         )}
       </div>
 
-      {error && (
-        <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium">{error}</div>
-      )}
+      <Alert tone="success" onDismiss={() => setNotice(null)}>
+        {notice}
+      </Alert>
+      {/* An open dialog shows its own failure. */}
+      <ErrorAlert error={!showAssign && !showReview ? error : null} />
 
       <div className="flex flex-wrap gap-sm">
         {canAssign && (
@@ -163,12 +175,13 @@ export default function DirectorAttentionDetail() {
             <Button variant="outline" onClick={() => setShowAssign(false)}>
               Cancel
             </Button>
-            <Button onClick={handleAssign} disabled={loading || !assigneeId}>
-              {loading ? "..." : "Assign"}
+            <Button onClick={handleAssign} disabled={loading || !assigneeId} aria-busy={loading || undefined}>
+              {loading ? "Assigning…" : "Assign"}
             </Button>
           </>
         }
       >
+        <ErrorAlert error={error} className="mb-md" />
         <FormField
           label="Assign to"
           id="assign-to"
@@ -189,12 +202,13 @@ export default function DirectorAttentionDetail() {
             <Button variant="outline" onClick={() => setShowReview(null)}>
               Cancel
             </Button>
-            <Button onClick={() => showReview && handleReview(showReview)} disabled={loading}>
-              {loading ? "..." : "Confirm"}
+            <Button onClick={() => showReview && handleReview(showReview)} disabled={loading} aria-busy={loading || undefined}>
+              {loading ? "Saving…" : "Confirm"}
             </Button>
           </>
         }
       >
+        <ErrorAlert error={error} className="mb-md" />
         <FormField
           label={showReview === "reopen" ? "Reason for reopening" : "Note (optional)"}
           id="review-reason"

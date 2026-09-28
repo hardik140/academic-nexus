@@ -1,7 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/modal";
+import { ErrorAlert } from "@/components/ui/error-alert";
+import { StateView } from "@/components/ui/state-view";
+import { useAsyncResource } from "@/hooks/use-async-resource";
+import { toFeedbackError, type FeedbackError } from "@/lib/action-failure";
 import { listMyNotifications, markAllNotificationsRead, markNotificationRead } from "./actions";
 
 const TYPE_FILTERS = ["all", "action_required", "warning", "error", "success", "info"] as const;
@@ -15,17 +19,27 @@ const TYPE_ICONS: Record<string, string> = {
 };
 
 export default function DirectorNotifications() {
-  const [notifications, setNotifications] = useState<any[]>([]);
   const [filter, setFilter] = useState<(typeof TYPE_FILTERS)[number]>("all");
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<FeedbackError | null>(null);
 
-  const load = async () => {
-    const data = await listMyNotifications();
-    setNotifications(data);
+  // A failed load is an error, never "No notifications." (owner decision D5).
+  const notificationsResource = useAsyncResource(() => listMyNotifications(), []);
+  const notifications: any[] = notificationsResource.data ?? [];
+
+  const markRead = async (key: string, fn: () => Promise<unknown>) => {
+    if (busy) return;
+    setBusy(key);
+    setError(null);
+    try {
+      await fn();
+      notificationsResource.reload();
+    } catch (e) {
+      setError(await toFeedbackError(e, "The notification couldn't be marked read."));
+    } finally {
+      setBusy(null);
+    }
   };
-
-  useEffect(() => {
-    load();
-  }, []);
 
   const filtered = filter === "all" ? notifications : notifications.filter((n) => n.type === filter);
   const unreadCount = notifications.filter((n) => !n.read).length;
@@ -40,10 +54,9 @@ export default function DirectorNotifications() {
         {unreadCount > 0 && (
           <Button
             variant="outline"
-            onClick={async () => {
-              await markAllNotificationsRead();
-              await load();
-            }}
+            disabled={busy !== null}
+            aria-busy={busy === "all" || undefined}
+            onClick={() => markRead("all", () => markAllNotificationsRead())}
           >
             Mark All Read
           </Button>
@@ -64,7 +77,11 @@ export default function DirectorNotifications() {
         ))}
       </div>
 
+      <ErrorAlert error={error} />
+
       <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-sm">
+        <StateView state={notificationsResource} isEmpty={() => false} loadingLabel="Loading notifications…" empty={{ title: "No notifications" }}>
+          {() => (
         <div className="divide-y divide-outline-variant">
           {filtered.length > 0 ? (
             filtered.map((n) => (
@@ -77,11 +94,11 @@ export default function DirectorNotifications() {
                 </div>
                 {!n.read && (
                   <button
-                    onClick={async () => {
-                      await markNotificationRead(n.id);
-                      await load();
-                    }}
-                    className="text-xs font-medium text-secondary hover:underline shrink-0"
+                    type="button"
+                    disabled={busy !== null}
+                    aria-busy={busy === n.id || undefined}
+                    onClick={() => markRead(n.id, () => markNotificationRead(n.id))}
+                    className="text-xs font-medium text-secondary hover:underline shrink-0 disabled:opacity-50"
                   >
                     Mark read
                   </button>
@@ -92,6 +109,8 @@ export default function DirectorNotifications() {
             <div className="p-xl text-center text-sm text-outline">No notifications.</div>
           )}
         </div>
+          )}
+        </StateView>
       </div>
     </div>
   );

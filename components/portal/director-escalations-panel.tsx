@@ -1,8 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { Button, FormField, Modal, StatusBadge } from "@/components/ui/modal";
+import { Alert } from "@/components/ui/alert";
+import { ErrorAlert } from "@/components/ui/error-alert";
+import { ErrorState } from "@/components/ui/error-state";
+import { useAsyncResource } from "@/hooks/use-async-resource";
+import { toFeedbackError, type FeedbackError } from "@/lib/action-failure";
+import { classifyError } from "@/lib/feedback-error";
 import { actOnRiskFlag, listMyRiskFlagAssignments } from "@/app/(portal)/director/attention/actions";
 
 /**
@@ -14,48 +20,63 @@ import { actOnRiskFlag, listMyRiskFlagAssignments } from "@/app/(portal)/directo
  * see teacher/dashboard/page.tsx).
  */
 export function DirectorEscalationsPanel() {
-  const [flags, setFlags] = useState<any[]>([]);
   const [loading, setLoading] = useState<string | null>(null);
   const [resolveTarget, setResolveTarget] = useState<string | null>(null);
   const [resolutionNotes, setResolutionNotes] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<FeedbackError | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
-  const load = async () => {
-    try {
-      const data = await listMyRiskFlagAssignments();
-      setFlags(data);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load escalations.");
-    }
-  };
-
-  useEffect(() => {
-    load();
-  }, []);
+  // Escalations assigned to this user. The panel stays out of the way while
+  // it loads and when there are none — but a failed load is shown, never
+  // mistaken for "none" (owner decision D5).
+  const flagsResource = useAsyncResource(() => listMyRiskFlagAssignments(), []);
+  const flags: any[] = flagsResource.data ?? [];
+  const loadFailed = flagsResource.status === "error";
 
   const act = async (flagId: string, action: "acknowledge" | "start" | "resolve") => {
+    if (loading) return;
     setLoading(flagId);
     setError(null);
+    setNotice(null);
     try {
       await actOnRiskFlag({ flagId, action, resolutionNotes: action === "resolve" ? resolutionNotes.trim() || undefined : undefined });
+      setNotice(action === "resolve" ? "Escalation marked resolved." : action === "start" ? "Work on the escalation started." : "Escalation acknowledged.");
       setResolveTarget(null);
       setResolutionNotes("");
-      await load();
+      flagsResource.reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to update.");
+      setError(await toFeedbackError(e, "Failed to update."));
     } finally {
       setLoading(null);
     }
   };
 
-  if (flags.length === 0 && !error) return null;
+  if (flags.length === 0 && !loadFailed && !error && !notice) return null;
 
   return (
     <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-sm overflow-hidden">
       <div className="px-lg py-md border-b border-outline-variant flex items-center justify-between">
         <h2 className="text-sm font-bold text-on-surface flex items-center gap-sm">🚨 Director Escalations ({flags.length})</h2>
       </div>
-      {error && <div className="px-lg py-md bg-error/10 text-error text-sm font-medium">{error}</div>}
+      <Alert tone="success" className="mx-lg mt-md" onDismiss={() => setNotice(null)}>
+        {notice}
+      </Alert>
+      {/* The resolve dialog shows its own failure. */}
+      <ErrorAlert error={!resolveTarget ? error : null} className="mx-lg mt-md" />
+      {loadFailed && flags.length === 0 && (
+        <ErrorState {...classifyError(flagsResource.error)} title="Your escalations couldn't be loaded" onRetry={flagsResource.reload} />
+      )}
+      <Alert
+        tone="error"
+        className="mx-lg mt-md"
+        action={<Button variant="outline" size="sm" onClick={flagsResource.reload}>Try again</Button>}
+      >
+        {loadFailed && flags.length > 0 ? (
+          <>
+            This couldn&apos;t be refreshed. Showing what was loaded earlier.
+          </>
+        ) : null}
+      </Alert>
       <div className="divide-y divide-outline-variant">
         {flags.map((f: any) => (
           <div key={f.id} className="px-lg py-md">
@@ -70,12 +91,12 @@ export function DirectorEscalationsPanel() {
               </Link>
               <div className="flex gap-xs shrink-0">
                 {f.status === "assigned" && (
-                  <Button size="sm" variant="outline" onClick={() => act(f.id, "acknowledge")} disabled={loading === f.id}>
+                  <Button size="sm" variant="outline" onClick={() => act(f.id, "acknowledge")} disabled={loading === f.id} aria-busy={loading === f.id || undefined}>
                     Acknowledge
                   </Button>
                 )}
                 {f.status === "acknowledged" && (
-                  <Button size="sm" variant="outline" onClick={() => act(f.id, "start")} disabled={loading === f.id}>
+                  <Button size="sm" variant="outline" onClick={() => act(f.id, "start")} disabled={loading === f.id} aria-busy={loading === f.id || undefined}>
                     Start
                   </Button>
                 )}
@@ -99,12 +120,13 @@ export function DirectorEscalationsPanel() {
             <Button variant="outline" onClick={() => setResolveTarget(null)}>
               Cancel
             </Button>
-            <Button onClick={() => resolveTarget && act(resolveTarget, "resolve")} disabled={loading === resolveTarget}>
-              {loading === resolveTarget ? "..." : "Mark Resolved"}
+            <Button onClick={() => resolveTarget && act(resolveTarget, "resolve")} disabled={loading === resolveTarget} aria-busy={loading === resolveTarget || undefined}>
+              {loading === resolveTarget ? "Saving…" : "Mark Resolved"}
             </Button>
           </>
         }
       >
+        <ErrorAlert error={error} className="mb-md" />
         <FormField
           label="Resolution notes"
           id="resolution-notes"

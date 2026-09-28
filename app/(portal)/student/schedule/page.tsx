@@ -1,32 +1,39 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { StatusBadge } from "@/components/ui/modal";
+import { assertRead } from "@/lib/read-result-server";
+import { NO_MATCH_ID } from "@/lib/read-result";
 
 export default async function StudentSchedule() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: student } = await supabase
+  const { data: student, error: studentError } = await supabase
     .from("students")
     .select("id")
     .eq("user_id", user.id)
     .maybeSingle();
+  assertRead(studentError);
 
-  const { data: enrollments } = await supabase
+  const { data: enrollments, error: enrollmentsError } = await supabase
     .from("course_enrollments")
     .select("*, course_offerings:offering_id(id, courses:course_id(id, name, code, credits, type, department_id, departments:department_id(name)), sections:section_id(name), semesters:semester_id(name), profiles:instructor_id(full_name))")
-    .eq("student_id", student?.id || "")
+    .eq("student_id", student?.id || NO_MATCH_ID)
     .eq("status", "enrolled");
+  assertRead(enrollmentsError);
 
   // Sessions carry their offering, which is what names the course, the
   // section and the teacher — timetable_slots holds none of those now.
-  const { data: slots } = await supabase
+  const { data: profile, error: profileError } = await supabase.from("profiles").select("college_id").eq("id", user.id).single();
+  assertRead(profileError);
+  const { data: slots, error: slotsError } = await supabase
     .from("timetable_slots")
     .select("*, course_offerings:offering_id(id, courses:course_id(name, code), sections:section_id(name))")
-    .eq("college_id", (await supabase.from("profiles").select("college_id").eq("id", user.id).single()).data?.college_id || "")
+    .eq("college_id", profile?.college_id || NO_MATCH_ID)
     .order("day_of_week")
     .order("start_time");
+  assertRead(slotsError);
 
   const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
   const todayIndex = new Date().getDay();
@@ -40,11 +47,12 @@ export default async function StudentSchedule() {
   // Today's assigned substitutions, by course — read-only downstream touch:
   // a class covered by a substitute today shows who's covering it, without
   // mutating the underlying timetable_slots row.
-  const { data: todaySubs } = await supabase
+  const { data: todaySubs, error: todaySubsError } = await supabase
     .from("substitution_assignments")
     .select("offering_id, substitute:substitute_teacher_id(full_name)")
     .eq("date", todayDate)
     .eq("status", "assigned");
+  assertRead(todaySubsError);
   // Keyed by offering: a substitute covers one section's class, not every
   // section of the course.
   const substituteByOffering = new Map(

@@ -2,6 +2,9 @@
 
 import { useState, useTransition } from "react";
 import { Button, FormField, Modal, StatusBadge } from "@/components/ui/modal";
+import { Alert } from "@/components/ui/alert";
+import { ErrorAlert } from "@/components/ui/error-alert";
+import { toFeedbackError, type FeedbackError } from "@/lib/action-failure";
 import { GATE_SECURITY_CAPABILITIES } from "@/lib/permissions";
 import {
   assignGate,
@@ -53,7 +56,10 @@ export function SecurityAdminClient({
   instructions: Instruction[];
 }) {
   const [pending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
+  // A failure, and where it happened: the page or the dialog that was open,
+  // so it is shown there and nowhere else.
+  const [failure, setFailure] = useState<{ surface: string; error: FeedbackError } | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const [authorizing, setAuthorizing] = useState<Candidate | null>(null);
   const [employeeCode, setEmployeeCode] = useState("");
@@ -86,14 +92,33 @@ export function SecurityAdminClient({
    * swallowing that here would turn "you cannot deactivate a guard without
    * a reason" into a button that silently does nothing.
    */
-  const run = (fn: () => Promise<unknown>, onDone?: () => void) => {
-    setError(null);
+  const surface = authorizing
+    ? "authorize"
+    : assigning
+      ? "assign"
+      : editing
+        ? "capabilities"
+        : deactivating
+          ? "deactivate"
+          : newGate
+            ? "gate"
+            : instruction
+              ? "instruction"
+              : "page";
+  const errorFor = (where: string) => (failure?.surface === where ? failure.error : null);
+
+  const run = (fn: () => Promise<unknown>, onDone?: () => void, done?: string) => {
+    if (pending) return;
+    const where = surface;
+    setFailure(null);
+    setNotice(null);
     startTransition(async () => {
       try {
         await fn();
         onDone?.();
+        if (done) setNotice(done);
       } catch (e) {
-        setError(e instanceof Error ? e.message : "That could not be saved.");
+        setFailure({ surface: where, error: await toFeedbackError(e, "That could not be saved.") });
       }
     });
   };
@@ -102,9 +127,10 @@ export function SecurityAdminClient({
 
   return (
     <div className="space-y-lg">
-      {error && (
-        <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium">{error}</div>
-      )}
+      <Alert tone="success" onDismiss={() => setNotice(null)}>
+        {notice}
+      </Alert>
+      <ErrorAlert error={errorFor("page")} />
 
       {/* ── Awaiting authorization ───────────────────────────────── */}
       {candidates.length > 0 && (
@@ -161,7 +187,7 @@ export function SecurityAdminClient({
                           type="button"
                           aria-label={`Unassign ${g.code}`}
                           className="text-outline hover:text-error px-xs"
-                          onClick={() => run(() => revokeGateAssignment(g.assignmentId))}
+                          onClick={() => run(() => revokeGateAssignment(g.assignmentId), undefined, "Gate assignment removed.")}
                           disabled={pending}
                         >
                           ×
@@ -187,12 +213,12 @@ export function SecurityAdminClient({
                     Permissions
                   </Button>
                   {p.status === "ACTIVE" && (
-                    <Button size="sm" variant="outline" onClick={() => run(() => setSecurityPersonnelStatus({ personnelId: p.id, status: "SUSPENDED" }))} disabled={pending}>
+                    <Button size="sm" variant="outline" onClick={() => run(() => setSecurityPersonnelStatus({ personnelId: p.id, status: "SUSPENDED" }), undefined, `${p.full_name} suspended.`)} disabled={pending}>
                       Suspend
                     </Button>
                   )}
                   {(p.status === "SUSPENDED" || p.status === "PENDING") && (
-                    <Button size="sm" onClick={() => run(() => setSecurityPersonnelStatus({ personnelId: p.id, status: "ACTIVE" }))} disabled={pending}>
+                    <Button size="sm" onClick={() => run(() => setSecurityPersonnelStatus({ personnelId: p.id, status: "ACTIVE" }), undefined, `${p.full_name} reactivated.`)} disabled={pending}>
                       Activate
                     </Button>
                   )}
@@ -229,7 +255,7 @@ export function SecurityAdminClient({
               <span className={`text-xs font-semibold ${g.is_active ? "text-success" : "text-outline"}`}>
                 {g.is_active ? "Active" : "Retired"}
               </span>
-              <Button size="sm" variant="outline" onClick={() => run(() => setGateActive(g.id, !g.is_active))} disabled={pending}>
+              <Button size="sm" variant="outline" onClick={() => run(() => setGateActive(g.id, !g.is_active), undefined, `${g.name} ${g.is_active ? "deactivated" : "activated"}.`)} disabled={pending}>
                 {g.is_active ? "Retire" : "Reopen"}
               </Button>
             </li>
@@ -264,7 +290,7 @@ export function SecurityAdminClient({
                 <div className="text-xs text-outline mt-xs">{new Date(i.created_at).toLocaleString()}</div>
               </div>
               {i.status === "active" && (
-                <Button size="sm" variant="outline" onClick={() => run(() => withdrawSecurityInstruction(i.id))} disabled={pending}>
+                <Button size="sm" variant="outline" onClick={() => run(() => withdrawSecurityInstruction(i.id), undefined, "Instruction withdrawn.")} disabled={pending}>
                   Withdraw
                 </Button>
               )}
@@ -284,10 +310,12 @@ export function SecurityAdminClient({
             <Button variant="ghost" onClick={() => setAuthorizing(null)}>Cancel</Button>
             <Button
               disabled={pending}
+              aria-busy={pending || undefined}
               onClick={() =>
                 run(
                   () => authorizeSecurityPersonnel({ profileId: authorizing!.id, employeeCode: employeeCode || undefined }),
-                  () => setAuthorizing(null)
+                  () => setAuthorizing(null),
+                  `${authorizing!.full_name} authorized for gate duty. Assign a gate next.`
                 )
               }
             >
@@ -297,6 +325,7 @@ export function SecurityAdminClient({
         }
       >
         <div className="space-y-md">
+          <ErrorAlert error={errorFor("authorize")} />
           <FormField label="Employee code (optional)" id="emp-code" value={employeeCode} onChange={setEmployeeCode} placeholder="SEC-04" />
           <p className="text-xs text-outline">
             They start with the standard operational capabilities. Assign at least one gate afterwards — a guard with no
@@ -315,13 +344,15 @@ export function SecurityAdminClient({
             <Button variant="ghost" onClick={() => setAssigning(null)}>Cancel</Button>
             <Button
               disabled={!assignGateId || pending}
-              onClick={() => run(() => assignGate(assigning!.id, assignGateId), () => setAssigning(null))}
+              aria-busy={pending || undefined}
+              onClick={() => run(() => assignGate(assigning!.id, assignGateId), () => setAssigning(null), "Gate assigned.")}
             >
               Assign
             </Button>
           </div>
         }
       >
+        <ErrorAlert error={errorFor("assign")} className="mb-md" />
         <FormField
           label="Gate"
           id="assign-gate"
@@ -341,13 +372,14 @@ export function SecurityAdminClient({
         footer={
           <div className="flex justify-end gap-sm">
             <Button variant="ghost" onClick={() => setEditing(null)}>Cancel</Button>
-            <Button disabled={pending} onClick={() => run(() => setSecurityPermissions(editing!.id, caps), () => setEditing(null))}>
+            <Button disabled={pending} aria-busy={pending || undefined} onClick={() => run(() => setSecurityPermissions(editing!.id, caps), () => setEditing(null), "Capabilities saved.")}>
               Save
             </Button>
           </div>
         }
       >
         <div className="space-y-xs">
+          <ErrorAlert error={errorFor("capabilities")} />
           {GATE_SECURITY_CAPABILITIES.map((cap) => (
             <label key={cap} className="flex items-center gap-sm text-sm text-on-surface py-xs">
               <input
@@ -374,10 +406,12 @@ export function SecurityAdminClient({
             <Button
               variant="destructive"
               disabled={deactivateReason.trim().length < 5 || pending}
+              aria-busy={pending || undefined}
               onClick={() =>
                 run(
                   () => setSecurityPersonnelStatus({ personnelId: deactivating!.id, status: "DEACTIVATED", reason: deactivateReason }),
-                  () => setDeactivating(null)
+                  () => setDeactivating(null),
+                  `${deactivating!.full_name} deactivated.`
                 )
               }
             >
@@ -386,6 +420,7 @@ export function SecurityAdminClient({
           </div>
         }
       >
+        <ErrorAlert error={errorFor("deactivate")} className="mb-md" />
         <FormField label="Reason" id="deact-reason" type="textarea" rows={3} value={deactivateReason} onChange={setDeactivateReason} required />
       </Modal>
 
@@ -398,7 +433,8 @@ export function SecurityAdminClient({
             <Button variant="ghost" onClick={() => setNewGate(false)}>Cancel</Button>
             <Button
               disabled={!gateForm.code.trim() || !gateForm.name.trim() || pending}
-              onClick={() => run(() => createGate(gateForm), () => setNewGate(false))}
+              aria-busy={pending || undefined}
+              onClick={() => run(() => createGate(gateForm), () => setNewGate(false), `Gate ${gateForm.name} added.`)}
             >
               Add
             </Button>
@@ -406,6 +442,7 @@ export function SecurityAdminClient({
         }
       >
         <div className="space-y-md">
+          <ErrorAlert error={errorFor("gate")} />
           <FormField label="Code" id="gate-code" value={gateForm.code} onChange={(v) => setGateForm((f) => ({ ...f, code: v }))} placeholder="MAIN" required />
           <FormField label="Name" id="gate-name" value={gateForm.name} onChange={(v) => setGateForm((f) => ({ ...f, name: v }))} placeholder="Main Gate" required />
           <FormField label="Description" id="gate-desc" value={gateForm.description} onChange={(v) => setGateForm((f) => ({ ...f, description: v }))} />
@@ -422,6 +459,7 @@ export function SecurityAdminClient({
             <Button variant="ghost" onClick={() => setInstruction(false)}>Cancel</Button>
             <Button
               disabled={!instructionForm.title.trim() || !instructionForm.message.trim() || pending}
+              aria-busy={pending || undefined}
               onClick={() =>
                 run(
                   () =>
@@ -436,7 +474,8 @@ export function SecurityAdminClient({
                   () => {
                     setInstruction(false);
                     setInstructionForm({ title: "", message: "", priority: "normal", audience: "all", gateId: "", personnelId: "" });
-                  }
+                  },
+                  "Instruction issued."
                 )
               }
             >
@@ -446,6 +485,7 @@ export function SecurityAdminClient({
         }
       >
         <div className="space-y-md">
+          <ErrorAlert error={errorFor("instruction")} />
           <FormField label="Title" id="ins-title" value={instructionForm.title} onChange={(v) => setInstructionForm((f) => ({ ...f, title: v }))} required />
           <FormField label="Message" id="ins-message" type="textarea" rows={4} value={instructionForm.message} onChange={(v) => setInstructionForm((f) => ({ ...f, message: v }))} required />
           <FormField

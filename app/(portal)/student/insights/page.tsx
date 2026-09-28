@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { StudentInsightsClient } from "./insights-client";
 import { buildSubjectRisks, computeDegreeProgress } from "@/lib/academic-scoring";
 import type { Database } from "@/types/database";
+import { assertRead } from "@/lib/read-result-server";
+import { NO_MATCH_ID } from "@/lib/read-result";
 
 // The hand-maintained Database type's Relationships arrays are empty (see
 // types/database.ts's own header comment and placements/actions.ts's
@@ -28,21 +30,22 @@ export default async function StudentInsights() {
 
   if (!user) redirect("/login");
 
-  const { data: student } = await supabase
+  const { data: student, error: studentError } = await supabase
     .from("students")
     .select("*")
     .eq("user_id", user.id)
     .single();
+  assertRead(studentError);
 
   const [attendanceRes, marksRes, enrollmentsRes] = await Promise.all([
     supabase
       .from("attendance")
       .select("*")
-      .eq("student_id", student?.id || ""),
+      .eq("student_id", student?.id || NO_MATCH_ID),
     supabase
       .from("marks")
       .select("*")
-      .eq("student_id", student?.id || ""),
+      .eq("student_id", student?.id || NO_MATCH_ID),
     supabase
       .from("course_enrollments")
       .select(
@@ -51,8 +54,9 @@ export default async function StudentInsights() {
       // students(id), not the profile id. course_enrollments.student_id was
       // repointed by 047; comparing it to user.id used to match nothing and
       // returned an empty insights page rather than an error.
-      .eq("student_id", student?.id || ""),
+      .eq("student_id", student?.id || NO_MATCH_ID),
   ]);
+  for (const res of [attendanceRes, marksRes, enrollmentsRes]) assertRead(res.error);
 
   const attendance = (attendanceRes.data || []) as AttendanceRow[];
   const marks = marksRes.data || [];

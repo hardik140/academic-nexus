@@ -1,8 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button, FormField, Modal, StatusBadge } from "@/components/ui/modal";
+import { Alert } from "@/components/ui/alert";
+import { ErrorAlert } from "@/components/ui/error-alert";
+import { ErrorState } from "@/components/ui/error-state";
+import { LoadingState } from "@/components/ui/loading-state";
+import { useAsyncResource } from "@/hooks/use-async-resource";
+import { toFeedbackError, type FeedbackError } from "@/lib/action-failure";
+import { classifyError } from "@/lib/feedback-error";
 import { LifecycleTimeline } from "@/components/ui/lifecycle-timeline";
 import { decideOnDecision, getDecision, listDecisionAuditTrail, listDelegateCandidates } from "../actions";
 
@@ -19,38 +26,32 @@ export default function DirectorDecisionDetail() {
   const router = useRouter();
   const decisionId = params.id as string;
 
-  const [decision, setDecision] = useState<any>(null);
-  const [auditTrail, setAuditTrail] = useState<any[]>([]);
-  const [delegates, setDelegates] = useState<any[]>([]);
   const [showDecideModal, setShowDecideModal] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const [delegateTo, setDelegateTo] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<FeedbackError | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
-  const load = async () => {
-    try {
-      const [d, audit, candidates] = await Promise.all([
-        getDecision(decisionId),
-        listDecisionAuditTrail(decisionId),
-        listDelegateCandidates(),
-      ]);
-      setDecision(d);
-      setAuditTrail(audit);
-      setDelegates(candidates);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load decision.");
-    }
-  };
-
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // The decision, its audit trail and who it may be delegated to. A failed
+  // load is an error with Try again, never the message as page text (D5).
+  const detail = useAsyncResource(async () => {
+    const [decision, auditTrail, delegates] = await Promise.all([
+      getDecision(decisionId),
+      listDecisionAuditTrail(decisionId),
+      listDelegateCandidates(),
+    ]);
+    return { decision: decision as any, auditTrail: auditTrail as any[], delegates: delegates as any[] };
   }, [decisionId]);
+  const decision = detail.data?.decision ?? null;
+  const auditTrail = detail.data?.auditTrail ?? [];
+  const delegates = detail.data?.delegates ?? [];
 
   const handleDecide = async (action: string) => {
+    if (loading) return;
     setLoading(true);
     setError(null);
+    setNotice(null);
     try {
       await decideOnDecision({
         decisionId,
@@ -58,19 +59,24 @@ export default function DirectorDecisionDetail() {
         reason: reason.trim() || undefined,
         delegateTo: action === "delegated" ? delegateTo || undefined : undefined,
       });
+      setNotice(`Decision recorded: ${DECIDE_ACTIONS.find((a) => a.value === action)?.label ?? action}.`);
       setShowDecideModal(null);
       setReason("");
       setDelegateTo("");
-      await load();
+      detail.reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to record decision.");
+      setError(await toFeedbackError(e, "Failed to record decision."));
     } finally {
       setLoading(false);
     }
   };
 
   if (!decision) {
-    return <div className="p-xl text-center text-sm text-outline">{error || "Loading..."}</div>;
+    return detail.status === "error" ? (
+      <ErrorState {...classifyError(detail.error)} title="This decision couldn't be loaded" onRetry={detail.reload} />
+    ) : (
+      <LoadingState label="Loading the decision…" />
+    );
   }
 
   const isPending = ["pending", "info_requested", "sent_back"].includes(decision.status);
@@ -153,9 +159,11 @@ export default function DirectorDecisionDetail() {
         )}
       </div>
 
-      {error && (
-        <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium">{error}</div>
-      )}
+      <Alert tone="success" onDismiss={() => setNotice(null)}>
+        {notice}
+      </Alert>
+      {/* The decide dialog shows its own failure. */}
+      <ErrorAlert error={!showDecideModal ? error : null} />
 
       {isPending && (
         <div className="flex flex-wrap gap-sm">
@@ -197,13 +205,15 @@ export default function DirectorDecisionDetail() {
             <Button
               onClick={() => showDecideModal && handleDecide(showDecideModal)}
               disabled={loading || (showDecideModal === "delegated" && !delegateTo)}
+              aria-busy={loading || undefined}
             >
-              {loading ? "..." : "Confirm"}
+              {loading ? "Saving…" : "Confirm"}
             </Button>
           </>
         }
       >
         <div className="space-y-md">
+          <ErrorAlert error={error} />
           {showDecideModal === "delegated" && (
             <FormField
               label="Delegate to"

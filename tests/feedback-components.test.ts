@@ -140,7 +140,12 @@ describe("ErrorState", () => {
   it.each(KINDS)("the %s error is a role=alert region with its own copy and no motion", (kind) => {
     const html = render(ErrorState, { kind });
     expect(firstTag(html)).toContain('role="alert"');
-    expect(html).not.toMatch(/motion-|transition|animate-|duration-/);
+    // The error has no motion of its own. A control inside it (Sign in again,
+    // Try again) keeps the hover feedback every control has: motion-feedback,
+    // on that control's own tag and nowhere else.
+    expect(firstTag(html)).not.toMatch(/motion-|transition|animate-|duration-/);
+    expect(html.replace(/<(?:a|button)\b[^>]*>/g, "")).not.toMatch(/motion-|transition|animate-|duration-/);
+    expect(html).not.toMatch(/motion-(?!feedback)/);
     expect(html).toMatch(/<p class="[^"]*font-semibold[^"]*">[^<]+<\/p>/);
   });
 

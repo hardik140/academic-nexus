@@ -1,8 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Modal, Button, FormField } from "@/components/ui/modal";
+import { Alert } from "@/components/ui/alert";
+import { ErrorAlert } from "@/components/ui/error-alert";
+import { StateView } from "@/components/ui/state-view";
+import { useAsyncResource } from "@/hooks/use-async-resource";
+import { toFeedbackError, type FeedbackError } from "@/lib/action-failure";
+import { SessionExpiredError } from "@/lib/feedback-error";
+import { requireData } from "@/lib/read-result";
 import { updateCollege } from "./actions";
 
 const EMPTY_FORM = {
@@ -12,22 +19,21 @@ const EMPTY_FORM = {
 
 export default function AdminSettings() {
   const supabase = createClient();
-  const [college, setCollege] = useState<any>(null);
   const [showEdit, setShowEdit] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<FeedbackError | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
 
-  useEffect(() => { loadCollege(); }, []);
-
-  const loadCollege = async () => {
+  // The institution's record. A failed load is an error, never a profile of dashes (D5).
+  const collegeResource = useAsyncResource(async () => {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    const { data: profile } = await supabase.from("profiles").select("college_id").eq("id", user.id).single();
-    if (!profile) return;
-    const { data } = await supabase.from("colleges").select("*").eq("id", profile.college_id).single();
-    setCollege(data);
-  };
+    if (!user) throw new SessionExpiredError();
+    const profile = requireData(await supabase.from("profiles").select("college_id").eq("id", user.id).single());
+    if (!profile) return null;
+    return requireData(await supabase.from("colleges").select("*").eq("id", profile.college_id).single());
+  }, []);
+  const college: any = collegeResource.data ?? null;
 
   const openEdit = () => {
     if (college) {
@@ -51,8 +57,10 @@ export default function AdminSettings() {
   };
 
   const handleSave = async () => {
+    if (loading) return;
     setLoading(true);
     setError(null);
+    setNotice(null);
     try {
       await updateCollege({
         name: form.name,
@@ -69,9 +77,10 @@ export default function AdminSettings() {
         country: form.country,
       });
       setShowEdit(false);
-      await loadCollege();
+      setNotice("Institution settings saved.");
+      collegeResource.reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to update settings.");
+      setError(await toFeedbackError(e, "Failed to update settings."));
     } finally {
       setLoading(false);
     }
@@ -102,14 +111,18 @@ export default function AdminSettings() {
         <Button onClick={openEdit} disabled={!college}>Edit</Button>
       </div>
 
-      {error && !showEdit && (
-        <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium">{error}</div>
-      )}
+      <Alert tone="success" onDismiss={() => setNotice(null)}>
+        {notice}
+      </Alert>
+      {/* The edit dialog shows its own failure. */}
+      <ErrorAlert error={!showEdit ? error : null} />
 
       <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-sm">
         <div className="px-lg py-md border-b border-outline-variant">
           <h2 className="text-sm font-bold text-on-surface">Institution Profile</h2>
         </div>
+        <StateView state={collegeResource} loadingLabel="Loading the institution profile…" empty={{ title: "No institution profile found" }}>
+          {() => (
         <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 divide-outline-variant">
           {fields.map(([label, value]) => (
             <div key={label} className="px-lg py-md border-b md:border-b-0 border-outline-variant">
@@ -118,6 +131,8 @@ export default function AdminSettings() {
             </div>
           ))}
         </div>
+          )}
+        </StateView>
       </div>
 
       <Modal
@@ -128,13 +143,11 @@ export default function AdminSettings() {
         footer={
           <>
             <Button variant="outline" onClick={() => setShowEdit(false)}>Cancel</Button>
-            <Button onClick={handleSave} disabled={loading || !form.name || !form.code}>{loading ? "Saving..." : "Save Changes"}</Button>
+            <Button onClick={handleSave} disabled={loading || !form.name || !form.code} aria-busy={loading || undefined}>{loading ? "Saving..." : "Save Changes"}</Button>
           </>
         }
       >
-        {error && (
-          <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium mb-md">{error}</div>
-        )}
+        <ErrorAlert error={error} className="mb-md" />
         <div className="space-y-lg">
           <div>
             <h3 className="text-xs font-bold text-outline uppercase tracking-wider mb-sm">General Information</h3>

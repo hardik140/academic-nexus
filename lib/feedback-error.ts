@@ -23,7 +23,43 @@
  * Actions distinguishable; until then they classify as "load".
  */
 
+import { looksInternal } from "@/lib/internal-error";
+
 export type ErrorKind = "load" | "network" | "forbidden" | "session" | "not-found" | "unknown";
+
+/**
+ * Raised on the client when a read finds no signed-in user: the session has
+ * ended. Carries the same explicit code as lib/rbac.ts, so classifyError()
+ * reports it as "session" without reading any message.
+ */
+export class SessionExpiredError extends Error {
+  readonly code = "UNAUTHENTICATED";
+  constructor() {
+    super("Your session has expired. Please sign in again.");
+    this.name = "SessionExpiredError";
+  }
+}
+
+/**
+ * The text a failed action may show the user.
+ *
+ * A deliberate business message thrown by a Server Action ("This gate pass
+ * must be approved before an exit can be recorded.") is meant to be read and
+ * is kept. Everything else becomes `fallback`:
+ *
+ *   • an error carrying a Next.js digest — in production its message is
+ *     Next's generic replacement, not the action's own words;
+ *   • a message that describes the database (lib/internal-error.ts,
+ *     looksInternal), e.g. from a client-side Supabase write;
+ *   • anything that is not an Error with a message.
+ */
+export function feedbackMessage(error: unknown, fallback: string): string {
+  if (!(error instanceof Error)) return fallback;
+  if (property(error, "digest")) return fallback;
+  const message = error.message.trim();
+  if (!message || looksInternal(message)) return fallback;
+  return message;
+}
 
 export interface FeedbackFailure {
   kind: ErrorKind;

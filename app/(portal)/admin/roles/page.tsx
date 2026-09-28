@@ -1,17 +1,19 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { getCached } from "@/lib/cache";
+import { assertRead } from "@/lib/read-result-server";
 
 export default async function AdminRoles() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: viewerProfile } = await supabase
+  const { data: viewerProfile, error: viewerProfileError } = await supabase
     .from("profiles")
     .select("college_id")
     .eq("id", user.id)
     .single();
+  assertRead(viewerProfileError);
 
   // This data changes essentially never — a 5 minute TTL is safe.
   // `permissions` is a global catalog (no college_id column); `role_permissions`
@@ -24,6 +26,7 @@ export default async function AdminRoles() {
         supabase.from("permissions").select("*").order("module").order("name"),
         supabase.from("role_permissions").select("*, permissions(name, description)"),
       ]);
+      for (const res of [permissionsRes, rolePermsRes]) assertRead(res.error);
       return { permissions: permissionsRes.data, rolePerms: rolePermsRes.data };
     }
   );

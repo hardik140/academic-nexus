@@ -1,47 +1,55 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Button, StatusBadge } from "@/components/ui/modal";
+import { Alert } from "@/components/ui/alert";
+import { ErrorAlert } from "@/components/ui/error-alert";
+import { StateView } from "@/components/ui/state-view";
+import { useAsyncResource } from "@/hooks/use-async-resource";
+import { toFeedbackError, type FeedbackError } from "@/lib/action-failure";
 import { listFinancialDisputes, claimDispute, resolveDispute, rejectDispute } from "./actions";
 
 export default function FinanceDisputes() {
-  const [disputes, setDisputes] = useState<any[]>([]);
   const [resolveTarget, setResolveTarget] = useState<{ id: string; action: "resolved" | "rejected" } | null>(null);
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<FeedbackError | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
-  useEffect(() => { load(); }, []);
-
-  const load = async () => {
-    setDisputes(await listFinancialDisputes());
-  };
+  // A failed load is an error, never "No open disputes" (owner decision D5).
+  const disputesResource = useAsyncResource(() => listFinancialDisputes(), []);
+  const disputes: any[] = disputesResource.data ?? [];
 
   const handleClaim = async (id: string) => {
+    if (loading) return;
     setLoading(id);
     setError(null);
+    setNotice(null);
     try {
       await claimDispute(id);
-      await load();
+      setNotice("Dispute claimed. It is now under your investigation.");
+      disputesResource.reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to claim dispute.");
+      setError(await toFeedbackError(e, "Failed to claim dispute."));
     } finally {
       setLoading(null);
     }
   };
 
   const handleFinalize = async () => {
-    if (!resolveTarget || !notes.trim()) return;
+    if (!resolveTarget || !notes.trim() || loading) return;
     setLoading(resolveTarget.id);
     setError(null);
+    setNotice(null);
     try {
       if (resolveTarget.action === "resolved") await resolveDispute(resolveTarget.id, notes);
       else await rejectDispute(resolveTarget.id, notes);
+      setNotice(`Dispute ${resolveTarget.action === "resolved" ? "resolved" : "rejected"}. The student will see your notes.`);
       setResolveTarget(null);
       setNotes("");
-      await load();
+      disputesResource.reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to finalize dispute.");
+      setError(await toFeedbackError(e, "Failed to finalize dispute."));
     } finally {
       setLoading(null);
     }
@@ -57,10 +65,15 @@ export default function FinanceDisputes() {
         <p className="text-sm text-on-surface-variant mt-xs">Student-reported payment/fee discrepancies</p>
       </div>
 
-      {error && (
-        <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium">{error}</div>
-      )}
+      <Alert tone="success" onDismiss={() => setNotice(null)}>
+        {notice}
+      </Alert>
 
+      <ErrorAlert error={error} />
+
+      <StateView state={disputesResource} isEmpty={() => false} loadingLabel="Loading disputes…" empty={{ title: "No disputes" }}>
+        {() => (
+          <>
       <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-sm">
         <div className="px-lg py-md border-b border-outline-variant">
           <h2 className="text-sm font-bold text-on-surface flex items-center gap-sm">⚖️ Open Disputes ({open.length})</h2>
@@ -88,7 +101,7 @@ export default function FinanceDisputes() {
                 </div>
                 <div className="flex gap-xs items-center shrink-0">
                   {d.status === "submitted" && (
-                    <Button size="sm" variant="outline" onClick={() => handleClaim(d.id)} disabled={loading === d.id}>
+                    <Button size="sm" variant="outline" onClick={() => handleClaim(d.id)} disabled={loading === d.id} aria-busy={loading === d.id || undefined}>
                       {loading === d.id ? "..." : "Claim"}
                     </Button>
                   )}
@@ -118,6 +131,7 @@ export default function FinanceDisputes() {
                     variant={activeTarget.action === "resolved" ? "primary" : "destructive"}
                     onClick={handleFinalize}
                     disabled={!notes.trim() || loading === d.id}
+                    aria-busy={loading === d.id || undefined}
                   >
                     Confirm {activeTarget.action === "resolved" ? "Resolve" : "Reject"}
                   </Button>
@@ -155,6 +169,9 @@ export default function FinanceDisputes() {
           )}
         </div>
       </div>
+          </>
+        )}
+      </StateView>
     </div>
   );
 }

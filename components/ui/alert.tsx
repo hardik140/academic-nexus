@@ -50,6 +50,13 @@ export interface AlertProps {
   action?: React.ReactNode;
   /** Shows a Dismiss button, which calls this. */
   onDismiss?: () => void;
+  /**
+   * Move focus to the message when it appears. For a result that replaces
+   * the control the user was on — a form that closes once submitted — so
+   * focus lands on the outcome instead of the top of the document. Never
+   * for passive messages.
+   */
+  focusOnShow?: boolean;
   /** Layout classes for the message (margins, width). Not applied while empty. */
   className?: string;
 }
@@ -58,19 +65,21 @@ function hasContent(node: React.ReactNode): boolean {
   return node !== null && node !== undefined && node !== false && node !== "";
 }
 
-export function Alert({ tone, title, children, action, onDismiss, className }: AlertProps) {
+export function Alert({ tone, title, children, action, onDismiss, focusOnShow = false, className }: AlertProps) {
   const regionRef = useRef<HTMLDivElement>(null);
   const dismissedWithFocus = useRef(false);
   const hasMessage = hasContent(title) || hasContent(children);
   const { label, box, icon } = TONES[tone];
 
-  // Dismiss removed the button that had focus: keep focus where the message was.
+  // Dismiss removed the button that had focus: keep focus where the message
+  // was. And a message asked to take focus takes it when it appears.
   useLayoutEffect(() => {
     if (!hasMessage && dismissedWithFocus.current) {
       dismissedWithFocus.current = false;
       regionRef.current?.focus();
     }
-  }, [hasMessage]);
+    if (hasMessage && focusOnShow) regionRef.current?.focus();
+  }, [hasMessage, focusOnShow]);
 
   const toneName = <span className="sr-only">{label}: </span>;
 

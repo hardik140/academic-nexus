@@ -1,16 +1,19 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Button, StatusBadge } from "@/components/ui/modal";
+import { Alert } from "@/components/ui/alert";
+import { ErrorAlert } from "@/components/ui/error-alert";
+import { StateView } from "@/components/ui/state-view";
+import { useAsyncResource } from "@/hooks/use-async-resource";
+import { toFeedbackError, type FeedbackError } from "@/lib/action-failure";
+import { feedbackMessage } from "@/lib/feedback-error";
 import { actOnLeaveRequest, listHodApprovals, actOnAttendanceCorrection, listCorrectionApprovals, previewLeaveImpact } from "./actions";
 
 export default function HodApprovals() {
-  const [pending, setPending] = useState<any[]>([]);
-  const [processed, setProcessed] = useState<any[]>([]);
-  const [pendingCorrections, setPendingCorrections] = useState<any[]>([]);
-  const [processedCorrections, setProcessedCorrections] = useState<any[]>([]);
   const [loading, setLoading] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<FeedbackError | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   // Leave Impact Preview — keyed by request id; "loading" while the fetch is
   // in flight, otherwise the { teacherName, affectedClasses } result.
   const [impact, setImpact] = useState<Record<string, any>>({});
@@ -25,44 +28,48 @@ export default function HodApprovals() {
       const result = await previewLeaveImpact(requestId);
       setImpact((prev) => ({ ...prev, [requestId]: result }));
     } catch (e) {
-      setImpact((prev) => ({ ...prev, [requestId]: { error: e instanceof Error ? e.message : "Failed to load impact." } }));
+      setImpact((prev) => ({ ...prev, [requestId]: { error: feedbackMessage(e, "Failed to load impact.") } }));
     }
   };
 
-  useEffect(() => { loadRequests(); }, []);
-
-  const loadRequests = async () => {
-    const [{ pending, processed }, { pending: pendingCorr, processed: processedCorr }] = await Promise.all([
-      listHodApprovals(),
-      listCorrectionApprovals(),
-    ]);
-    setPending(pending);
-    setProcessed(processed);
-    setPendingCorrections(pendingCorr);
-    setProcessedCorrections(processedCorr);
-  };
+  // Both approval queues. A failed load is an error, never "No pending
+  // requests" — an empty-looking queue would read as all done (D5).
+  const approvals = useAsyncResource(async () => {
+    const [leave, corrections] = await Promise.all([listHodApprovals(), listCorrectionApprovals()]);
+    return { leave, corrections };
+  }, []);
+  const pending: any[] = approvals.data?.leave.pending ?? [];
+  const processed: any[] = approvals.data?.leave.processed ?? [];
+  const pendingCorrections: any[] = approvals.data?.corrections.pending ?? [];
+  const processedCorrections: any[] = approvals.data?.corrections.processed ?? [];
 
   const handleAction = async (id: string, action: "approved" | "rejected") => {
+    if (loading) return;
     setLoading(id);
     setError(null);
+    setNotice(null);
     try {
       await actOnLeaveRequest(id, action);
-      await loadRequests();
+      setNotice(`Leave request ${action}.`);
+      approvals.reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to update request.");
+      setError(await toFeedbackError(e, "Failed to update request."));
     } finally {
       setLoading(null);
     }
   };
 
   const handleCorrectionAction = async (id: string, action: "approved" | "rejected") => {
+    if (loading) return;
     setLoading(id);
     setError(null);
+    setNotice(null);
     try {
       await actOnAttendanceCorrection(id, action);
-      await loadRequests();
+      setNotice(`Attendance correction ${action}.`);
+      approvals.reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to update correction request.");
+      setError(await toFeedbackError(e, "Failed to update correction request."));
     } finally {
       setLoading(null);
     }
@@ -75,10 +82,14 @@ export default function HodApprovals() {
         <p className="text-sm text-on-surface-variant mt-xs">Leave and attendance correction requests from staff in your department</p>
       </div>
 
-      {error && (
-        <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium">{error}</div>
-      )}
+      <Alert tone="success" onDismiss={() => setNotice(null)}>
+        {notice}
+      </Alert>
+      <ErrorAlert error={error} />
 
+      <StateView state={approvals} isEmpty={() => false} loadingLabel="Loading approvals…" empty={{ title: "No approvals" }}>
+        {() => (
+          <>
       {/* Leave — Pending Queue */}
       <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-sm">
         <div className="px-lg py-md border-b border-outline-variant flex items-center justify-between">
@@ -141,7 +152,7 @@ export default function HodApprovals() {
                   <Button size="sm" variant="destructive" onClick={() => handleAction(req.id, "rejected")} disabled={loading === req.id}>
                     Reject
                   </Button>
-                  <Button size="sm" onClick={() => handleAction(req.id, "approved")} disabled={loading === req.id}>
+                  <Button size="sm" onClick={() => handleAction(req.id, "approved")} disabled={loading === req.id} aria-busy={loading === req.id || undefined}>
                     {loading === req.id ? "..." : "Approve"}
                   </Button>
                 </div>
@@ -204,7 +215,7 @@ export default function HodApprovals() {
                   <Button size="sm" variant="destructive" onClick={() => handleCorrectionAction(req.id, "rejected")} disabled={loading === req.id}>
                     Reject
                   </Button>
-                  <Button size="sm" onClick={() => handleCorrectionAction(req.id, "approved")} disabled={loading === req.id}>
+                  <Button size="sm" onClick={() => handleCorrectionAction(req.id, "approved")} disabled={loading === req.id} aria-busy={loading === req.id || undefined}>
                     {loading === req.id ? "..." : "Approve"}
                   </Button>
                 </div>
@@ -238,6 +249,9 @@ export default function HodApprovals() {
           )}
         </div>
       </div>
+          </>
+        )}
+      </StateView>
     </div>
   );
 }

@@ -1,11 +1,21 @@
 "use client";
 
-import { Suspense, useState, useEffect } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { DataTable, type DataTableQuery } from "@/components/ui/data-table";
 import { Modal, Button, FormField, StatusBadge } from "@/components/ui/modal";
+import { Alert } from "@/components/ui/alert";
+import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
+import { ErrorAlert } from "@/components/ui/error-alert";
+import { ErrorState } from "@/components/ui/error-state";
+import { LoadingState } from "@/components/ui/loading-state";
+import { useToast } from "@/components/ui/toast";
+import { useAsyncResource } from "@/hooks/use-async-resource";
+import { toFeedbackError, type FeedbackError } from "@/lib/action-failure";
+import { classifyError } from "@/lib/feedback-error";
+import { requireRows } from "@/lib/read-result";
 import { formatCurrency } from "@/lib/utils";
 import {
   inviteUser,
@@ -45,26 +55,35 @@ function AdminUsersInner() {
   const searchParams = useSearchParams();
   const [users, setUsers] = useState<any[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
+  const [usersError, setUsersError] = useState<unknown>(null);
   const [totalUsers, setTotalUsers] = useState(0);
   const [query, setQuery] = useState<DataTableQuery>({ search: "", sortKey: null, sortDir: "asc", page: 0 });
-  const [invitations, setInvitations] = useState<any[]>([]);
-  const [departments, setDepartments] = useState<any[]>([]);
   const [editUser, setEditUser] = useState<any>(null);
   const [academicSummary, setAcademicSummary] = useState<StudentAcademicSummary | null>(null);
+  const [academicSummaryError, setAcademicSummaryError] = useState<unknown>(null);
   const [academicStatusDraft, setAcademicStatusDraft] = useState("");
   const [academicLoading, setAcademicLoading] = useState(false);
-  const [academicError, setAcademicError] = useState<string | null>(null);
+  const [academicError, setAcademicError] = useState<FeedbackError | null>(null);
   const [showInvite, setShowInvite] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<FeedbackError | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const noticeRef = useRef<HTMLDivElement>(null);
+  const [revokeTarget, setRevokeTarget] = useState<{ id: string; email: string } | null>(null);
+  const [revokePending, setRevokePending] = useState(false);
+  const [revokeError, setRevokeError] = useState<FeedbackError | null>(null);
+  const [statusTarget, setStatusTarget] = useState<{ id: string; name: string; status: UserStatus } | null>(null);
+  const [statusPending, setStatusPending] = useState(false);
+  const [statusError, setStatusError] = useState<FeedbackError | null>(null);
+  const latestUsersLoad = useRef(0);
+  const latestSummary = useRef(0);
+  const toast = useToast();
   const [inviteForm, setInviteForm] = useState<{ email: string; full_name: string; role: UserRole; department_id: string }>({
     email: "",
     full_name: "",
     role: "director",
     department_id: "",
   });
-
-  useEffect(() => { loadInvitations(); loadDepartments(); }, []);
 
   // DataTable reports the initial query on mount and every search/sort/page
   // change thereafter — this is the single fetch path, real pagination via
@@ -79,31 +98,44 @@ function AdminUsersInner() {
   }, [searchParams]);
 
   const loadUsers = async (q: DataTableQuery) => {
+    const run = ++latestUsersLoad.current;
     setUsersLoading(true);
-    // Server Action, not a direct browser Supabase call — this one goes
-    // through getCached() (Redis, college-scoped, 30s TTL), unlike the rest
-    // of this page's data (invitations, departments), which is small enough
-    // that Phase 3's caching wasn't worth the added indirection there.
-    const { data, count } = await listUsers(q);
-
-    setUsers(data);
-    setTotalUsers(count);
-    setUsersLoading(false);
+    setUsersError(null);
+    try {
+      // Server Action, not a direct browser Supabase call — this one goes
+      // through getCached() (Redis, college-scoped, 30s TTL), unlike the rest
+      // of this page's data (invitations, departments), which is small enough
+      // that Phase 3's caching wasn't worth the added indirection there.
+      const { data, count } = await listUsers(q);
+      if (run !== latestUsersLoad.current) return;
+      setUsers(data);
+      setTotalUsers(count);
+    } catch (e) {
+      // A failed load is an error in the table, never "No users found." (D5).
+      if (run === latestUsersLoad.current) setUsersError(e);
+    } finally {
+      if (run === latestUsersLoad.current) setUsersLoading(false);
+    }
   };
 
-  const loadInvitations = async () => {
-    const { data } = await supabase
-      .from("invitations")
-      .select("*")
-      .eq("status", "pending")
-      .order("created_at", { ascending: false });
-    setInvitations(data || []);
-  };
+  const invitationsResource = useAsyncResource(
+    async () =>
+      requireRows(
+        await supabase
+          .from("invitations")
+          .select("*")
+          .eq("status", "pending")
+          .order("created_at", { ascending: false })
+      ),
+    []
+  );
+  const invitations: any[] = invitationsResource.data ?? [];
 
-  const loadDepartments = async () => {
-    const { data } = await supabase.from("departments").select("id, name, code").order("name");
-    setDepartments(data || []);
-  };
+  const departmentsResource = useAsyncResource(
+    async () => requireRows(await supabase.from("departments").select("id, name, code").order("name")),
+    []
+  );
+  const departments: any[] = departmentsResource.data ?? [];
 
   const handleInvite = async () => {
     setLoading(true);
@@ -117,31 +149,41 @@ function AdminUsersInner() {
       });
       setInviteForm({ email: "", full_name: "", role: "director", department_id: "" });
       setShowInvite(false);
-      await loadInvitations();
+      setNotice(`Invitation sent to ${inviteForm.email}.`);
+      invitationsResource.reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to send invitation.");
+      setError(await toFeedbackError(e, "Failed to send invitation."));
     } finally {
       setLoading(false);
     }
   };
 
-  const handleResend = async (invitationId: string) => {
+  // Low stakes, nothing else to show it: a toast.
+  const handleResend = async (invitation: { id: string; email: string }) => {
     setError(null);
     try {
-      await resendInvitation(invitationId);
-      await loadInvitations();
+      await resendInvitation(invitation.id);
+      toast.success(`Invitation resent to ${invitation.email}.`, { id: `resend-${invitation.id}` });
+      invitationsResource.reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to resend invitation.");
+      setError(await toFeedbackError(e, "Failed to resend invitation."));
     }
   };
 
-  const handleRevoke = async (invitationId: string) => {
-    setError(null);
+  // Asked first (ConfirmationDialog); a failure stays in the dialog.
+  const confirmRevoke = async () => {
+    if (!revokeTarget) return;
+    setRevokePending(true);
+    setRevokeError(null);
     try {
-      await revokeInvitation(invitationId);
-      await loadInvitations();
+      await revokeInvitation(revokeTarget.id);
+      setNotice(`Invitation for ${revokeTarget.email} revoked.`);
+      setRevokeTarget(null);
+      invitationsResource.reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to revoke invitation.");
+      setRevokeError(await toFeedbackError(e, "Failed to revoke invitation."));
+    } finally {
+      setRevokePending(false);
     }
   };
 
@@ -150,29 +192,46 @@ function AdminUsersInner() {
     setError(null);
     try {
       await updateUserProfile(editUser.id, editUser.full_name, editUser.role, editUser.phone || undefined, query);
+      setNotice(`${editUser.full_name} updated.`);
       setEditUser(null);
-      await loadUsers(query);
+      void loadUsers(query);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to update user.");
+      setError(await toFeedbackError(e, "Failed to update user."));
     } finally {
       setLoading(false);
     }
   };
 
-  const openEditUser = async (row: any) => {
-    setEditUser(row);
+  // A student's academic record, for the Edit dialog. A failed load says so
+  // (with Try again) rather than "Loading…" for ever.
+  const loadAcademicSummary = async (userId: string) => {
+    const run = ++latestSummary.current;
     setAcademicSummary(null);
-    setAcademicError(null);
-    if (row.role === "student") {
-      const summary = await getStudentAcademicSummary(row.id);
+    setAcademicSummaryError(null);
+    try {
+      const summary = await getStudentAcademicSummary(userId);
+      if (run !== latestSummary.current) return;
       setAcademicSummary(summary);
       if (summary) setAcademicStatusDraft(summary.status);
+    } catch (e) {
+      if (run === latestSummary.current) setAcademicSummaryError(e);
     }
   };
 
+  const openEditUser = async (row: any) => {
+    setEditUser(row);
+    setError(null);
+    setAcademicError(null);
+    setAcademicSummary(null);
+    setAcademicSummaryError(null);
+    if (row.role === "student") await loadAcademicSummary(row.id);
+  };
+
   const closeEditUser = () => {
+    latestSummary.current++;
     setEditUser(null);
     setAcademicSummary(null);
+    setAcademicSummaryError(null);
     setAcademicError(null);
   };
 
@@ -182,24 +241,35 @@ function AdminUsersInner() {
     setAcademicError(null);
     try {
       await updateStudentAcademicStatus(editUser.id, academicStatusDraft as any, query);
-      const summary = await getStudentAcademicSummary(editUser.id);
-      setAcademicSummary(summary);
     } catch (e) {
-      setAcademicError(e instanceof Error ? e.message : "Failed to update academic status.");
+      setAcademicError(await toFeedbackError(e, "Failed to update academic status."));
+      return;
     } finally {
       setAcademicLoading(false);
     }
+    // Refreshing the record is not part of the update: a failure here shows
+    // on the record, not as a failed update.
+    void loadAcademicSummary(editUser.id);
   };
 
-  const updateUserStatus = async (userId: string, status: string) => {
-    setError(null);
+  // Suspending or reactivating an account is asked first; a failure stays in the dialog.
+  const confirmStatusChange = async () => {
+    if (!statusTarget) return;
+    setStatusPending(true);
+    setStatusError(null);
     try {
-      await updateUserStatusAction(userId, status as UserStatus, query);
-      await loadUsers(query);
+      await updateUserStatusAction(statusTarget.id, statusTarget.status, query);
+      setNotice(`${statusTarget.name} ${statusTarget.status === "suspended" ? "suspended" : "reactivated"}.`);
+      setStatusTarget(null);
+      void loadUsers(query);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to update status.");
+      setStatusError(await toFeedbackError(e, "Failed to update status."));
+    } finally {
+      setStatusPending(false);
     }
   };
+
+  const noticeRegion = () => noticeRef.current?.querySelector<HTMLElement>('[role="status"]') ?? null;
 
   const departmentOptions = [
     { value: "", label: "— None —" },
@@ -216,8 +286,22 @@ function AdminUsersInner() {
         <Button onClick={() => setShowInvite(true)}>+ Invite User</Button>
       </div>
 
-      {error && !editUser && !showInvite && (
-        <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium">{error}</div>
+      <div ref={noticeRef}>
+        <Alert tone="success" onDismiss={() => setNotice(null)}>
+          {notice}
+        </Alert>
+      </div>
+
+      {/* A dialog's own failure is shown inside it. */}
+      <ErrorAlert error={!editUser && !showInvite ? error : null} />
+
+      {invitationsResource.status === "error" && (
+        <ErrorState
+          {...classifyError(invitationsResource.error)}
+          title="Pending invitations couldn't be loaded"
+          onRetry={invitationsResource.reload}
+          className="rounded-2xl border border-outline-variant bg-surface-container-lowest"
+        />
       )}
 
       {invitations.length > 0 && (
@@ -235,10 +319,17 @@ function AdminUsersInner() {
                   </div>
                 </div>
                 <div className="flex gap-md">
-                  <button onClick={() => handleResend(inv.id)} className="text-xs text-secondary hover:underline font-medium">
+                  <button type="button" onClick={() => handleResend(inv)} className="text-xs text-secondary hover:underline font-medium">
                     Resend
                   </button>
-                  <button onClick={() => handleRevoke(inv.id)} className="text-xs text-error hover:underline font-medium">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRevokeError(null);
+                      setRevokeTarget({ id: inv.id, email: inv.email });
+                    }}
+                    className="text-xs text-error hover:underline font-medium"
+                  >
                     Revoke
                   </button>
                 </div>
@@ -297,6 +388,8 @@ function AdminUsersInner() {
         serverMode
         totalCount={totalUsers}
         loading={usersLoading}
+        error={usersError}
+        onRetry={() => loadUsers(query)}
         onQueryChange={setQuery}
         pageSize={USERS_PAGE_SIZE}
         actions={(row: any) => (
@@ -309,14 +402,14 @@ function AdminUsersInner() {
             </button>
             {row.status === "active" ? (
               <button
-                onClick={(e) => { e.stopPropagation(); updateUserStatus(row.id, "suspended"); }}
+                onClick={(e) => { e.stopPropagation(); setStatusError(null); setStatusTarget({ id: row.id, name: row.full_name, status: "suspended" }); }}
                 className="text-xs text-error hover:underline font-medium"
               >
                 Suspend
               </button>
             ) : (
               <button
-                onClick={(e) => { e.stopPropagation(); updateUserStatus(row.id, "active"); }}
+                onClick={(e) => { e.stopPropagation(); setStatusError(null); setStatusTarget({ id: row.id, name: row.full_name, status: "active" }); }}
                 className="text-xs text-success hover:underline font-medium"
               >
                 Activate
@@ -335,15 +428,24 @@ function AdminUsersInner() {
         footer={
           <>
             <Button variant="outline" onClick={() => setShowInvite(false)}>Cancel</Button>
-            <Button onClick={handleInvite} disabled={loading || !inviteForm.email || !inviteForm.full_name}>
+            <Button onClick={handleInvite} disabled={loading || !inviteForm.email || !inviteForm.full_name} aria-busy={loading || undefined}>
               {loading ? "Sending..." : "Send Invitation"}
             </Button>
           </>
         }
       >
-        {error && (
-          <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium mb-md">{error}</div>
-        )}
+        <ErrorAlert error={error} className="mb-md" />
+        <Alert
+          tone="error"
+          className="mb-md"
+          action={<Button variant="outline" size="sm" onClick={departmentsResource.reload}>Try again</Button>}
+        >
+          {departmentsResource.status === "error" ? (
+            <>
+              Departments couldn&apos;t be loaded, so none can be chosen yet.
+            </>
+          ) : null}
+        </Alert>
         <div className="space-y-md">
           <FormField label="Full Name" id="invite_name" value={inviteForm.full_name} onChange={(v) => setInviteForm({ ...inviteForm, full_name: v })} placeholder="e.g. Jane Doe" required />
           <FormField label="Email" id="invite_email" type="email" value={inviteForm.email} onChange={(v) => setInviteForm({ ...inviteForm, email: v })} placeholder="jane@college.edu" required />
@@ -362,7 +464,7 @@ function AdminUsersInner() {
         footer={
           <>
             <Button variant="outline" onClick={closeEditUser}>Cancel</Button>
-            <Button onClick={handleSaveUser} disabled={loading}>
+            <Button onClick={handleSaveUser} disabled={loading} aria-busy={loading || undefined}>
               {loading ? "Saving..." : "Save Changes"}
             </Button>
           </>
@@ -370,6 +472,7 @@ function AdminUsersInner() {
       >
         {editUser && (
           <div className="space-y-md">
+            <ErrorAlert error={error} />
             <FormField label="Full Name" id="edit_name" value={editUser.full_name} onChange={(v) => setEditUser({ ...editUser, full_name: v })} />
             <FormField label="Role" id="edit_role" type="select" value={editUser.role} onChange={(v) => setEditUser({ ...editUser, role: v })} options={roles} />
             <FormField label="Phone" id="edit_phone" value={editUser.phone || ""} onChange={(v) => setEditUser({ ...editUser, phone: v })} />
@@ -390,7 +493,7 @@ function AdminUsersInner() {
                     </div>
                     <div className="flex flex-wrap gap-xs">
                       {academicSummary.outstandingFees > 0 && (
-                        <span className="text-[11px] font-semibold px-sm py-[2px] rounded-full bg-warning/10 text-warning">
+                        <span className="text-[11px] font-semibold px-sm py-[2px] rounded-full bg-warning-container text-on-warning-container">
                           {formatCurrency(academicSummary.outstandingFees)} outstanding
                         </span>
                       )}
@@ -404,7 +507,7 @@ function AdminUsersInner() {
                         <span className="text-[11px] text-outline">No clearance flags</span>
                       )}
                     </div>
-                    {academicError && <p className="text-xs text-error font-medium">{academicError}</p>}
+                    <ErrorAlert error={academicError} />
                     <div className="flex gap-sm items-end">
                       <div className="flex-1">
                         <FormField
@@ -421,19 +524,59 @@ function AdminUsersInner() {
                         variant="outline"
                         onClick={handleUpdateAcademicStatus}
                         disabled={academicLoading || academicStatusDraft === academicSummary.status}
+                        aria-busy={academicLoading || undefined}
                       >
                         {academicLoading ? "Updating..." : "Update Status"}
                       </Button>
                     </div>
                   </>
+                ) : academicSummaryError ? (
+                  <ErrorState
+                    {...classifyError(academicSummaryError)}
+                    title="The academic record couldn't be loaded"
+                    onRetry={() => loadAcademicSummary(editUser.id)}
+                  />
                 ) : (
-                  <div className="text-xs text-outline">Loading academic record...</div>
+                  <LoadingState variant="inline" label="Loading academic record…" />
                 )}
               </div>
             )}
           </div>
         )}
       </Modal>
+
+      <ConfirmationDialog
+        open={!!revokeTarget}
+        title="Revoke this invitation?"
+        description={revokeTarget ? `${revokeTarget.email} will no longer be able to use the invitation link. You can invite them again later.` : undefined}
+        confirmLabel="Revoke invitation"
+        pendingLabel="Revoking…"
+        pending={revokePending}
+        error={revokeError}
+        onConfirm={confirmRevoke}
+        onCancel={() => setRevokeTarget(null)}
+        returnFocusTo={noticeRegion}
+      />
+
+      <ConfirmationDialog
+        open={!!statusTarget}
+        title={statusTarget?.status === "suspended" ? "Suspend this account?" : "Reactivate this account?"}
+        description={
+          statusTarget
+            ? statusTarget.status === "suspended"
+              ? `${statusTarget.name} will be signed out of the portal and unable to sign in until reactivated.`
+              : `${statusTarget.name} will be able to sign in again.`
+            : undefined
+        }
+        confirmLabel={statusTarget?.status === "suspended" ? "Suspend account" : "Reactivate account"}
+        pendingLabel={statusTarget?.status === "suspended" ? "Suspending…" : "Reactivating…"}
+        tone={statusTarget?.status === "suspended" ? "destructive" : "default"}
+        pending={statusPending}
+        error={statusError}
+        onConfirm={confirmStatusChange}
+        onCancel={() => setStatusTarget(null)}
+        returnFocusTo={noticeRegion}
+      />
     </div>
   );
 }

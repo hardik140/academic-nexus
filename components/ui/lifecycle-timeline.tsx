@@ -1,8 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { addEscalationNote, listEscalationNotes } from "@/lib/escalation-notes";
 import { Button, FormField } from "@/components/ui/modal";
+import { ErrorAlert } from "@/components/ui/error-alert";
+import { StateView } from "@/components/ui/state-view";
+import { useAsyncResource } from "@/hooks/use-async-resource";
+import { toFeedbackError, type FeedbackError } from "@/lib/action-failure";
 
 interface LifecycleTimelineProps {
   entityType: "decision" | "risk_flag";
@@ -27,35 +31,24 @@ const ENTRY_ICONS: Record<string, string> = {
  * keyed by (entityType, entityId).
  */
 export function LifecycleTimeline({ entityType, entityId, canAddNote = true }: LifecycleTimelineProps) {
-  const [notes, setNotes] = useState<any[]>([]);
   const [body, setBody] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<FeedbackError | null>(null);
 
-  const load = async () => {
-    try {
-      const data = await listEscalationNotes(entityType, entityId);
-      setNotes(data);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load activity.");
-    }
-  };
-
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [entityType, entityId]);
+  // The thread. A failed load is an error, never "No activity yet." (D5).
+  const notesResource = useAsyncResource(() => listEscalationNotes(entityType, entityId), [entityType, entityId]);
 
   const handleAddNote = async () => {
-    if (!body.trim()) return;
+    if (!body.trim() || submitting) return;
     setSubmitting(true);
     setError(null);
     try {
       await addEscalationNote({ entityType, entityId, entryType: "note", body: body.trim() });
       setBody("");
-      await load();
+      // Refreshing the thread reports its own failure, never as a failed note.
+      notesResource.reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to add note.");
+      setError(await toFeedbackError(e, "Failed to add note."));
     } finally {
       setSubmitting(false);
     }
@@ -64,9 +57,9 @@ export function LifecycleTimeline({ entityType, entityId, canAddNote = true }: L
   return (
     <div className="space-y-md">
       <h3 className="text-sm font-bold text-on-surface">Activity</h3>
-      {error && (
-        <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium">{error}</div>
-      )}
+      <ErrorAlert error={error} />
+      <StateView state={notesResource} isEmpty={() => false} loadingLabel="Loading activity…" empty={{ title: "No activity yet" }}>
+        {(notes: any[]) => (
       <div className="space-y-sm">
         {notes.length === 0 && <div className="text-sm text-outline">No activity yet.</div>}
         {notes.map((n: any) => (
@@ -86,6 +79,8 @@ export function LifecycleTimeline({ entityType, entityId, canAddNote = true }: L
           </div>
         ))}
       </div>
+        )}
+      </StateView>
       {canAddNote && (
         <div className="flex gap-sm items-end pt-sm border-t border-outline-variant">
           <div className="flex-1">
@@ -99,7 +94,7 @@ export function LifecycleTimeline({ entityType, entityId, canAddNote = true }: L
               placeholder="Add context, evidence, or a status update..."
             />
           </div>
-          <Button size="sm" onClick={handleAddNote} disabled={submitting || !body.trim()}>
+          <Button size="sm" onClick={handleAddNote} disabled={submitting || !body.trim()} aria-busy={submitting || undefined}>
             {submitting ? "..." : "Post"}
           </Button>
         </div>

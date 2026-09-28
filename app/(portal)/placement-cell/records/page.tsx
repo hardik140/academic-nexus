@@ -1,8 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { DataTable, type DataTableQuery } from "@/components/ui/data-table";
 import { Modal, Button, FormField, StatusBadge } from "@/components/ui/modal";
+import { Alert } from "@/components/ui/alert";
+import { ErrorAlert } from "@/components/ui/error-alert";
+import { toFeedbackError, type FeedbackError } from "@/lib/action-failure";
 import { listStudentPlacementRecords, updateStudentPlacementStatus } from "./actions";
 
 const RECORDS_PAGE_SIZE = 10;
@@ -21,20 +24,33 @@ const STATUS_OPTIONS = [
 export default function PlacementCellRecords() {
   const [records, setRecords] = useState<any[]>([]);
   const [loadingList, setLoadingList] = useState(false);
+  const [listError, setListError] = useState<unknown>(null);
   const [totalRecords, setTotalRecords] = useState(0);
   const [query, setQuery] = useState<DataTableQuery>({ search: "", sortKey: null, sortDir: "asc", page: 0 });
   const [editing, setEditing] = useState<any>(null);
   const [status, setStatus] = useState("not_placed");
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<FeedbackError | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const latestLoad = useRef(0);
 
+  // The latest query's page; a failed load is an error in the table, never
+  // "No students found." (owner decision D5).
   const loadRecords = async (q: DataTableQuery) => {
+    const run = ++latestLoad.current;
     setLoadingList(true);
-    const { data, count } = await listStudentPlacementRecords(q);
-    setRecords(data);
-    setTotalRecords(count);
-    setLoadingList(false);
+    setListError(null);
+    try {
+      const { data, count } = await listStudentPlacementRecords(q);
+      if (run !== latestLoad.current) return;
+      setRecords(data);
+      setTotalRecords(count);
+    } catch (e) {
+      if (run === latestLoad.current) setListError(e);
+    } finally {
+      if (run === latestLoad.current) setLoadingList(false);
+    }
   };
 
   const openEdit = (row: any) => {
@@ -45,15 +61,17 @@ export default function PlacementCellRecords() {
   };
 
   const handleSave = async () => {
-    if (!editing) return;
+    if (!editing || loading) return;
     setLoading(true);
     setError(null);
+    setNotice(null);
     try {
       await updateStudentPlacementStatus(editing.id, status as any, notes, query);
+      setNotice(`Placement status updated for ${editing.profiles?.full_name || "the student"}.`);
       setEditing(null);
-      await loadRecords(query);
+      void loadRecords(query);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to update placement record.");
+      setError(await toFeedbackError(e, "Failed to update placement record."));
     } finally {
       setLoading(false);
     }
@@ -66,9 +84,11 @@ export default function PlacementCellRecords() {
         <p className="text-sm text-on-surface-variant mt-xs">Master placement status for every student</p>
       </div>
 
-      {error && !editing && (
-        <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium">{error}</div>
-      )}
+      <Alert tone="success" onDismiss={() => setNotice(null)}>
+        {notice}
+      </Alert>
+      {/* The update dialog shows its own failure. */}
+      <ErrorAlert error={!editing ? error : null} />
 
       <DataTable
         title="All Students"
@@ -94,6 +114,8 @@ export default function PlacementCellRecords() {
         serverMode
         totalCount={totalRecords}
         loading={loadingList}
+        error={listError}
+        onRetry={() => loadRecords(query)}
         onQueryChange={(q) => { setQuery(q); loadRecords(q); }}
         pageSize={RECORDS_PAGE_SIZE}
       />
@@ -105,13 +127,11 @@ export default function PlacementCellRecords() {
         footer={
           <>
             <Button variant="outline" onClick={() => setEditing(null)}>Cancel</Button>
-            <Button onClick={handleSave} disabled={loading}>{loading ? "Saving..." : "Save"}</Button>
+            <Button onClick={handleSave} disabled={loading} aria-busy={loading || undefined}>{loading ? "Saving..." : "Save"}</Button>
           </>
         }
       >
-        {error && (
-          <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium mb-md">{error}</div>
-        )}
+        <ErrorAlert error={error} className="mb-md" />
         <div className="space-y-md">
           <FormField label="Placement Status" id="status" type="select" value={status} onChange={setStatus} options={STATUS_OPTIONS} required />
           <FormField label="Notes (optional)" id="notes" type="textarea" value={notes} onChange={setNotes} rows={3} />

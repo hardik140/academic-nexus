@@ -1,4 +1,5 @@
 import { securityContext, securityScanFeed } from "../actions";
+import { Alert } from "@/components/ui/alert";
 
 export const dynamic = "force-dynamic";
 
@@ -16,9 +17,7 @@ export default async function SecurityMovementsPage() {
     return (
       <div className="space-y-lg">
         <h1 className="text-2xl font-extrabold text-on-surface tracking-tight">Movements</h1>
-        <div className="bg-error/10 border border-error/20 text-error rounded-2xl p-lg text-sm font-medium">
-          This account is not active for gate duty.
-        </div>
+        <Alert tone="error">This account is not active for gate duty.</Alert>
       </div>
     );
   }
@@ -36,11 +35,9 @@ export default async function SecurityMovementsPage() {
         </p>
       </div>
 
-      {feeds.length === 0 && (
-        <div className="bg-warning/10 border border-warning/20 text-warning rounded-2xl p-lg text-sm font-medium">
-          You are not assigned to a gate.
-        </div>
-      )}
+      <Alert tone="warning">
+        {feeds.length === 0 ? "You are not assigned to a gate." : null}
+      </Alert>
 
       {feeds.map(({ gate, rows }) => (
         <section key={gate.id} className="bg-surface-container-lowest border border-outline-variant rounded-2xl">

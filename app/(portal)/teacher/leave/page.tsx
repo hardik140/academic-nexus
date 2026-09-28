@@ -1,8 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Button, FormField, StatusBadge } from "@/components/ui/modal";
+import { Alert } from "@/components/ui/alert";
+import { ErrorAlert } from "@/components/ui/error-alert";
+import { StateView } from "@/components/ui/state-view";
+import { useAsyncResource } from "@/hooks/use-async-resource";
+import { toFeedbackError, type FeedbackError } from "@/lib/action-failure";
+import { SessionExpiredError } from "@/lib/feedback-error";
+import { requireRows } from "@/lib/read-result";
 import { applyForLeave } from "./actions";
 import type { Database } from "@/types/database";
 
@@ -10,11 +17,10 @@ type LeaveType = Database["public"]["Tables"]["leave_requests"]["Row"]["leave_ty
 
 export default function TeacherLeave() {
   const supabase = createClient();
-  const [requests, setRequests] = useState<any[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [error, setError] = useState<FeedbackError | null>(null);
   const [form, setForm] = useState({
     leave_type: "casual",
     start_date: "",
@@ -22,23 +28,25 @@ export default function TeacherLeave() {
     reason: "",
   });
 
-  useEffect(() => { loadRequests(); }, []);
-
-  const loadRequests = async () => {
+  // A failed load is an error, never "no requests" (owner decision D5).
+  const requestsResource = useAsyncResource(async () => {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    const { data } = await supabase
-      .from("leave_requests")
-      .select("*")
-      .eq("requested_by", user.id)
-      .order("created_at", { ascending: false });
-    setRequests(data || []);
-  };
+    if (!user) throw new SessionExpiredError();
+    return requireRows(
+      await supabase
+        .from("leave_requests")
+        .select("*")
+        .eq("requested_by", user.id)
+        .order("created_at", { ascending: false })
+    );
+  }, []);
+  const requests = requestsResource.data ?? [];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setSuccess(null);
     try {
       await applyForLeave({
         leaveType: form.leave_type as LeaveType,
@@ -48,11 +56,12 @@ export default function TeacherLeave() {
       });
       setForm({ leave_type: "casual", start_date: "", end_date: "", reason: "" });
       setShowForm(false);
-      setSubmitted(true);
-      await loadRequests();
-      setTimeout(() => setSubmitted(false), 3000);
+      // Stays until dismissed: the record of a request the user just made.
+      setSuccess("Leave request submitted. It is awaiting HOD approval.");
+      // A failure to refresh the list shows on the list, not as a failed submission.
+      requestsResource.reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to submit leave request.");
+      setError(await toFeedbackError(e, "Failed to submit leave request."));
     } finally {
       setLoading(false);
     }
@@ -86,15 +95,11 @@ export default function TeacherLeave() {
         </Button>
       </div>
 
-      {submitted && (
-        <div className="bg-success/10 border border-success/20 text-success rounded-xl p-md text-sm font-medium">
-          ✅ Leave request submitted! Awaiting HOD approval.
-        </div>
-      )}
+      <Alert tone="success" focusOnShow onDismiss={() => setSuccess(null)}>
+        {success}
+      </Alert>
 
-      {error && (
-        <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium">{error}</div>
-      )}
+      <ErrorAlert error={error} />
 
       {/* Summary */}
       <div className="grid grid-cols-3 gap-md">
@@ -127,7 +132,7 @@ export default function TeacherLeave() {
           </div>
           <div className="flex justify-end gap-sm">
             <Button variant="outline" type="button" onClick={() => setShowForm(false)}>Cancel</Button>
-            <Button type="submit" disabled={loading}>{loading ? "Submitting..." : "Submit Request"}</Button>
+            <Button type="submit" disabled={loading} aria-busy={loading || undefined}>{loading ? "Submitting..." : "Submit Request"}</Button>
           </div>
         </form>
       )}
@@ -137,6 +142,13 @@ export default function TeacherLeave() {
         <div className="px-lg py-md border-b border-outline-variant">
           <h2 className="text-sm font-bold text-on-surface flex items-center gap-sm">🗓️ Leave History</h2>
         </div>
+        <StateView
+          state={requestsResource}
+          isEmpty={() => false}
+          loadingLabel="Loading your leave requests…"
+          empty={{ title: "No leave requests submitted" }}
+        >
+          {(requests) => (
         <div className="divide-y divide-outline-variant">
           {requests.map((req: any) => (
             <div key={req.id} className="flex items-center justify-between px-lg py-md hover:bg-surface-container-low transition-colors">
@@ -154,6 +166,8 @@ export default function TeacherLeave() {
             <div className="p-xl text-center text-sm text-outline">No leave requests submitted.</div>
           )}
         </div>
+          )}
+        </StateView>
       </div>
     </div>
   );

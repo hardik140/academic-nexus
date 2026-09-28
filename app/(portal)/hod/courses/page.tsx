@@ -1,36 +1,38 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { ErrorState } from "@/components/ui/error-state";
+import { LoadingState } from "@/components/ui/loading-state";
+import { useAsyncResource } from "@/hooks/use-async-resource";
+import { classifyError, SessionExpiredError } from "@/lib/feedback-error";
+import { requireData, requireRows } from "@/lib/read-result";
 
 export default function HodCourses() {
   const supabase = createClient();
-  const [courses, setCourses] = useState<any[]>([]);
   const [search, setSearch] = useState("");
 
-  useEffect(() => { loadCourses(); }, []);
-
-  const loadCourses = async () => {
+  // A failed load is an error, never "No courses found." (owner decision D5).
+  const coursesResource = useAsyncResource(async () => {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    if (!user) throw new SessionExpiredError();
     // Resolve department via departments.hod_id, same as hod/dashboard,
     // hod/reports, and hod/faculty — see the comment in hod/faculty/page.tsx
     // for why profiles.department_id isn't the right field here.
-    const { data: department } = await supabase.from("departments").select("id").eq("hod_id", user.id).single();
-    if (!department) {
-      setCourses([]);
-      return;
-    }
+    const department = requireData(await supabase.from("departments").select("id").eq("hod_id", user.id).single());
+    if (!department) return [];
 
-    const { data } = await supabase
-      .from("courses")
-      // A catalog course has no single instructor after 047 — teaching
-      // assignment belongs to each offering, so this no longer joins one.
-      .select("*, departments:department_id(name)")
-      .eq("department_id", department.id)
-      .order("code");
-    setCourses(data || []);
-  };
+    return requireRows(
+      await supabase
+        .from("courses")
+        // A catalog course has no single instructor after 047 — teaching
+        // assignment belongs to each offering, so this no longer joins one.
+        .select("*, departments:department_id(name)")
+        .eq("department_id", department.id)
+        .order("code")
+    ) as any[];
+  }, []);
+  const courses = coursesResource.data ?? [];
 
   const filtered = courses.filter((c: any) =>
     !search ||
@@ -71,7 +73,18 @@ export default function HodCourses() {
                 <th className="text-left px-lg py-sm font-semibold text-xs uppercase tracking-wider">Status</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-outline-variant">
+            <tbody className="divide-y divide-outline-variant" aria-busy={coursesResource.status === "loading" || undefined}>
+              {coursesResource.status !== "success" && !coursesResource.data && (
+                <tr>
+                  <td colSpan={7}>
+                    {coursesResource.status === "error" ? (
+                      <ErrorState {...classifyError(coursesResource.error)} title="Your department's courses couldn't be loaded" onRetry={coursesResource.reload} />
+                    ) : (
+                      <LoadingState label="Loading courses…" />
+                    )}
+                  </td>
+                </tr>
+              )}
               {filtered.map((c: any) => (
                 <tr key={c.id} className="hover:bg-surface-container-low transition-colors">
                   <td className="px-lg py-md font-mono text-secondary font-semibold">{c.code}</td>
@@ -82,12 +95,12 @@ export default function HodCourses() {
                   <td className="px-lg py-md capitalize text-on-surface-variant">{c.type}</td>
                   <td className="px-lg py-md">
                     <span className={`text-xs font-semibold px-sm py-xs rounded-full capitalize ${
-                      c.status === "active" ? "bg-success/10 text-success" : "bg-warning/10 text-warning"
+                      c.status === "active" ? "bg-success-container text-on-success-container" : "bg-warning-container text-on-warning-container"
                     }`}>{c.status}</span>
                   </td>
                 </tr>
               ))}
-              {filtered.length === 0 && (
+              {coursesResource.data && filtered.length === 0 && (
                 <tr><td colSpan={7} className="px-lg py-xl text-center text-outline">{courses.length === 0 ? "No courses found." : "No courses match your search."}</td></tr>
               )}
             </tbody>

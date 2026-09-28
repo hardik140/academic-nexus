@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { Tables } from "@/types/database";
 import { cn, getInitials } from "@/lib/utils";
 import { NativeDialog } from "@/components/ui/native-dialog";
+import { ToastProvider } from "@/components/ui/toast";
 
 interface PortalShellProps {
   profile: Tables<"profiles">;
@@ -158,7 +159,8 @@ function SidebarContent({
   profile: Tables<"profiles">;
   pathname: string;
   expanded: boolean;
-  onNavigate: () => void;
+  /** Every click on a navigation link: closes the drawer, and may start the pending marker. */
+  onNavigate: (href: string, event: React.MouseEvent<HTMLAnchorElement>) => void;
   /** The drawer's close control; the desktop sidebar has none. */
   onClose?: () => void;
 }) {
@@ -215,7 +217,7 @@ function SidebarContent({
             <Link
               key={item.href}
               href={item.href}
-              onClick={onNavigate}
+              onClick={(event) => onNavigate(item.href, event)}
               className={cn(
                 "flex items-center gap-sm px-md py-[10px] rounded-xl text-sm font-medium motion-feedback",
                 isActive
@@ -265,6 +267,15 @@ function SidebarContent({
 /** Tailwind's `lg` breakpoint: from here on the sidebar is persistent and the drawer is not used. */
 const DESKTOP_QUERY = "(min-width: 64rem)";
 
+/**
+ * How long a navigation must still be pending before the marker shows. A
+ * prefetched page arrives in about 20–65ms (measured on a production build,
+ * M6); 150ms stays clear of that with room for slower devices, so a fast
+ * navigation shows nothing at all, while a slow one is marked well within
+ * the first second. A timer, not an animation: the marker appears at once.
+ */
+const PENDING_MARKER_DELAY_MS = 150;
+
 export function PortalShell({ profile, children }: PortalShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -272,13 +283,37 @@ export function PortalShell({ profile, children }: PortalShellProps) {
   const router = useRouter();
   const supabase = createClient();
 
+  // The page a navigation link is loading, from the click until the route
+  // changes. Owned here, not by each link, so it survives the drawer closing.
+  const [pendingHref, setPendingHref] = useState<string | null>(null);
+  // Which pending navigation has lasted long enough to be marked.
+  const [markedHref, setMarkedHref] = useState<string | null>(null);
+  const markerShown = pendingHref !== null && markedHref === pendingHref;
+
   // Any route change closes the drawer — a link inside it, or the browser's
-  // back and forward buttons.
+  // back and forward buttons — and ends any pending navigation.
   const [drawerPath, setDrawerPath] = useState(pathname);
   if (drawerPath !== pathname) {
     setDrawerPath(pathname);
     setMobileOpen(false);
+    setPendingHref(null);
   }
+
+  // Mark a navigation only once it has been pending for the delay.
+  useEffect(() => {
+    if (!pendingHref) return;
+    const timer = setTimeout(() => setMarkedHref(pendingHref), PENDING_MARKER_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [pendingHref]);
+
+  // Back or Forward abandons a pending navigation, even if it lands on the
+  // same path it started from.
+  useEffect(() => {
+    if (!pendingHref) return;
+    const abandon = () => setPendingHref(null);
+    window.addEventListener("popstate", abandon);
+    return () => window.removeEventListener("popstate", abandon);
+  }, [pendingHref]);
 
   // Widening to the desktop layout closes the drawer, so a modal drawer is
   // never left open over a page that already shows the sidebar.
@@ -294,152 +329,179 @@ export function PortalShell({ profile, children }: PortalShellProps) {
 
   const closeDrawer = () => setMobileOpen(false);
 
+  const navigate = (href: string, event: React.MouseEvent<HTMLAnchorElement>) => {
+    closeDrawer();
+    // Only a plain same-tab navigation to another page is pending here: not a
+    // modified click (new tab or window), and not the page already shown.
+    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    if (href === pathname) return;
+    setPendingHref(href);
+  };
+
   const handleLogout = async () => {
     await supabase.auth.signOut();
     router.push("/login");
   };
 
   return (
-    <div className="flex h-screen overflow-hidden bg-surface">
-      {/* ─── Sidebar (desktop): persistent; collapsing changes its width at once ─── */}
-      <aside
-        className={cn(
-          "hidden lg:flex flex-col bg-surface-container-lowest border-r border-outline-variant",
-          sidebarOpen ? "w-64" : "w-[72px]"
-        )}
-      >
-        <SidebarContent profile={profile} pathname={pathname} expanded={sidebarOpen} onNavigate={closeDrawer} />
-      </aside>
+    <ToastProvider>
+      <div className="flex h-screen overflow-hidden bg-surface">
+        {/* ─── Sidebar (desktop): persistent; collapsing changes its width at once ─── */}
+        <aside
+          className={cn(
+            "hidden lg:flex flex-col bg-surface-container-lowest border-r border-outline-variant",
+            sidebarOpen ? "w-64" : "w-[72px]"
+          )}
+        >
+          <SidebarContent profile={profile} pathname={pathname} expanded={sidebarOpen} onNavigate={navigate} />
+        </aside>
 
-      {/* ─── Navigation drawer (below desktop): a native modal dialog ─── */}
-      <NativeDialog
-        open={mobileOpen}
-        onClose={closeDrawer}
-        aria-label="Menu"
-        className="motion-drawer m-0 h-dvh max-h-dvh w-64 open:flex flex-col text-inherit bg-surface-container-lowest border-r border-outline-variant backdrop:bg-black/40"
-      >
-        <SidebarContent profile={profile} pathname={pathname} expanded onNavigate={closeDrawer} onClose={closeDrawer} />
-      </NativeDialog>
+        {/* ─── Navigation drawer (below desktop): a native modal dialog ─── */}
+        <NativeDialog
+          open={mobileOpen}
+          onClose={closeDrawer}
+          aria-label="Menu"
+          className="motion-drawer m-0 h-dvh max-h-dvh w-64 open:flex flex-col text-inherit bg-surface-container-lowest border-r border-outline-variant backdrop:bg-black/40"
+        >
+          <SidebarContent profile={profile} pathname={pathname} expanded onNavigate={navigate} onClose={closeDrawer} />
+        </NativeDialog>
 
-      {/* ─── Main Content Area ─── */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Header */}
-        <header className="h-16 bg-surface-container-lowest border-b border-outline-variant flex items-center justify-between px-lg shrink-0">
-          <div className="flex items-center gap-md">
-            {/* Mobile hamburger */}
-            <button
-              aria-label="Open menu"
-              className="lg:hidden p-xs rounded-lg hover:bg-surface-container-high"
-              onClick={() => setMobileOpen(true)}
-            >
-              <svg
-                aria-hidden="true"
-                xmlns="http://www.w3.org/2000/svg"
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
+        {/* ─── Main Content Area ─── */}
+        <div className="flex-1 flex flex-col min-w-0">
+          {/* Header */}
+          <header className="h-16 bg-surface-container-lowest border-b border-outline-variant flex items-center justify-between px-lg shrink-0">
+            <div className="flex items-center gap-md">
+              {/* Mobile hamburger */}
+              <button
+                aria-label="Open menu"
+                className="lg:hidden p-xs rounded-lg hover:bg-surface-container-high"
+                onClick={() => setMobileOpen(true)}
               >
-                <line x1="4" x2="20" y1="12" y2="12" />
-                <line x1="4" x2="20" y1="6" y2="6" />
-                <line x1="4" x2="20" y1="18" y2="18" />
-              </svg>
-            </button>
+                <svg
+                  aria-hidden="true"
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <line x1="4" x2="20" y1="12" y2="12" />
+                  <line x1="4" x2="20" y1="6" y2="6" />
+                  <line x1="4" x2="20" y1="18" y2="18" />
+                </svg>
+              </button>
 
-            {/* Sidebar toggle */}
-            <button
-              aria-label={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
-              className="hidden lg:block p-xs rounded-lg hover:bg-surface-container-high text-on-surface-variant"
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-            >
-              <svg
-                aria-hidden="true"
-                xmlns="http://www.w3.org/2000/svg"
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
+              {/* Sidebar toggle */}
+              <button
+                aria-label={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
+                className="hidden lg:block p-xs rounded-lg hover:bg-surface-container-high text-on-surface-variant"
+                onClick={() => setSidebarOpen(!sidebarOpen)}
               >
-                <rect width="18" height="18" x="3" y="3" rx="2" />
-                <path d="M9 3v18" />
-              </svg>
-            </button>
+                <svg
+                  aria-hidden="true"
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <rect width="18" height="18" x="3" y="3" rx="2" />
+                  <path d="M9 3v18" />
+                </svg>
+              </button>
 
-            {/* Breadcrumb */}
-            <div className="text-sm text-on-surface-variant">
-              <span className="font-semibold text-on-surface capitalize">
-                {breadcrumbLabel(pathname)}
+              {/* Breadcrumb */}
+              <div className="text-sm text-on-surface-variant">
+                <span className="font-semibold text-on-surface capitalize">
+                  {breadcrumbLabel(pathname)}
+                </span>
+              </div>
+
+              {/* Navigation pending: static, in the header so it stays in view
+                  once the mobile drawer has closed. Its space is always kept,
+                  so appearing moves nothing. */}
+              <span
+                data-testid="nav-pending"
+                className={cn("flex items-center gap-xs text-xs text-on-surface-variant", !markerShown && "invisible")}
+              >
+                <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-outline">
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M12 6v6l4 2" />
+                </svg>
+                Loading page…
               </span>
             </div>
-          </div>
 
-          <div className="flex items-center gap-sm">
-            {/* Notifications bell — wired to a real Notification Center for
-                director only in this pass (see app/(portal)/director/notifications);
-                every other role keeps the previous static, non-functional bell. */}
-            {profile.role === "director" ? (
-              <Link href="/director/notifications" aria-label="Notifications" className="relative p-sm rounded-xl hover:bg-surface-container-high transition-colors block">
-                <svg
-                  aria-hidden="true"
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="text-on-surface-variant"
-                >
-                  <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
-                  <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
-                </svg>
-                <span className="absolute top-1 right-1 w-2 h-2 bg-error rounded-full" />
-              </Link>
-            ) : (
-              <button aria-label="Notifications" className="relative p-sm rounded-xl hover:bg-surface-container-high transition-colors">
-                <svg
-                  aria-hidden="true"
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="text-on-surface-variant"
-                >
-                  <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
-                  <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
-                </svg>
-                <span className="absolute top-1 right-1 w-2 h-2 bg-error rounded-full" />
+            <div className="flex items-center gap-sm">
+              {/* Notifications bell — wired to a real Notification Center for
+                  director only in this pass (see app/(portal)/director/notifications);
+                  every other role keeps the previous static, non-functional bell. */}
+              {profile.role === "director" ? (
+                <Link href="/director/notifications" aria-label="Notifications" className="relative p-sm rounded-xl hover:bg-surface-container-high transition-colors block">
+                  <svg
+                    aria-hidden="true"
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="text-on-surface-variant"
+                  >
+                    <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+                    <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+                  </svg>
+                  <span className="absolute top-1 right-1 w-2 h-2 bg-error rounded-full" />
+                </Link>
+              ) : (
+                <button aria-label="Notifications" className="relative p-sm rounded-xl hover:bg-surface-container-high transition-colors">
+                  <svg
+                    aria-hidden="true"
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="text-on-surface-variant"
+                  >
+                    <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+                    <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+                  </svg>
+                  <span className="absolute top-1 right-1 w-2 h-2 bg-error rounded-full" />
+                </button>
+              )}
+
+              {/* Logout */}
+              <button
+                onClick={handleLogout}
+                className="px-md py-xs text-xs font-medium text-on-surface-variant hover:text-error bg-surface-container-low hover:bg-error-container rounded-lg transition-colors"
+              >
+                Sign Out
               </button>
-            )}
+            </div>
+          </header>
 
-            {/* Logout */}
-            <button
-              onClick={handleLogout}
-              className="px-md py-xs text-xs font-medium text-on-surface-variant hover:text-error bg-surface-container-low hover:bg-error-container rounded-lg transition-colors"
-            >
-              Sign Out
-            </button>
-          </div>
-        </header>
-
-        {/* Page content */}
-        <main className="flex-1 overflow-y-auto p-lg">{children}</main>
+          {/* Page content */}
+          <main className="flex-1 overflow-y-auto p-lg" aria-busy={pendingHref ? true : undefined}>
+            {children}
+          </main>
+        </div>
       </div>
-    </div>
+    </ToastProvider>
   );
 }

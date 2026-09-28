@@ -1,7 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Button, FormField, StatusBadge } from "@/components/ui/modal";
+import { Alert } from "@/components/ui/alert";
+import { ErrorAlert } from "@/components/ui/error-alert";
+import { ErrorState } from "@/components/ui/error-state";
+import { LoadingState } from "@/components/ui/loading-state";
+import { useAsyncResource } from "@/hooks/use-async-resource";
+import { toFeedbackError, type FeedbackError } from "@/lib/action-failure";
+import { classifyError } from "@/lib/feedback-error";
 import { formatCurrency } from "@/lib/utils";
 import { requestRefund, listMyRefundRequests, submitDispute, listMyDisputes } from "./actions";
 
@@ -19,60 +26,67 @@ interface FeeOption {
 }
 
 export function FinanceRequestsPanel({ payments, fees }: { payments: EligiblePayment[]; fees: FeeOption[] }) {
-  const [refunds, setRefunds] = useState<any[]>([]);
-  const [disputes, setDisputes] = useState<any[]>([]);
+  // The student's refund requests and disputes. A failed load is an error,
+  // never "No refund requests yet." (owner decision D5).
+  const requests = useAsyncResource(async () => {
+    const [refunds, disputes] = await Promise.all([listMyRefundRequests(), listMyDisputes()]);
+    return { refunds: refunds as any[], disputes: disputes as any[] };
+  }, []);
+  const refunds = requests.data?.refunds ?? [];
+  const disputes = requests.data?.disputes ?? [];
+  const loadedOnce = requests.data !== undefined;
 
   const [showRefundForm, setShowRefundForm] = useState(false);
   const [refundPaymentId, setRefundPaymentId] = useState("");
   const [refundAmount, setRefundAmount] = useState("");
   const [refundReason, setRefundReason] = useState("");
-  const [refundError, setRefundError] = useState<string | null>(null);
+  const [refundError, setRefundError] = useState<FeedbackError | null>(null);
+  const [refundSuccess, setRefundSuccess] = useState<string | null>(null);
   const [submittingRefund, setSubmittingRefund] = useState(false);
 
   const [showDisputeForm, setShowDisputeForm] = useState(false);
   const [disputeFeeId, setDisputeFeeId] = useState("");
   const [disputeDescription, setDisputeDescription] = useState("");
-  const [disputeError, setDisputeError] = useState<string | null>(null);
+  const [disputeError, setDisputeError] = useState<FeedbackError | null>(null);
+  const [disputeSuccess, setDisputeSuccess] = useState<string | null>(null);
   const [submittingDispute, setSubmittingDispute] = useState(false);
-
-  const load = async () => {
-    const [r, d] = await Promise.all([listMyRefundRequests(), listMyDisputes()]);
-    setRefunds(r);
-    setDisputes(d);
-  };
-
-  useEffect(() => { load(); }, []);
 
   const hasPendingRefund = (paymentId: string) => refunds.some((r) => r.payment_id === paymentId && r.status === "pending");
 
   const handleRefundSubmit = async () => {
+    if (submittingRefund) return;
     setSubmittingRefund(true);
     setRefundError(null);
+    setRefundSuccess(null);
     try {
       await requestRefund(refundPaymentId, Number(refundAmount), refundReason);
       setRefundPaymentId("");
       setRefundAmount("");
       setRefundReason("");
       setShowRefundForm(false);
-      await load();
+      setRefundSuccess(`Refund request for ${formatCurrency(Number(refundAmount))} submitted. Finance will review it.`);
+      requests.reload();
     } catch (e) {
-      setRefundError(e instanceof Error ? e.message : "Failed to submit refund request.");
+      setRefundError(await toFeedbackError(e, "Failed to submit refund request."));
     } finally {
       setSubmittingRefund(false);
     }
   };
 
   const handleDisputeSubmit = async () => {
+    if (submittingDispute) return;
     setSubmittingDispute(true);
     setDisputeError(null);
+    setDisputeSuccess(null);
     try {
       await submitDispute(disputeFeeId || null, null, disputeDescription);
       setDisputeFeeId("");
       setDisputeDescription("");
       setShowDisputeForm(false);
-      await load();
+      setDisputeSuccess("Dispute reported. Finance will investigate and reply here.");
+      requests.reload();
     } catch (e) {
-      setDisputeError(e instanceof Error ? e.message : "Failed to submit dispute.");
+      setDisputeError(await toFeedbackError(e, "Failed to submit dispute."));
     } finally {
       setSubmittingDispute(false);
     }
@@ -85,15 +99,17 @@ export function FinanceRequestsPanel({ payments, fees }: { payments: EligiblePay
         <div className="px-lg py-md border-b border-outline-variant flex items-center justify-between">
           <h2 className="text-sm font-bold text-on-surface flex items-center gap-sm">💸 Refund Requests</h2>
           {payments.length > 0 && (
-            <Button size="sm" variant="outline" onClick={() => setShowRefundForm(!showRefundForm)}>
+            // Needs the loaded requests: they decide which payments may be refunded.
+            <Button size="sm" variant="outline" disabled={!loadedOnce} onClick={() => setShowRefundForm(!showRefundForm)}>
               {showRefundForm ? "Cancel" : "Request Refund"}
             </Button>
           )}
         </div>
 
-        {refundError && (
-          <div className="mx-lg mt-md bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium">{refundError}</div>
-        )}
+        <Alert tone="success" focusOnShow className="mx-lg mt-md" onDismiss={() => setRefundSuccess(null)}>
+          {refundSuccess}
+        </Alert>
+        <ErrorAlert error={refundError} className="mx-lg mt-md" />
 
         {showRefundForm && (
           <div className="p-lg space-y-md">
@@ -111,13 +127,20 @@ export function FinanceRequestsPanel({ payments, fees }: { payments: EligiblePay
             <FormField label="Refund amount" id="refund-amount" type="number" value={refundAmount} onChange={setRefundAmount} required placeholder="0.00" />
             <FormField label="Reason" id="refund-reason" type="textarea" value={refundReason} onChange={setRefundReason} required rows={3} placeholder="Why are you requesting this refund?" />
             <div className="flex justify-end">
-              <Button size="sm" onClick={handleRefundSubmit} disabled={submittingRefund || !refundPaymentId || !refundAmount || !refundReason.trim()}>
+              <Button size="sm" onClick={handleRefundSubmit} disabled={submittingRefund || !refundPaymentId || !refundAmount || !refundReason.trim()} aria-busy={submittingRefund || undefined}>
                 {submittingRefund ? "Submitting..." : "Submit Request"}
               </Button>
             </div>
           </div>
         )}
 
+        {!loadedOnce ? (
+          requests.status === "error" ? (
+            <ErrorState {...classifyError(requests.error)} title="Your refund requests couldn't be loaded" onRetry={requests.reload} />
+          ) : (
+            <LoadingState label="Loading refund requests…" />
+          )
+        ) : (
         <div className="divide-y divide-outline-variant">
           {refunds.length > 0 ? refunds.map((r: any) => (
             <div key={r.id} className="flex items-center justify-between px-lg py-md">
@@ -134,6 +157,7 @@ export function FinanceRequestsPanel({ payments, fees }: { payments: EligiblePay
             <div className="p-lg text-center text-xs text-outline">No refund requests yet.</div>
           )}
         </div>
+        )}
       </div>
 
       {/* Disputes */}
@@ -145,9 +169,10 @@ export function FinanceRequestsPanel({ payments, fees }: { payments: EligiblePay
           </Button>
         </div>
 
-        {disputeError && (
-          <div className="mx-lg mt-md bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium">{disputeError}</div>
-        )}
+        <Alert tone="success" focusOnShow className="mx-lg mt-md" onDismiss={() => setDisputeSuccess(null)}>
+          {disputeSuccess}
+        </Alert>
+        <ErrorAlert error={disputeError} className="mx-lg mt-md" />
 
         {showDisputeForm && (
           <div className="p-lg space-y-md">
@@ -170,13 +195,20 @@ export function FinanceRequestsPanel({ payments, fees }: { payments: EligiblePay
               placeholder="e.g. I paid ₹40,000 but the portal shows it as pending"
             />
             <div className="flex justify-end">
-              <Button size="sm" onClick={handleDisputeSubmit} disabled={submittingDispute || !disputeDescription.trim()}>
+              <Button size="sm" onClick={handleDisputeSubmit} disabled={submittingDispute || !disputeDescription.trim()} aria-busy={submittingDispute || undefined}>
                 {submittingDispute ? "Submitting..." : "Submit"}
               </Button>
             </div>
           </div>
         )}
 
+        {!loadedOnce ? (
+          requests.status === "error" ? (
+            <ErrorState {...classifyError(requests.error)} title="Your disputes couldn't be loaded" onRetry={requests.reload} />
+          ) : (
+            <LoadingState label="Loading disputes…" />
+          )
+        ) : (
         <div className="divide-y divide-outline-variant">
           {disputes.length > 0 ? disputes.map((d: any) => (
             <div key={d.id} className="flex items-center justify-between px-lg py-md">
@@ -193,6 +225,7 @@ export function FinanceRequestsPanel({ payments, fees }: { payments: EligiblePay
             <div className="p-lg text-center text-xs text-outline">No disputes yet.</div>
           )}
         </div>
+        )}
       </div>
     </div>
   );

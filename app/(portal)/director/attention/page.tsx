@@ -1,6 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { Alert } from "@/components/ui/alert";
+import { ErrorAlert } from "@/components/ui/error-alert";
+import { StateView } from "@/components/ui/state-view";
+import { useAsyncResource } from "@/hooks/use-async-resource";
+import { toFeedbackError, type FeedbackError } from "@/lib/action-failure";
 import Link from "next/link";
 import { Button, Modal, StatusBadge, FormField } from "@/components/ui/modal";
 import { createManualRiskFlag, getStudentRiskOverview, listRiskFlags, type ManualFlagParams } from "./actions";
@@ -30,36 +35,49 @@ const SCOPE_OPTIONS = [
 ];
 
 export default function DirectorAttention() {
-  const [open, setOpen] = useState<any[]>([]);
-  const [resolved, setResolved] = useState<any[]>([]);
-  const [studentRisk, setStudentRisk] = useState<any[]>([]);
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState<Partial<ManualFlagParams>>({ severity: "medium", scopeLevel: "institution" });
   const [creating, setCreating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<FeedbackError | string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  // Required fields left empty on the last Create, by field id.
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
-  const load = async () => {
+  // Flags and the student-risk overview. A failed load is an error, never
+  // "No critical institutional risks detected." (owner decision D5).
+  const attention = useAsyncResource(async () => {
     const [flags, risk] = await Promise.all([listRiskFlags(), getStudentRiskOverview()]);
-    setOpen(flags.open);
-    setResolved(flags.resolved);
-    setStudentRisk(risk);
-  };
-
-  useEffect(() => {
-    load();
+    return { flags, risk };
   }, []);
+  const open: any[] = attention.data?.flags.open ?? [];
+  const resolved: any[] = attention.data?.flags.resolved ?? [];
+  const studentRisk: any[] = attention.data?.risk ?? [];
 
   const handleCreate = async () => {
-    if (!form.flagType || !form.severity || !form.scopeLevel || !form.title || !form.description) return;
+    if (creating) return;
+    // Say which fields are missing, on the fields themselves and in a summary.
+    const missing: Record<string, string> = {};
+    if (!form.flagType) missing["flag-type"] = "Choose a flag type.";
+    if (!form.title?.trim()) missing["flag-title"] = "Enter a title.";
+    if (!form.description?.trim()) missing["flag-description"] = "Describe what needs attention.";
+    setFieldErrors(missing);
+    const firstMissing = Object.keys(missing)[0];
+    if (firstMissing) {
+      setError(`Fill in ${Object.keys(missing).length === 1 ? "the highlighted field" : "the highlighted fields"} to create the flag.`);
+      document.getElementById(firstMissing)?.focus();
+      return;
+    }
     setCreating(true);
     setError(null);
+    setNotice(null);
     try {
       await createManualRiskFlag(form as ManualFlagParams);
       setShowCreate(false);
+      setNotice(`Flag "${form.title}" created.`);
       setForm({ severity: "medium", scopeLevel: "institution" });
-      await load();
+      attention.reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to create flag.");
+      setError(await toFeedbackError(e, "Failed to create flag."));
     } finally {
       setCreating(false);
     }
@@ -75,15 +93,27 @@ export default function DirectorAttention() {
           <h1 className="text-2xl font-extrabold text-on-surface tracking-tight">Attention Required</h1>
           <p className="text-sm text-on-surface-variant mt-xs">Exceptions, risks, and escalations that need your attention</p>
         </div>
-        <Button variant="outline" onClick={() => setShowCreate(true)}>
+        <Button
+          variant="outline"
+          onClick={() => {
+            setError(null);
+            setFieldErrors({});
+            setShowCreate(true);
+          }}
+        >
           + Flag Manually
         </Button>
       </div>
 
-      {error && (
-        <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium">{error}</div>
-      )}
+      <Alert tone="success" onDismiss={() => setNotice(null)}>
+        {notice}
+      </Alert>
+      {/* The create dialog shows its own failure. */}
+      <ErrorAlert error={!showCreate ? error : null} />
 
+      <StateView state={attention} isEmpty={() => false} loadingLabel="Loading attention items…" empty={{ title: "Nothing needs attention" }}>
+        {() => (
+          <>
       {/* Student Risk Overview — aggregate-first, never a named list here */}
       <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-sm">
         <div className="px-lg py-md border-b border-outline-variant flex items-center justify-between">
@@ -166,6 +196,9 @@ export default function DirectorAttention() {
           {resolved.length === 0 && <div className="p-xl text-center text-sm text-outline">No decisions processed yet.</div>}
         </div>
       </div>
+          </>
+        )}
+      </StateView>
 
       <Modal
         open={showCreate}
@@ -177,13 +210,14 @@ export default function DirectorAttention() {
             <Button variant="outline" onClick={() => setShowCreate(false)}>
               Cancel
             </Button>
-            <Button onClick={handleCreate} disabled={creating}>
-              {creating ? "..." : "Create"}
+            <Button onClick={handleCreate} disabled={creating} aria-busy={creating || undefined}>
+              {creating ? "Creating…" : "Create"}
             </Button>
           </>
         }
       >
         <div className="space-y-md">
+          <ErrorAlert error={error} />
           <FormField
             label="Flag Type"
             id="flag-type"
@@ -192,6 +226,7 @@ export default function DirectorAttention() {
             onChange={(v) => setForm({ ...form, flagType: v as ManualFlagParams["flagType"] })}
             options={FLAG_TYPE_OPTIONS}
             required
+            error={fieldErrors["flag-type"]}
           />
           <FormField
             label="Severity"
@@ -211,7 +246,7 @@ export default function DirectorAttention() {
             options={SCOPE_OPTIONS}
             required
           />
-          <FormField label="Title" id="flag-title" value={form.title || ""} onChange={(v) => setForm({ ...form, title: v })} required />
+          <FormField label="Title" id="flag-title" value={form.title || ""} onChange={(v) => setForm({ ...form, title: v })} required error={fieldErrors["flag-title"]} />
           <FormField
             label="Description"
             id="flag-description"
@@ -220,6 +255,7 @@ export default function DirectorAttention() {
             value={form.description || ""}
             onChange={(v) => setForm({ ...form, description: v })}
             required
+            error={fieldErrors["flag-description"]}
           />
         </div>
       </Modal>

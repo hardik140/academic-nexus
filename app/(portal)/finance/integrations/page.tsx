@@ -3,6 +3,13 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Modal, Button, FormField, StatusBadge } from "@/components/ui/modal";
+import { Alert } from "@/components/ui/alert";
+import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
+import { ErrorAlert } from "@/components/ui/error-alert";
+import { ErrorState } from "@/components/ui/error-state";
+import { LoadingState } from "@/components/ui/loading-state";
+import { toFeedbackError, type FeedbackError } from "@/lib/action-failure";
+import { classifyError } from "@/lib/feedback-error";
 import {
   activateConnection,
   createConnection,
@@ -36,18 +43,22 @@ const PROVIDER_HINT: Record<string, string> = {
 };
 
 const HEALTH_TONE: Record<string, string> = {
-  HEALTHY: "bg-success/10 text-success border-success/20",
-  DEGRADED: "bg-warning/10 text-warning border-warning/20",
-  ACTION_REQUIRED: "bg-error/10 text-error border-error/20",
+  HEALTHY: "bg-success-container text-on-success-container border-success/30",
+  DEGRADED: "bg-warning-container text-on-warning-container border-warning/30",
+  ACTION_REQUIRED: "bg-error-container text-on-error-container border-error/30",
   BLOCKED: "bg-surface-container-high text-on-surface-variant border-outline-variant",
 };
 
 export default function FinanceIntegrationsPage() {
   const [health, setHealth] = useState<Health | null>(null);
   const [providers, setProviders] = useState<{ id: string; displayName: string }[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  // Loading the dashboard and running an action fail separately: a failed
+  // load is never "No accounting integration yet" (owner decision D5).
+  const [loadError, setLoadError] = useState<unknown>(null);
+  const [error, setError] = useState<FeedbackError | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [disableFor, setDisableFor] = useState<ConnectionRow | null>(null);
 
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({ provider: "zoho_books", displayName: "", host: "", port: "9000", dataCenter: "in", financialYearStartMonth: "4" });
@@ -78,8 +89,9 @@ export default function FinanceIntegrationsPage() {
         }
       }
       setReadiness(checks);
+      setLoadError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not load integrations.");
+      setLoadError(e);
     }
   }, []);
 
@@ -88,21 +100,25 @@ export default function FinanceIntegrationsPage() {
   }, [load]);
 
   const run = async (key: string, fn: () => Promise<unknown>, successMessage?: string) => {
+    if (busy) return null;
     setBusy(key);
     setError(null);
     setNotice(null);
     try {
       const result = await fn();
       if (successMessage) setNotice(successMessage);
-      await load();
-      return result;
+      // Reloading reports its own failure (loadError), never as a failed action.
+      void load();
+      return result ?? true;
     } catch (e) {
-      setError(e instanceof Error ? e.message : "The action did not complete.");
+      setError(await toFeedbackError(e, "The action did not complete."));
       return null;
     } finally {
       setBusy(null);
     }
   };
+
+  const dialogOpen = showCreate || credentialFor !== null || syncFor !== null || disableFor !== null;
 
   const handleCreate = () =>
     run(
@@ -168,18 +184,37 @@ export default function FinanceIntegrationsPage() {
         <Button onClick={() => setShowCreate(true)}>+ Add Integration</Button>
       </div>
 
-      {error && <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium">{error}</div>}
-      {notice && <div className="bg-success/10 border border-success/20 text-success rounded-xl p-md text-sm font-medium">{notice}</div>}
+      {/* An open dialog shows its own failure. */}
+      <ErrorAlert error={!dialogOpen ? error : null} />
+      <Alert tone="success" onDismiss={() => setNotice(null)}>
+        {notice}
+      </Alert>
 
-      {health && !health.credentialStorageConfigured && (
-        <div className="bg-error/10 border border-error/20 rounded-xl p-md text-sm">
-          <p className="font-semibold text-error">Credential storage is not configured.</p>
-          <p className="text-on-surface-variant mt-xs">
+      {!health && !loadError && <LoadingState label="Loading integrations…" />}
+      {loadError !== null && !health && (
+        <ErrorState
+          {...classifyError(loadError)}
+          title="Integrations couldn't be loaded"
+          onRetry={() => void load()}
+          className="rounded-2xl border border-outline-variant bg-surface-container-lowest"
+        />
+      )}
+      <Alert tone="error" action={<Button variant="outline" size="sm" onClick={() => void load()}>Try again</Button>}>
+        {loadError !== null && health ? (
+          <>
+            This couldn&apos;t be refreshed. Showing what was loaded earlier.
+          </>
+        ) : null}
+      </Alert>
+
+      <Alert tone="error" title={health && !health.credentialStorageConfigured ? "Credential storage is not configured." : undefined}>
+        {health && !health.credentialStorageConfigured ? (
+          <>
             FINANCE_CREDENTIAL_KEY is not set, so accounting credentials cannot be encrypted. New connections are
             refused rather than stored in a weaker form. Set a 32-byte key in the server environment.
-          </p>
-        </div>
-      )}
+          </>
+        ) : null}
+      </Alert>
 
       {health && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-md">
@@ -203,7 +238,7 @@ export default function FinanceIntegrationsPage() {
         <Link href="/finance/integrations/audit" className="text-secondary font-semibold hover:underline">Audit →</Link>
       </div>
 
-      {connections.length === 0 && (
+      {health && connections.length === 0 && (
         <div className="rounded-2xl border border-dashed border-outline-variant p-lg text-sm text-on-surface-variant">
           No accounting integration yet. Adding one does not change how fees or payments are recorded — it only mirrors
           them outward.
@@ -227,7 +262,7 @@ export default function FinanceIntegrationsPage() {
                     <Button size="sm" onClick={() => setCredentialFor(c)}>Add credential</Button>
                   )}
                   {(c.status === "AUTH_REQUIRED" || c.status === "AUTHENTICATED" || c.status === "CONNECTION_FAILED" || c.status === "WRONG_COMPANY" || c.status === "WRONG_ORGANIZATION") && (
-                    <Button size="sm" disabled={busy === c.id} onClick={() => run(c.id, () => verifyConnection(c.id), "Verification finished.")}>
+                    <Button size="sm" disabled={busy === c.id} aria-busy={busy === c.id || undefined} onClick={() => run(c.id, () => verifyConnection(c.id), "Verification finished.")}>
                       Test &amp; verify
                     </Button>
                   )}
@@ -235,7 +270,7 @@ export default function FinanceIntegrationsPage() {
                     <Button size="sm" variant="outline">Mappings{ready && !ready.ready ? ` (${ready.gaps} missing)` : ""}</Button>
                   </Link>
                   {c.status === "VERIFIED" && (
-                    <Button size="sm" disabled={busy === c.id || (ready ? !ready.ready : false)} onClick={() => run(c.id, () => activateConnection(c.id), "Connection activated.")}>
+                    <Button size="sm" disabled={busy === c.id || (ready ? !ready.ready : false)} aria-busy={busy === c.id || undefined} onClick={() => run(c.id, () => activateConnection(c.id), "Connection activated.")}>
                       Activate
                     </Button>
                   )}
@@ -243,7 +278,7 @@ export default function FinanceIntegrationsPage() {
                     <Button size="sm" onClick={() => setSyncFor(c)}>Sync now</Button>
                   )}
                   {c.status !== "DISABLED" && (
-                    <Button size="sm" variant="destructive" disabled={busy === c.id} onClick={() => run(c.id, () => disableConnection(c.id), "Connection disabled and its credential removed.")}>
+                    <Button size="sm" variant="destructive" disabled={busy === c.id} onClick={() => { setError(null); setDisableFor(c); }}>
                       Disable
                     </Button>
                   )}
@@ -296,11 +331,12 @@ export default function FinanceIntegrationsPage() {
         footer={
           <>
             <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
-            <Button onClick={handleCreate} disabled={busy === "create"}>{busy === "create" ? "Creating..." : "Create"}</Button>
+            <Button onClick={handleCreate} disabled={busy === "create"} aria-busy={busy === "create" || undefined}>{busy === "create" ? "Creating..." : "Create"}</Button>
           </>
         }
       >
         <div className="space-y-md">
+          <ErrorAlert error={error} />
           <FormField
             label="Provider"
             id="provider"
@@ -340,11 +376,12 @@ export default function FinanceIntegrationsPage() {
         footer={
           <>
             <Button variant="outline" onClick={() => setCredentialFor(null)}>Cancel</Button>
-            <Button onClick={handleCredential} disabled={busy === credentialFor?.id}>Store securely</Button>
+            <Button onClick={handleCredential} disabled={busy === credentialFor?.id} aria-busy={busy === credentialFor?.id || undefined}>Store securely</Button>
           </>
         }
       >
         <div className="space-y-md">
+          <ErrorAlert error={error} />
           <p className="text-xs text-on-surface-variant">
             Stored encrypted. It is never shown again, never sent to the browser, and no role in the application can
             read it back — only the synchronisation worker can.
@@ -393,11 +430,12 @@ export default function FinanceIntegrationsPage() {
         footer={
           <>
             <Button variant="outline" onClick={() => setSyncFor(null)}>Cancel</Button>
-            <Button onClick={handleSync} disabled={busy === syncFor?.id}>Queue</Button>
+            <Button onClick={handleSync} disabled={busy === syncFor?.id} aria-busy={busy === syncFor?.id || undefined}>Queue</Button>
           </>
         }
       >
         <div className="space-y-md text-sm">
+          <ErrorAlert error={error} />
           <dl className="grid grid-cols-2 gap-sm">
             <dt className="text-on-surface-variant">Provider</dt><dd className="text-on-surface font-medium">{syncFor?.provider}</dd>
             <dt className="text-on-surface-variant">Company</dt><dd className="text-on-surface font-medium">{syncFor?.company ?? "—"}</dd>
@@ -412,6 +450,27 @@ export default function FinanceIntegrationsPage() {
           </p>
         </div>
       </Modal>
+
+      <ConfirmationDialog
+        open={disableFor !== null}
+        title="Disable this integration?"
+        description={
+          disableFor
+            ? `${disableFor.displayName} stops syncing and its stored credential is removed. Payments already recorded in Academic Nexus are not affected.`
+            : undefined
+        }
+        confirmLabel="Disable integration"
+        pendingLabel="Disabling…"
+        pending={disableFor !== null && busy === disableFor.id}
+        error={disableFor !== null ? error : null}
+        onConfirm={async () => {
+          if (!disableFor) return;
+          const target = disableFor;
+          const done = await run(target.id, () => disableConnection(target.id), "Connection disabled and its credential removed.");
+          if (done !== null) setDisableFor(null);
+        }}
+        onCancel={() => setDisableFor(null)}
+      />
     </div>
   );
 }

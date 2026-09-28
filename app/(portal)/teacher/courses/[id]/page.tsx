@@ -5,6 +5,7 @@ import { StatusBadge } from "@/components/ui/modal";
 import { computeSubjectRisk } from "@/lib/academic-scoring";
 import { formatPct } from "@/lib/utils";
 import type { Database } from "@/types/database";
+import { assertRead } from "@/lib/read-result-server";
 
 // Embedded-select casts throughout this file: the hand-maintained Database
 // type declares no Relationships, so supabase-js can't infer these shapes
@@ -34,13 +35,14 @@ export default async function TeacherCoursePulse({ params }: { params: Promise<{
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: offeringRaw } = await supabase
+  const { data: offeringRaw, error: offeringRawError } = await supabase
     .from("course_offerings")
     .select(
       "id, status, instructor_id, courses:course_id(id, name, code, credits, departments:department_id(name)), sections:section_id(name, batch_year), semesters:semester_id(name)"
     )
     .eq("id", offeringId)
     .single();
+  assertRead(offeringRawError);
   const offering = offeringRaw as unknown as OfferingWithContext | null;
   if (!offering) notFound();
 
@@ -62,6 +64,7 @@ export default async function TeacherCoursePulse({ params }: { params: Promise<{
     supabase.from("attendance").select("*").eq("offering_id", offeringId),
     supabase.from("marks").select("*").eq("offering_id", offeringId),
   ]);
+  for (const res of [enrollmentsRes, attendanceRes, marksRes]) assertRead(res.error);
 
   const enrollments = (enrollmentsRes.data || []) as unknown as EnrollmentWithStudent[];
   // student_id is a students(id) on every one of these tables now (047), so

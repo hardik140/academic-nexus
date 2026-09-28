@@ -1,8 +1,16 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Modal, Button, FormField } from "@/components/ui/modal";
+import { Alert } from "@/components/ui/alert";
+import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
+import { ErrorAlert } from "@/components/ui/error-alert";
+import { StateView } from "@/components/ui/state-view";
+import { useToast } from "@/components/ui/toast";
+import { useAsyncResource } from "@/hooks/use-async-resource";
+import { toFeedbackError, type FeedbackError } from "@/lib/action-failure";
+import { requireRows } from "@/lib/read-result";
 import { inviteUser, resendInvitation, revokeInvitation } from "./actions";
 import type { UserRole } from "@/types/database";
 
@@ -17,27 +25,30 @@ const INVITABLE_ROLES: { value: InvitableRole; label: string }[] = [
 
 export default function DirectorTeamPage() {
   const supabase = createClient();
-  const [invitations, setInvitations] = useState<any[]>([]);
-  const [staff, setStaff] = useState<any[]>([]);
   const [showInvite, setShowInvite] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<FeedbackError | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const noticeRef = useRef<HTMLDivElement>(null);
+  const [revokeTarget, setRevokeTarget] = useState<{ id: string; email: string } | null>(null);
+  const [revokePending, setRevokePending] = useState(false);
+  const [revokeError, setRevokeError] = useState<FeedbackError | null>(null);
+  const toast = useToast();
   const [form, setForm] = useState<{ email: string; full_name: string; role: InvitableRole }>({
     email: "",
     full_name: "",
     role: "finance",
   });
 
-  useEffect(() => { load(); }, []);
-
-  const load = async () => {
-    const [{ data: inv }, { data: profiles }] = await Promise.all([
+  // Pending invitations and active staff. A failed load is an error, never
+  // "No staff yet." (owner decision D5).
+  const team = useAsyncResource(async () => {
+    const [inv, profiles] = await Promise.all([
       supabase.from("invitations").select("*").eq("status", "pending").order("created_at", { ascending: false }),
       supabase.from("profiles").select("*").eq("status", "active").in("role", ["finance", "hod", "warden", "placement_cell"]).order("full_name"),
     ]);
-    setInvitations(inv || []);
-    setStaff(profiles || []);
-  };
+    return { invitations: requireRows(inv) as any[], staff: requireRows(profiles) as any[] };
+  }, []);
 
   const handleInvite = async () => {
     setLoading(true);
@@ -46,31 +57,41 @@ export default function DirectorTeamPage() {
       await inviteUser({ email: form.email, fullName: form.full_name, role: form.role });
       setForm({ email: "", full_name: "", role: "finance" });
       setShowInvite(false);
-      await load();
+      setNotice(`Invitation sent to ${form.email}.`);
+      team.reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to send invitation.");
+      setError(await toFeedbackError(e, "Failed to send invitation."));
     } finally {
       setLoading(false);
     }
   };
 
-  const handleResend = async (invitationId: string) => {
+  // Low stakes, nothing else to show it: a toast.
+  const handleResend = async (invitation: { id: string; email: string }) => {
     setError(null);
     try {
-      await resendInvitation(invitationId);
-      await load();
+      await resendInvitation(invitation.id);
+      toast.success(`Invitation resent to ${invitation.email}.`, { id: `resend-${invitation.id}` });
+      team.reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to resend invitation.");
+      setError(await toFeedbackError(e, "Failed to resend invitation."));
     }
   };
 
-  const handleRevoke = async (invitationId: string) => {
-    setError(null);
+  // Asked first (ConfirmationDialog); a failure stays in the dialog.
+  const confirmRevoke = async () => {
+    if (!revokeTarget) return;
+    setRevokePending(true);
+    setRevokeError(null);
     try {
-      await revokeInvitation(invitationId);
-      await load();
+      await revokeInvitation(revokeTarget.id);
+      setNotice(`Invitation for ${revokeTarget.email} revoked.`);
+      setRevokeTarget(null);
+      team.reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to revoke invitation.");
+      setRevokeError(await toFeedbackError(e, "Failed to revoke invitation."));
+    } finally {
+      setRevokePending(false);
     }
   };
 
@@ -84,10 +105,18 @@ export default function DirectorTeamPage() {
         <Button onClick={() => setShowInvite(true)}>+ Invite Staff</Button>
       </div>
 
-      {error && !showInvite && (
-        <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium">{error}</div>
-      )}
+      <div ref={noticeRef}>
+        <Alert tone="success" onDismiss={() => setNotice(null)}>
+          {notice}
+        </Alert>
+      </div>
 
+      {/* The invite dialog shows its own failure. */}
+      <ErrorAlert error={!showInvite ? error : null} />
+
+      <StateView state={team} isEmpty={() => false} loadingLabel="Loading your team…" empty={{ title: "No staff yet" }}>
+        {({ invitations, staff }) => (
+          <>
       {invitations.length > 0 && (
         <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-sm overflow-hidden">
           <div className="px-lg py-md border-b border-outline-variant">
@@ -103,8 +132,17 @@ export default function DirectorTeamPage() {
                   </div>
                 </div>
                 <div className="flex gap-md">
-                  <button onClick={() => handleResend(inv.id)} className="text-xs text-secondary hover:underline font-medium">Resend</button>
-                  <button onClick={() => handleRevoke(inv.id)} className="text-xs text-error hover:underline font-medium">Revoke</button>
+                  <button type="button" onClick={() => handleResend(inv)} className="text-xs text-secondary hover:underline font-medium">Resend</button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRevokeError(null);
+                      setRevokeTarget({ id: inv.id, email: inv.email });
+                    }}
+                    className="text-xs text-error hover:underline font-medium"
+                  >
+                    Revoke
+                  </button>
                 </div>
               </div>
             ))}
@@ -129,6 +167,9 @@ export default function DirectorTeamPage() {
           ))}
         </div>
       </div>
+          </>
+        )}
+      </StateView>
 
       <Modal
         open={showInvite}
@@ -138,21 +179,32 @@ export default function DirectorTeamPage() {
         footer={
           <>
             <Button variant="outline" onClick={() => setShowInvite(false)}>Cancel</Button>
-            <Button onClick={handleInvite} disabled={loading || !form.email || !form.full_name}>
+            <Button onClick={handleInvite} disabled={loading || !form.email || !form.full_name} aria-busy={loading || undefined}>
               {loading ? "Sending..." : "Send Invitation"}
             </Button>
           </>
         }
       >
-        {error && (
-          <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium mb-md">{error}</div>
-        )}
+        <ErrorAlert error={error} className="mb-md" />
         <div className="space-y-md">
           <FormField label="Full Name" id="invite_name" value={form.full_name} onChange={(v) => setForm({ ...form, full_name: v })} placeholder="e.g. Jane Doe" required />
           <FormField label="Email" id="invite_email" type="email" value={form.email} onChange={(v) => setForm({ ...form, email: v })} placeholder="jane@college.edu" required />
           <FormField label="Role" id="invite_role" type="select" value={form.role} onChange={(v) => setForm({ ...form, role: v as InvitableRole })} options={INVITABLE_ROLES} required />
         </div>
       </Modal>
+
+      <ConfirmationDialog
+        open={!!revokeTarget}
+        title="Revoke this invitation?"
+        description={revokeTarget ? `${revokeTarget.email} will no longer be able to use the invitation link. You can invite them again later.` : undefined}
+        confirmLabel="Revoke invitation"
+        pendingLabel="Revoking…"
+        pending={revokePending}
+        error={revokeError}
+        onConfirm={confirmRevoke}
+        onCancel={() => setRevokeTarget(null)}
+        returnFocusTo={() => noticeRef.current?.querySelector<HTMLElement>('[role="status"]') ?? null}
+      />
     </div>
   );
 }

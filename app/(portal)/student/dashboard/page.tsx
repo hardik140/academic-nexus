@@ -4,6 +4,8 @@ import { StudentDashboardClient } from "./dashboard-client";
 import { computeAcademicHealth, buildSubjectRisks } from "@/lib/academic-scoring";
 import { listOpportunities } from "@/app/(portal)/student/placements/actions";
 import type { Database } from "@/types/database";
+import { assertRead } from "@/lib/read-result-server";
+import { NO_MATCH_ID } from "@/lib/read-result";
 
 // See insights/page.tsx for why this cast is needed — same hand-maintained
 // Database type / empty Relationships limitation.
@@ -27,17 +29,19 @@ export default async function StudentDashboard() {
 
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase
+  const { data: profile, error: profileError } = await supabase
     .from("profiles")
     .select("*")
     .eq("id", user.id)
     .single();
+  assertRead(profileError);
 
-  const { data: student } = await supabase
+  const { data: student, error: studentError } = await supabase
     .from("students")
     .select("*")
     .eq("user_id", user.id)
     .single();
+  assertRead(studentError);
 
   // Full attendance/marks/enrollment history for this student — needed (not
   // just a recent slice) so the Academic Health score and risk reasons are
@@ -47,12 +51,12 @@ export default async function StudentDashboard() {
     supabase
       .from("attendance")
       .select("*, course_offerings:offering_id(courses:course_id(name, code), sections:section_id(name))")
-      .eq("student_id", student?.id || "")
+      .eq("student_id", student?.id || NO_MATCH_ID)
       .order("date", { ascending: false }),
     supabase
       .from("marks")
       .select("*")
-      .eq("student_id", student?.id || ""),
+      .eq("student_id", student?.id || NO_MATCH_ID),
     supabase
       .from("course_enrollments")
       .select(
@@ -60,11 +64,11 @@ export default async function StudentDashboard() {
       )
       // students(id), not the profile id — 047 repointed this column, and
       // comparing it to user.id silently matched nothing.
-      .eq("student_id", student?.id || ""),
+      .eq("student_id", student?.id || NO_MATCH_ID),
     supabase
       .from("fees")
       .select("*")
-      .eq("student_id", student?.id || "")
+      .eq("student_id", student?.id || NO_MATCH_ID)
       .in("status", ["pending", "overdue"])
       .order("due_date", { ascending: true }),
     supabase
@@ -75,6 +79,7 @@ export default async function StudentDashboard() {
       .order("created_at", { ascending: false })
       .limit(5),
   ]);
+  for (const res of [attendanceRes, marksRes, enrollmentsRes, feesRes, notificationsRes]) assertRead(res.error);
 
   const attendance = (attendanceRes.data || []) as AttendanceRow[];
   const marks = marksRes.data || [];

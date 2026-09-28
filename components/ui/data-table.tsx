@@ -2,6 +2,10 @@
 
 import { cn } from "@/lib/utils";
 import { useEffect, useState } from "react";
+import { Alert } from "@/components/ui/alert";
+import { ErrorState } from "@/components/ui/error-state";
+import { Button } from "@/components/ui/modal";
+import { classifyError } from "@/lib/feedback-error";
 
 // ─── DataTable ───────────────────────────────────────────────────────
 
@@ -48,6 +52,17 @@ interface DataTableProps<T> {
   totalCount?: number;
   loading?: boolean;
   onQueryChange?: (query: DataTableQuery) => void;
+
+  /**
+   * The load failed (M6.6, owner decision D5). With no rows, the table body
+   * is an error with Try again instead of `emptyMessage` — a failed load is
+   * never shown as "No records found". With rows from an earlier load, they
+   * stay, under an error Alert. Anything truthy counts; only its code and
+   * digest are used (see lib/feedback-error.ts), never its message.
+   */
+  error?: unknown;
+  /** Try again after a failed load. */
+  onRetry?: () => void;
 }
 
 export function DataTable<T extends Record<string, any>>({
@@ -66,6 +81,8 @@ export function DataTable<T extends Record<string, any>>({
   totalCount,
   loading = false,
   onQueryChange,
+  error,
+  onRetry,
 }: DataTableProps<T>) {
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
@@ -164,8 +181,17 @@ export function DataTable<T extends Record<string, any>>({
         </div>
       )}
 
+      {/* Always rendered: the live region exists before its message. */}
+      <Alert
+        tone="error"
+        className="mx-lg my-md"
+        action={onRetry && <Button variant="outline" size="sm" onClick={onRetry}>Try again</Button>}
+      >
+        {Boolean(error) && data.length > 0 ? "This couldn't be refreshed. Showing what was loaded earlier." : null}
+      </Alert>
+
       {/* Table */}
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto" aria-busy={loading || undefined}>
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-surface-container-low text-on-surface-variant">
@@ -204,6 +230,12 @@ export function DataTable<T extends Record<string, any>>({
                   className="px-lg py-xl text-center text-outline"
                 >
                   Loading…
+                </td>
+              </tr>
+            ) : Boolean(error) && data.length === 0 ? (
+              <tr>
+                <td colSpan={columns.length + (actions ? 1 : 0)}>
+                  <ErrorState {...classifyError(error)} onRetry={onRetry} />
                 </td>
               </tr>
             ) : paged.length > 0 ? (
