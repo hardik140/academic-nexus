@@ -10,6 +10,7 @@ import { logAudit } from "@/lib/audit";
 import { resolveListSort, listCacheKey } from "@/lib/cached-list";
 import type { DataTableQuery } from "@/components/ui/data-table";
 import { dbError } from "@/lib/internal-error";
+import { assertRead } from "@/lib/read-result-server";
 
 // See app/(portal)/student/placements/actions.ts's comment on why embedded
 // selects need a local cast — the hand-maintained Database type has no
@@ -68,17 +69,19 @@ export async function listStudentPlacementRecords(q: DataTableQuery) {
     dbQuery = dbQuery.order(column, { ascending });
 
     const from = q.page * RECORDS_PAGE_SIZE;
-    const { data, count } = await dbQuery.range(from, from + RECORDS_PAGE_SIZE - 1);
+    const { data, count, error: dataError } = await dbQuery.range(from, from + RECORDS_PAGE_SIZE - 1);
+    assertRead(dataError);
     const students = (data || []) as unknown as StudentRecordRow[];
 
     const studentIds = students.map((s) => s.id);
-    const { data: placementRows } = studentIds.length
+    const { data: placementRows, error: placementRowsError } = studentIds.length
       ? await supabase
           .from("placements")
           .select("student_id, company_name, package_lpa, status")
           .in("student_id", studentIds)
           .order("placement_date", { ascending: false })
-      : { data: [] };
+      : { data: [], error: null };
+    assertRead(placementRowsError);
 
     const latestByStudent: Record<string, { company_name: string; package_lpa: number | null; status: string }> = {};
     (placementRows || []).forEach((p) => {

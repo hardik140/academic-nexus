@@ -7,6 +7,7 @@ import { requireRole } from "@/lib/rbac";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { PERMISSIONS } from "@/lib/permissions";
 import { dbError } from "@/lib/internal-error";
+import { assertRead } from "@/lib/read-result-server";
 
 const RequestTransferSchema = z.object({
   reason: z.string().trim().min(1).max(1000),
@@ -60,12 +61,14 @@ export async function requestRoomTransfer(reasonRaw: string) {
 export async function listMyRoomTransferRequests() {
   const actor = await requireRole(PERMISSIONS.room_transfer_request);
   const supabase = await createClient();
-  const { data: student } = await supabase.from("students").select("id").eq("user_id", actor.userId).single();
+  const { data: student, error: studentError } = await supabase.from("students").select("id").eq("user_id", actor.userId).single();
+  assertRead(studentError);
   if (!student) return [];
-  const { data } = await supabase
+  const { data, error: dataError } = await supabase
     .from("room_transfer_requests")
     .select("*")
     .eq("student_id", student.id)
     .order("created_at", { ascending: false });
+  assertRead(dataError);
   return data || [];
 }

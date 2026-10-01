@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { assertRead } from "@/lib/read-result-server";
 import { NO_MATCH_ID } from "@/lib/read-result";
+import { todayDayOfWeek } from "@/lib/format";
 
 export default async function TeacherTimetable() {
   const supabase = await createClient();
@@ -34,7 +35,7 @@ export default async function TeacherTimetable() {
   const slots = slotsRes.data;
 
   const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-  const todayIndex = new Date().getDay();
+  const todayIndex = todayDayOfWeek();
   const grouped: Record<number, any[]> = {};
   (slots || []).forEach((s: any) => {
     if (!grouped[s.day_of_week]) grouped[s.day_of_week] = [];

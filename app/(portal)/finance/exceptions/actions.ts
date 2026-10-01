@@ -5,6 +5,7 @@ import { requireRole } from "@/lib/rbac";
 import { getCached } from "@/lib/cache";
 import { PERMISSIONS } from "@/lib/permissions";
 import { computeEffectiveFeeStatus, detectDuplicatePaymentRisk } from "@/lib/finance-status";
+import { assertRead } from "@/lib/read-result-server";
 
 export interface ExceptionEntry {
   id: string;
@@ -57,6 +58,10 @@ export async function getFinanceExceptions(): Promise<FinanceExceptions> {
         .eq("college_id", actor.collegeId)
         .in("status", ["submitted", "under_investigation"]),
     ]);
+    assertRead(feesRes.error);
+    assertRead(paymentsRes.error);
+    assertRead(refundsRes.error);
+    assertRead(disputesRes.error);
 
     // Cast to any: this hand-maintained types file declares empty
     // Relationships for every table, so embedded joins can't be inferred —

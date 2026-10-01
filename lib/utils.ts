@@ -87,14 +87,6 @@ export function cn(...inputs: ClassValue[]) {
   return keepSemanticMotion(twMerge(clsx(inputs)));
 }
 
-/** Format currency */
-export function formatCurrency(amount: number, currency = "USD"): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency,
-  }).format(amount);
-}
-
 /** Format date */
 export function formatDate(
   date: string | Date,

@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { formatCurrency } from "@/lib/utils";
+import { formatMoney } from "@/lib/format";
 import { getCached } from "@/lib/cache";
 import { computeEffectiveFeeStatus } from "@/lib/finance-status";
 import { assertRead } from "@/lib/read-result-server";
@@ -69,15 +69,15 @@ export default async function FinanceReports() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-md">
         <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-lg shadow-sm">
           <div className="text-xs font-semibold text-outline uppercase tracking-wider mb-sm">Total Billed</div>
-          <div className="text-2xl font-extrabold text-on-surface">{formatCurrency(summary?.total_billed || 0)}</div>
+          <div className="text-2xl font-extrabold text-on-surface">{formatMoney(summary?.total_billed || 0)}</div>
         </div>
         <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-lg shadow-sm">
           <div className="text-xs font-semibold text-outline uppercase tracking-wider mb-sm">Total Collected</div>
-          <div className="text-2xl font-extrabold text-success">{formatCurrency(summary?.total_collected || 0)}</div>
+          <div className="text-2xl font-extrabold text-success">{formatMoney(summary?.total_collected || 0)}</div>
         </div>
         <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-lg shadow-sm">
           <div className="text-xs font-semibold text-outline uppercase tracking-wider mb-sm">Outstanding (Overdue)</div>
-          <div className="text-2xl font-extrabold text-error">{formatCurrency(totalOutstandingOverdue)}</div>
+          <div className="text-2xl font-extrabold text-error">{formatMoney(totalOutstandingOverdue)}</div>
         </div>
         <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-lg shadow-sm">
           <div className="text-xs font-semibold text-outline uppercase tracking-wider mb-sm">Collection Rate</div>
@@ -100,7 +100,7 @@ export default async function FinanceReports() {
                     <span className="text-sm font-semibold text-on-surface">{d.code}</span>
                     <span className="text-xs text-outline ml-sm">{d.name}</span>
                   </div>
-                  <span className="text-sm font-bold text-on-surface">{formatCurrency(d.collected)} / {formatCurrency(d.billed)}</span>
+                  <span className="text-sm font-bold text-on-surface">{formatMoney(d.collected)} / {formatMoney(d.billed)}</span>
                 </div>
                 <div className="h-1.5 bg-surface-container-high rounded-full overflow-hidden">
                   <div className="h-full rounded-full bg-secondary" style={{ width: `${Math.min(pct, 100)}%` }} />

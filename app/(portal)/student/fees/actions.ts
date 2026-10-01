@@ -9,9 +9,11 @@ import { PERMISSIONS } from "@/lib/permissions";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import { dbError } from "@/lib/internal-error";
+import { assertRead } from "@/lib/read-result-server";
 
 async function resolveStudentId(supabase: SupabaseClient<Database>, actor: AuthorizedActor): Promise<string> {
-  const { data: student } = await supabase.from("students").select("id").eq("user_id", actor.userId).single();
+  const { data: student, error: studentError } = await supabase.from("students").select("id").eq("user_id", actor.userId).single();
+  assertRead(studentError);
   if (!student) throw new Error("No student record found for this account.");
   return student.id;
 }
@@ -81,11 +83,12 @@ export async function listMyRefundRequests() {
   const supabase = await createClient();
   const studentId = await resolveStudentId(supabase, actor);
 
-  const { data } = await supabase
+  const { data, error: dataError } = await supabase
     .from("refund_requests")
     .select("*, payments:payment_id(amount, method, created_at)")
     .eq("student_id", studentId)
     .order("created_at", { ascending: false });
+  assertRead(dataError);
   return data || [];
 }
 
@@ -134,10 +137,11 @@ export async function listMyDisputes() {
   const supabase = await createClient();
   const studentId = await resolveStudentId(supabase, actor);
 
-  const { data } = await supabase
+  const { data, error: dataError } = await supabase
     .from("financial_disputes")
     .select("*")
     .eq("student_id", studentId)
     .order("created_at", { ascending: false });
+  assertRead(dataError);
   return data || [];
 }

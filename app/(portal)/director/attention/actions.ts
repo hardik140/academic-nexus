@@ -13,6 +13,7 @@ import { computeEffectiveFeeStatus } from "@/lib/finance-status";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import { dbError } from "@/lib/internal-error";
+import { assertRead } from "@/lib/read-result-server";
 
 function attentionCacheKey(scopeKey: string) {
   return `attention:${scopeKey}`;
@@ -20,7 +21,8 @@ function attentionCacheKey(scopeKey: string) {
 
 /** Resolves the department a HOD actor owns, via departments.hod_id — same as hod/approvals. */
 async function resolveHodDepartmentId(supabase: SupabaseClient<Database>, actor: AuthorizedActor) {
-  const { data } = await supabase.from("departments").select("id").eq("hod_id", actor.userId).single();
+  const { data, error: dataError } = await supabase.from("departments").select("id").eq("hod_id", actor.userId).single();
+  assertRead(dataError);
   return data?.id ?? null;
 }
 
@@ -54,6 +56,8 @@ export async function listRiskFlags() {
       baseQuery().in("status", ["open", "assigned", "acknowledged", "in_progress"]).order("severity", { ascending: false }).order("detected_at", { ascending: false }),
       baseQuery().in("status", ["resolved", "dismissed"]).order("resolved_at", { ascending: false }).limit(30),
     ]);
+    assertRead(openRes.error);
+    assertRead(resolvedRes.error);
     return { open: openRes.data || [], resolved: resolvedRes.data || [] };
   });
 }
@@ -64,13 +68,14 @@ export async function listMyRiskFlagAssignments() {
   const supabase = await createClient();
 
   return getCached(attentionCacheKey(`assigned:${actor.userId}`), 30, async () => {
-    const { data } = await supabase
+    const { data, error: dataError } = await supabase
       .from("risk_flags")
       .select("*, department:department_id(name, code)")
       .eq("assigned_to", actor.userId)
       .in("status", ["assigned", "acknowledged", "in_progress"])
       .order("severity", { ascending: false })
       .order("assigned_at", { ascending: false });
+    assertRead(dataError);
     return data || [];
   });
 }
@@ -130,6 +135,9 @@ export async function getStudentRiskOverview() {
       supabase.from("fees").select("student_id, status, due_date, amount, paid_amount").eq("college_id", actor.collegeId),
       supabase.from("course_enrollments").select("student_id").eq("college_id", actor.collegeId).eq("status", "failed"),
     ]);
+    assertRead(studentsRes.error);
+    assertRead(feesRes.error);
+    assertRead(enrollRes.error);
 
     // Cast to any: this hand-maintained types file doesn't declare table
     // Relationships, so the embedded departments:department_id(...) join

@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/rbac";
 import { getCached } from "@/lib/cache";
 import { PERMISSIONS } from "@/lib/permissions";
+import { assertRead } from "@/lib/read-result-server";
 
 /**
  * Institution-wide version of warden/dashboard's per-warden tiles — same
@@ -32,6 +33,10 @@ export async function getHostelRollup() {
         .eq("status", "open")
         .in("category", ["hostel", "mess", "plumbing", "electrical", "cleaning"]),
     ]);
+    assertRead(blocksRes.error);
+    assertRead(roomsRes.error);
+    assertRead(gatePassesRes.error);
+    assertRead(complaintsRes.error);
 
     const blocks = blocksRes.data || [];
     const rooms = roomsRes.data || [];

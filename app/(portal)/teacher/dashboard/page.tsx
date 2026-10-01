@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { TeacherDashboardClient, type PriorityAction } from "./dashboard-client";
 import type { Database } from "@/types/database";
 import { assertRead } from "@/lib/read-result-server";
+import { todayDayOfWeek, todayInTimeZone } from "@/lib/format";
 
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -54,8 +55,8 @@ export default async function TeacherDashboard() {
   );
   const offeringIds = offerings.map((o) => o.id);
 
-  const todayIndex = new Date().getDay();
-  const today = new Date().toISOString().split("T")[0];
+  const todayIndex = todayDayOfWeek();
+  const today = todayInTimeZone();
 
   const [enrollmentsRes, attendanceRes, marksRes, todaySlotsRes, leaveRes, correctionsRes, notificationsRes] =
     await Promise.all([

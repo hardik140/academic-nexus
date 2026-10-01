@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { todayInTimeZone } from "@/lib/format";
 import Link from "next/link";
 import { Modal, Button, FormField, StatusBadge } from "@/components/ui/modal";
 import { Alert } from "@/components/ui/alert";
@@ -67,7 +68,7 @@ export default function FinanceIntegrationsPage() {
   const [cred, setCred] = useState({ clientId: "", clientSecret: "", refreshToken: "", dataCenter: "in", username: "", password: "", apiKey: "" });
 
   const [syncFor, setSyncFor] = useState<ConnectionRow | null>(null);
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayInTimeZone();
   const [syncRange, setSyncRange] = useState({ from: today.slice(0, 8) + "01", to: today });
 
   const [readiness, setReadiness] = useState<Record<string, { ready: boolean; gaps: number }>>({});

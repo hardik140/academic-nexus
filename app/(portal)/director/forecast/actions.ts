@@ -7,6 +7,7 @@ import { checkRateLimit } from "@/lib/rate-limit";
 import { PERMISSIONS } from "@/lib/permissions";
 import type { Json } from "@/types/database";
 import { dbError } from "@/lib/internal-error";
+import { assertRead } from "@/lib/read-result-server";
 
 export async function getForecastBaseline() {
   const actor = await requireRole(PERMISSIONS.forecast_simulator_read);
@@ -19,12 +20,18 @@ export async function getForecastBaseline() {
     supabase.from("mv_department_health").select("placement_rate"),
     supabase.from("hostel_blocks").select("id").eq("college_id", actor.collegeId),
   ]);
+  assertRead(studentsRes.error);
+  assertRead(facultyRes.error);
+  assertRead(feeRes.error);
+  assertRead(placementRes.error);
+  assertRead(hostelBlocksRes.error);
 
   let hostelCapacity = 0;
   let hostelOccupancy = 0;
   const blockIds = (hostelBlocksRes.data || []).map((b) => b.id);
   if (blockIds.length > 0) {
-    const { data: rooms } = await supabase.from("hostel_rooms").select("capacity, occupancy").in("block_id", blockIds);
+    const { data: rooms, error: roomsError } = await supabase.from("hostel_rooms").select("capacity, occupancy").in("block_id", blockIds);
+    assertRead(roomsError);
     hostelCapacity = (rooms || []).reduce((s, r) => s + r.capacity, 0);
     hostelOccupancy = (rooms || []).reduce((s, r) => s + r.occupancy, 0);
   }

@@ -10,6 +10,7 @@ import { classifyError } from "@/lib/feedback-error";
 import Link from "next/link";
 import { Button, FormField, Modal, StatusBadge } from "@/components/ui/modal";
 import { listConnections, listReconciliation, resolveReconciliationItem, runReconciliation } from "../actions";
+import { formatMoney, todayInTimeZone } from "@/lib/format";
 
 /**
  * Reconciliation (§64, §80, §98).
@@ -28,9 +29,6 @@ type Data = Awaited<ReturnType<typeof listReconciliation>>;
 type Connection = Awaited<ReturnType<typeof listConnections>>[number];
 type Item = Data["openItems"][number];
 
-const money = (n: number | null | undefined) =>
-  n === null || n === undefined ? "—" : n.toLocaleString("en-IN", { style: "currency", currency: "INR" });
-
 export default function ReconciliationPage() {
   const [data, setData] = useState<Data>({ runs: [], openItems: [] });
   const [connections, setConnections] = useState<Connection[]>([]);
@@ -41,7 +39,7 @@ export default function ReconciliationPage() {
   const [error, setError] = useState<FeedbackError | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayInTimeZone();
   const [form, setForm] = useState({ connectionId: "", from: today.slice(0, 8) + "01", to: today });
   const [resolving, setResolving] = useState<Item | null>(null);
   const [resolution, setResolution] = useState("");
@@ -137,18 +135,18 @@ export default function ReconciliationPage() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-md mt-md">
             <div>
               <p className="text-xs uppercase tracking-wide text-on-surface-variant">Academic Nexus</p>
-              <p className="text-xl font-extrabold text-on-surface tabular-nums mt-xs">{money(latest.local_amount)}</p>
+              <p className="text-xl font-extrabold text-on-surface tabular-nums mt-xs">{formatMoney(latest.local_amount)}</p>
               <p className="text-xs text-on-surface-variant tabular-nums">{latest.local_count ?? 0} payments</p>
             </div>
             <div>
               <p className="text-xs uppercase tracking-wide text-on-surface-variant">Accounting system</p>
-              <p className="text-xl font-extrabold text-on-surface tabular-nums mt-xs">{money(latest.external_amount)}</p>
+              <p className="text-xl font-extrabold text-on-surface tabular-nums mt-xs">{formatMoney(latest.external_amount)}</p>
               <p className="text-xs text-on-surface-variant tabular-nums">{latest.external_count ?? 0} documents</p>
             </div>
             <div>
               <p className="text-xs uppercase tracking-wide text-on-surface-variant">Difference</p>
               <p className={`text-xl font-extrabold tabular-nums mt-xs ${Math.abs(Number(latest.difference_amount ?? 0)) > 0.005 ? "text-error" : "text-success"}`}>
-                {money(latest.difference_amount)}
+                {formatMoney(latest.difference_amount)}
               </p>
             </div>
             <div>
@@ -181,8 +179,8 @@ export default function ReconciliationPage() {
                     <span className="text-xs font-mono font-semibold text-error">{item.difference_type}</span>
                     <p className="text-sm text-on-surface mt-xs">{item.detail}</p>
                     <p className="text-xs text-on-surface-variant mt-xs tabular-nums">
-                      {item.local_amount !== null && <>here {money(item.local_amount)} </>}
-                      {item.external_amount !== null && <>· there {money(item.external_amount)}</>}
+                      {item.local_amount !== null && <>here {formatMoney(item.local_amount)} </>}
+                      {item.external_amount !== null && <>· there {formatMoney(item.external_amount)}</>}
                     </p>
                   </div>
                   <Button size="sm" variant="outline" onClick={() => { setResolving(item); setResolution(""); }}>Resolve</Button>

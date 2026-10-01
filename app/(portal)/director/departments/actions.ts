@@ -11,6 +11,7 @@ import { assertClaimed } from "@/lib/concurrent-claim";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import { dbError } from "@/lib/internal-error";
+import { assertRead } from "@/lib/read-result-server";
 
 const AssignHodSchema = z.object({
   departmentId: z.string().guid(),
@@ -110,11 +111,12 @@ export async function assignHodViaRequest(request: Request, departmentId: string
 export async function listEligibleHodCandidates() {
   const actor = await requireRole(["director"]);
   const supabase = await createClient();
-  const { data } = await supabase
+  const { data, error: dataError } = await supabase
     .from("profiles")
     .select("id, full_name, role")
     .eq("college_id", actor.collegeId)
     .in("role", ["hod", "teacher"])
     .order("full_name");
+  assertRead(dataError);
   return data || [];
 }

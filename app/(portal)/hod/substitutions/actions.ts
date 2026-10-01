@@ -10,6 +10,7 @@ import { logAudit } from "@/lib/audit";
 import { assertClaimed } from "@/lib/concurrent-claim";
 import { PERMISSIONS } from "@/lib/permissions";
 import { dbError } from "@/lib/internal-error";
+import { assertRead } from "@/lib/read-result-server";
 
 function substitutionsCacheKey(hodUserId: string) {
   return `hod-substitutions:${hodUserId}`;
@@ -17,7 +18,8 @@ function substitutionsCacheKey(hodUserId: string) {
 
 /** Resolves the department a HOD actor owns, via departments.hod_id — same as hod/approvals. */
 async function resolveHodDepartmentId(supabase: Awaited<ReturnType<typeof createClient>>, userId: string) {
-  const { data } = await supabase.from("departments").select("id").eq("hod_id", userId).single();
+  const { data, error: dataError } = await supabase.from("departments").select("id").eq("hod_id", userId).single();
+  assertRead(dataError);
   return data?.id ?? null;
 }
 
@@ -44,6 +46,8 @@ export async function listSubstitutionNeeds() {
         baseQuery().eq("status", "needed").order("date", { ascending: true }),
         baseQuery().eq("status", "assigned").order("date", { ascending: true }),
       ]);
+      assertRead(neededRes.error);
+      assertRead(assignedRes.error);
       return { needed: neededRes.data || [], assigned: assignedRes.data || [] };
     }
 
@@ -53,10 +57,11 @@ export async function listSubstitutionNeeds() {
     // Department scope resolves through the offering's course. Two hops now
     // (offerings of this department's courses, then substitutions on those
     // offerings) because substitution_assignments no longer carries a course.
-    const { data: deptOfferings } = await supabase
+    const { data: deptOfferings, error: deptOfferingsError } = await supabase
       .from("course_offerings")
       .select("id, courses:course_id!inner(department_id)")
       .eq("courses.department_id", departmentId);
+    assertRead(deptOfferingsError);
     const offeringIds = ((deptOfferings as unknown as { id: string }[]) || []).map((o) => o.id);
     if (offeringIds.length === 0) return { needed: [], assigned: [] };
 
@@ -65,6 +70,8 @@ export async function listSubstitutionNeeds() {
       baseQuery().eq("status", "needed").order("date", { ascending: true }),
       baseQuery().eq("status", "assigned").order("date", { ascending: true }),
     ]);
+    assertRead(neededRes.error);
+    assertRead(assignedRes.error);
     return { needed: neededRes.data || [], assigned: assignedRes.data || [] };
   });
 }
@@ -75,18 +82,20 @@ export async function listDepartmentTeachers() {
   const supabase = await createClient();
 
   if (actor.role === "admin") {
-    const { data } = await supabase.from("profiles").select("id, full_name").in("role", ["teacher", "hod"]).order("full_name");
+    const { data, error: dataError } = await supabase.from("profiles").select("id, full_name").in("role", ["teacher", "hod"]).order("full_name");
+    assertRead(dataError);
     return data || [];
   }
 
   const departmentId = await resolveHodDepartmentId(supabase, actor.userId);
   if (!departmentId) return [];
-  const { data } = await supabase
+  const { data, error: dataError2 } = await supabase
     .from("profiles")
     .select("id, full_name")
     .eq("department_id", departmentId)
     .in("role", ["teacher", "hod"])
     .order("full_name");
+  assertRead(dataError2);
   return data || [];
 }
 

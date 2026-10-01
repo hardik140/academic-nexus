@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { StatusBadge } from "@/components/ui/modal";
 import { assertRead } from "@/lib/read-result-server";
 import { NO_MATCH_ID } from "@/lib/read-result";
+import { todayDayOfWeek, todayInTimeZone } from "@/lib/format";
 
 export default async function StudentSchedule() {
   const supabase = await createClient();
@@ -36,8 +37,8 @@ export default async function StudentSchedule() {
   assertRead(slotsError);
 
   const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-  const todayIndex = new Date().getDay();
-  const todayDate = new Date().toISOString().split("T")[0];
+  const todayIndex = todayDayOfWeek();
+  const todayDate = todayInTimeZone();
   const groupedSlots: Record<number, any[]> = {};
   (slots || []).forEach((slot: any) => {
     if (!groupedSlots[slot.day_of_week]) groupedSlots[slot.day_of_week] = [];

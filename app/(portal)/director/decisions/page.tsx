@@ -9,6 +9,7 @@ import { StateView } from "@/components/ui/state-view";
 import { useAsyncResource } from "@/hooks/use-async-resource";
 import { toFeedbackError, type FeedbackError } from "@/lib/action-failure";
 import { decideOnDecision, listDecisions } from "./actions";
+import { formatMoney } from "@/lib/format";
 
 export default function DirectorDecisions() {
   const [loading, setLoading] = useState<string | null>(null);
@@ -74,7 +75,7 @@ export default function DirectorDecisions() {
                     </div>
                     {(d.financial_impact != null || d.student_impact_count != null) && (
                       <div className="text-xs text-on-surface-variant mt-xs flex gap-md">
-                        {d.financial_impact != null && <span>₹{Number(d.financial_impact).toLocaleString()}</span>}
+                        {d.financial_impact != null && <span>{formatMoney(d.financial_impact)}</span>}
                         {d.student_impact_count != null && <span>{d.student_impact_count} students affected</span>}
                       </div>
                     )}

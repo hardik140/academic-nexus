@@ -6,6 +6,7 @@ import { getCached } from "@/lib/cache";
 import { resolveListSort, listCacheKey } from "@/lib/cached-list";
 import { DEFAULT_QUERY_LIMIT } from "@/lib/constants";
 import type { DataTableQuery } from "@/components/ui/data-table";
+import { assertRead } from "@/lib/read-result-server";
 
 const FACULTY_PAGE_SIZE = 10;
 // full_name only — course_count is a join tally computed below, not a real
@@ -45,6 +46,9 @@ export async function listFaculty(q: DataTableQuery) {
       supabase.from("course_offerings").select("id, instructor_id, status").limit(DEFAULT_QUERY_LIMIT * 2),
       supabase.from("timetable_slots").select("offering_id").limit(DEFAULT_QUERY_LIMIT * 2),
     ]);
+    assertRead(facultyRes.error);
+    assertRead(offeringsRes.error);
+    assertRead(slotsRes.error);
 
     // Workload is measured in OFFERINGS delivered, not catalog rows owned.
     // Under courses.instructor_id a teacher taking three sections of one
@@ -81,6 +85,8 @@ export async function listFaculty(q: DataTableQuery) {
           supabase.from("marks").select("entered_by").in("entered_by", pageIds),
         ])
       : [{ data: [] }, { data: [] }];
+    assertRead(attendanceRes.error);
+    assertRead(marksRes.error);
 
     const attendanceSessions: Record<string, Set<string>> = {};
     (attendanceRes.data || []).forEach((a: any) => {

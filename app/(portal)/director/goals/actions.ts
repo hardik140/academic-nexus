@@ -11,6 +11,7 @@ import { PERMISSIONS } from "@/lib/permissions";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import { dbError } from "@/lib/internal-error";
+import { assertRead } from "@/lib/read-result-server";
 
 const METRIC_KEYS = ["placement_rate", "avg_cgpa", "attendance_pct", "fee_collection_pct", "hostel_occupancy_pct"] as const;
 type MetricKey = (typeof METRIC_KEYS)[number];
@@ -26,32 +27,38 @@ function goalsCacheKey(collegeId: string) {
  * (never 0) when the underlying signal has no data, same "insufficient
  * data over fabrication" rule as everywhere else in this pass.
  */
-async function resolveAutoMetricValue(supabase: SupabaseClient<Database>, actor: AuthorizedActor, metricKey: MetricKey): Promise<number | null> {
+async function resolveAutoMetricValue(supabase: SupabaseClient<Database>, actor: AuthorizedActor, metricKey: MetricKey, requireSuccessfulRead = false): Promise<number | null> {
   switch (metricKey) {
     case "placement_rate": {
-      const { data } = await supabase.from("mv_department_health").select("placement_rate");
+      const { data, error } = await supabase.from("mv_department_health").select("placement_rate");
+      if (requireSuccessfulRead) assertRead(error);
       const values = (data || []).map((d) => d.placement_rate).filter((v): v is number => v != null);
       return values.length ? Math.round((values.reduce((s, v) => s + v, 0) / values.length) * 10) / 10 : null;
     }
     case "avg_cgpa": {
-      const { data } = await supabase.from("mv_department_enrollment").select("avg_cgpa");
+      const { data, error } = await supabase.from("mv_department_enrollment").select("avg_cgpa");
+      if (requireSuccessfulRead) assertRead(error);
       const values = (data || []).map((d) => d.avg_cgpa).filter((v): v is number => v != null);
       return values.length ? Math.round((values.reduce((s, v) => s + v, 0) / values.length) * 100) / 100 : null;
     }
     case "attendance_pct": {
-      const { data } = await supabase.from("mv_department_health").select("attendance_pct");
+      const { data, error } = await supabase.from("mv_department_health").select("attendance_pct");
+      if (requireSuccessfulRead) assertRead(error);
       const values = (data || []).map((d) => d.attendance_pct).filter((v): v is number => v != null);
       return values.length ? Math.round((values.reduce((s, v) => s + v, 0) / values.length) * 10) / 10 : null;
     }
     case "fee_collection_pct": {
-      const { data } = await supabase.from("mv_fee_summary").select("collection_pct").maybeSingle();
+      const { data, error } = await supabase.from("mv_fee_summary").select("collection_pct").maybeSingle();
+      if (requireSuccessfulRead) assertRead(error);
       return data?.collection_pct ?? null;
     }
     case "hostel_occupancy_pct": {
-      const { data: blocks } = await supabase.from("hostel_blocks").select("id").eq("college_id", actor.collegeId);
+      const { data: blocks, error: blocksError } = await supabase.from("hostel_blocks").select("id").eq("college_id", actor.collegeId);
+      if (requireSuccessfulRead) assertRead(blocksError);
       const blockIds = (blocks || []).map((b) => b.id);
       if (blockIds.length === 0) return null;
-      const { data: rooms } = await supabase.from("hostel_rooms").select("capacity, occupancy").in("block_id", blockIds);
+      const { data: rooms, error: roomsError } = await supabase.from("hostel_rooms").select("capacity, occupancy").in("block_id", blockIds);
+      if (requireSuccessfulRead) assertRead(roomsError);
       const capacity = (rooms || []).reduce((s, r) => s + r.capacity, 0);
       const occupancy = (rooms || []).reduce((s, r) => s + r.occupancy, 0);
       return capacity > 0 ? Math.round((occupancy / capacity) * 1000) / 10 : null;
@@ -82,7 +89,8 @@ export async function listGoals() {
   // be inferred — same pattern used throughout the rest of the app.
   const goals = (data || []) as any[];
   const autoGoals = goals.filter((g) => g.tracking_mode === "auto");
-  const liveValues = await Promise.all(autoGoals.map((g) => resolveAutoMetricValue(supabase, actor, g.metric_key as MetricKey)));
+  // D5 applies to this read path only; goal creation keeps its existing baseline semantics.
+  const liveValues = await Promise.all(autoGoals.map((g) => resolveAutoMetricValue(supabase, actor, g.metric_key as MetricKey, true)));
   const liveValueMap = new Map(autoGoals.map((g, i) => [g.id, liveValues[i]]));
 
   return goals.map((g) => ({

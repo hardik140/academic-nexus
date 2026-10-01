@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { formatCurrency, formatDate, formatPct } from "@/lib/utils";
+import { formatDate, formatPct } from "@/lib/utils";
+import { formatMoney } from "@/lib/format";
 import { HealthGauge } from "@/components/charts/health-gauge";
 import { StatusBadge } from "@/components/ui/modal";
 import { computeEffectiveFeeStatus } from "@/lib/finance-status";
@@ -313,13 +314,13 @@ export function StudentDashboardClient({
                       {fee.type}
                     </td>
                     <td className="px-lg py-md text-on-surface-variant">
-                      {formatCurrency(fee.amount)}
+                      {formatMoney(fee.amount)}
                     </td>
                     <td className="px-lg py-md text-success">
-                      {formatCurrency(fee.paid_amount)}
+                      {formatMoney(fee.paid_amount)}
                     </td>
                     <td className="px-lg py-md font-semibold text-on-surface">
-                      {formatCurrency(fee.amount - fee.paid_amount)}
+                      {formatMoney(fee.amount - fee.paid_amount)}
                     </td>
                     <td className="px-lg py-md text-on-surface-variant">
                       {formatDate(fee.due_date)}

@@ -6,6 +6,7 @@ import { getCached } from "@/lib/cache";
 import { resolveListSort, listCacheKey } from "@/lib/cached-list";
 import { PERMISSIONS } from "@/lib/permissions";
 import type { DataTableQuery } from "@/components/ui/data-table";
+import { assertRead } from "@/lib/read-result-server";
 
 const ROOMS_PAGE_SIZE = 10;
 const ROOMS_SORT_COLUMNS = ["block_name", "room_number", "type", "occupancy"] as const;
@@ -32,7 +33,8 @@ export async function listWardenRooms(q: DataTableQuery) {
     // matches any block and silently produced an empty room list.
     let blockIds: string[] | null = null;
     if (actor.role !== "admin") {
-      const { data: blocks } = await supabase.from("hostel_blocks").select("id").eq("warden_id", actor.userId);
+      const { data: blocks, error: blocksError } = await supabase.from("hostel_blocks").select("id").eq("warden_id", actor.userId);
+      assertRead(blocksError);
       blockIds = (blocks || []).map((b) => b.id);
       if (blockIds.length === 0) {
         return { data: [], count: 0 };
@@ -50,7 +52,8 @@ export async function listWardenRooms(q: DataTableQuery) {
     if (!q.sortKey) dbQuery = dbQuery.order("room_number", { ascending: true });
 
     const from = q.page * ROOMS_PAGE_SIZE;
-    const { data, count } = await dbQuery.range(from, from + ROOMS_PAGE_SIZE - 1);
+    const { data, count, error: dataError } = await dbQuery.range(from, from + ROOMS_PAGE_SIZE - 1);
+    assertRead(dataError);
     return { data: data || [], count: count ?? 0 };
   });
 }

@@ -13,6 +13,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import type { DataTableQuery } from "@/components/ui/data-table";
 import { dbError } from "@/lib/internal-error";
+import { assertRead } from "@/lib/read-result-server";
 
 type ScholarshipType = Database["public"]["Tables"]["scholarships"]["Row"]["type"];
 
@@ -38,7 +39,8 @@ export async function listScholarships(q: DataTableQuery) {
     dbQuery = dbQuery.order(column, { ascending });
 
     const from = q.page * SCHOLARSHIPS_PAGE_SIZE;
-    const { data, count } = await dbQuery.range(from, from + SCHOLARSHIPS_PAGE_SIZE - 1);
+    const { data, count, error: dataError } = await dbQuery.range(from, from + SCHOLARSHIPS_PAGE_SIZE - 1);
+    assertRead(dataError);
     return { data: data || [], count: count ?? 0 };
   });
 }

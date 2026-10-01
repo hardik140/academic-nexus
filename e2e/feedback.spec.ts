@@ -303,6 +303,10 @@ test.describe("StateView", () => {
 // ─── axe ─────────────────────────────────────────────────────────────────
 
 test("every feedback state passes an axe WCAG 2.2 AA scan", async ({ page }) => {
+  // Test budget, not an assertion change: the gallery now also carries the
+  // M6 feedback sections, and this runs about eight full-page axe scans
+  // (~20s alone), which can pass 30s when the whole suite runs in parallel.
+  test.setTimeout(60_000);
   await openGallery(page);
   const scan = async (state: string) => {
     const { violations } = await new AxeBuilder({ page }).include('[data-testid="gallery-feedback"]').withTags(WCAG_TAGS).analyze();

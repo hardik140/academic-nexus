@@ -14,6 +14,7 @@ import { inviteUserCore, type InviteUserParams } from "@/lib/invitations";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import { dbError } from "@/lib/internal-error";
+import { assertRead } from "@/lib/read-result-server";
 
 // Roles eligible to be promoted directly into Placement Cell — mirrors
 // assignHodCore's "must already hold an eligible role" guard
@@ -25,12 +26,13 @@ const PROMOTABLE_ROLES = ["teacher", "admin"] as const;
 export async function listPlacementCellUsers() {
   const actor = await requireRole(["director"]);
   const supabase = await createClient();
-  const { data } = await supabase
+  const { data, error: dataError } = await supabase
     .from("profiles")
     .select("id, full_name, email, status, created_at")
     .eq("college_id", actor.collegeId)
     .eq("role", "placement_cell")
     .order("created_at", { ascending: false });
+  assertRead(dataError);
   return data || [];
 }
 
@@ -38,12 +40,13 @@ export async function listPlacementCellUsers() {
 export async function listPlacementCellCandidates() {
   const actor = await requireRole(["director"]);
   const supabase = await createClient();
-  const { data } = await supabase
+  const { data, error: dataError } = await supabase
     .from("profiles")
     .select("id, full_name, email, role")
     .eq("college_id", actor.collegeId)
     .in("role", PROMOTABLE_ROLES)
     .order("full_name");
+  assertRead(dataError);
   return data || [];
 }
 
@@ -245,6 +248,11 @@ export async function getPlacementOverview() {
         .eq("role", "placement_cell")
         .eq("status", "active"),
     ]);
+    assertRead(summaryRes.error);
+    assertRead(companiesRes.error);
+    assertRead(activeDrivesRes.error);
+    assertRead(applicationsRes.error);
+    assertRead(cellRes.error);
 
     return {
       totalPlaced: summaryRes.data?.total_placed || 0,

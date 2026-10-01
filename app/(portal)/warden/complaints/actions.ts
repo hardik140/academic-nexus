@@ -15,6 +15,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import type { DataTableQuery } from "@/components/ui/data-table";
 import { dbError } from "@/lib/internal-error";
+import { assertRead } from "@/lib/read-result-server";
 
 const COMPLAINTS_PAGE_SIZE = 10;
 const COMPLAINTS_SORT_COLUMNS = ["title"] as const;
@@ -36,7 +37,8 @@ async function resolveWardenScopedSubmitterIds(
   const studentIds = await resolveWardenScopedStudentIds(supabase, actor);
   if (studentIds === null) return null;
   if (studentIds.length === 0) return [];
-  const { data: students } = await supabase.from("students").select("user_id").in("id", studentIds);
+  const { data: students, error: studentsError } = await supabase.from("students").select("user_id").in("id", studentIds);
+  assertRead(studentsError);
   return (students || []).map((s) => s.user_id);
 }
 
@@ -68,7 +70,8 @@ export async function listHostelComplaints(q: DataTableQuery) {
     dbQuery = dbQuery.order(column, { ascending });
 
     const from = q.page * COMPLAINTS_PAGE_SIZE;
-    const { data, count } = await dbQuery.range(from, from + COMPLAINTS_PAGE_SIZE - 1);
+    const { data, count, error: dataError } = await dbQuery.range(from, from + COMPLAINTS_PAGE_SIZE - 1);
+    assertRead(dataError);
     return { data: data || [], count: count ?? 0 };
   });
 }

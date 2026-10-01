@@ -9,7 +9,8 @@ import { ErrorState } from "@/components/ui/error-state";
 import { useAsyncResource } from "@/hooks/use-async-resource";
 import { toFeedbackError, type FeedbackError } from "@/lib/action-failure";
 import { classifyError } from "@/lib/feedback-error";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatDate } from "@/lib/utils";
+import { formatMoney } from "@/lib/format";
 import { computeEffectiveFeeStatus } from "@/lib/finance-status";
 import { recordPayment, listInvoices, listPayments, getFeeStats } from "./actions";
 import type { Database } from "@/types/database";
@@ -113,7 +114,7 @@ export default function FinanceTransactions() {
     setError(null);
     try {
       await recordPayment(payFee.id, Number(form.amount), form.method, form.transaction_ref || undefined, form.notes || undefined, feesQuery, paymentsQuery);
-      setNotice(`Payment of ${formatCurrency(Number(form.amount))} recorded for ${payFee.students?.profiles?.full_name || "the student"}.`);
+      setNotice(`Payment of ${formatMoney(Number(form.amount))} recorded for ${payFee.students?.profiles?.full_name || "the student"}.`);
       setPayFee(null);
       // Refreshing the figures is not part of recording: a failure there
       // shows where the figures are, not as a failed payment.
@@ -153,10 +154,10 @@ export default function FinanceTransactions() {
       ) : (
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-md" aria-busy={statsResource.status === "loading" || undefined}>
         {[
-          { label: "Total Billed", value: stats ? formatCurrency(stats.total) : "—", color: "text-on-surface" },
-          { label: "Collected", value: stats ? formatCurrency(stats.collected) : "—", color: "text-success" },
-          { label: "Pending", value: stats ? formatCurrency(stats.pending) : "—", color: "text-warning" },
-          { label: "Overdue", value: stats ? formatCurrency(stats.overdue) : "—", color: "text-error" },
+          { label: "Total Billed", value: stats ? formatMoney(stats.total) : "—", color: "text-on-surface" },
+          { label: "Collected", value: stats ? formatMoney(stats.collected) : "—", color: "text-success" },
+          { label: "Pending", value: stats ? formatMoney(stats.pending) : "—", color: "text-warning" },
+          { label: "Overdue", value: stats ? formatMoney(stats.overdue) : "—", color: "text-error" },
         ].map(kpi => (
           <div key={kpi.label} className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-lg shadow-sm">
             <div className="text-xs font-semibold text-outline uppercase tracking-wider mb-sm">{kpi.label}</div>
@@ -182,8 +183,8 @@ export default function FinanceTransactions() {
             { key: "student", header: "Student", render: (row: any) => <span className="font-medium text-on-surface">{(row.students?.profiles as any)?.full_name || "—"}</span> },
             { key: "enrollment", header: "Enrollment", render: (row: any) => <span className="font-mono text-xs text-on-surface-variant">{row.students?.enrollment_number || "—"}</span> },
             { key: "type", header: "Type", render: (row: any) => <span className="capitalize text-on-surface-variant">{row.type}</span> },
-            { key: "amount", header: "Amount", sortable: true, render: (row: any) => <span className="font-semibold">{formatCurrency(row.amount)}</span> },
-            { key: "paid_amount", header: "Paid", render: (row: any) => <span className="text-success">{formatCurrency(row.paid_amount)}</span> },
+            { key: "amount", header: "Amount", sortable: true, render: (row: any) => <span className="font-semibold">{formatMoney(row.amount)}</span> },
+            { key: "paid_amount", header: "Paid", render: (row: any) => <span className="text-success">{formatMoney(row.paid_amount)}</span> },
             { key: "due_date", header: "Due Date", sortable: true, render: (row: any) => formatDate(row.due_date) },
             { key: "status", header: "Status", render: (row: any) => <StatusBadge status={computeEffectiveFeeStatus(row)} /> },
           ]}
@@ -210,7 +211,7 @@ export default function FinanceTransactions() {
         <DataTable
           columns={[
             { key: "student", header: "Student", render: (row: any) => <span className="font-medium text-on-surface">{(row.students?.profiles as any)?.full_name || "—"}</span> },
-            { key: "amount", header: "Amount", sortable: true, render: (row: any) => <span className="font-semibold text-success">{formatCurrency(row.amount)}</span> },
+            { key: "amount", header: "Amount", sortable: true, render: (row: any) => <span className="font-semibold text-success">{formatMoney(row.amount)}</span> },
             { key: "method", header: "Method", render: (row: any) => <span className="capitalize text-on-surface-variant">{row.method}</span> },
             { key: "transaction_ref", header: "Ref", render: (row: any) => <span className="font-mono text-xs">{row.transaction_ref || "—"}</span> },
             { key: "receipt_number", header: "Receipt", render: (row: any) => <span className="font-mono text-xs">{row.receipt_number || "—"}</span> },
@@ -235,7 +236,7 @@ export default function FinanceTransactions() {
         open={!!payFee}
         onClose={() => setPayFee(null)}
         title={`Record Payment — ${(payFee?.students?.profiles as any)?.full_name || ""}`}
-        description={payFee ? `Outstanding balance: ${formatCurrency(payFee.amount - payFee.paid_amount)}` : undefined}
+        description={payFee ? `Outstanding balance: ${formatMoney(payFee.amount - payFee.paid_amount)}` : undefined}
         footer={
           <>
             <Button variant="outline" onClick={() => setPayFee(null)}>Cancel</Button>

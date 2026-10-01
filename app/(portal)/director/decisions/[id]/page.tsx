@@ -12,6 +12,7 @@ import { toFeedbackError, type FeedbackError } from "@/lib/action-failure";
 import { classifyError } from "@/lib/feedback-error";
 import { LifecycleTimeline } from "@/components/ui/lifecycle-timeline";
 import { decideOnDecision, getDecision, listDecisionAuditTrail, listDelegateCandidates } from "../actions";
+import { formatMoney } from "@/lib/format";
 
 const DECIDE_ACTIONS: { value: string; label: string; variant: "primary" | "destructive" | "outline" | "secondary" }[] = [
   { value: "approved", label: "Approve", variant: "primary" },
@@ -115,7 +116,7 @@ export default function DirectorDecisionDetail() {
           {decision.financial_impact != null && (
             <div>
               <div className="text-xs text-outline uppercase tracking-wider">Financial Impact</div>
-              <div className="text-on-surface">₹{Number(decision.financial_impact).toLocaleString()}</div>
+              <div className="text-on-surface">{formatMoney(decision.financial_impact)}</div>
             </div>
           )}
           {decision.student_impact_count != null && (

@@ -15,6 +15,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, UserRole, UserStatus } from "@/types/database";
 import type { DataTableQuery } from "@/components/ui/data-table";
 import { dbError } from "@/lib/internal-error";
+import { assertRead } from "@/lib/read-result-server";
 
 const USERS_PAGE_SIZE = 10;
 // Server actions are callable directly (not just through the UI that only
@@ -57,7 +58,8 @@ export async function listUsers(q: DataTableQuery) {
     dbQuery = dbQuery.order(sortColumn, { ascending: q.sortKey ? q.sortDir === "asc" : false });
 
     const from = q.page * USERS_PAGE_SIZE;
-    const { data, count } = await dbQuery.range(from, from + USERS_PAGE_SIZE - 1);
+    const { data, count, error: dataError } = await dbQuery.range(from, from + USERS_PAGE_SIZE - 1);
+    assertRead(dataError);
     return { data: data || [], count: count ?? 0 };
   });
 }
@@ -276,12 +278,13 @@ export async function getStudentAcademicSummary(targetUserId: string): Promise<S
   const actor = await requireRole(["admin"]);
   const supabase = await createClient();
 
-  const { data: student } = await supabase
+  const { data: student, error: studentError } = await supabase
     .from("students")
     .select("id, status, enrollment_number, batch_year, semester")
     .eq("user_id", targetUserId)
     .eq("college_id", actor.collegeId)
     .maybeSingle();
+  assertRead(studentError);
   if (!student) return null;
 
   const [feesRes, allocationRes, gatePassRes] = await Promise.all([
@@ -289,6 +292,9 @@ export async function getStudentAcademicSummary(targetUserId: string): Promise<S
     supabase.from("hostel_allocations").select("id").eq("student_id", student.id).eq("status", "active").maybeSingle(),
     supabase.from("gate_passes").select("id").eq("student_id", student.id).in("status", ["pending", "approved", "active"]).maybeSingle(),
   ]);
+  assertRead(feesRes.error);
+  assertRead(allocationRes.error);
+  assertRead(gatePassRes.error);
 
   const outstandingFees = (feesRes.data || [])
     .filter((f) => !["paid", "waived", "refunded"].includes(computeEffectiveFeeStatus(f)))

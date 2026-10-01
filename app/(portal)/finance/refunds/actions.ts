@@ -10,6 +10,7 @@ import { logAudit } from "@/lib/audit";
 import { assertClaimed } from "@/lib/concurrent-claim";
 import { PERMISSIONS } from "@/lib/permissions";
 import { dbError } from "@/lib/internal-error";
+import { assertRead } from "@/lib/read-result-server";
 
 function refundsCacheKey(collegeId: string) {
   return `finance-refunds:${collegeId}`;
@@ -28,6 +29,8 @@ export async function listRefundRequests() {
       baseQuery().eq("status", "pending").order("created_at", { ascending: false }),
       baseQuery().neq("status", "pending").order("created_at", { ascending: false }).limit(20),
     ]);
+    assertRead(pendingRes.error);
+    assertRead(processedRes.error);
     return { pending: pendingRes.data || [], processed: processedRes.data || [] };
   });
 }
