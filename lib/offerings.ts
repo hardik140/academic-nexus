@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AuthorizedActor } from "@/lib/rbac";
 import type { Database } from "@/types/database";
+import { assertRead } from "@/lib/read-result-server";
 
 /**
  * Server-side authority for the offering-centric academic model
@@ -300,7 +301,8 @@ export async function listTeachableOfferings(
     query = query.eq("semester_id", semesterId);
   }
 
-  const { data } = await query;
+  const { data, error: dataError } = await query;
+  assertRead(dataError);
   return data ?? [];
 }
 
@@ -316,12 +318,13 @@ export async function getActiveSemesterId(
   supabase: SupabaseClient<Database>,
   actor: AuthorizedActor
 ): Promise<string | null> {
-  const { data } = await supabase
+  const { data, error: dataError } = await supabase
     .from("semesters")
     .select("id")
     .eq("college_id", actor.collegeId)
     .eq("status", "active")
     .maybeSingle();
+  assertRead(dataError);
   return data?.id ?? null;
 }
 

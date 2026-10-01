@@ -14,6 +14,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import type { DataTableQuery } from "@/components/ui/data-table";
 import { dbError } from "@/lib/internal-error";
+import { assertRead } from "@/lib/read-result-server";
 
 const COLLEGES_PAGE_SIZE = 10;
 const COLLEGES_SORT_COLUMNS = ["name", "code"] as const;
@@ -42,7 +43,8 @@ export async function listColleges(q: DataTableQuery) {
     dbQuery = dbQuery.order(column, { ascending });
 
     const from = q.page * COLLEGES_PAGE_SIZE;
-    const { data, count } = await dbQuery.range(from, from + COLLEGES_PAGE_SIZE - 1);
+    const { data, count, error: dataError } = await dbQuery.range(from, from + COLLEGES_PAGE_SIZE - 1);
+    assertRead(dataError);
     return { data: data || [], count: count ?? 0 };
   });
 }

@@ -9,7 +9,7 @@ import { LoadingState } from "@/components/ui/loading-state";
 import { useAsyncResource } from "@/hooks/use-async-resource";
 import { toFeedbackError, type FeedbackError } from "@/lib/action-failure";
 import { classifyError } from "@/lib/feedback-error";
-import { formatCurrency } from "@/lib/utils";
+import { formatMoney } from "@/lib/format";
 import { requestRefund, listMyRefundRequests, submitDispute, listMyDisputes } from "./actions";
 
 interface EligiblePayment {
@@ -64,7 +64,7 @@ export function FinanceRequestsPanel({ payments, fees }: { payments: EligiblePay
       setRefundAmount("");
       setRefundReason("");
       setShowRefundForm(false);
-      setRefundSuccess(`Refund request for ${formatCurrency(Number(refundAmount))} submitted. Finance will review it.`);
+      setRefundSuccess(`Refund request for ${formatMoney(Number(refundAmount))} submitted. Finance will review it.`);
       requests.reload();
     } catch (e) {
       setRefundError(await toFeedbackError(e, "Failed to submit refund request."));
@@ -122,7 +122,7 @@ export function FinanceRequestsPanel({ payments, fees }: { payments: EligiblePay
               required
               options={payments
                 .filter((p) => !hasPendingRefund(p.id))
-                .map((p) => ({ value: p.id, label: `${formatCurrency(p.amount)} — ${p.method} — ${new Date(p.created_at).toLocaleDateString()}` }))}
+                .map((p) => ({ value: p.id, label: `${formatMoney(p.amount)} — ${p.method} — ${new Date(p.created_at).toLocaleDateString()}` }))}
             />
             <FormField label="Refund amount" id="refund-amount" type="number" value={refundAmount} onChange={setRefundAmount} required placeholder="0.00" />
             <FormField label="Reason" id="refund-reason" type="textarea" value={refundReason} onChange={setRefundReason} required rows={3} placeholder="Why are you requesting this refund?" />
@@ -145,7 +145,7 @@ export function FinanceRequestsPanel({ payments, fees }: { payments: EligiblePay
           {refunds.length > 0 ? refunds.map((r: any) => (
             <div key={r.id} className="flex items-center justify-between px-lg py-md">
               <div>
-                <div className="text-sm text-on-surface">{formatCurrency(r.amount)}</div>
+                <div className="text-sm text-on-surface">{formatMoney(r.amount)}</div>
                 <div className="text-xs text-outline mt-xs">
                   {new Date(r.created_at).toLocaleDateString()}
                   {r.review_notes ? ` — ${r.review_notes}` : ""}

@@ -13,6 +13,7 @@ import { PERMISSIONS } from "@/lib/permissions";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import { dbError } from "@/lib/internal-error";
+import { assertRead } from "@/lib/read-result-server";
 
 const DECISION_CATEGORIES = [
   "department_change",
@@ -147,6 +148,8 @@ export async function listDecisions() {
       baseQuery().eq("status", "pending").order("created_at", { ascending: false }),
       baseQuery().neq("status", "pending").order("updated_at", { ascending: false }).limit(30),
     ]);
+    assertRead(pendingRes.error);
+    assertRead(processedRes.error);
     return { pending: pendingRes.data || [], processed: processedRes.data || [] };
   });
 }

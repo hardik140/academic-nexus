@@ -16,6 +16,7 @@ import {
 } from "@/lib/gate-security/credential";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
+import { assertRead } from "@/lib/read-result-server";
 
 /**
  * The Security Guard's whole server surface.
@@ -277,11 +278,12 @@ export async function securityContext(): Promise<SecurityContext> {
   const actor = await requireRole(PERMISSIONS.gate_security_dashboard);
   const supabase = await createClient();
 
-  const { data: person } = await supabase
+  const { data: person, error: personError } = await supabase
     .from("security_personnel")
     .select("id, status, employee_code, permissions")
     .eq("profile_id", actor.userId)
     .maybeSingle();
+  assertRead(personError);
 
   if (!person || person.status !== "ACTIVE") {
     return {
@@ -294,23 +296,26 @@ export async function securityContext(): Promise<SecurityContext> {
     };
   }
 
-  const { data: assignments } = await supabase
+  const { data: assignments, error: assignmentsError } = await supabase
     .from("security_gate_assignments")
     .select("gate_id")
     .eq("security_personnel_id", person.id)
     .is("revoked_at", null);
+  assertRead(assignmentsError);
 
   const gateIds = (assignments ?? []).map((a) => a.gate_id);
-  const { data: gates } = gateIds.length
+  const { data: gates, error: gatesError } = gateIds.length
     ? await supabase.from("gates").select("id, code, name").in("id", gateIds).eq("is_active", true).order("code")
-    : { data: [] };
+    : { data: [], error: null };
+  assertRead(gatesError);
 
-  const { data: instructions } = await supabase
+  const { data: instructions, error: instructionsError } = await supabase
     .from("security_instructions")
     .select("id, title, message, priority, created_at")
     .eq("status", "active")
     .order("created_at", { ascending: false })
     .limit(10);
+  assertRead(instructionsError);
 
   return {
     personnelId: person.id,
@@ -370,11 +375,12 @@ export async function securityTodayCounts(gateId: string): Promise<{ out: number
   const since = new Date();
   since.setHours(0, 0, 0, 0);
 
-  const { data } = await supabase
+  const { data, error: dataError } = await supabase
     .from("gate_movements")
     .select("movement_type")
     .eq("gate_id", gateId)
     .gte("occurred_at", since.toISOString());
+  assertRead(dataError);
 
   const rows = data ?? [];
   return {

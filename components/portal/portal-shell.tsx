@@ -18,7 +18,7 @@ interface PortalShellProps {
 /** Navigation items per role */
 const NAV_MAP: Record<
   string,
-  Array<{ label: string; href: string; icon: string }>
+  Array<{ label: string; href: string; icon: string; activePath?: string }>
 > = {
   student: [
     { label: "Dashboard", href: "/student/dashboard", icon: "📊" },
@@ -68,7 +68,7 @@ const NAV_MAP: Record<
     { label: "Decisions", href: "/director/decisions", icon: "🗳️" },
     { label: "Analytics", href: "/director/analytics", icon: "📈" },
     { label: "Departments", href: "/director/departments", icon: "🏢" },
-    { label: "Placements", href: "/director/placements/funnel", icon: "🎯" },
+    { label: "Placements", href: "/director/placements/funnel", icon: "🎯", activePath: "/director/placements" },
     { label: "Hostel", href: "/director/hostel", icon: "🏠" },
     { label: "Gate Security", href: "/director/security", icon: "🛡️" },
     { label: "Team", href: "/director/team", icon: "✉️" },
@@ -149,7 +149,7 @@ const roleLabel: Record<string, string> = {
 };
 
 /** The navigation panel: the desktop sidebar and the mobile drawer render the same one. */
-function SidebarContent({
+export function SidebarContent({
   profile,
   pathname,
   expanded,
@@ -165,6 +165,13 @@ function SidebarContent({
   onClose?: () => void;
 }) {
   const navItems = NAV_MAP[profile.role] || NAV_MAP.student;
+  // Match whole path segments; the most specific section is the sole current link.
+  const currentItem = navItems
+    .filter((item) => {
+      const path = item.activePath ?? item.href;
+      return pathname === path || pathname.startsWith(`${path}/`);
+    })
+    .sort((a, b) => (b.activePath ?? b.href).length - (a.activePath ?? a.href).length)[0];
 
   return (
     <>
@@ -212,11 +219,12 @@ function SidebarContent({
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto py-md px-sm space-y-xs">
         {navItems.map((item) => {
-          const isActive = pathname === item.href;
+          const isActive = item === currentItem;
           return (
             <Link
               key={item.href}
               href={item.href}
+              aria-current={isActive ? "page" : undefined}
               onClick={(event) => onNavigate(item.href, event)}
               className={cn(
                 "flex items-center gap-sm px-md py-[10px] rounded-xl text-sm font-medium motion-feedback",
@@ -225,8 +233,8 @@ function SidebarContent({
                   : "text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
               )}
             >
-              <span className="text-base shrink-0">{item.icon}</span>
-              {expanded && <span className="truncate">{item.label}</span>}
+              <span aria-hidden="true" className="text-base shrink-0">{item.icon}</span>
+              <span className={expanded ? "truncate" : "sr-only"}>{item.label}</span>
             </Link>
           );
         })}

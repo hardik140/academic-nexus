@@ -16,7 +16,7 @@ import { useAsyncResource } from "@/hooks/use-async-resource";
 import { toFeedbackError, type FeedbackError } from "@/lib/action-failure";
 import { classifyError } from "@/lib/feedback-error";
 import { requireRows } from "@/lib/read-result";
-import { formatCurrency } from "@/lib/utils";
+import { formatMoney } from "@/lib/format";
 import {
   inviteUser,
   resendInvitation,
@@ -494,7 +494,7 @@ function AdminUsersInner() {
                     <div className="flex flex-wrap gap-xs">
                       {academicSummary.outstandingFees > 0 && (
                         <span className="text-[11px] font-semibold px-sm py-[2px] rounded-full bg-warning-container text-on-warning-container">
-                          {formatCurrency(academicSummary.outstandingFees)} outstanding
+                          {formatMoney(academicSummary.outstandingFees)} outstanding
                         </span>
                       )}
                       {academicSummary.hasActiveHostelAllocation && (

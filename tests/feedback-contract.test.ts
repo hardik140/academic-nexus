@@ -174,6 +174,18 @@ describe("feedback contract", () => {
     expect(uncaught).toEqual([]);
   });
 
+  it("no page loads through a promise chain with no error path (S1: a failed read must reach an error state)", () => {
+    // `action().then(setData)` in an effect leaves the page on "Loading..."
+    // forever when the read fails; loaders use useAsyncResource/StateView or
+    // catch. A .then with a .catch after it is allowed.
+    const chains = SHIPPED_UI.flatMap((f) =>
+      [...code(read(f)).matchAll(/\b\w+\([^()]*\)\s*\.then\(\s*(?:set\w+|\(?[\w\s,[\]{}]*\)?\s*=>)[\s\S]{0,400}?\)\s*;/g)]
+        .filter((m) => !/\.catch\(/.test(m[0]) && /\bset[A-Z]\w*\(|\.then\(\s*set\w+\)/.test(m[0]))
+        .map((m) => `${f}: ${m[0].replace(/\s+/g, " ").slice(0, 90)}`)
+    );
+    expect(chains).toEqual([]);
+  });
+
   it("EmptyState is rendered only by StateView (and shown in the development gallery)", () => {
     const importers = APPLICATION.filter((file) => /from\s+["']@\/components\/ui\/empty-state["']/.test(read(file)));
     expect(importers.sort()).toEqual(["app/dev/gallery/demos.tsx", "components/ui/state-view.tsx"]);

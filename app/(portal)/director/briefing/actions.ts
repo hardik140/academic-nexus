@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/rbac";
 import { PERMISSIONS } from "@/lib/permissions";
+import { assertRead } from "@/lib/read-result-server";
 
 const SUB_SCORE_LABELS: Record<string, string> = {
   academic_score: "Academic Health",
@@ -43,6 +44,10 @@ export async function getExecutiveBriefing() {
       .limit(3),
     supabase.from("strategic_goals").select("id, title, target_date").eq("college_id", actor.collegeId).in("status", ["on_track", "at_risk"]).order("target_date", { ascending: true }).limit(3),
   ])) as any[];
+  assertRead(snapshotsRes.error);
+  assertRead(risksRes.error);
+  assertRead(decisionsRes.error);
+  assertRead(goalsRes.error);
 
   const [latest, prior] = snapshotsRes.data || [];
 

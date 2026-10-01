@@ -13,6 +13,7 @@ import { classifyError, SessionExpiredError } from "@/lib/feedback-error";
 import { requireRows } from "@/lib/read-result";
 import { saveAttendance, requestAttendanceCorrection, listMyCorrectionRequests } from "./actions";
 import type { Database } from "@/types/database";
+import { todayInTimeZone } from "@/lib/format";
 
 type AttendanceStatus = Database["public"]["Tables"]["attendance"]["Row"]["status"];
 
@@ -34,7 +35,7 @@ export default function TeacherAttendance() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<FeedbackError | null>(null);
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+  const [date, setDate] = useState(() => todayInTimeZone());
   // The class roll: loading, loaded, or failed — never "no students" when the read failed.
   const [studentsLoading, setStudentsLoading] = useState(false);
   const [studentsError, setStudentsError] = useState<unknown>(null);

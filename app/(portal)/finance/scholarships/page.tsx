@@ -9,7 +9,8 @@ import { ErrorAlert } from "@/components/ui/error-alert";
 import { useAsyncResource } from "@/hooks/use-async-resource";
 import { toFeedbackError, type FeedbackError } from "@/lib/action-failure";
 import { requireRows } from "@/lib/read-result";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatDate } from "@/lib/utils";
+import { formatMoney } from "@/lib/format";
 import { createScholarship, listScholarships } from "./actions";
 import type { Database } from "@/types/database";
 
@@ -122,7 +123,7 @@ export default function FinanceScholarships() {
           { key: "student", header: "Student", render: (row: any) => <span className="font-medium text-on-surface">{(row.students as any)?.profiles?.full_name || "—"}</span> },
           { key: "name", header: "Scholarship", sortable: true },
           { key: "type", header: "Type", render: (row: any) => <span className="capitalize">{row.type}</span> },
-          { key: "amount", header: "Amount", sortable: true, render: (row: any) => formatCurrency(row.amount) },
+          { key: "amount", header: "Amount", sortable: true, render: (row: any) => formatMoney(row.amount) },
           { key: "awarded_date", header: "Awarded", render: (row: any) => row.awarded_date ? formatDate(row.awarded_date) : "—" },
           { key: "status", header: "Status", render: (row: any) => <StatusBadge status={row.status} /> },
         ]}

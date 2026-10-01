@@ -9,7 +9,8 @@ import { ErrorAlert } from "@/components/ui/error-alert";
 import { useAsyncResource } from "@/hooks/use-async-resource";
 import { toFeedbackError, type FeedbackError } from "@/lib/action-failure";
 import { requireRows } from "@/lib/read-result";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatDate } from "@/lib/utils";
+import { formatMoney } from "@/lib/format";
 import { computeEffectiveFeeStatus } from "@/lib/finance-status";
 import { createInvoice, listInvoices } from "./actions";
 
@@ -104,8 +105,8 @@ export default function FinanceInvoices() {
         columns={[
           { key: "student", header: "Student", render: (row: any) => <span className="font-medium text-on-surface">{(row.students as any)?.profiles?.full_name || "—"}</span> },
           { key: "type", header: "Type", sortable: true },
-          { key: "amount", header: "Amount", sortable: true, render: (row: any) => formatCurrency(row.amount) },
-          { key: "paid_amount", header: "Paid", render: (row: any) => formatCurrency(row.paid_amount) },
+          { key: "amount", header: "Amount", sortable: true, render: (row: any) => formatMoney(row.amount) },
+          { key: "paid_amount", header: "Paid", render: (row: any) => formatMoney(row.paid_amount) },
           { key: "due_date", header: "Due Date", sortable: true, render: (row: any) => formatDate(row.due_date) },
           { key: "status", header: "Status", render: (row: any) => <StatusBadge status={computeEffectiveFeeStatus(row)} /> },
         ]}

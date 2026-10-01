@@ -4,6 +4,7 @@ import Link from "next/link";
 import { RoomTransferPanel } from "./room-transfer-panel";
 import { assertRead } from "@/lib/read-result-server";
 import { NO_MATCH_ID } from "@/lib/read-result";
+import { todayDayOfWeek } from "@/lib/format";
 
 export default async function StudentHostel() {
   const supabase = await createClient();
@@ -28,7 +29,7 @@ export default async function StudentHostel() {
   const allocation = allocationData as any;
 
   // Mess menu for today
-  const todayDay = new Date().getDay();
+  const todayDay = todayDayOfWeek();
   const { data: messMenu, error: messMenuError } = await supabase
     .from("mess_menu")
     .select("*")

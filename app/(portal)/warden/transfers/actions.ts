@@ -12,6 +12,7 @@ import { PERMISSIONS } from "@/lib/permissions";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import { dbError } from "@/lib/internal-error";
+import { assertRead } from "@/lib/read-result-server";
 
 function transfersCacheKey(scopeKey: string) {
   return `warden-transfers:${scopeKey}`;
@@ -20,7 +21,8 @@ function transfersCacheKey(scopeKey: string) {
 /** Resolves the hostel blocks this warden owns, same pattern as warden/rooms/actions.ts. */
 async function resolveWardenBlockIds(supabase: SupabaseClient<Database>, actor: AuthorizedActor): Promise<string[] | null> {
   if (actor.role === "admin") return null;
-  const { data: blocks } = await supabase.from("hostel_blocks").select("id").eq("warden_id", actor.userId);
+  const { data: blocks, error: blocksError } = await supabase.from("hostel_blocks").select("id").eq("warden_id", actor.userId);
+  assertRead(blocksError);
   return (blocks || []).map((b) => b.id);
 }
 
@@ -60,6 +62,8 @@ export async function listRoomTransferRequests() {
       baseQuery().eq("status", "pending").order("created_at", { ascending: false }),
       baseQuery().neq("status", "pending").order("created_at", { ascending: false }).limit(20),
     ]);
+    assertRead(pendingRes.error);
+    assertRead(processedRes.error);
 
     if (blockIds === null) {
       return { pending: pendingRes.data || [], processed: processedRes.data || [] };
@@ -85,7 +89,8 @@ export async function listAvailableRoomsForTransfer() {
 
   let query = supabase.from("hostel_rooms").select("*").neq("status", "maintenance");
   query = blockIds === null ? query.eq("college_id", actor.collegeId) : query.in("block_id", blockIds);
-  const { data } = await query.order("block_name").order("room_number");
+  const { data, error: dataError } = await query.order("block_name").order("room_number");
+  assertRead(dataError);
   return (data || []).filter((r) => r.occupancy < r.capacity);
 }
 

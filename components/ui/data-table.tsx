@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Alert } from "@/components/ui/alert";
 import { ErrorState } from "@/components/ui/error-state";
 import { Button } from "@/components/ui/modal";
@@ -89,6 +89,23 @@ export function DataTable<T extends Record<string, any>>({
   const [page, setPage] = useState(0);
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [hasOverflow, setHasOverflow] = useState(false);
+
+  useEffect(() => {
+    const region = scrollRef.current;
+    const table = region?.querySelector("table");
+    if (!region || !table) return;
+    // Observe viewport and content, including changes after data/font loads.
+    // The observer also delivers the initial measurement without a layout shift.
+    const observer = new ResizeObserver(() => {
+      setHasOverflow(region.scrollWidth > region.clientWidth);
+    });
+    observer.observe(region);
+    observer.observe(table);
+    return () => observer.disconnect();
+  }, []);
 
   // Debounced separately from `searchInput` so the input itself stays
   // responsive to every keystroke while the (re-)filter/query + page reset
@@ -191,32 +208,47 @@ export function DataTable<T extends Record<string, any>>({
       </Alert>
 
       {/* Table */}
-      <div className="overflow-x-auto" aria-busy={loading || undefined}>
+      <div
+        ref={scrollRef}
+        className="overflow-x-auto focus-visible:outline-offset-[calc(-1*var(--focus-ring-width))]"
+        tabIndex={hasOverflow ? 0 : -1}
+        role={hasOverflow ? "region" : undefined}
+        aria-label={hasOverflow ? (title || "Data") + " — scrollable table" : undefined}
+        aria-busy={loading || undefined}
+      >
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-surface-container-low text-on-surface-variant">
               {columns.map((col) => (
                 <th
                   key={col.key}
+                  scope="col"
+                  aria-sort={col.sortable ? (sortKey === col.key ? (sortDir === "asc" ? "ascending" : "descending") : "none") : undefined}
                   className={cn(
                     "text-left px-lg py-sm font-semibold text-xs uppercase tracking-wider",
-                    col.sortable && "cursor-pointer select-none hover:text-on-surface motion-feedback",
+                    col.sortable && "relative cursor-pointer select-none hover:text-on-surface motion-feedback",
                     col.className
                   )}
-                  onClick={() => col.sortable && handleSort(col.key)}
                 >
-                  <span className="flex items-center gap-xs">
-                    {col.header}
-                    {col.sortable && sortKey === col.key && (
-                      <span className="text-secondary">
-                        {sortDir === "asc" ? "↑" : "↓"}
-                      </span>
-                    )}
-                  </span>
+                  {col.sortable ? (
+                    <button
+                      type="button"
+                      onClick={() => handleSort(col.key)}
+                      className="flex items-center gap-xs w-full text-left uppercase tracking-[inherit] cursor-pointer before:absolute before:inset-0"
+                      aria-label={"Sort by " + col.header}
+                    >
+                      {col.header}
+                      {sortKey === col.key && (
+                        <span aria-hidden="true" className="text-secondary">
+                          {sortDir === "asc" ? "↑" : "↓"}
+                        </span>
+                      )}
+                    </button>
+                  ) : col.header}
                 </th>
               ))}
               {actions && (
-                <th className="text-right px-lg py-sm font-semibold text-xs uppercase tracking-wider">
+                <th scope="col" className="text-right px-lg py-sm font-semibold text-xs uppercase tracking-wider">
                   Actions
                 </th>
               )}

@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/rbac";
 import { getCached } from "@/lib/cache";
+import { assertRead } from "@/lib/read-result-server";
 
 const STAFF_ROLES = ["placement_cell", "director", "admin"] as const;
 
@@ -36,6 +37,8 @@ export async function getPlacementReports() {
         .in("status", ["placed", "joined"]),
       supabase.from("students").select("*", { count: "exact", head: true }).eq("college_id", actor.collegeId),
     ]);
+    assertRead(placementsRes.error);
+    assertRead(totalStudentsRes.error);
 
     const rows = (placementsRes.data || []) as unknown as PlacementReportRow[];
     const byDepartment: Record<string, number> = {};

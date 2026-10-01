@@ -14,6 +14,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import type { DataTableQuery } from "@/components/ui/data-table";
 import { dbError } from "@/lib/internal-error";
+import { assertRead } from "@/lib/read-result-server";
 
 // See app/(portal)/student/placements/actions.ts's comment on why embedded
 // selects need a local cast — the hand-maintained Database type has no
@@ -54,7 +55,8 @@ export async function listDrives(q: DataTableQuery) {
     dbQuery = dbQuery.order(column, { ascending });
 
     const from = q.page * DRIVES_PAGE_SIZE;
-    const { data, count } = await dbQuery.range(from, from + DRIVES_PAGE_SIZE - 1);
+    const { data, count, error: dataError } = await dbQuery.range(from, from + DRIVES_PAGE_SIZE - 1);
+    assertRead(dataError);
     return { data: data || [], count: count ?? 0 };
   });
 }
@@ -62,12 +64,13 @@ export async function listDrives(q: DataTableQuery) {
 export async function listCompaniesForSelect() {
   const actor = await requireRole(STAFF_ROLES);
   const supabase = await createClient();
-  const { data } = await supabase
+  const { data, error: dataError } = await supabase
     .from("companies")
     .select("id, name")
     .eq("college_id", actor.collegeId)
     .eq("status", "active")
     .order("name");
+  assertRead(dataError);
   return data || [];
 }
 
@@ -75,23 +78,25 @@ export async function listCompaniesForSelect() {
 export async function listActiveDrivesForSelect() {
   const actor = await requireRole(STAFF_ROLES);
   const supabase = await createClient();
-  const { data } = await supabase
+  const { data, error: dataError } = await supabase
     .from("placement_drives")
     .select("id, job_role, companies:company_id(name)")
     .eq("college_id", actor.collegeId)
     .eq("status", "published")
     .order("created_at", { ascending: false });
+  assertRead(dataError);
   return data || [];
 }
 
 export async function listDepartmentsForSelect() {
   const actor = await requireRole(STAFF_ROLES);
   const supabase = await createClient();
-  const { data } = await supabase
+  const { data, error: dataError } = await supabase
     .from("departments")
     .select("id, name, code")
     .eq("college_id", actor.collegeId)
     .order("name");
+  assertRead(dataError);
   return data || [];
 }
 
@@ -274,18 +279,20 @@ export async function listApplicants(driveIdRaw: string) {
   const supabase = await createClient();
   const { driveId } = z.object({ driveId: z.string().guid() }).parse({ driveId: driveIdRaw });
 
-  const { data: drive } = await supabase.from("placement_drives").select("id, college_id").eq("id", driveId).single();
+  const { data: drive, error: driveError } = await supabase.from("placement_drives").select("id, college_id").eq("id", driveId).single();
+  assertRead(driveError);
   if (!drive || drive.college_id !== actor.collegeId) {
     throw new Error("Placement drive not found in your college.");
   }
 
-  const { data } = await supabase
+  const { data, error: dataError } = await supabase
     .from("placement_applications")
     .select(
       "*, students:student_id(enrollment_number, cgpa, batch_year, profiles:user_id(full_name), departments(name))"
     )
     .eq("drive_id", driveId)
     .order("applied_at", { ascending: false });
+  assertRead(dataError);
 
   return data || [];
 }

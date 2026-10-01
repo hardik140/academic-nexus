@@ -15,6 +15,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import type { DataTableQuery } from "@/components/ui/data-table";
 import { dbError } from "@/lib/internal-error";
+import { assertRead } from "@/lib/read-result-server";
 
 const PAYMENTS_PAGE_SIZE = 10;
 const PAYMENTS_SORT_COLUMNS = ["amount", "created_at"] as const;
@@ -43,7 +44,8 @@ export async function listPayments(q: DataTableQuery) {
     dbQuery = dbQuery.order(column, { ascending });
 
     const from = q.page * PAYMENTS_PAGE_SIZE;
-    const { data, count } = await dbQuery.range(from, from + PAYMENTS_PAGE_SIZE - 1);
+    const { data, count, error: dataError } = await dbQuery.range(from, from + PAYMENTS_PAGE_SIZE - 1);
+    assertRead(dataError);
     return { data: data || [], count: count ?? 0 };
   });
 }
@@ -63,7 +65,8 @@ export async function getFeeStats() {
   const supabase = await createClient();
 
   return getCached(`stats:fees:${actor.collegeId}`, 30, async () => {
-    const { data } = await supabase.from("fees").select("amount, paid_amount, status, due_date").eq("college_id", actor.collegeId);
+    const { data, error: dataError } = await supabase.from("fees").select("amount, paid_amount, status, due_date").eq("college_id", actor.collegeId);
+    assertRead(dataError);
     const f = data || [];
     // "overdue" is computed live (computeEffectiveFeeStatus), not the stored
     // status column — nothing anywhere ever sets fees.status = 'overdue'

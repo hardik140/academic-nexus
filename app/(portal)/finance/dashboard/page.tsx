@@ -4,6 +4,7 @@ import { getCached } from "@/lib/cache";
 import { computeEffectiveFeeStatus } from "@/lib/finance-status";
 import { getFinanceExceptions } from "../exceptions/actions";
 import { assertRead } from "@/lib/read-result-server";
+import { formatMoney } from "@/lib/format";
 
 export default async function FinanceDashboard() {
   const supabase = await createClient();
@@ -46,8 +47,6 @@ export default async function FinanceDashboard() {
     .order("created_at", { ascending: false })
     .limit(10);
   assertRead(recentPaymentsError);
-
-  const formatCurr = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
 
   const actionItems = [
     { label: "refund request", count: exceptions.refundsAwaitingApproval.length, href: "/finance/refunds", severity: "high" as const },
@@ -121,15 +120,15 @@ export default async function FinanceDashboard() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-md">
         <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-lg shadow-sm">
           <div className="text-xs font-semibold text-outline uppercase tracking-wider mb-sm">Total Billed</div>
-          <div className="text-2xl font-extrabold text-on-surface">{formatCurr(totalBilled)}</div>
+          <div className="text-2xl font-extrabold text-on-surface">{formatMoney(totalBilled)}</div>
         </div>
         <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-lg shadow-sm">
           <div className="text-xs font-semibold text-outline uppercase tracking-wider mb-sm">Collected</div>
-          <div className="text-2xl font-extrabold text-success">{formatCurr(totalCollected)}</div>
+          <div className="text-2xl font-extrabold text-success">{formatMoney(totalCollected)}</div>
         </div>
         <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-lg shadow-sm">
           <div className="text-xs font-semibold text-outline uppercase tracking-wider mb-sm">Overdue</div>
-          <div className="text-2xl font-extrabold text-error">{formatCurr(totalOverdue)}</div>
+          <div className="text-2xl font-extrabold text-error">{formatMoney(totalOverdue)}</div>
         </div>
         <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-lg shadow-sm">
           <div className="text-xs font-semibold text-outline uppercase tracking-wider mb-sm">Collection Rate</div>
@@ -162,7 +161,7 @@ export default async function FinanceDashboard() {
                 <tr key={p.id} className="hover:bg-surface-container-low transition-colors">
                   <td className="px-lg py-md font-mono text-xs text-on-surface-variant">{p.transaction_ref?.slice(0, 12)}...</td>
                   <td className="px-lg py-md font-medium text-on-surface">{(p.profiles as any)?.full_name || "—"}</td>
-                  <td className="px-lg py-md text-on-surface">{formatCurr(p.amount)}</td>
+                  <td className="px-lg py-md text-on-surface">{formatMoney(p.amount)}</td>
                   <td className="px-lg py-md text-on-surface-variant capitalize">{p.method}</td>
                   <td className="px-lg py-md">
                     <span className={`text-xs font-semibold px-sm py-xs rounded-full ${

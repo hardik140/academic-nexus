@@ -13,6 +13,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import type { DataTableQuery } from "@/components/ui/data-table";
 import { dbError } from "@/lib/internal-error";
+import { assertRead } from "@/lib/read-result-server";
 
 const FEES_PAGE_SIZE = 10;
 const FEES_SORT_COLUMNS = ["type", "amount", "due_date"] as const;
@@ -39,7 +40,8 @@ export async function listInvoices(q: DataTableQuery) {
     dbQuery = dbQuery.order(column, { ascending });
 
     const from = q.page * FEES_PAGE_SIZE;
-    const { data, count } = await dbQuery.range(from, from + FEES_PAGE_SIZE - 1);
+    const { data, count, error: dataError } = await dbQuery.range(from, from + FEES_PAGE_SIZE - 1);
+    assertRead(dataError);
     return { data: data || [], count: count ?? 0 };
   });
 }

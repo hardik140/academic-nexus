@@ -60,7 +60,13 @@ async function focusPosition(page: Page) {
 async function clickAndReadTransitions(button: Locator) {
   return button.evaluate(
     (el: HTMLElement) =>
-      new Promise<{ open: boolean; transitions: { property: string; pseudo: string; ms: number }[] }>((resolve) => {
+      new Promise<{
+        open: boolean;
+        connected: boolean;
+        style: { property: string; duration: string; easing: string };
+        backdropStyle: { property: string; duration: string; easing: string };
+        transitions: { property: string; pseudo: string; ms: number }[];
+      }>((resolve) => {
         const observer = new MutationObserver((records) => {
           const dialog = records.map((r) => r.target).find((t): t is HTMLDialogElement => t instanceof HTMLDialogElement);
           if (!dialog) return;
@@ -72,7 +78,21 @@ async function clickAndReadTransitions(button: Locator) {
               const effect = a.effect as KeyframeEffect;
               return { property: (a as CSSTransition).transitionProperty, pseudo: effect.pseudoElement ?? "", ms: Number(effect.getTiming().duration) };
             });
-          resolve({ open: dialog.open, transitions });
+          const readStyle = (pseudo?: string) => {
+            const style = getComputedStyle(dialog, pseudo ?? null);
+            return {
+              property: style.transitionProperty,
+              duration: style.transitionDuration,
+              easing: style.transitionTimingFunction,
+            };
+          };
+          resolve({
+            open: dialog.open,
+            connected: dialog.isConnected,
+            style: readStyle(),
+            backdropStyle: readStyle("::backdrop"),
+            transitions,
+          });
         });
         observer.observe(document.body, { subtree: true, attributes: true, attributeFilter: ["open"] });
         el.click();
@@ -397,12 +417,17 @@ test.describe("Modal: motion-dialog", () => {
 
     const exiting = await clickAndReadTransitions(dialog.getByRole("button", { name: "Close", exact: true }));
     expect(exiting.open).toBe(false);
+    expect(exiting.connected).toBe(true);
     expect(exiting.transitions.filter((t) => t.pseudo === "").map((t) => t.property).sort()).toEqual([...PROPS].sort());
     // The ::backdrop lives as long as the dialog stays in the top layer: it only fades.
     expect(exiting.transitions.filter((t) => t.pseudo === "::backdrop").map((t) => t.property)).toEqual(["opacity"]);
     for (const t of exiting.transitions) expect(t.ms).toBe(150);
-    const closed = await computedTransition(editDialogElement(page));
-    expect(closed.easing).toBe(EASE_IN_OUT);
+    expect(exiting.style.property.split(", ")).toEqual(PROPS);
+    expect(toMs(exiting.style.duration)).toBe(150);
+    expect(exiting.style.easing).toBe(EASE_IN_OUT);
+    expect(toMs(exiting.backdropStyle.duration)).toBe(150);
+    expect(exiting.backdropStyle.easing).toBe(EASE_IN_OUT);
+    await expect(editDialogElement(page)).toHaveCount(0);
   });
 
   test("no keyframe animation, no shadow or layout transition, and the backdrop is the native ::backdrop", async ({ page }) => {

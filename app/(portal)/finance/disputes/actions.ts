@@ -12,6 +12,7 @@ import { PERMISSIONS } from "@/lib/permissions";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import { dbError } from "@/lib/internal-error";
+import { assertRead } from "@/lib/read-result-server";
 
 function disputesCacheKey(collegeId: string) {
   return `finance-disputes:${collegeId}`;
@@ -25,11 +26,12 @@ export async function listFinancialDisputes() {
   const supabase = await createClient();
 
   return getCached(disputesCacheKey(actor.collegeId), 30, async () => {
-    const { data } = await supabase
+    const { data, error: dataError } = await supabase
       .from("financial_disputes")
       .select(SELECT_COLS)
       .eq("college_id", actor.collegeId)
       .order("created_at", { ascending: false });
+    assertRead(dataError);
     return data || [];
   });
 }

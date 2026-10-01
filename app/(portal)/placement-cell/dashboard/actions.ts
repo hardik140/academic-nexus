@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/rbac";
 import { getCached } from "@/lib/cache";
+import { assertRead } from "@/lib/read-result-server";
 
 export async function getPlacementCellDashboard() {
   const actor = await requireRole(["placement_cell", "director", "admin"]);
@@ -48,6 +49,14 @@ export async function getPlacementCellDashboard() {
         .order("applied_at", { ascending: false })
         .limit(5),
     ]);
+    assertRead(totalStudentsRes.error);
+    assertRead(eligibleRes.error);
+    assertRead(summaryRes.error);
+    assertRead(companiesRes.error);
+    assertRead(activeDrivesRes.error);
+    assertRead(applicationsRes.error);
+    assertRead(recentDrivesRes.error);
+    assertRead(recentApplicationsRes.error);
 
     const totalStudents = totalStudentsRes.count || 0;
     const placed = summaryRes.data?.total_placed || 0;

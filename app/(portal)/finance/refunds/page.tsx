@@ -7,7 +7,7 @@ import { ErrorAlert } from "@/components/ui/error-alert";
 import { StateView } from "@/components/ui/state-view";
 import { useAsyncResource } from "@/hooks/use-async-resource";
 import { toFeedbackError, type FeedbackError } from "@/lib/action-failure";
-import { formatCurrency } from "@/lib/utils";
+import { formatMoney } from "@/lib/format";
 import { listRefundRequests, approveRefund, rejectRefund } from "./actions";
 
 export default function FinanceRefunds() {
@@ -84,10 +84,10 @@ export default function FinanceRefunds() {
                     {(req.students as any)?.profiles?.full_name} — {(req.students as any)?.enrollment_number}
                   </div>
                   <div className="text-xs text-outline mt-xs">
-                    Original payment: {formatCurrency((req.payments as any)?.amount || 0)} via {(req.payments as any)?.method} on{" "}
+                    Original payment: {formatMoney((req.payments as any)?.amount || 0)} via {(req.payments as any)?.method} on{" "}
                     {(req.payments as any)?.created_at ? new Date((req.payments as any).created_at).toLocaleDateString() : "—"}
                   </div>
-                  <div className="text-sm font-bold text-on-surface mt-xs">Requesting {formatCurrency(req.amount)}</div>
+                  <div className="text-sm font-bold text-on-surface mt-xs">Requesting {formatMoney(req.amount)}</div>
                   <div className="text-sm text-on-surface-variant italic mt-xs">&ldquo;{req.reason}&rdquo;</div>
                 </div>
                 <div className="flex gap-xs items-center shrink-0">
@@ -132,7 +132,7 @@ export default function FinanceRefunds() {
             <div key={req.id} className="flex items-center justify-between px-lg py-md">
               <div>
                 <div className="text-sm text-on-surface">
-                  {(req.students as any)?.profiles?.full_name} — {formatCurrency(req.amount)}
+                  {(req.students as any)?.profiles?.full_name} — {formatMoney(req.amount)}
                 </div>
                 <div className="text-xs text-outline mt-xs">
                   {new Date(req.reviewed_at).toLocaleDateString()}
