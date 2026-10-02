@@ -8,7 +8,7 @@ import { LoadingState } from "@/components/ui/loading-state";
 import { useAsyncResource } from "@/hooks/use-async-resource";
 import { toFeedbackError, type FeedbackError } from "@/lib/action-failure";
 import { classifyError } from "@/lib/feedback-error";
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
+import { FacultyRatioChart } from "@/components/charts/faculty-ratio-chart";
 import { Button, FormField } from "@/components/ui/modal";
 import { computeScenario, getForecastBaseline, listSavedScenarios, saveForecastScenario, type ScenarioParams } from "./actions";
 
@@ -60,13 +60,6 @@ export default function ForecastSimulatorPage() {
       setSaving(false);
     }
   };
-
-  const ratioChartData = result
-    ? [
-        { label: "Current", ratio: result.projected.baselineFacultyStudentRatio },
-        { label: "Projected", ratio: result.projected.facultyStudentRatio },
-      ]
-    : [];
 
   return (
     <div className="space-y-lg">
@@ -191,17 +184,7 @@ export default function ForecastSimulatorPage() {
 
           {result.projected.hostelUptakeRateNote && <p className="text-xs text-outline italic">{result.projected.hostelUptakeRateNote}</p>}
 
-          {ratioChartData.some((d) => d.ratio != null) && (
-            <ResponsiveContainer width="100%" height={180}>
-              <LineChart data={ratioChartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-outline-variant)" />
-                <XAxis dataKey="label" stroke="var(--color-outline)" fontSize={12} />
-                <YAxis stroke="var(--color-outline)" fontSize={12} />
-                <Tooltip />
-                <Line type="monotone" dataKey="ratio" stroke="var(--color-secondary)" strokeWidth={2} dot={{ r: 4 }} />
-              </LineChart>
-            </ResponsiveContainer>
-          )}
+          <FacultyRatioChart current={result.projected.baselineFacultyStudentRatio} projected={result.projected.facultyStudentRatio} />
 
           <div className="flex items-end gap-sm pt-md border-t border-outline-variant">
             <ErrorAlert error={error} />

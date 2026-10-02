@@ -31,7 +31,7 @@ export default function DirectorHostelRollup() {
         <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-sm p-lg">
           <h2 className="text-sm font-bold text-on-surface mb-md">Occupancy</h2>
           {data.totalCapacity > 0 ? (
-            <DonutChart slices={slices} centerLabel={`${data.occupancyPct}%`} />
+            <DonutChart title="Hostel occupancy" slices={slices} centerLabel={`${data.occupancyPct}%`} />
           ) : (
             <div className="p-xl text-center text-sm text-outline">No hostel capacity data available yet.</div>
           )}
