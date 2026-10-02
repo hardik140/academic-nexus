@@ -44,9 +44,16 @@ async function names(p: Locator) {
   for (const item of items) {
     const link = p.getByRole("link", { name: item.label, exact: true });
     await expect(link).toHaveAccessibleName(item.label);
-    await expect(link).toHaveAttribute("href", item.href);
-    await expect(link.locator("span").first()).toHaveAttribute("aria-hidden", "true");
-    expect(await link.evaluate((a) => ({ tag: a.tagName, role: a.getAttribute("role"), label: a.getAttribute("aria-label"), tabindex: a.getAttribute("tabindex") }))).toEqual({ tag: "A", role: null, label: null, tabindex: null });
+    // Read the remaining contract together; retain the existing stabilization
+    // window without spending a separate browser round trip on each attribute.
+    await expect.poll(() => link.evaluate((a) => ({
+      href: a.getAttribute("href"),
+      iconAriaHidden: a.querySelector("span")?.getAttribute("aria-hidden"),
+      tag: a.tagName,
+      role: a.getAttribute("role"),
+      label: a.getAttribute("aria-label"),
+      tabindex: a.getAttribute("tabindex"),
+    }))).toEqual({ href: item.href, iconAriaHidden: "true", tag: "A", role: null, label: null, tabindex: null });
   }
 }
 async function current(p: Locator, label: string | null) {
