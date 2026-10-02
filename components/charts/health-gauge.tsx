@@ -1,6 +1,7 @@
 "use client";
 
 import { RadialBarChart, RadialBar, PolarAngleAxis, ResponsiveContainer } from "recharts";
+import { ChartFigure } from "./chart-figure";
 
 interface HealthGaugeProps {
   score: number | null;
@@ -41,30 +42,35 @@ export function HealthGauge({
   }
 
   const data = [{ name: label, value: score, fill: scoreColor(score) }];
+  const partial = contributingCount != null && possibleCount != null && contributingCount < possibleCount;
+  const caption = `${label}: ${score} out of 100${partial ? `, based on ${contributingCount} of ${possibleCount} signals` : ""}.`;
 
   return (
-    <div className="relative h-[200px]">
-      <ResponsiveContainer width="100%" height="100%">
-        <RadialBarChart
-          innerRadius="70%"
-          outerRadius="100%"
-          data={data}
-          startAngle={90}
-          endAngle={-270}
-        >
-          <PolarAngleAxis type="number" domain={[0, 100]} angleAxisId={0} tick={false} />
-          <RadialBar background dataKey="value" cornerRadius={12} angleAxisId={0} />
-        </RadialBarChart>
-      </ResponsiveContainer>
-      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-        <div className="text-4xl font-extrabold text-on-surface">{score}</div>
-        <div className="text-xs text-outline">out of 100</div>
-        {contributingCount != null && possibleCount != null && contributingCount < possibleCount && (
-          <div className="text-[10px] text-outline mt-xs px-md text-center">
-            Based on {contributingCount} of {possibleCount} signals
-          </div>
-        )}
+    <ChartFigure caption={caption}>
+      <div className="relative h-[200px]">
+        <ResponsiveContainer width="100%" height="100%">
+          <RadialBarChart
+            accessibilityLayer={false}
+            innerRadius="70%"
+            outerRadius="100%"
+            data={data}
+            startAngle={90}
+            endAngle={-270}
+          >
+            <PolarAngleAxis type="number" domain={[0, 100]} angleAxisId={0} tick={false} />
+            <RadialBar background dataKey="value" cornerRadius={12} angleAxisId={0} isAnimationActive={false} />
+          </RadialBarChart>
+        </ResponsiveContainer>
+        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+          <div className="text-4xl font-extrabold text-on-surface">{score}</div>
+          <div className="text-xs text-outline">out of 100</div>
+          {partial && (
+            <div className="text-[10px] text-outline mt-xs px-md text-center">
+              Based on {contributingCount} of {possibleCount} signals
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+    </ChartFigure>
   );
 }

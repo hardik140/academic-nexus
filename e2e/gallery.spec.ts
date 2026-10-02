@@ -13,6 +13,7 @@ const SECTIONS = [
   "motion-utilities",
   "loading-screen",
   "funnel-chart",
+  "chart-figures",
   "buttons",
   "form-fields",
   "status-badges",

@@ -3,6 +3,10 @@ import { notFound } from "next/navigation";
 import { Button, StatusBadge } from "@/components/ui/modal";
 import { StatsCard } from "@/components/ui/stats-card";
 import { PlacementFunnelChart } from "@/components/charts/placement-funnel-chart";
+import { DepartmentHeatmapGrid } from "@/components/charts/department-heatmap-grid";
+import { DonutChart } from "@/components/charts/donut-chart";
+import { FacultyRatioChart } from "@/components/charts/faculty-ratio-chart";
+import { HealthGauge } from "@/components/charts/health-gauge";
 import Loading from "@/app/loading";
 import {
   AlertDemos,
@@ -82,6 +86,17 @@ const SAMPLE_FUNNEL = [
   { name: "Interviewed", value: 96 },
   { name: "Placed", value: 58 },
 ];
+
+// Fictional sample data for the other charts (M7).
+const SAMPLE_DONUT = [
+  { name: "Occupied", value: 300, color: "var(--color-secondary)" },
+  { name: "Vacant", value: 100, color: "var(--color-outline-variant)" },
+];
+const SAMPLE_HEATMAP = [
+  { departmentId: "sample-cse", departmentName: "Computer Science", departmentCode: "CSE", attendancePct: 82, backlogRate: 12, feeCollectionPct: 64, placementRate: null, openRiskCount: 2 },
+  { departmentId: "sample-me", departmentName: "Mechanical", departmentCode: "ME", attendancePct: 41, backlogRate: 55, feeCollectionPct: 90, placementRate: 71, openRiskCount: 0 },
+];
+const CHART_PANEL = "min-w-0 rounded-panel border border-outline-variant bg-surface-container-lowest p-md";
 
 const MOTION_TOKENS = [
   "--duration-instant", "--duration-fast", "--duration-normal", "--duration-slow",
@@ -209,6 +224,23 @@ export default function ComponentGalleryPage() {
         <Section id="funnel-chart" title="Placement funnel chart (never animated)">
           <div data-testid="funnel-chart" className="rounded-panel border border-outline-variant bg-surface-container-lowest p-md">
             <PlacementFunnelChart stages={SAMPLE_FUNNEL} />
+          </div>
+        </Section>
+
+        <Section id="chart-figures" title="Charts in ChartFigure (never animated)">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-md">
+            <div data-testid="chart-donut" className={CHART_PANEL}>
+              <DonutChart title="Hostel occupancy" slices={SAMPLE_DONUT} centerLabel="75%" />
+            </div>
+            <div data-testid="chart-gauge" className={CHART_PANEL}>
+              <HealthGauge score={68} contributingCount={3} possibleCount={4} />
+            </div>
+            <div data-testid="chart-ratio" className={CHART_PANEL}>
+              <FacultyRatioChart current={18.5} projected={22} />
+            </div>
+            <div data-testid="chart-heatmap" className={`${CHART_PANEL} lg:col-span-2`}>
+              <DepartmentHeatmapGrid rows={SAMPLE_HEATMAP} />
+            </div>
           </div>
         </Section>
 
