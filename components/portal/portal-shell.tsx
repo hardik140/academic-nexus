@@ -9,6 +9,8 @@ import type { Tables } from "@/types/database";
 import { cn, getInitials } from "@/lib/utils";
 import { NativeDialog } from "@/components/ui/native-dialog";
 import { ToastProvider } from "@/components/ui/toast";
+import { SessionsDialog } from "@/components/portal/sessions-dialog";
+import { endMySessions, listMySessions, revokeMySession } from "@/lib/sessions/actions";
 
 interface PortalShellProps {
   profile: Tables<"profiles">;
@@ -287,6 +289,7 @@ const PENDING_MARKER_DELAY_MS = 150;
 export function PortalShell({ profile, children }: PortalShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [devicesOpen, setDevicesOpen] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
@@ -347,6 +350,9 @@ export function PortalShell({ profile, children }: PortalShellProps) {
   };
 
   const handleLogout = async () => {
+    // The registry first (migration 054): signOut() ends every GoTrue
+    // session of the user, so the application ends the same set.
+    await endMySessions("global");
     await supabase.auth.signOut();
     router.push("/login");
   };
@@ -493,6 +499,29 @@ export function PortalShell({ profile, children }: PortalShellProps) {
                   <span className="absolute top-1 right-1 w-2 h-2 bg-error rounded-full" />
                 </button>
               )}
+
+              {/* Your devices: the user's own sessions, with "Sign out" on each (054). */}
+              <button
+                aria-label="Your devices"
+                onClick={() => setDevicesOpen(true)}
+                className="p-sm rounded-xl hover:bg-surface-container-high text-on-surface-variant motion-feedback"
+              >
+                <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect width="14" height="10" x="2" y="4" rx="2" />
+                  <path d="M6 18h6" />
+                  <rect width="6" height="10" x="16" y="8" rx="1" />
+                </svg>
+              </button>
+              <SessionsDialog
+                open={devicesOpen}
+                onClose={() => setDevicesOpen(false)}
+                title="Your devices"
+                description="Where your account is signed in. Signing out a device ends that session immediately."
+                load={listMySessions}
+                revoke={revokeMySession}
+                revokeLabel="Sign out"
+                emptyText="Only this device is signed in."
+              />
 
               {/* Logout */}
               <button

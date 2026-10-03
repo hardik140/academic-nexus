@@ -36,6 +36,17 @@ CREATE OR REPLACE FUNCTION auth.uid() RETURNS UUID AS $$
   SELECT NULLIF(current_setting('request.jwt.claim.sub', true), '')::UUID;
 $$ LANGUAGE sql STABLE;
 
+-- The full claim set, as hosted Supabase defines it: PostgREST puts the
+-- verified JWT's claims in request.jwt.claims. Migration 054 reads the
+-- GoTrue `session_id` claim through this. Tests that do not set the claims
+-- get NULL, exactly as a request with no session_id would.
+CREATE OR REPLACE FUNCTION auth.jwt() RETURNS JSONB AS $$
+  SELECT coalesce(
+    nullif(current_setting('request.jwt.claim', true), ''),
+    nullif(current_setting('request.jwt.claims', true), '')
+  )::JSONB;
+$$ LANGUAGE sql STABLE;
+
 CREATE OR REPLACE FUNCTION auth.email() RETURNS TEXT AS $$
   SELECT NULLIF(current_setting('request.jwt.claim.email', true), '');
 $$ LANGUAGE sql STABLE;

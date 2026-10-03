@@ -28,14 +28,41 @@ export interface FeedbackError {
 
 export const SESSION_EXPIRED_MESSAGE = "Your session has expired. Please sign in again.";
 const NETWORK_MESSAGE = "Couldn't reach the server. Check your internet connection, then try again.";
+export const COLLEGE_UNAVAILABLE_MESSAGE = "Your college is currently unavailable. Reload the page for details.";
 
-export type SessionState = "present" | "missing" | "unknown";
+/**
+ * "ended": signed in to Supabase Auth, but this session was revoked or not
+ * admitted (migration 054). "college_unavailable": the college is in
+ * MAINTENANCE or SUSPENDED (053).
+ */
+export type SessionState = "present" | "missing" | "unknown" | "ended" | "college_unavailable";
 
-/** Asks Supabase Auth whether a user is still signed in. */
+/**
+ * When a signed-in user's action fails, the database can say whether the
+ * application itself is closed to them. Any failure to ask is "no answer",
+ * never a block.
+ */
+async function accessBlock(client: ReturnType<typeof createClient>): Promise<SessionState | null> {
+  try {
+    const rpc = client.rpc as unknown as (name: string) => PromiseLike<{ data: unknown; error: unknown }>;
+    const { data, error } = await rpc("my_access_state");
+    const state = data as { allowed?: boolean; profile_status?: string; role?: string; college_state?: string } | null;
+    if (error || !state || state.allowed !== false) return null;
+    if (state.profile_status === "active" && state.role !== "super_admin" && state.college_state && state.college_state !== "ACTIVE") {
+      return "college_unavailable";
+    }
+    return "ended";
+  } catch {
+    return null;
+  }
+}
+
+/** Asks Supabase Auth whether a user is still signed in — and, if so, whether the application admits them. */
 export async function currentSessionState(): Promise<SessionState> {
   try {
-    const { data, error } = await createClient().auth.getUser();
-    if (data.user) return "present";
+    const client = createClient();
+    const { data, error } = await client.auth.getUser();
+    if (data.user) return (await accessBlock(client)) ?? "present";
     if (!error) return "missing";
     // Could not ask (offline, auth service down): no conclusion either way.
     if (error.name === "AuthRetryableFetchError" || error.status === undefined || error.status === 0 || error.status >= 500) {
@@ -55,6 +82,8 @@ export async function toFeedbackError(
   const { kind } = classifyError(error);
   if (kind === "session") return { message: SESSION_EXPIRED_MESSAGE, session: true };
   if (kind === "network") return { message: NETWORK_MESSAGE, session: false };
-  if ((await sessionState()) === "missing") return { message: SESSION_EXPIRED_MESSAGE, session: true };
+  const state = await sessionState();
+  if (state === "missing" || state === "ended") return { message: SESSION_EXPIRED_MESSAGE, session: true };
+  if (state === "college_unavailable") return { message: COLLEGE_UNAVAILABLE_MESSAGE, session: false };
   return { message: feedbackMessage(error, fallback), session: false };
 }

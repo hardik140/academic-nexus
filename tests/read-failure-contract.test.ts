@@ -131,8 +131,11 @@ const VIEW_STATE_READS = new Set(["director/dashboard.getCommandCenterData", "di
 /** A call to an imported write action — invitations, for instance. */
 const IMPORTED_WRITE = /\bawait\s+(?!create(?:Admin)?Client\b)(invite|resend|revoke|create|update|delete|assign|approve|reject|send|record|submit|apply|cancel)[A-Z]\w*\s*\(/;
 
-// Every function that writes: mutations are not read functions.
-const WRITE = /\.(insert|update|upsert|delete)\s*\(|\.rpc\s*\(|auth\.admin\.|storage\.from|sendEmail|revalidatePath|writeAudit|logAudit|sendExpoPushNotifications|invalidateCache/;
+// Every function that writes: mutations are not read functions. A state-
+// changing database function reached through lib/college-access's
+// callAccessRpc (set_/revoke_/end_/register_, migrations 053/054) is a write
+// too; a read through it (session_enforcement_readiness) stays a read.
+const WRITE = /\.(insert|update|upsert|delete)\s*\(|\.rpc\s*\(|auth\.admin\.|storage\.from|sendEmail|revalidatePath|writeAudit|logAudit|sendExpoPushNotifications|invalidateCache|callAccessRpc(?:<[^>]*>)?\(\s*\w+,\s*"(?:set_|revoke_|end_|register_)/;
 
 function actionFiles(dir: string): string[] {
   return readdirSync(dir).flatMap((entry) => {

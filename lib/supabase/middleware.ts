@@ -4,7 +4,24 @@ import { routePrefixFor, dashboardPathFor } from "@/lib/auth/role-routes";
 import { checkRateLimit, RateLimitError, RateLimiterUnavailableError } from "@/lib/rate-limit";
 import { clientIp } from "@/lib/client-ip";
 import { getCached, middlewareProfileCacheKey } from "@/lib/cache";
-import type { UserRole, UserStatus } from "@/types/database";
+import type { Database, UserRole, UserStatus } from "@/types/database";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  AccessFeatureUnavailable,
+  admissionAllows,
+  deviceLabelFromUserAgent,
+  registerSession,
+  unavailableReason,
+  type Admission,
+  type UnavailableReason,
+} from "@/lib/college-access";
+
+/**
+ * A random per-browser id, used ONLY to label a session in the device list.
+ * It is never counted and never authorizes anything (migration 054 counts
+ * GoTrue's session ids), so a forged or cleared value cannot make room.
+ */
+export const DEVICE_COOKIE = "nx_device";
 
 /**
  * Routes that don't require authentication. `/api` covers machine-to-machine
@@ -25,6 +42,10 @@ const PUBLIC_ROUTES = [
   "/auth/accept-invite",
   "/auth/reset-password",
   "/api",
+  // The college-unavailable / device-limit page. It is where a refused
+  // session is sent, so it cannot itself require admission; it re-reads the
+  // session and the access state on its own.
+  "/unavailable",
 ];
 
 export async function updateSession(request: NextRequest) {
@@ -167,6 +188,37 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  // College lifecycle and session admission (migrations 053/054). Uncached,
+  // unlike the profile above: a suspension or a revocation takes effect on
+  // the very next request. The database refuses the same sessions on its
+  // own; this is what turns the refusal into the right page.
+  const userAgent = request.headers.get("user-agent");
+  const deviceId = request.cookies.get(DEVICE_COOKIE)?.value ?? crypto.randomUUID();
+  let admission: Admission | null = null;
+  try {
+    admission = await registerSession(supabase as unknown as SupabaseClient<Database>, {
+      client: "web",
+      deviceId,
+      deviceLabel: deviceLabelFromUserAgent(userAgent),
+      userAgent,
+    });
+  } catch (err) {
+    // Fail closed — unless the database predates the feature entirely.
+    if (!(err instanceof AccessFeatureUnavailable)) return unavailable(request, "error");
+  }
+  if (admission && !admissionAllows(admission)) {
+    return unavailable(request, unavailableReason(admission));
+  }
+  if (!request.cookies.get(DEVICE_COOKIE)) {
+    supabaseResponse.cookies.set(DEVICE_COOKIE, deviceId, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: request.nextUrl.protocol === "https:",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 400,
+    });
+  }
+
   // Root path → redirect to role dashboard
   if (pathname === "/") {
     const url = request.nextUrl.clone();
@@ -204,4 +256,12 @@ export async function updateSession(request: NextRequest) {
   }
 
   return supabaseResponse;
+}
+
+function unavailable(request: NextRequest, reason: UnavailableReason): NextResponse {
+  const url = request.nextUrl.clone();
+  url.pathname = "/unavailable";
+  url.search = "";
+  url.searchParams.set("reason", reason);
+  return NextResponse.redirect(url);
 }

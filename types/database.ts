@@ -28,6 +28,9 @@ export type UserRole =
 
 export type UserStatus = "active" | "suspended" | "pending" | "graduated" | "alumni";
 
+/** Migration 053. MAINTENANCE and SUSPENDED block college users; neither deletes data. */
+export type CollegeLifecycleState = "ACTIVE" | "MAINTENANCE" | "SUSPENDED";
+
 /**
  * Loosens DB-enum (CHECK constraint) literal unions to plain `string` for
  * write payloads, since form state is naturally string-typed and Postgres
@@ -77,12 +80,19 @@ export interface Database {
           established_year: number | null;
           created_by: string | null;
           is_platform: boolean;
+          /** Migration 053. Changed only through set_college_lifecycle(). */
+          lifecycle_state: CollegeLifecycleState;
+          lifecycle_message: string | null;
+          lifecycle_expected_resume_at: string | null;
+          lifecycle_changed_at: string | null;
+          lifecycle_changed_by: string | null;
           created_at: string;
           updated_at: string;
         };
         Insert: OptionalKeys<
           Database["public"]["Tables"]["colleges"]["Row"],
           "id" | "created_at" | "updated_at" | "domain" | "logo_url" | "address" | "city" | "state" | "country" | "phone" | "email" | "website" | "accreditation" | "established_year" | "created_by" | "is_platform"
+          | "lifecycle_state" | "lifecycle_message" | "lifecycle_expected_resume_at" | "lifecycle_changed_at" | "lifecycle_changed_by"
         >;
         Update: Partial<Database["public"]["Tables"]["colleges"]["Insert"]>;
         Relationships: [];
@@ -1739,6 +1749,58 @@ export interface Database {
           | "withdrawn_by" | "withdrawn_at"
         >;
         Update: Partial<Database["public"]["Tables"]["security_instructions"]["Insert"]>;
+        Relationships: [];
+      };
+      // ── Migration 053: college lifecycle history (immutable, super_admin-readable) ──
+      college_lifecycle_events: {
+        Row: {
+          id: string;
+          college_id: string;
+          previous_state: CollegeLifecycleState;
+          new_state: CollegeLifecycleState;
+          reason: string;
+          message: string | null;
+          expected_resume_at: string | null;
+          sessions_revoked: number;
+          changed_by: string;
+          changed_at: string;
+        };
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
+      // ── Migration 054: application session registry (written only by its functions) ──
+      user_sessions: {
+        Row: {
+          session_id: string;
+          user_id: string;
+          college_id: string;
+          status: "active" | "rejected" | "revoked";
+          client: "web" | "mobile" | "mobile-legacy";
+          device_id: string | null;
+          device_label: string | null;
+          user_agent: string | null;
+          created_at: string;
+          last_seen_at: string;
+          expires_at: string | null;
+          revoked_at: string | null;
+          revoked_by: string | null;
+          revoked_reason: string | null;
+        };
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
+      role_session_limits: {
+        Row: { role: string; max_sessions: number | null };
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
+      platform_settings: {
+        Row: { key: "session_enforcement"; value: string; updated_at: string; updated_by: string | null };
+        Insert: never;
+        Update: never;
         Relationships: [];
       };
     };

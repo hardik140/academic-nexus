@@ -13,9 +13,30 @@ import { useAsyncResource } from "@/hooks/use-async-resource";
 import { toFeedbackError, type FeedbackError } from "@/lib/action-failure";
 import { classifyError } from "@/lib/feedback-error";
 import { requireRows } from "@/lib/read-result";
-import { createCollege, listColleges, inviteUser, resendInvitation, revokeInvitation } from "./actions";
+import { LifecycleBadge, LifecycleDialog, LifecycleHistoryDialog, type LifecycleChange, type LifecycleHistoryEntry } from "@/components/portal/college-lifecycle";
+import { SessionsDialog } from "@/components/portal/sessions-dialog";
+import type { CollegeLifecycleState } from "@/types/database";
+import {
+  createCollege,
+  listColleges,
+  inviteUser,
+  resendInvitation,
+  revokeInvitation,
+  setCollegeLifecycle,
+  listCollegeLifecycleHistory,
+  listCollegeAdminSessions,
+  revokeAdminSession,
+} from "./actions";
 
 const COLLEGES_PAGE_SIZE = 10;
+
+/** The fields of a college row the lifecycle dialogs use (migration 053). */
+interface LifecycleCollege {
+  id: string;
+  name: string;
+  lifecycle_state: CollegeLifecycleState;
+  lifecycle_message: string | null;
+}
 
 export default function SuperAdminCollegesPage() {
   const supabase = createClient();
@@ -37,6 +58,14 @@ export default function SuperAdminCollegesPage() {
   const toast = useToast();
   const [createForm, setCreateForm] = useState({ name: "", code: "", city: "", state: "", country: "India" });
   const [inviteForm, setInviteForm] = useState({ email: "", fullName: "" });
+  // College lifecycle (053) and Admin sessions (054).
+  const [lifecycleFor, setLifecycleFor] = useState<LifecycleCollege | null>(null);
+  const [lifecyclePending, setLifecyclePending] = useState(false);
+  const [lifecycleError, setLifecycleError] = useState<FeedbackError | null>(null);
+  const [historyFor, setHistoryFor] = useState<LifecycleCollege | null>(null);
+  const [history, setHistory] = useState<LifecycleHistoryEntry[] | null>(null);
+  const [historyError, setHistoryError] = useState<FeedbackError | null>(null);
+  const [sessionsFor, setSessionsFor] = useState<LifecycleCollege | null>(null);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load(query); }, [query]);
@@ -114,6 +143,36 @@ export default function SuperAdminCollegesPage() {
       setError(await toFeedbackError(e, "Failed to create college."));
     } finally {
       setLoading(false);
+    }
+  };
+
+  // A consequential change: the dialog stays open on failure; on success a
+  // persistent page Alert says what happened (M6 decisions).
+  const handleLifecycle = async (change: LifecycleChange) => {
+    if (!lifecycleFor) return;
+    setLifecyclePending(true);
+    setLifecycleError(null);
+    try {
+      await setCollegeLifecycle({ collegeId: lifecycleFor.id, ...change }, query);
+      const what = change.state === "ACTIVE" ? "reactivated" : change.state === "MAINTENANCE" ? "put under maintenance" : "suspended";
+      setNotice(`${lifecycleFor.name} ${what}.${change.state === "ACTIVE" ? "" : " Its users have been signed out."}`);
+      setLifecycleFor(null);
+      void load(query);
+    } catch (e) {
+      setLifecycleError(await toFeedbackError(e, "The college's status couldn't be changed."));
+    } finally {
+      setLifecyclePending(false);
+    }
+  };
+
+  const openHistory = async (college: LifecycleCollege) => {
+    setHistoryFor(college);
+    setHistory(null);
+    setHistoryError(null);
+    try {
+      setHistory(await listCollegeLifecycleHistory(college.id));
+    } catch (e) {
+      setHistoryError(await toFeedbackError(e, "The history couldn't be loaded."));
     }
   };
 
@@ -213,6 +272,11 @@ export default function SuperAdminCollegesPage() {
             render: (row: any) => <span className="text-on-surface-variant">{[row.city, row.state].filter(Boolean).join(", ") || "—"}</span>,
           },
           {
+            key: "lifecycle_state",
+            header: "Status",
+            render: (row: LifecycleCollege) => <LifecycleBadge state={row.lifecycle_state ?? "ACTIVE"} />,
+          },
+          {
             key: "created_at",
             header: "Created",
             render: (row: any) => <span className="text-on-surface-variant">{new Date(row.created_at).toLocaleDateString()}</span>,
@@ -231,12 +295,35 @@ export default function SuperAdminCollegesPage() {
         onQueryChange={setQuery}
         pageSize={COLLEGES_PAGE_SIZE}
         actions={(row: any) => (
-          <button
-            onClick={(e) => { e.stopPropagation(); setInviteFor(row); }}
-            className="text-xs text-secondary hover:underline font-medium"
-          >
-            Invite Admin
-          </button>
+          <div className="flex flex-wrap gap-md">
+            <button
+              onClick={(e) => { e.stopPropagation(); setInviteFor(row); }}
+              className="text-xs text-secondary hover:underline font-medium"
+            >
+              Invite Admin
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); setLifecycleError(null); setLifecycleFor(row); }}
+              className="text-xs text-secondary hover:underline font-medium"
+              aria-label={`Change status of ${row.name}`}
+            >
+              Change status
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); void openHistory(row); }}
+              className="text-xs text-secondary hover:underline font-medium"
+              aria-label={`Status history of ${row.name}`}
+            >
+              History
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); setSessionsFor(row); }}
+              className="text-xs text-secondary hover:underline font-medium"
+              aria-label={`Admin sessions of ${row.name}`}
+            >
+              Admin sessions
+            </button>
+          </div>
         )}
       />
 
@@ -283,6 +370,33 @@ export default function SuperAdminCollegesPage() {
           <FormField label="Email" id="admin_email" type="email" value={inviteForm.email} onChange={(v) => setInviteForm({ ...inviteForm, email: v })} placeholder="jane@college.edu" required />
         </div>
       </Modal>
+
+      <LifecycleDialog
+        open={!!lifecycleFor}
+        onClose={() => setLifecycleFor(null)}
+        college={lifecycleFor}
+        onSubmit={handleLifecycle}
+        pending={lifecyclePending}
+        error={lifecycleError}
+      />
+
+      <LifecycleHistoryDialog
+        open={!!historyFor}
+        onClose={() => setHistoryFor(null)}
+        collegeName={historyFor?.name ?? ""}
+        entries={history}
+        error={historyError}
+      />
+
+      <SessionsDialog
+        open={!!sessionsFor}
+        onClose={() => setSessionsFor(null)}
+        title={`Admin sessions — ${sessionsFor?.name ?? ""}`}
+        description="Where this college's Admin accounts are signed in. Signing one out ends that session immediately."
+        load={() => listCollegeAdminSessions(sessionsFor!.id)}
+        revoke={revokeAdminSession}
+        emptyText="No Admin of this college is signed in."
+      />
 
       <ConfirmationDialog
         open={!!revokeTarget}

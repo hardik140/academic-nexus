@@ -270,6 +270,31 @@ export async function as(
 }
 
 /**
+ * as(), for a specific GoTrue session: also sets the full claim set PostgREST
+ * puts in request.jwt.claims, including the `session_id` claim migration 054
+ * keys the session registry on. Without a sessionId the claims carry none —
+ * the shape of a token with no session.
+ */
+export async function asSession(
+  db: PGlite,
+  uid: string,
+  sessionId: string | null,
+  sql: string,
+  params: unknown[] = []
+): Promise<Attempt> {
+  const claims = JSON.stringify(sessionId ? { sub: uid, role: "authenticated", session_id: sessionId } : { sub: uid, role: "authenticated" });
+  await db.exec(`SET request.jwt.claim.sub = '${uid}'; SET request.jwt.claims = '${claims}'; SET ROLE authenticated;`);
+  try {
+    const res = await db.query<Record<string, unknown>>(sql, params);
+    return { ok: true, error: null, rows: res.affectedRows ?? 0, data: res.rows ?? [] };
+  } catch (err) {
+    return { ok: false, error: (err as Error).message, rows: 0, data: [] };
+  } finally {
+    await db.exec("RESET ROLE; RESET request.jwt.claim.sub; RESET request.jwt.claims;");
+  }
+}
+
+/**
  * Reads as the database owner, bypassing RLS.
  *
  * ONLY for verifying the postcondition — "did the row actually change" — and
