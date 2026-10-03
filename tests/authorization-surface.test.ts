@@ -297,7 +297,10 @@ const SURFACE: Record<string, string[]> = {
   security: ["gate_security"],
   student: ["student"],
   "super-admin": ["super_admin"],
-  teacher: ["admin+hod+teacher", "admin+teacher", "teacher"],
+  // "hod+teacher" is student_invite (055): a teacher passes this gate only to
+  // reach student_placement_check(), which admits a CURRENT Class In-Charge
+  // for their own section and nobody else.
+  teacher: ["admin+hod+teacher", "admin+teacher", "hod+teacher", "teacher"],
   warden: ["admin+director+warden", "admin+warden"],
 };
 

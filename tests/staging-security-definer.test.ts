@@ -25,7 +25,33 @@ describe("inventory", () => {
     const names = rows.map((r) => r.proname);
     // Adding a definer function means adding it to this list AND deciding
     // its grant below — the test fails until both happen.
-    expect(names).toEqual([
+    //
+    // 055 (academic foundation, ACADEMIC_LIFECYCLE_CONTRACT.md). Every one
+    // re-derives the actor from auth.uid() through my_operational_role(), so
+    // a blocked college or refused session cannot act; none takes an
+    // identity argument it trusts. Grants are pinned in staging-academic-
+    // foundation's shape test and the REVOKE block at the end of 055.
+    const ACADEMIC_055 = [
+      // internal helpers, no EXECUTE for sessions
+      "academic_audit", "academic_notify", "enroll_section_into_offering", "student_placement_check",
+      "timetable_teacher_clash",
+      // trigger-only guards and history writers
+      "audit_academic_structure", "end_department_terms_with_semester", "guard_academic_structure",
+      "guard_academic_tenant", "guard_enrollment_unique_course", "guard_offering_assignment",
+      "guard_offering_open_for_records", "guard_student_section_assignment", "guard_timetable_slot",
+      "offering_auto_enroll", "record_department_hod", "record_offering_instructor",
+      // caller-scoped predicates and projections
+      "academic_actor_role", "active_semester_id", "can_manage_department", "can_schedule_offering",
+      "current_class_incharge", "instructor_eligible", "is_department_staff", "my_academic_context",
+      "my_timetable_offering_ids", "section_department_id",
+      // the actions — each checks department authority itself, then audits
+      "accept_student_invitation", "assign_class_incharge", "assign_student_section",
+      "create_student_invitation_placement", "create_timetable_slot", "delete_timetable_slot",
+      "department_term_readiness", "end_class_incharge", "end_department_term", "grant_external_teaching",
+      "revoke_external_teaching", "start_department_term", "student_invitation_preflight",
+      "students_without_section", "update_timetable_slot",
+    ];
+    expect(names).toEqual([...ACADEMIC_055, ...[
       // 053/054: the access gate every RLS table's restrictive tenant_access_gate
       // and the helpers call. Answers about the caller only; no arguments.
       "app_access_allowed",
@@ -99,7 +125,7 @@ describe("inventory", () => {
       // switch. Both super_admin only, reason required, audited.
       "set_college_lifecycle", "set_session_enforcement",
       "wardens_block", "wardens_room", "wardens_student", "wardens_student_profile",
-    ]);
+    ]].sort());
     for (const r of rows) expect(r.cfg, `${r.proname} search_path`).toMatch(/search_path=/);
   });
 });

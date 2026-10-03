@@ -54,6 +54,13 @@ export interface OfferingContext {
   instructorId: string | null;
   departmentId: string;
   status: OfferingStatus;
+  /**
+   * The term's status. Only 'reopened' matters to authority: inside 052's
+   * correction window a COMPLETED offering is writable again (055 §6).
+   * Optional so callers that build a context by hand keep compiling; absent
+   * reads as "not reopened", the closed-by-default answer.
+   */
+  semesterStatus?: string;
 }
 
 type OfferingRow = {
@@ -65,6 +72,7 @@ type OfferingRow = {
   instructor_id: string | null;
   status: OfferingStatus;
   courses: { department_id: string } | null;
+  semesters: { status: string } | null;
 };
 
 /**
@@ -90,7 +98,7 @@ export async function loadOffering(
   const { data } = await supabase
     .from("course_offerings")
     .select(
-      "id, college_id, semester_id, course_id, section_id, instructor_id, status, courses:course_id(department_id)"
+      "id, college_id, semester_id, course_id, section_id, instructor_id, status, courses:course_id(department_id), semesters:semester_id(status)"
     )
     .eq("id", offeringId)
     .maybeSingle();
@@ -116,7 +124,20 @@ export async function loadOffering(
     instructorId: offering.instructor_id,
     departmentId: offering.courses.department_id,
     status: offering.status,
+    semesterStatus: offering.semesters?.status,
   };
+}
+
+/**
+ * The application half of 055's guard_offering_open_for_records(): a
+ * cancelled offering is closed to academic writes, and so is a COMPLETED one
+ * (its department ended the term — defect 4) except inside 052's reopen
+ * correction window.
+ */
+export function offeringOpenForRecords(offering: Pick<OfferingContext, "status" | "semesterStatus">): boolean {
+  if (offering.status === "cancelled") return false;
+  if (offering.status === "completed" && offering.semesterStatus !== "reopened") return false;
+  return true;
 }
 
 /**
@@ -126,11 +147,12 @@ export async function loadOffering(
  * - the assigned instructor (teacher OR a teaching hod): their own offering.
  * - anyone else: no.
  *
- * A cancelled offering is closed to writes for everyone. That is the only
- * lifecycle gate applied here; `planned`, `active` and `completed` all stay
- * writable because end-of-term marks legitimately land against a completed
- * offering. Finalization ("results published — no further edits") does not
- * exist in this schema yet and is NOT invented here; see the file footer.
+ * A cancelled offering is closed to writes for everyone, and since 055 so is
+ * a completed one — "completed" is what the HOD ending the department's term
+ * sets, so it is the point at which the term's records stop changing. The
+ * correction path is 052's controlled reopen, inside which a completed
+ * offering is writable again (offeringOpenForRecords). End-of-term marks
+ * therefore land BEFORE the department's term is ended.
  *
  * Note what is NOT here: `hod` does not get blanket write access to their
  * department's offerings. A HOD who teaches passes as the instructor like
@@ -150,7 +172,7 @@ export async function loadOffering(
  * the timetable.
  */
 export function canWriteOfferingRecords(actor: AuthorizedActor, offering: OfferingContext): boolean {
-  if (offering.status === "cancelled") return false;
+  if (!offeringOpenForRecords(offering)) return false;
   if (actor.role === "admin") return true;
   return offering.instructorId !== null && offering.instructorId === actor.userId;
 }
@@ -195,10 +217,10 @@ export async function assertCanRecordAttendance(
     return offering;
   }
 
-  // A cancelled offering has no classes to cover, so no substitution can
-  // reopen it. Checked before the lookup so the widening can never be wider
-  // than the base rule it widens.
-  if (offering.status !== "cancelled") {
+  // A cancelled or completed offering has no classes left to cover, so no
+  // substitution can reopen it. Checked before the lookup so the widening can
+  // never be wider than the base rule it widens.
+  if (offeringOpenForRecords(offering)) {
     const { data: substitution } = await supabase
       .from("substitution_assignments")
       .select("id")

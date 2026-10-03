@@ -8,6 +8,7 @@ import { logAudit } from "@/lib/audit";
 import { dashboardPathFor } from "@/lib/auth/role-routes";
 import { invalidateCache, middlewareProfileCacheKey } from "@/lib/cache";
 import { dbError } from "@/lib/internal-error";
+import { academicRpc } from "@/lib/academic/rpc";
 
 const AcceptInvitationSchema = z.object({
   password: z.string().min(8, { message: "Password must be at least 8 characters." }).max(200),
@@ -72,6 +73,17 @@ export async function acceptInvitation(password: string) {
   const { error: passwordErr } = await supabase.auth.updateUser({ password: validPassword });
   if (passwordErr) {
     throw dbError(passwordErr);
+  }
+
+  // A STUDENT invitation completes in one database transaction (migration
+  // 055, accept_student_invitation): the student record, their section,
+  // their enrolments, the profile activation and the invitation's acceptance
+  // all commit together or not at all. The placement it reads was resolved
+  // when the invitation was created; nothing the invitee sends is consulted.
+  if (profile.role === "student") {
+    await academicRpc(supabase, "accept_student_invitation", { p_invitation_id: invitation.id });
+    await invalidateCache(middlewareProfileCacheKey(user.id));
+    redirect(dashboardPathFor(profile.role));
   }
 
   const { error: profileErr } = await supabase

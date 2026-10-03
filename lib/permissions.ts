@@ -99,6 +99,26 @@ export const PERMISSIONS = {
   // management rights stop at sections and their own department's offerings.
   academic_period_manage: ["admin", "director"],
 
+  // ── Department academic operation (migration 055) ───────────────────
+  //
+  // ACADEMIC_LIFECYCLE_CONTRACT.md §6. Every one of these is DEPARTMENT-
+  // scoped in the database: the function or policy re-derives "does this
+  // caller head THIS department" from departments.hod_id on every call, so a
+  // role here only opens the door. The database also admits admin/director
+  // as institutional fallback; PR 1 ships the HOD screens only, so the
+  // application gate is the HOD alone and exposes nothing else.
+  department_term_manage: ["hod"],
+  department_structure_manage: ["hod"],
+  class_incharge_manage: ["hod"],
+  offering_manage: ["hod"],
+  external_teaching_manage: ["hod"],
+  timetable_manage: ["hod"],
+  student_section_reconcile: ["hod"],
+  // A teacher may invite a student ONLY into a section they are the current
+  // Class In-Charge of; an HOD only into their own department's sections.
+  // student_placement_check() (055 §14) decides which, per invitation.
+  student_invite: ["hod", "teacher"],
+
   // ── Finance Integration Hub (migration 049) ─────────────────────────
   //
   // Split along the line that matters: CREDENTIAL CUSTODY is separated from

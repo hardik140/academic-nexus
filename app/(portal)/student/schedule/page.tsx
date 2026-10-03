@@ -4,6 +4,7 @@ import { StatusBadge } from "@/components/ui/modal";
 import { assertRead } from "@/lib/read-result-server";
 import { NO_MATCH_ID } from "@/lib/read-result";
 import { todayDayOfWeek, todayInTimeZone } from "@/lib/format";
+import { currentTermEnrolledOfferingIds } from "@/lib/academic/timetable";
 
 export default async function StudentSchedule() {
   const supabase = await createClient();
@@ -19,19 +20,23 @@ export default async function StudentSchedule() {
 
   const { data: enrollments, error: enrollmentsError } = await supabase
     .from("course_enrollments")
-    .select("*, course_offerings:offering_id(id, courses:course_id(id, name, code, credits, type, department_id, departments:department_id(name)), sections:section_id(name), semesters:semester_id(name), profiles:instructor_id(full_name))")
+    .select("*, course_offerings:offering_id(id, courses:course_id(id, name, code, credits, type, department_id, departments:department_id(name)), sections:section_id(name), semesters:semester_id(name, status), profiles:instructor_id(full_name))")
     .eq("student_id", student?.id || NO_MATCH_ID)
     .eq("status", "enrolled");
   assertRead(enrollmentsError);
 
   // Sessions carry their offering, which is what names the course, the
   // section and the teacher — timetable_slots holds none of those now.
-  const { data: profile, error: profileError } = await supabase.from("profiles").select("college_id").eq("id", user.id).single();
-  assertRead(profileError);
+  //
+  // Only the student's OWN enrolled offerings in the ACTIVE term (055,
+  // defect 2): this page used to list every slot in the college. The
+  // database now narrows a student's read the same way; this keeps the page
+  // to the current week even where history is readable.
+  const myOfferingIds = currentTermEnrolledOfferingIds(enrollments as never);
   const { data: slots, error: slotsError } = await supabase
     .from("timetable_slots")
     .select("*, course_offerings:offering_id(id, courses:course_id(name, code), sections:section_id(name))")
-    .eq("college_id", profile?.college_id || NO_MATCH_ID)
+    .in("offering_id", myOfferingIds.length ? myOfferingIds : [NO_MATCH_ID])
     .order("day_of_week")
     .order("start_time");
   assertRead(slotsError);

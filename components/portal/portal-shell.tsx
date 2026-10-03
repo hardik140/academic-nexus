@@ -38,6 +38,7 @@ const NAV_MAP: Record<
   teacher: [
     { label: "Dashboard", href: "/teacher/dashboard", icon: "📊" },
     { label: "My Courses", href: "/teacher/courses", icon: "📚" },
+    { label: "My Class", href: "/teacher/class", icon: "🧑‍🏫" },
     { label: "Attendance", href: "/teacher/attendance", icon: "✅" },
     { label: "Grading", href: "/teacher/grading", icon: "📝" },
     { label: "Timetable", href: "/teacher/timetable", icon: "📅" },
@@ -45,6 +46,7 @@ const NAV_MAP: Record<
   ],
   hod: [
     { label: "Dashboard", href: "/hod/dashboard", icon: "📊" },
+    { label: "Academics", href: "/hod/academics", icon: "🏫" },
     { label: "Approvals", href: "/hod/approvals", icon: "✅" },
     { label: "Substitutions", href: "/hod/substitutions", icon: "🔄" },
     { label: "Team", href: "/hod/team", icon: "✉️" },

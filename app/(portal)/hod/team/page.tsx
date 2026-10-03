@@ -11,7 +11,7 @@ import { useToast } from "@/components/ui/toast";
 import { useAsyncResource } from "@/hooks/use-async-resource";
 import { toFeedbackError, type FeedbackError } from "@/lib/action-failure";
 import { requireRows } from "@/lib/read-result";
-import { inviteUser, resendInvitation, revokeInvitation, type InviteHodTeamParams } from "./actions";
+import { inviteUser, listInviteSections, resendInvitation, revokeInvitation, type InviteHodTeamParams } from "./actions";
 
 const ROLE_OPTIONS = [
   { value: "teacher", label: "Teacher" },
@@ -23,7 +23,8 @@ interface FormState {
   email: string;
   fullName: string;
   enrollmentNumber: string;
-  batchYear: string;
+  sectionId: string;
+  programmeSemester: string;
   parentName: string;
   parentEmail: string;
   parentPhone: string;
@@ -34,7 +35,8 @@ const EMPTY_FORM: FormState = {
   email: "",
   fullName: "",
   enrollmentNumber: "",
-  batchYear: String(new Date().getFullYear()),
+  sectionId: "",
+  programmeSemester: "",
   parentName: "",
   parentEmail: "",
   parentPhone: "",
@@ -67,6 +69,12 @@ export default function HodTeamPage() {
   );
   const invitations: any[] = invitationsResource.data ?? [];
 
+  // A student joins a SECTION (migration 055): its department, programme and
+  // intake year are resolved by the database, so they are not form fields.
+  const sectionsResource = useAsyncResource(() => listInviteSections(), []);
+  const inviteSections = sectionsResource.data ?? [];
+  const pickedSection = inviteSections.find((s) => s.id === form.sectionId);
+
   const handleInvite = async () => {
     setLoading(true);
     setError(null);
@@ -77,8 +85,9 @@ export default function HodTeamPage() {
               role: "student",
               email: form.email,
               fullName: form.fullName,
+              sectionId: form.sectionId,
               enrollmentNumber: form.enrollmentNumber,
-              batchYear: Number(form.batchYear),
+              programmeSemester: Number(form.programmeSemester),
               parentName: form.parentName || undefined,
               parentEmail: form.parentEmail || undefined,
               parentPhone: form.parentPhone || undefined,
@@ -199,7 +208,7 @@ export default function HodTeamPage() {
                 loading ||
                 !form.email ||
                 !form.fullName ||
-                (form.role === "student" && !form.enrollmentNumber)
+                (form.role === "student" && (!form.enrollmentNumber || !form.sectionId || !form.programmeSemester))
               }
               aria-busy={loading || undefined}
             >
@@ -216,8 +225,27 @@ export default function HodTeamPage() {
 
           {form.role === "student" && (
             <>
+              <FormField
+                label="Section"
+                id="invite_section"
+                type="select"
+                value={form.sectionId}
+                onChange={(v) => setForm({ ...form, sectionId: v, programmeSemester: "" })}
+                options={inviteSections.map((s) => ({ value: s.id, label: s.label }))}
+                error={sectionsResource.status === "error" ? "Your sections could not be loaded." : undefined}
+                required
+              />
+              <FormField
+                label="Programme semester"
+                id="invite_semester"
+                type="select"
+                value={form.programmeSemester}
+                onChange={(v) => setForm({ ...form, programmeSemester: v })}
+                options={Array.from({ length: pickedSection?.duration ?? 0 }, (_, i) => ({ value: String(i + 1), label: `Semester ${i + 1}` }))}
+                disabled={!pickedSection}
+                required
+              />
               <FormField label="Enrollment Number" id="invite_enrollment" value={form.enrollmentNumber} onChange={(v) => setForm({ ...form, enrollmentNumber: v })} placeholder="e.g. 2026CSE001" required />
-              <FormField label="Batch Year" id="invite_batch" type="number" value={form.batchYear} onChange={(v) => setForm({ ...form, batchYear: v })} required />
               <FormField label="Parent Name" id="invite_parent_name" value={form.parentName} onChange={(v) => setForm({ ...form, parentName: v })} />
               <FormField label="Parent Email" id="invite_parent_email" type="email" value={form.parentEmail} onChange={(v) => setForm({ ...form, parentEmail: v })} />
               <FormField label="Parent Phone" id="invite_parent_phone" value={form.parentPhone} onChange={(v) => setForm({ ...form, parentPhone: v })} />

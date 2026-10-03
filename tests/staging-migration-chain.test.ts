@@ -147,11 +147,14 @@ describe("the real migration chain applies to an empty database", () => {
 
     const before = await snapshot();
     const fs = await import("node:fs");
-    for (const file of [
-      "047_academic_transactions_on_offerings.sql",
-      "049_finance_integration_hub.sql",
-      "050_gate_security.sql",
-    ]) {
+    // Since 055 the batch runs to the end of the chain: 055 drops 047's
+    // course_enrollments_manage_staff, so replaying 047 without what follows
+    // would "restore" a superseded policy — the same artefact as above.
+    const batch = fs.readdirSync(join(process.cwd(), "supabase/migrations"))
+      .filter((f) => f.endsWith(".sql") && f >= "047_")
+      .sort();
+    expect(batch[0]).toBe("047_academic_transactions_on_offerings.sql");
+    for (const file of batch) {
       const sql = fs.readFileSync(join(process.cwd(), "supabase/migrations", file), "utf8").replace(/\r\n/g, "\n");
       await expect(db.exec(sql), `${file} is not re-runnable`).resolves.toBeDefined();
     }

@@ -1,5 +1,7 @@
 "use client";
 
+import { AcademicContextCard } from "@/components/academics/academic-context-card";
+import type { AcademicContext } from "@/lib/academic/types";
 import Link from "next/link";
 import { formatDate, formatPct } from "@/lib/utils";
 import { formatMoney } from "@/lib/format";
@@ -22,6 +24,8 @@ interface StudentDashboardClientProps {
   academicHealth: AcademicHealthResult;
   subjectRisks: SubjectRiskEntry[];
   upcomingPlacementDeadlines: any[];
+  /** my_academic_context() (055); null where the database predates it. */
+  academicContext?: AcademicContext | null;
 }
 
 const PROFILE_FIELDS = [
@@ -62,6 +66,7 @@ export function StudentDashboardClient({
   academicHealth,
   subjectRisks,
   upcomingPlacementDeadlines,
+  academicContext,
 }: StudentDashboardClientProps) {
   const totalFeesDue = fees.reduce((sum: number, f: any) => sum + (f.amount - f.paid_amount), 0);
   const cgpa = student?.cgpa || 0;
@@ -122,6 +127,8 @@ export function StudentDashboardClient({
           </span>
         )}
       </div>
+
+      {academicContext?.student && <AcademicContextCard context={academicContext} />}
 
       {/* ─── Academic Health + Today's Actions ─── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-md">

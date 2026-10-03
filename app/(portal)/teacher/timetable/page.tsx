@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { assertRead } from "@/lib/read-result-server";
 import { NO_MATCH_ID } from "@/lib/read-result";
 import { todayDayOfWeek } from "@/lib/format";
+import { currentTermTaughtOfferingIds } from "@/lib/academic/timetable";
 
 export default async function TeacherTimetable() {
   const supabase = await createClient();
@@ -15,12 +16,14 @@ export default async function TeacherTimetable() {
   // timetable_slots has no instructor_id after 047 — a slot belongs to an
   // offering, and the offering names the instructor. Read-only page: this
   // phase deliberately adds no timetable WRITE policy.
+  // The ACTIVE term only (055): a teacher's past offerings keep their own
+  // slots as history and are not this week's classes.
   const { data: myOfferings, error: myOfferingsError } = await supabase
     .from("course_offerings")
-    .select("id")
+    .select("id, status, semesters:semester_id(status)")
     .eq("instructor_id", user.id);
   assertRead(myOfferingsError);
-  const myOfferingIds = ((myOfferings as any[]) || []).map((o) => o.id);
+  const myOfferingIds = currentTermTaughtOfferingIds(myOfferings as never);
 
   const slotsRes = myOfferingIds.length
     ? await supabase

@@ -20,6 +20,25 @@ import {
 } from "./staging/harness";
 
 /**
+ * Migration 055 (decision 4) added a second, independent layer: an
+ * instructor must be eligible for the course — staff of its owning
+ * department, or holding that department's external teaching
+ * authorization. Most attacks in this file name an ineligible instructor, so
+ * that layer would now refuse them first. To keep proving the layer each
+ * test targets (the offering RLS), the attacker is first given the
+ * authorization AS THE OWNER, exactly as 051's enrolment guard is satisfied
+ * below. Every refusal that remains is then the RLS policy's alone.
+ */
+async function authorizeExternally(d: PGlite, teacher: string, department: string) {
+  await d.query(
+    `INSERT INTO public.external_teaching_authorizations (college_id, department_id, teacher_id, reason)
+       VALUES ('00000001-0000-4000-8000-000000000001', $1, $2, 'isolating the RLS layer under test')`,
+    [department, teacher]
+  );
+}
+const ECE = "00000002-0000-4000-8000-000000000002";
+
+/**
  * Remediation of F1 and F2, verified against real PostgreSQL RLS.
  *
  * F1 — course_offerings_manage (046) was role + tenancy, so an HOD could
@@ -174,8 +193,16 @@ describe("F1 — offering management", () => {
       // NOT fail; RLS is a filter, not a gate, so it silently narrows to the
       // rows the caller may touch. What matters is exactly which rows those
       // are.
-      const blanket = await as(d, U.hodCse, `UPDATE public.course_offerings SET instructor_id=auth.uid()`);
-      expect(blanket.ok).toBe(true);
+      // 055: an UNFILTERED statement now fails as a whole — it would rewrite
+      // the teacher of a closed term's offering, which is history (defect 5).
+      const wholesale = await as(d, U.hodCse, `UPDATE public.course_offerings SET instructor_id=auth.uid()`);
+      expect(wholesale.ok).toBe(false);
+      expect(wholesale.error).toMatch(/closed term/);
+
+      const blanket = await as(d, U.hodCse,
+        `UPDATE public.course_offerings SET instructor_id=auth.uid()
+           WHERE semester_id IN (SELECT id FROM public.semesters WHERE status IN ('planned','active'))`);
+      expect(blanket.ok, blanket.error ?? "").toBe(true);
 
       const taken = await verify<{ id: string }>(
         d,
@@ -243,7 +270,9 @@ describe("F1 — offering management", () => {
       const r = await as(
         d,
         U.director,
-        `UPDATE public.course_offerings SET instructor_id='${U.teacherA}' WHERE id='${OFF.ece}'`
+        // 055: still college-wide, but the teacher must be eligible for the
+        // course (decision 4) — an Electronics teacher for an Electronics course.
+        `UPDATE public.course_offerings SET instructor_id='${U.hodEce}' WHERE id='${OFF.ece}'`
       );
       expect(r.rows).toBe(1);
     } finally {
@@ -251,7 +280,7 @@ describe("F1 — offering management", () => {
     }
   });
 
-  it("RESIDUAL: a director can still self-assign and gain academic write", async () => {
+  it("RESIDUAL CLOSED (055): a director can no longer self-assign and gain academic write", async () => {
     const d = await fresh();
     try {
       // Reported, not silently fixed. A director otherwise holds read-only
@@ -259,14 +288,19 @@ describe("F1 — offering management", () => {
       // that into write authority. It is narrower than F1 — director is an
       // institution-wide role, not a departmental one, so no scope boundary
       // is crossed — but it is the same shape and belongs in the report.
-      expect((await as(d, U.director, `UPDATE public.course_offerings SET instructor_id=auth.uid() WHERE id='${OFF.dsA3}'`)).rows).toBe(1);
+      // 055 (decision 4): an instructor must be a teacher or HOD eligible for
+      // the course. A director is neither, so the residual this test recorded
+      // is now refused at the database.
+      const self = await as(d, U.director, `UPDATE public.course_offerings SET instructor_id=auth.uid() WHERE id='${OFF.dsA3}'`);
+      expect(self.ok).toBe(false);
+      expect(self.error).toMatch(/not authorized to teach/);
       const write = await as(
         d,
         U.director,
         `INSERT INTO public.attendance (college_id, offering_id, student_id, date, status, marked_by)
            VALUES ('${COLLEGE_A}','${OFF.dsA3}','${S.a}','${DATE}','present',auth.uid())`
       );
-      expect(write.ok).toBe(true);
+      expect(write.ok).toBe(false);
     } finally {
       await d.close();
     }
@@ -279,7 +313,7 @@ describe("F1 — offering management", () => {
         d,
         U.hodCse,
         `INSERT INTO public.course_offerings (college_id, semester_id, course_id, section_id, instructor_id, status)
-           VALUES ('${COLLEGE_A}','${SEM_5}','${COURSE_MATHS}','00000008-0000-4000-8000-000000000004',auth.uid(),'active')`
+           VALUES ('${COLLEGE_A}','${SEM_5}','${COURSE_MATHS}','00000008-0000-4000-8000-000000000004',NULL,'active')`
       );
       expect(r.ok).toBe(false);
       expect(r.error).toMatch(/row-level security/i);
@@ -311,7 +345,7 @@ describe("F1 — offering management", () => {
       const r = await as(
         d,
         U.hodCse,
-        `UPDATE public.course_offerings SET course_id='${COURSE_MATHS}' WHERE id='${OFF.dsA3}'`
+        `UPDATE public.course_offerings SET course_id='${COURSE_MATHS}', instructor_id=NULL WHERE id='${OFF.dsA3}'`
       );
       expect(r.ok).toBe(false);
       expect(r.error).toMatch(/row-level security/i);
@@ -631,6 +665,7 @@ describe("mutation resistance", () => {
     );
     try {
       // With the predicate gone this is 046's hole again.
+      await authorizeExternally(d, U.hodCse, ECE);
       const r = await as(d, U.hodCse, `UPDATE public.course_offerings SET instructor_id=auth.uid() WHERE id='${OFF.ece}'`);
       expect(r.rows, "mutation was not detected — the escalation is open").toBe(1);
     } finally {
@@ -654,7 +689,7 @@ describe("mutation resistance", () => {
       // USING still guards the OLD row, so the cross-department grab stays
       // blocked — but moving one of their own offerings into Mechanical,
       // taking its records with it, opens up.
-      const r = await as(d, U.hodCse, `UPDATE public.course_offerings SET course_id='${COURSE_MATHS}' WHERE id='${OFF.dsA3}'`);
+      const r = await as(d, U.hodCse, `UPDATE public.course_offerings SET course_id='${COURSE_MATHS}', instructor_id=NULL WHERE id='${OFF.dsA3}'`);
       expect(r.rows, "mutation was not detected — the new-row check is doing nothing").toBe(1);
       expect(await scalar(d, `SELECT course_id FROM course_offerings WHERE id=$1`, [OFF.dsA3])).toBe(COURSE_MATHS);
     } finally {
@@ -673,7 +708,7 @@ describe("mutation resistance", () => {
       return sql.slice(0, wcAt) + sql.slice(end);
     });
     try {
-      const r = await as(d, U.hodCse, `UPDATE public.course_offerings SET course_id='${COURSE_MATHS}' WHERE id='${OFF.dsA3}'`);
+      const r = await as(d, U.hodCse, `UPDATE public.course_offerings SET course_id='${COURSE_MATHS}', instructor_id=NULL WHERE id='${OFF.dsA3}'`);
       expect(r.rows).toBe(0);
       expect(await scalar(d, `SELECT course_id FROM course_offerings WHERE id=$1`, [OFF.dsA3])).toBe(COURSE_DS);
     } finally {
@@ -698,6 +733,7 @@ describe("mutation resistance", () => {
       );
     });
     try {
+      await authorizeExternally(d, U.hodCse, ECE);
       const r = await as(d, U.hodCse, `UPDATE public.course_offerings SET instructor_id=auth.uid() WHERE id='${OFF.ece}'`);
       expect(r.rows, "mutation was not detected").toBe(1);
       // And the escalation completes. Migration 051 added an independent
@@ -798,6 +834,7 @@ describe("mutation resistance", () => {
       )
     );
     try {
+      await authorizeExternally(d, U.hodCse, ECE);
       const r = await as(d, U.hodCse, `UPDATE public.course_offerings SET instructor_id=auth.uid() WHERE id='${OFF.ece}'`);
       expect(r.rows, "mutation was not detected").toBe(1);
     } finally {

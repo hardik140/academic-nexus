@@ -68,6 +68,27 @@ export interface InviteUserParams {
   metadata?: Record<string, unknown>;
 }
 
+/** An invitation that exists in the database but has not been emailed yet. */
+export interface CreatedInvitation {
+  userId: string;
+  invitationId: string;
+  email: string;
+  fullName: string;
+  role: InviteUserParams["role"];
+  collegeId: string;
+  hashedToken: string;
+}
+
+/** Deletes an invited auth account that never got as far as being usable. */
+async function removeInvitedAccount(admin: ReturnType<typeof createAdminClient>, userId: string) {
+  const { error } = await admin.auth.admin.deleteUser(userId);
+  if (error) {
+    // Logged, never swallowed silently: an operator must be able to find a
+    // pending account that cleanup could not remove.
+    console.error("[invitations] could not remove a half-created invited account", { userId, code: error.code });
+  }
+}
+
 /**
  * Shared by every invite-capable tier's Server Action/Route Handler
  * (admin/users, director/team, hod/team, super-admin/colleges) — the
@@ -76,12 +97,18 @@ export interface InviteUserParams {
  * supabase/migrations/019_invitations_table.sql's header comment: Supabase
  * owns the real invitation token end-to-end — the `invitations` row this
  * writes is bookkeeping/audit only, not the security boundary.
+ *
+ * Creating and delivering are separate steps (055 / defect 1): a student
+ * invitation must attach its academic placement between the two, and if
+ * that fails the invitation is discarded BEFORE anyone is emailed. Every
+ * failure inside creation removes the account it made, so no path leaves a
+ * half-created pending invitee behind.
  */
-export async function inviteUserCore(
+export async function createInvitationCore(
   supabase: SupabaseClient<Database>,
   actor: AuthorizedActor,
   params: InviteUserParams
-) {
+): Promise<CreatedInvitation> {
   const parsed = InviteUserSchema.parse(params);
 
   if (!canInvite(actor.role, parsed.role)) {
@@ -155,12 +182,13 @@ export async function inviteUserCore(
 
   if (profileErr) {
     // The auth user exists but carries no role — it would land as an inert
-    // pending student. Fail loudly rather than leaving a half-provisioned
-    // account for someone to puzzle over later.
-    throw new Error(`Invited account created but could not be assigned the ${parsed.role} role: ${profileErr.message}`);
+    // pending student. Remove it and fail loudly rather than leaving a
+    // half-provisioned account for someone to puzzle over later.
+    await removeInvitedAccount(admin, created.user.id);
+    throw new Error(`The invited account could not be assigned the ${parsed.role} role, so it was removed. Try again.`);
   }
 
-  const { error: insertErr } = await supabase.from("invitations").insert({
+  const { data: invitationRow, error: insertErr } = await supabase.from("invitations").insert({
     college_id: collegeId,
     email: parsed.email,
     role: parsed.role,
@@ -168,23 +196,65 @@ export async function inviteUserCore(
     invited_by: actor.userId,
     user_id: created.user.id,
     metadata: (parsed.metadata as Database["public"]["Tables"]["invitations"]["Insert"]["metadata"]) || null,
-  });
-  if (insertErr) {
-    throw dbError(insertErr);
+  }).select("id").single();
+  if (insertErr || !invitationRow) {
+    await removeInvitedAccount(admin, created.user.id);
+    throw insertErr ? dbError(insertErr) : new Error("The invitation could not be recorded.");
   }
 
-  const collegeName = await getCollegeName(supabase, collegeId);
-  await sendInvitationEmail({
-    to: parsed.email,
+
+  return {
+    userId: created.user.id,
+    invitationId: invitationRow.id,
+    email: parsed.email,
     fullName: parsed.fullName,
     role: parsed.role,
+    collegeId,
+    hashedToken: created.properties.hashed_token,
+  };
+}
+
+/** Emails a created invitation and records it. */
+export async function deliverInvitation(
+  supabase: SupabaseClient<Database>,
+  actor: AuthorizedActor,
+  invitation: CreatedInvitation
+) {
+  const collegeName = await getCollegeName(supabase, invitation.collegeId);
+  await sendInvitationEmail({
+    to: invitation.email,
+    fullName: invitation.fullName,
+    role: invitation.role,
     collegeName,
-    actionLink: confirmLink(created.properties.hashed_token, "invite"),
+    actionLink: confirmLink(invitation.hashedToken, "invite"),
   });
 
-  await logAudit(supabase, actor, `Invited ${parsed.email} as ${parsed.role}`, "invitations", created.user.id);
+  await logAudit(supabase, actor, `Invited ${invitation.email} as ${invitation.role}`, "invitations", invitation.userId);
+}
 
-  return { userId: created.user.id };
+/**
+ * Undoes a created, never-delivered invitation: the auth account goes and
+ * the bookkeeping row is marked revoked, so nothing pending remains.
+ */
+export async function discardInvitation(
+  supabase: SupabaseClient<Database>,
+  invitation: CreatedInvitation
+) {
+  await removeInvitedAccount(createAdminClient(), invitation.userId);
+  const { error } = await supabase.from("invitations").update({ status: "revoked" }).eq("id", invitation.invitationId);
+  if (error) {
+    console.error("[invitations] could not mark a discarded invitation revoked", { code: error.code });
+  }
+}
+
+export async function inviteUserCore(
+  supabase: SupabaseClient<Database>,
+  actor: AuthorizedActor,
+  params: InviteUserParams
+) {
+  const created = await createInvitationCore(supabase, actor, params);
+  await deliverInvitation(supabase, actor, created);
+  return { userId: created.userId };
 }
 
 const InvitationIdSchema = z.object({ invitationId: z.string().guid() });

@@ -4,6 +4,7 @@ import { TeacherDashboardClient, type PriorityAction } from "./dashboard-client"
 import type { Database } from "@/types/database";
 import { assertRead } from "@/lib/read-result-server";
 import { todayDayOfWeek, todayInTimeZone } from "@/lib/format";
+import { currentTermTaughtOfferingIds } from "@/lib/academic/timetable";
 
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -22,6 +23,7 @@ type SlotWithCourse = TimetableSlotRow & {
 type OfferingSummary = {
   id: string;
   status: string;
+  semesters: { status: string } | null;
   courses: { id: string; name: string; code: string } | null;
   sections: { name: string } | null;
 };
@@ -45,14 +47,31 @@ export default async function TeacherDashboard() {
   // sections of one course are two entries here, each with its own roll,
   // register and marks sheet — which is the whole point of the offering
   // model and was inexpressible before it.
+  //
+  // "This term" is now enforced (055): earlier terms' offerings keep their
+  // own slots and records as history and are not today's classes or work.
   const { data: offeringsData, error: offeringsDataError } = await supabase
     .from("course_offerings")
-    .select("id, status, courses:course_id(id, name, code), sections:section_id(name)")
+    .select("id, status, semesters:semester_id(status), courses:course_id(id, name, code), sections:section_id(name)")
     .eq("instructor_id", user.id);
   assertRead(offeringsDataError);
-  const offerings = ((offeringsData as unknown as OfferingSummary[]) || []).filter(
-    (o) => o.status !== "cancelled"
-  );
+  const allOfferings = (offeringsData as unknown as OfferingSummary[]) || [];
+  const currentIds = new Set(currentTermTaughtOfferingIds(allOfferings));
+  const offerings = allOfferings.filter((o) => currentIds.has(o.id));
+
+  // Sections this teacher is Class In-Charge of this term (055) — explicit
+  // assignments by the HOD, listed with their own page.
+  const { data: inchargeRows, error: inchargeError } = await supabase
+    .from("section_class_incharges")
+    .select("section_id, semesters:semester_id!inner(status), sections:section_id(name, batch_year, programmes:programme_id(code))")
+    .eq("teacher_id", user.id)
+    .eq("semesters.status", "active")
+    .is("ended_at", null);
+  // A database that predates 055 has no such table: no In-Charge sections.
+  if (inchargeError && inchargeError.code !== "42P01" && inchargeError.code !== "PGRST205") assertRead(inchargeError);
+  const inchargeSections = (((inchargeError ? [] : inchargeRows) ?? []) as unknown as {
+    sections: { name: string; batch_year: number; programmes: { code: string } | null } | null;
+  }[]).map((r) => `${r.sections?.programmes?.code ?? ""} ${r.sections?.name ?? ""} (${r.sections?.batch_year ?? ""})`.trim());
   const offeringIds = offerings.map((o) => o.id);
 
   const todayIndex = todayDayOfWeek();
@@ -173,6 +192,15 @@ export default async function TeacherDashboard() {
       title: `${pendingCorrectionCount} correction request${pendingCorrectionCount !== 1 ? "s" : ""} awaiting HOD action`,
       priority: "low",
       href: "/teacher/attendance",
+    });
+  }
+
+  if (inchargeSections.length > 0) {
+    actions.push({
+      source: "Class In-Charge",
+      title: `You are Class In-Charge of ${inchargeSections.join(", ")}`,
+      priority: "low",
+      href: "/teacher/class",
     });
   }
 
