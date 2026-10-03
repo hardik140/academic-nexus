@@ -68,6 +68,11 @@
       "icon": "📚"
     },
     {
+      "label": "My Class",
+      "href": "/teacher/class",
+      "icon": "🧑‍🏫"
+    },
+    {
       "label": "Attendance",
       "href": "/teacher/attendance",
       "icon": "✅"
@@ -93,6 +98,11 @@
       "label": "Dashboard",
       "href": "/hod/dashboard",
       "icon": "📊"
+    },
+    {
+      "label": "Academics",
+      "href": "/hod/academics",
+      "icon": "🏫"
     },
     {
       "label": "Approvals",

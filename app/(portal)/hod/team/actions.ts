@@ -5,9 +5,10 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib/rbac";
 import { inviteUserCore, resendInvitationCore, revokeInvitationCore } from "@/lib/invitations";
+import { inviteStudentCore, StudentInviteSchema } from "@/lib/student-invitations";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
-import { dbError } from "@/lib/internal-error";
+import { assertRead } from "@/lib/read-result-server";
 
 const InviteTeacherSchema = z.object({
   email: z.string().trim().email({ message: "Enter a valid email address." }),
@@ -15,16 +16,9 @@ const InviteTeacherSchema = z.object({
   role: z.literal("teacher"),
 });
 
-const InviteStudentSchema = z.object({
-  email: z.string().trim().email({ message: "Enter a valid email address." }),
-  fullName: z.string().trim().min(1, { message: "Full name is required." }).max(200),
-  role: z.literal("student"),
-  enrollmentNumber: z.string().trim().min(1, { message: "Enrollment number is required." }).max(50),
-  batchYear: z.number().int().min(1900).max(2200),
-  parentName: z.string().trim().max(200).optional(),
-  parentEmail: z.string().trim().max(200).optional(),
-  parentPhone: z.string().trim().max(20).optional(),
-});
+// The student's department, programme and batch year are NOT form fields:
+// they are resolved by the database from the section (migration 055 §14).
+const InviteStudentSchema = StudentInviteSchema.extend({ role: z.literal("student") });
 
 const InviteHodTeamSchema = z.discriminatedUnion("role", [InviteTeacherSchema, InviteStudentSchema]);
 
@@ -48,12 +42,15 @@ async function resolveHodDepartment(supabase: SupabaseClient<Database>, actor: A
 /**
  * HOD's invite surface — HOD may invite Teachers or Students (see
  * lib/auth/invite-tiers.ts's INVITE_PERMISSIONS), always into their own
- * department, resolved server-side and never trusted from the client. A
- * student invite additionally creates the `students` row — inviteUserCore
- * alone only creates a `profiles` row, but `students.enrollment_number` /
- * `batch_year` / `department_id` are all NOT NULL, so a bare profile isn't
- * enough for that student's portal to actually work once they accept.
- * Teacher invites need nothing beyond the profile.
+ * department, resolved server-side and never trusted from the client.
+ *
+ * A student invitation goes through inviteStudentCore (lib/student-
+ * invitations.ts): the HOD picks a SECTION of their department and the
+ * database resolves everything else, checks the HOD heads that section's
+ * department, and records the placement before any email is sent. The old
+ * path inserted the `students` row directly at invite time, which RLS
+ * refuses for an HOD (students_admin_manage is admin-only), so it failed
+ * after the account had already been created — defect 1 of the contract.
  */
 async function inviteHodTeam(
   supabase: SupabaseClient<Database>,
@@ -61,30 +58,40 @@ async function inviteHodTeam(
   paramsRaw: InviteHodTeamParams
 ) {
   const params = InviteHodTeamSchema.parse(paramsRaw);
-  const departmentId = await resolveHodDepartment(supabase, actor);
 
-  const { userId } = await inviteUserCore(supabase, actor, {
+  if (params.role === "student") {
+    const { role: _role, ...student } = params;
+    void _role;
+    await inviteStudentCore(supabase, actor, student);
+    return;
+  }
+
+  const departmentId = await resolveHodDepartment(supabase, actor);
+  await inviteUserCore(supabase, actor, {
     email: params.email,
     fullName: params.fullName,
     role: params.role,
     departmentId,
   });
+}
 
-  if (params.role === "student") {
-    const { error } = await supabase.from("students").insert({
-      college_id: actor.collegeId,
-      user_id: userId,
-      department_id: departmentId,
-      enrollment_number: params.enrollmentNumber,
-      batch_year: params.batchYear,
-      parent_name: params.parentName || null,
-      parent_email: params.parentEmail || null,
-      parent_phone: params.parentPhone || null,
-    });
-    if (error) {
-      throw dbError(error);
-    }
-  }
+/**
+ * The sections an HOD may invite a student into: the active sections of the
+ * departments they head, each with its programme's length (the semester
+ * choices). The database re-checks the choice when the invitation is made.
+ */
+export async function listInviteSections(): Promise<{ id: string; label: string; duration: number }[]> {
+  const actor = await requireRole(["hod"]);
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("sections")
+    .select("id, name, batch_year, programmes:programme_id!inner(code, duration_semesters, departments:department_id!inner(hod_id))")
+    .eq("programmes.departments.hod_id", actor.userId)
+    .eq("status", "active");
+  assertRead(error);
+  return ((data ?? []) as unknown as { id: string; name: string; batch_year: number; programmes: { code: string; duration_semesters: number } }[])
+    .map((s) => ({ id: s.id, label: `${s.programmes.code} ${s.name} (${s.batch_year})`, duration: s.programmes.duration_semesters }))
+    .sort((a, b) => a.label.localeCompare(b.label));
 }
 
 export async function inviteUser(params: InviteHodTeamParams) {

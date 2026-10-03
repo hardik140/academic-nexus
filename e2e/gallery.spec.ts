@@ -33,6 +33,11 @@ const SECTIONS = [
   "college-lifecycle",
   "sessions",
   "session-enforcement",
+  "department-term",
+  "class-incharge",
+  "academic-context",
+  "student-invite",
+  "timetable-week",
   "session",
 ];
 

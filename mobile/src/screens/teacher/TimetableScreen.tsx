@@ -3,6 +3,7 @@ import { View, Text, StyleSheet } from "react-native";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import { Screen, Card, colors } from "@/components/ui";
+import { currentTermTaughtOfferingIds } from "@/lib/academic";
 
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -17,11 +18,12 @@ export default function TimetableScreen() {
     const { data: profile } = await supabase.from("profiles").select("college_id").eq("id", session.user.id).single();
     // timetable_slots has no instructor_id after 047 — resolve this
     // teacher's offerings first, then their scheduled sessions.
+    // The ACTIVE term only, as on the web (055).
     const { data: myOfferings } = await supabase
       .from("course_offerings")
-      .select("id")
+      .select("id, status, semesters:semester_id(status)")
       .eq("instructor_id", session.user.id);
-    const offeringIds = ((myOfferings as any[]) || []).map((o) => o.id);
+    const offeringIds = currentTermTaughtOfferingIds(myOfferings as never);
 
     const { data } = offeringIds.length
       ? await supabase

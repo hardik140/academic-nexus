@@ -1215,7 +1215,9 @@ describe("model observations", () => {
       // narrow access, never grant a write.
       `SELECT cmd FROM pg_policies WHERE schemaname='public' AND tablename='timetable_slots' AND permissive='PERMISSIVE'`
     );
-    expect(policies.map((p) => p.cmd)).toEqual(["SELECT"]);
+    // 055 split 006's single read into staff (college-wide) and student/parent
+    // (own enrolments) — both still SELECT only.
+    expect(policies.map((p) => p.cmd)).toEqual(["SELECT", "SELECT"]);
 
     // So nobody can create a timetable through PostgREST — unchanged since
     // migration 006, and deliberately left alone in Phase 8.

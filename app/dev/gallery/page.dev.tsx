@@ -31,6 +31,7 @@ import {
   ToastDemos,
 } from "./m6-demos";
 import { DeviceSessionDemos, EnforcementDemos, LifecycleDemos, UnavailableDemos } from "./lifecycle-demos";
+import { AcademicContextDemos, ClassInchargeDemos, DepartmentTermDemos, StudentInviteDemos, TimetableWeekDemos } from "./academics-demos";
 
 /**
  * Development-only component gallery — the browser-verification surface for
@@ -342,6 +343,26 @@ export default function ComponentGalleryPage() {
 
         <Section id="session-enforcement" title="Session enforcement cut-over (Super Admin)">
           <EnforcementDemos />
+        </Section>
+
+        <Section id="department-term" title="Department term and readiness (HOD)">
+          <DepartmentTermDemos />
+        </Section>
+
+        <Section id="class-incharge" title="Class In-Charge assignment (HOD)">
+          <ClassInchargeDemos />
+        </Section>
+
+        <Section id="academic-context" title="Student academic context">
+          <AcademicContextDemos />
+        </Section>
+
+        <Section id="student-invite" title="Student invitation into a section">
+          <StudentInviteDemos />
+        </Section>
+
+        <Section id="timetable-week" title="Department timetable (HOD)">
+          <TimetableWeekDemos />
         </Section>
 
         <Section id="session" title="Session expiry">

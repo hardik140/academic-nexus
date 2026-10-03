@@ -6,6 +6,7 @@ import { listOpportunities } from "@/app/(portal)/student/placements/actions";
 import type { Database } from "@/types/database";
 import { assertRead } from "@/lib/read-result-server";
 import { NO_MATCH_ID } from "@/lib/read-result";
+import { readAcademicContext } from "@/lib/academic/context";
 
 // See insights/page.tsx for why this cast is needed — same hand-maintained
 // Database type / empty Relationships limitation.
@@ -100,6 +101,9 @@ export default async function StudentDashboard() {
   // Eligible placement drives this student hasn't applied to yet, reusing
   // the placements module's own eligibility logic rather than re-deriving
   // min_cgpa/batch/department filtering here.
+  // The student's term, class, section and Class In-Charge (migration 055).
+  const academicContext = await readAcademicContext(supabase);
+
   let upcomingPlacementDeadlines: Awaited<ReturnType<typeof listOpportunities>> = [];
   try {
     const opportunities = await listOpportunities();
@@ -119,6 +123,7 @@ export default async function StudentDashboard() {
       academicHealth={academicHealth}
       subjectRisks={subjectRisks}
       upcomingPlacementDeadlines={upcomingPlacementDeadlines}
+      academicContext={academicContext}
     />
   );
 }

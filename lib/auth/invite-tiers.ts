@@ -7,8 +7,9 @@ import type { UserRole } from "@/types/database";
  * never trust a client-supplied target role against anything else.
  *
  * The cascade: Super Admin -> College Admin -> Director -> Finance/HOD/Warden/
- * Placement Cell/Gate Security, and HOD -> Teacher/Student. Every other role
- * invites no one.
+ * Placement Cell/Gate Security, and HOD -> Teacher/Student, and a Class
+ * In-Charge (a teacher) -> Student for their own section (migration 055).
+ * Every other role invites no one.
  *
  * Placement Cell is deliberately only reachable from Director, not Admin —
  * it's a Director-controlled functional role (see the Placement Cell plan),
@@ -26,7 +27,10 @@ export const INVITE_PERMISSIONS: Record<UserRole, UserRole[]> = {
   admin: ["director"],
   director: ["finance", "hod", "warden", "placement_cell", "gate_security"],
   hod: ["teacher", "student"],
-  teacher: [],
+  // Relationship-scoped (055): only while the teacher is a current Class
+  // In-Charge, and only into THAT section — student_placement_check()
+  // decides per invitation. The role grant alone admits nothing.
+  teacher: ["student"],
   finance: [],
   warden: [],
   student: [],

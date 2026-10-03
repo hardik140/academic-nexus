@@ -139,6 +139,10 @@ describe("mutation: the closed-semester freeze (P2-3)", () => {
       )
     );
     try {
+      // The historical offering is also 'completed', which 055's completed-
+      // offering freeze refuses on its own. Isolate the control under test:
+      // as the owner, mark it active, so only the closed-semester freeze stands.
+      await db.query(`UPDATE public.course_offerings SET status = 'active' WHERE id = '${OFF.historical}'`);
       const r = await as(db, U.teacherA,
         `INSERT INTO public.marks (college_id, offering_id, student_id, exam_type, max_marks, obtained_marks)
            VALUES ('${COLLEGE_A}','${OFF.historical}','${S.f}','midterm',100,50) RETURNING id`);

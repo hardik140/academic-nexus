@@ -301,6 +301,145 @@ export interface Database {
         Relationships: [];
       };
 
+      // ── Migration 055: academic foundation. Written ONLY by its SECURITY
+      //    DEFINER functions and triggers — there is no write policy on any of
+      //    these tables, so Insert/Update exist for typing completeness only.
+      department_terms: {
+        Row: {
+          id: string;
+          college_id: string;
+          department_id: string;
+          semester_id: string;
+          status: "active" | "ended";
+          start_source: "started" | "backfill";
+          started_at: string;
+          started_by: string | null;
+          pending_acknowledged: Json | null;
+          ended_at: string | null;
+          ended_by: string | null;
+          end_reason: string | null;
+        };
+        Insert: OptionalKeys<Database["public"]["Tables"]["department_terms"]["Row"], "id" | "status" | "start_source" | "started_at" | "started_by" | "pending_acknowledged" | "ended_at" | "ended_by" | "end_reason">;
+        Update: Partial<Database["public"]["Tables"]["department_terms"]["Insert"]>;
+        Relationships: [];
+      };
+
+      section_class_incharges: {
+        Row: {
+          id: string;
+          college_id: string;
+          semester_id: string;
+          section_id: string;
+          teacher_id: string;
+          assigned_at: string;
+          assigned_by: string | null;
+          assign_reason: string | null;
+          ended_at: string | null;
+          ended_by: string | null;
+          end_reason: string | null;
+        };
+        Insert: OptionalKeys<Database["public"]["Tables"]["section_class_incharges"]["Row"], "id" | "assigned_at" | "assigned_by" | "assign_reason" | "ended_at" | "ended_by" | "end_reason">;
+        Update: Partial<Database["public"]["Tables"]["section_class_incharges"]["Insert"]>;
+        Relationships: [];
+      };
+
+      student_section_assignments: {
+        Row: {
+          id: string;
+          college_id: string;
+          student_id: string;
+          section_id: string;
+          started_at: string;
+          started_semester_id: string | null;
+          start_source: "invitation" | "reconciliation" | "backfill" | "transfer" | "progression";
+          start_reason: string | null;
+          assigned_by: string | null;
+          ended_at: string | null;
+          ended_semester_id: string | null;
+          end_source: "transfer" | "progression" | "withdrawal" | null;
+          end_reason: string | null;
+          ended_by: string | null;
+        };
+        Insert: OptionalKeys<Database["public"]["Tables"]["student_section_assignments"]["Row"], "id" | "started_at" | "started_semester_id" | "start_reason" | "assigned_by" | "ended_at" | "ended_semester_id" | "end_source" | "end_reason" | "ended_by">;
+        Update: Partial<Database["public"]["Tables"]["student_section_assignments"]["Insert"]>;
+        Relationships: [];
+      };
+
+      department_hod_assignments: {
+        Row: {
+          id: string;
+          college_id: string;
+          department_id: string;
+          hod_id: string;
+          source: "assignment" | "backfill";
+          started_at: string;
+          assigned_by: string | null;
+          ended_at: string | null;
+          ended_by: string | null;
+        };
+        Insert: OptionalKeys<Database["public"]["Tables"]["department_hod_assignments"]["Row"], "id" | "source" | "started_at" | "assigned_by" | "ended_at" | "ended_by">;
+        Update: Partial<Database["public"]["Tables"]["department_hod_assignments"]["Insert"]>;
+        Relationships: [];
+      };
+
+      offering_instructor_history: {
+        Row: {
+          id: string;
+          college_id: string;
+          offering_id: string;
+          instructor_id: string;
+          source: "assignment" | "backfill";
+          started_at: string;
+          started_by: string | null;
+          ended_at: string | null;
+          ended_by: string | null;
+        };
+        Insert: OptionalKeys<Database["public"]["Tables"]["offering_instructor_history"]["Row"], "id" | "source" | "started_at" | "started_by" | "ended_at" | "ended_by">;
+        Update: Partial<Database["public"]["Tables"]["offering_instructor_history"]["Insert"]>;
+        Relationships: [];
+      };
+
+      external_teaching_authorizations: {
+        Row: {
+          id: string;
+          college_id: string;
+          department_id: string;
+          teacher_id: string;
+          reason: string;
+          granted_at: string;
+          granted_by: string | null;
+          revoked_at: string | null;
+          revoked_by: string | null;
+          revoke_reason: string | null;
+        };
+        Insert: OptionalKeys<Database["public"]["Tables"]["external_teaching_authorizations"]["Row"], "id" | "granted_at" | "granted_by" | "revoked_at" | "revoked_by" | "revoke_reason">;
+        Update: Partial<Database["public"]["Tables"]["external_teaching_authorizations"]["Insert"]>;
+        Relationships: [];
+      };
+
+      student_invitation_placements: {
+        Row: {
+          invitation_id: string;
+          college_id: string;
+          department_id: string;
+          programme_id: string;
+          section_id: string;
+          semester_id: string;
+          programme_semester: number;
+          enrollment_number: string;
+          parent_name: string | null;
+          parent_email: string | null;
+          parent_phone: string | null;
+          invited_by: string;
+          created_at: string;
+          consumed_at: string | null;
+          consumed_student_id: string | null;
+        };
+        Insert: OptionalKeys<Database["public"]["Tables"]["student_invitation_placements"]["Row"], "created_at" | "parent_name" | "parent_email" | "parent_phone" | "consumed_at" | "consumed_student_id">;
+        Update: Partial<Database["public"]["Tables"]["student_invitation_placements"]["Insert"]>;
+        Relationships: [];
+      };
+
       course_enrollments: {
         Row: {
           id: string;
