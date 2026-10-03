@@ -16,6 +16,8 @@ import type { Database, UserRole, UserStatus } from "@/types/database";
 import type { DataTableQuery } from "@/components/ui/data-table";
 import { dbError } from "@/lib/internal-error";
 import { assertRead } from "@/lib/read-result-server";
+import { callAccessRpc } from "@/lib/college-access";
+import type { DeviceSession } from "@/components/portal/device-list";
 
 const USERS_PAGE_SIZE = 10;
 // Server actions are callable directly (not just through the UI that only
@@ -375,4 +377,35 @@ export async function updateStudentAcademicStatus(
     const sortColumn = viewQuery.sortKey && USERS_SORT_COLUMNS.has(viewQuery.sortKey) ? viewQuery.sortKey : "created_at";
     await invalidateCache(usersCacheKey(actor.collegeId, viewQuery, sortColumn));
   }
+}
+
+// ─── A user's sessions (migration 054) ────────────────────────────────────
+
+const SessionUserId = z.string().regex(/^[0-9a-f-]{36}$/i, { message: "Invalid user." });
+
+/**
+ * One user's active sessions, for the College Admin. RLS limits the rows to
+ * the Admin's own college and never shows a super_admin's sessions.
+ */
+export async function listUserSessions(targetUserId: string): Promise<DeviceSession[]> {
+  await requireRole(["admin"]);
+  const userId = SessionUserId.parse(targetUserId);
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("user_sessions")
+    .select("session_id, client, device_label, status, created_at, last_seen_at")
+    .eq("user_id", userId)
+    .eq("status", "active")
+    .order("last_seen_at", { ascending: false });
+  assertRead(error);
+  return (data ?? []) as DeviceSession[];
+}
+
+/** revoke_session() decides: own college only, never a super_admin. Audited there. */
+export async function revokeUserSession(sessionId: string): Promise<void> {
+  const actor = await requireRole(["admin"]);
+  const id = SessionUserId.parse(sessionId);
+  await checkRateLimit(`revokeSession:${actor.userId}`, 30, 60);
+  const supabase = await createClient();
+  await callAccessRpc(supabase, "revoke_session", { p_session_id: id }, "That session couldn't be signed out.");
 }

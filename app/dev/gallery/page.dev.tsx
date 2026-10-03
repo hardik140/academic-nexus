@@ -30,6 +30,7 @@ import {
   SessionDemos,
   ToastDemos,
 } from "./m6-demos";
+import { DeviceSessionDemos, EnforcementDemos, LifecycleDemos, UnavailableDemos } from "./lifecycle-demos";
 
 /**
  * Development-only component gallery — the browser-verification surface for
@@ -325,6 +326,22 @@ export default function ComponentGalleryPage() {
 
         <Section id="table-error" title="Data table: failed loads">
           <DataTableErrorDemo />
+        </Section>
+
+        <Section id="college-unavailable" title="College unavailable and device limit (/unavailable)">
+          <UnavailableDemos />
+        </Section>
+
+        <Section id="college-lifecycle" title="College lifecycle (Super Admin)">
+          <LifecycleDemos />
+        </Section>
+
+        <Section id="sessions" title="Sessions and devices">
+          <DeviceSessionDemos />
+        </Section>
+
+        <Section id="session-enforcement" title="Session enforcement cut-over (Super Admin)">
+          <EnforcementDemos />
         </Section>
 
         <Section id="session" title="Session expiry">

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { verifySignatureAppRouter } from "@upstash/qstash/nextjs";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { runOperation } from "@/lib/finance/pipeline";
+import { unavailableCollegeIds } from "@/lib/college-access";
 
 /**
  * The finance integration worker (§78).
@@ -36,7 +37,7 @@ async function handler() {
 
   const { data: due, error } = await supabase
     .from("finance_sync_operations")
-    .select("id, status, next_attempt_at")
+    .select("id, college_id, status, next_attempt_at")
     .in("status", ["QUEUED", "RETRYING"])
     .or(`next_attempt_at.is.null,next_attempt_at.lte.${nowIso}`)
     .order("created_at", { ascending: true })
@@ -46,8 +47,16 @@ async function handler() {
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   }
 
+  // Lifecycle-blocked (migration 053): a college in MAINTENANCE or
+  // SUSPENDED is not synced. Its operations stay QUEUED/RETRYING, untouched,
+  // and run after it is reactivated.
+  const blocked = await unavailableCollegeIds(supabase);
   const results: Array<{ id: string; status: string; errorCode?: string }> = [];
   for (const row of due ?? []) {
+    if (blocked.has(row.college_id)) {
+      results.push({ id: row.id, status: "SKIPPED_COLLEGE_UNAVAILABLE" });
+      continue;
+    }
     try {
       const outcome = await runOperation(supabase, row.id);
       results.push({ id: row.id, status: outcome.status, errorCode: outcome.errorCode });

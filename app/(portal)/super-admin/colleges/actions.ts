@@ -15,6 +15,8 @@ import type { Database } from "@/types/database";
 import type { DataTableQuery } from "@/components/ui/data-table";
 import { dbError } from "@/lib/internal-error";
 import { assertRead } from "@/lib/read-result-server";
+import { callAccessRpc } from "@/lib/college-access";
+import type { DeviceSession } from "@/components/portal/device-list";
 
 const COLLEGES_PAGE_SIZE = 10;
 const COLLEGES_SORT_COLUMNS = ["name", "code"] as const;
@@ -151,4 +153,104 @@ export async function revokeInvitation(invitationId: string) {
   const supabase = await createClient();
   await revokeInvitationCore(supabase, actor, invitationId);
   revalidatePath("/super-admin/colleges");
+}
+
+// ─── College lifecycle and Admin sessions (migrations 053/054) ───────────
+
+const LifecycleSchema = z.object({
+  collegeId: z.string().regex(/^[0-9a-f-]{36}$/i, { message: "Invalid college." }),
+  state: z.enum(["ACTIVE", "MAINTENANCE", "SUSPENDED"]),
+  reason: z.string().trim().min(10, { message: "Give a reason of at least 10 characters." }).max(1000),
+  message: z.string().trim().max(500).optional(),
+  expectedResumeAt: z.string().datetime({ offset: true }).optional(),
+});
+
+export type SetCollegeLifecycleParams = z.input<typeof LifecycleSchema>;
+
+/**
+ * Moves a college between ACTIVE, MAINTENANCE and SUSPENDED. The database
+ * function is the authority (super_admin only, reason required, history and
+ * audit written in the same transaction, the college's sessions revoked when
+ * it leaves ACTIVE); this validates the shape first so the form can say what
+ * is wrong, and refreshes the cached list.
+ */
+export async function setCollegeLifecycle(params: SetCollegeLifecycleParams, viewQuery?: DataTableQuery) {
+  const actor = await requireRole(["super_admin"]);
+  const parsed = LifecycleSchema.parse(params);
+  await checkRateLimit(`collegeLifecycle:${actor.userId}`, 20, 60);
+  const supabase = await createClient();
+
+  await callAccessRpc(
+    supabase,
+    "set_college_lifecycle",
+    {
+      p_college_id: parsed.collegeId,
+      p_state: parsed.state,
+      p_reason: parsed.reason,
+      p_message: parsed.state === "ACTIVE" ? null : parsed.message || null,
+      p_expected_resume_at: parsed.state === "MAINTENANCE" ? parsed.expectedResumeAt ?? null : null,
+    },
+    "The college's status couldn't be changed."
+  );
+
+  revalidatePath("/super-admin/colleges");
+  if (viewQuery) {
+    const { column } = resolveListSort(COLLEGES_SORT_COLUMNS, "created_at", false, viewQuery);
+    await invalidateCache(listCacheKey(COLLEGES_CACHE_PREFIX, actor.collegeId, viewQuery, column));
+  }
+}
+
+export interface LifecycleEvent {
+  id: string;
+  previous_state: string;
+  new_state: string;
+  reason: string;
+  message: string | null;
+  expected_resume_at: string | null;
+  sessions_revoked: number;
+  changed_by: string;
+  changed_at: string;
+}
+
+/** The college's lifecycle history, newest first (super_admin-only RLS). */
+export async function listCollegeLifecycleHistory(collegeId: string): Promise<LifecycleEvent[]> {
+  await requireRole(["super_admin"]);
+  const id = LifecycleSchema.shape.collegeId.parse(collegeId);
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("college_lifecycle_events")
+    .select("id, previous_state, new_state, reason, message, expected_resume_at, sessions_revoked, changed_by, changed_at")
+    .eq("college_id", id)
+    .order("changed_at", { ascending: false })
+    .limit(100);
+  assertRead(error);
+  return (data ?? []) as LifecycleEvent[];
+}
+
+/**
+ * The active sessions of a college's Admin accounts — the only accounts
+ * super_admin manages (migration 020's scope, kept by 054's RLS).
+ */
+export async function listCollegeAdminSessions(collegeId: string): Promise<DeviceSession[]> {
+  await requireRole(["super_admin"]);
+  const id = LifecycleSchema.shape.collegeId.parse(collegeId);
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("user_sessions")
+    .select("session_id, client, device_label, status, created_at, last_seen_at, profiles:user_id(full_name)")
+    .eq("college_id", id)
+    .eq("status", "active")
+    .order("last_seen_at", { ascending: false });
+  assertRead(error);
+  return ((data ?? []) as unknown as Array<DeviceSession & { profiles: { full_name: string | null } | null }>).map((s) => ({
+    ...s,
+    device_label: [s.profiles?.full_name, s.device_label].filter(Boolean).join(" — ") || null,
+  }));
+}
+
+export async function revokeAdminSession(sessionId: string): Promise<void> {
+  await requireRole(["super_admin"]);
+  const id = LifecycleSchema.shape.collegeId.parse(sessionId);
+  const supabase = await createClient();
+  await callAccessRpc(supabase, "revoke_session", { p_session_id: id }, "That session couldn't be signed out.");
 }

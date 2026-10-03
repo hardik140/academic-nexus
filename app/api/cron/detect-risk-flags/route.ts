@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { verifySignatureAppRouter } from "@upstash/qstash/nextjs";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { unavailableCollegeIds } from "@/lib/college-access";
 import type { Database } from "@/types/database";
 
 /**
@@ -159,6 +160,10 @@ async function hostelSignals(
 
 async function handler() {
   const supabase = createAdminClient();
+  // Lifecycle-blocked (migration 053): a college in MAINTENANCE or SUSPENDED
+  // gets no new flags — and keeps the ones it has, untouched, until it is
+  // reactivated (they must not be auto-resolved just because it was skipped).
+  const blocked = await unavailableCollegeIds(supabase);
 
   // Reads the _raw relation directly (not the mv_department_health wrapper
   // view) — see the file doc comment. Not a declared table/view in the
@@ -181,13 +186,14 @@ async function handler() {
     }
   }
   signals.push(...(await hostelSignals(supabase)));
+  const liveSignals = signals.filter((s) => !blocked.has(s.collegeId));
 
   const OPEN_STATUSES = ["open", "assigned", "acknowledged", "in_progress"] as const;
   let created = 0;
   let updated = 0;
   let autoResolved = 0;
 
-  for (const signal of signals) {
+  for (const signal of liveSignals) {
     let query = supabase
       .from("risk_flags")
       .select("id, severity")
@@ -234,7 +240,8 @@ async function handler() {
     .in("status", OPEN_STATUSES);
 
   for (const flag of openSystemFlags || []) {
-    const stillSignaled = signals.some(
+    if (blocked.has(flag.college_id)) continue;
+    const stillSignaled = liveSignals.some(
       (s) => s.collegeId === flag.college_id && s.flagType === flag.flag_type && s.departmentId === flag.department_id
     );
     if (!stillSignaled) {
@@ -250,7 +257,7 @@ async function handler() {
     }
   }
 
-  return NextResponse.json({ ok: true, signalsDetected: signals.length, created, updated, autoResolved });
+  return NextResponse.json({ ok: true, signalsDetected: liveSignals.length, created, updated, autoResolved, collegesSkipped: blocked.size });
 }
 
 const hasQstashKeys = !!(process.env.QSTASH_CURRENT_SIGNING_KEY && process.env.QSTASH_NEXT_SIGNING_KEY);

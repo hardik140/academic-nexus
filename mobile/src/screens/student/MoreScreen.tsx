@@ -1,7 +1,7 @@
 import { View, Text, Pressable, StyleSheet } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { supabase } from "@/lib/supabase";
+import { signOutEverywhere } from "@/lib/session";
 import { colors } from "@/components/ui";
 import type { MoreStackParamList } from "@/navigation/StudentTabNavigator";
 
@@ -30,7 +30,7 @@ export default function MoreScreen() {
         </Pressable>
       ))}
 
-      <Pressable style={[styles.row, styles.signOutRow]} onPress={() => supabase.auth.signOut()}>
+      <Pressable style={[styles.row, styles.signOutRow]} onPress={() => signOutEverywhere()}>
         <Text style={styles.icon}>🚪</Text>
         <Text style={[styles.label, { color: colors.error }]}>Sign Out</Text>
       </Pressable>

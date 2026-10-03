@@ -26,8 +26,11 @@ import {
   listUsers,
   getStudentAcademicSummary,
   updateStudentAcademicStatus,
+  listUserSessions,
+  revokeUserSession,
   type StudentAcademicSummary,
 } from "./actions";
+import { SessionsDialog } from "@/components/portal/sessions-dialog";
 import type { UserRole, UserStatus } from "@/types/database";
 
 const ACADEMIC_STATUSES = [
@@ -75,6 +78,7 @@ function AdminUsersInner() {
   const [statusTarget, setStatusTarget] = useState<{ id: string; name: string; status: UserStatus } | null>(null);
   const [statusPending, setStatusPending] = useState(false);
   const [statusError, setStatusError] = useState<FeedbackError | null>(null);
+  const [sessionsFor, setSessionsFor] = useState<{ id: string; name: string } | null>(null);
   const latestUsersLoad = useRef(0);
   const latestSummary = useRef(0);
   const toast = useToast();
@@ -400,6 +404,13 @@ function AdminUsersInner() {
             >
               Edit
             </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); setSessionsFor({ id: row.id, name: row.full_name }); }}
+              className="text-xs text-secondary hover:underline font-medium"
+              aria-label={`Sessions of ${row.full_name}`}
+            >
+              Sessions
+            </button>
             {row.status === "active" ? (
               <button
                 onClick={(e) => { e.stopPropagation(); setStatusError(null); setStatusTarget({ id: row.id, name: row.full_name, status: "suspended" }); }}
@@ -417,6 +428,16 @@ function AdminUsersInner() {
             )}
           </div>
         )}
+      />
+
+      <SessionsDialog
+        open={!!sessionsFor}
+        onClose={() => setSessionsFor(null)}
+        title={`Sessions — ${sessionsFor?.name ?? ""}`}
+        description="Where this user is signed in. Signing a session out ends it immediately; the user can sign in again."
+        load={() => listUserSessions(sessionsFor!.id)}
+        revoke={revokeUserSession}
+        emptyText="This user is not signed in anywhere."
       />
 
       {/* Invite User Modal */}

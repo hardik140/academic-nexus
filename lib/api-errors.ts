@@ -12,8 +12,14 @@ import { InternalOperationError, looksInternal } from "@/lib/internal-error";
  */
 export function errorResponse(err: unknown): NextResponse {
   if (err instanceof RbacError) {
-    const status = err.code === "UNAUTHENTICATED" ? 401 : err.code === "INACTIVE" ? 403 : 403;
-    return NextResponse.json({ error: err.message }, { status });
+    // `code` lets the mobile app tell a maintenance window from a revoked
+    // session from a device limit, and show the right screen. The message
+    // is the guard's own, written for the user.
+    const status =
+      err.code === "UNAUTHENTICATED" || err.code === "SESSION_REVOKED" ? 401 :
+      err.code === "ACCESS_CHECK_FAILED" ? 503 :
+      403;
+    return NextResponse.json({ error: err.message, code: err.code }, { status });
   }
   if (err instanceof RateLimitError) {
     // Retry-After is the only part of a 429 a client can act on. Without it

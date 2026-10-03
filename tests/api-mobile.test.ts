@@ -17,6 +17,9 @@ const mockDeleteUser = vi.fn();
 // invited role/department there now (migrations 042/043), not through the
 // caller's own client.
 const mockAdminUpdate = vi.fn();
+// register_current_session (migration 054), called by requireRoleFromRequest
+// after the role check. Default: the session is admitted.
+const mockRpc = vi.fn();
 // lib/email.ts's nodemailer transport isn't configured in tests (no real
 // SMTP) — mocked so inviteUserCore's send step is a no-op here rather than
 // throwing "SMTP is not configured." vi.hoisted() (rather than a plain
@@ -69,6 +72,7 @@ function chainableInsert(result: { data?: unknown; error: unknown }) {
 vi.mock("@/lib/supabase/mobile", () => ({
   createMobileClient: () => ({
     auth: { getUser: mockGetUser },
+    rpc: mockRpc,
     from: () => ({
       select: () => eqChain,
       insert: mockInsert,
@@ -248,6 +252,8 @@ describe("app/api/mobile/* — HTTP-boundary authorization matrix", () => {
     mockAdminUpdate.mockReset();
     mockSendInvitationEmail.mockReset();
     mockSendInvitationEmail.mockResolvedValue(undefined);
+    mockRpc.mockReset();
+    mockRpc.mockResolvedValue({ data: { state: "active" }, error: null });
   });
 
   const GATEPASS_BODY = { destination: "Home", reason: "Weekend", exitTime: "2026-09-01T09:00:00Z", returnTime: "2026-09-02T18:00:00Z" };
@@ -1130,5 +1136,79 @@ describe("app/api/mobile/* — HTTP-boundary authorization matrix", () => {
     mockSingle.mockResolvedValue({ data: { role: "director", college_id: "c1", status: "active" } });
     const res = await assignHod(makeRequest({ departmentId: "dept-1", hodUserId: null }, "good-token"));
     expect(res.status).toBe(400);
+  });
+});
+
+// ─── College lifecycle and session admission at the HTTP boundary (053/054) ───
+
+describe("app/api/mobile/* — college lifecycle and session admission", () => {
+  beforeEach(() => {
+    mockGetUser.mockReset();
+    mockSingle.mockReset();
+    mockInsert.mockReset();
+    mockInsert.mockResolvedValue({ error: null });
+    mockRpc.mockReset();
+    mockUpsert.mockReset();
+    mockUpsert.mockResolvedValue({ error: null });
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+    mockSingle.mockResolvedValue({ data: { role: "student", college_id: "c1", status: "active" } });
+  });
+
+  const PUSH = { token: "ExponentPushToken[abc]", platform: "ios" };
+  const call = (headers: Record<string, string> = {}) =>
+    registerPushToken(new Request("http://localhost/test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer good-token", ...headers },
+      body: JSON.stringify(PUSH),
+    }));
+
+  it.each([
+    [{ state: "college_unavailable", college_state: "MAINTENANCE" }, 403, "COLLEGE_UNAVAILABLE", /under maintenance/],
+    [{ state: "college_unavailable", college_state: "SUSPENDED" }, 403, "COLLEGE_UNAVAILABLE", /suspended/],
+    [{ state: "rejected", active_sessions: 1, max_sessions: 1 }, 403, "SESSION_LIMIT", /maximum number of active devices/],
+    [{ state: "revoked", reason: "college_suspended" }, 401, "SESSION_REVOKED", /sign in again/],
+    [{ state: "no_session_claim", enforcement: "enforce" }, 401, "SESSION_REVOKED", /sign in again/],
+  ])("refuses %o before the route does anything — %i %s", async (admission, status, code, message) => {
+    mockRpc.mockResolvedValue({ data: admission, error: null });
+    const res = await call();
+    expect(res.status).toBe(status);
+    const body = await res.json();
+    expect(body.code).toBe(code);
+    expect(body.error).toMatch(message);
+    expect(mockUpsert).not.toHaveBeenCalled();
+  });
+
+  it("fails CLOSED with 503 when the admission check itself fails", async () => {
+    mockRpc.mockResolvedValue({ data: null, error: { code: "57014", message: "canceling statement due to statement timeout" } });
+    const res = await call();
+    expect(res.status).toBe(503);
+    const body = await res.json();
+    expect(body.code).toBe("ACCESS_CHECK_FAILED");
+    expect(body.error).not.toMatch(/statement timeout/);
+    expect(mockUpsert).not.toHaveBeenCalled();
+  });
+
+  it("proceeds when the database predates migration 054 (function not found) — no feature to enforce", async () => {
+    mockRpc.mockResolvedValue({ data: null, error: { code: "PGRST202", message: "Could not find the function" } });
+    expect((await call()).status).toBe(200);
+  });
+
+  it("tolerates a token with no session claim only while enforcement is 'register'", async () => {
+    mockRpc.mockResolvedValue({ data: { state: "no_session_claim", enforcement: "register" }, error: null });
+    expect((await call()).status).toBe(200);
+  });
+
+  it("registers the updated app as 'mobile' with its device label, and an older build as 'mobile-legacy'", async () => {
+    mockRpc.mockResolvedValue({ data: { state: "active" }, error: null });
+    await call({ "x-nexus-client": "mobile-app", "x-nexus-device-id": "dev-1", "x-nexus-device-label": "Pixel 8" });
+    expect(mockRpc).toHaveBeenLastCalledWith("register_current_session", expect.objectContaining({ p_client: "mobile", p_device_id: "dev-1", p_device_label: "Pixel 8" }));
+    await call();
+    expect(mockRpc).toHaveBeenLastCalledWith("register_current_session", expect.objectContaining({ p_client: "mobile-legacy", p_device_id: null }));
+  });
+
+  it("does not ask for admission before authentication and the role check: an unauthenticated call is 401 with no rpc", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: null } });
+    expect((await call()).status).toBe(401);
+    expect(mockRpc).not.toHaveBeenCalled();
   });
 });

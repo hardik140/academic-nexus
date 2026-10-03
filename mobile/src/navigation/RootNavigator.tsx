@@ -14,6 +14,8 @@ import DirectorTabNavigator from "@/navigation/DirectorTabNavigator";
 import AdminTabNavigator from "@/navigation/AdminTabNavigator";
 import { useProfile } from "@/hooks/useProfile";
 import { usePushRegistration } from "@/hooks/usePushRegistration";
+import { useAdmission } from "@/hooks/useAdmission";
+import AccessScreen from "@/screens/AccessScreen";
 
 export default function RootNavigator() {
   const { session, loading: authLoading } = useAuth();
@@ -45,7 +47,28 @@ export default function RootNavigator() {
   );
 }
 
+/**
+ * The session is admitted first (migration 054): the college must be ACTIVE
+ * and the account within its device limit. Anything else shows why, on its
+ * own screen — never an empty app or a generic error.
+ */
 function AuthenticatedRoot() {
+  const { admission, recheck } = useAdmission();
+
+  if (!admission) {
+    return (
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+        <ActivityIndicator size="large" color="#0051D5" />
+      </View>
+    );
+  }
+  if (admission.state !== "active") {
+    return <AccessScreen admission={admission} onRetry={recheck} />;
+  }
+  return <AdmittedRoot />;
+}
+
+function AdmittedRoot() {
   const { profile, loading } = useProfile();
   usePushRegistration(!loading && !!profile);
 

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { verifySignatureAppRouter } from "@upstash/qstash/nextjs";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { unavailableCollegeIds } from "@/lib/college-access";
 import type { Json } from "@/types/database";
 
 /**
@@ -49,7 +50,10 @@ async function handler() {
   const hostelBlocks = hostelBlocksRes.data || [];
   const hostelRooms = hostelRoomsRes.data || [];
 
-  const colleges = collegesRes.data || [];
+  // Lifecycle-blocked (migration 053): no snapshot for a college in
+  // MAINTENANCE or SUSPENDED.
+  const blocked = await unavailableCollegeIds(supabase);
+  const colleges = (collegesRes.data || []).filter((c) => !blocked.has(c.id));
   let written = 0;
 
   for (const college of colleges) {

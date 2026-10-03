@@ -48,6 +48,8 @@ const h = vi.hoisted(() => {
   const client = {
     from: (table: string) => query(table),
     auth: { getUser: async () => ({ data: { user: { id: "user-1" } }, error: null }) },
+    // requireRole's session admission (migration 054): admitted.
+    rpc: async () => ({ data: { state: "active" }, error: null }),
   };
   return { originalTz, eqCalls, tables, client };
 });

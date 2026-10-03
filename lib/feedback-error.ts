@@ -69,6 +69,7 @@ export interface FeedbackFailure {
 
 const SESSION_CODES = new Set([
   "UNAUTHENTICATED", // lib/rbac.ts: no session
+  "SESSION_REVOKED", // lib/rbac.ts: this session was revoked (054)
   "PGRST301", // PostgREST: the JWT could not be decoded or is invalid
   "PGRST303", // PostgREST: JWT claims validation failed (expired, among others)
 ]);
@@ -76,6 +77,8 @@ const SESSION_CODES = new Set([
 const FORBIDDEN_CODES = new Set([
   "FORBIDDEN", // lib/rbac.ts: the role may not do this
   "INACTIVE", // lib/rbac.ts: the account is not active
+  "COLLEGE_UNAVAILABLE", // lib/rbac.ts: the college is in MAINTENANCE or SUSPENDED (053)
+  "SESSION_LIMIT", // lib/rbac.ts: the account is at its device limit (054)
   "42501", // Postgres: insufficient_privilege
 ]);
 

@@ -135,6 +135,20 @@ const PRE_AUTH = new Set([
   "app/auth/reset-password/actions.ts",
 ]);
 
+/**
+ * The mobile session self-service routes (migration 054). AUTHENTICATED but
+ * deliberately not role-gated: they must work for a session the device
+ * limit rejected, so a user at the limit can sign out another device.
+ * Authorization is in the database functions they call, which act only on
+ * the caller's own sessions. Each must call authenticateRequest() — asserted
+ * below — so the exemption cannot quietly cover an unauthenticated route.
+ */
+const SESSION_SELF_SERVICE = new Set([
+  "app/api/mobile/session/route.ts",
+  "app/api/mobile/session/revoke/route.ts",
+  "app/api/mobile/session/end/route.ts",
+]);
+
 describe("no mutation reaches the database without passing a gate", () => {
   const actionFiles = sourceFiles(join(ROOT, "app")).filter((f) =>
     /(actions|route)\.tsx?$/.test(f)
@@ -151,6 +165,10 @@ describe("no mutation reaches the database without passing a gate", () => {
       const r = rel(file);
       if (PRE_AUTH.has(r)) continue;
       const src = readFileSync(file, "utf8");
+      if (SESSION_SELF_SERVICE.has(r)) {
+        if (!/\bauthenticateRequest\(request\)/.test(src)) ungated.push(`${r} → (session self-service route without authenticateRequest)`);
+        continue;
+      }
 
       const marks = [...src.matchAll(/export\s+(?:async\s+)?function\s+([A-Za-z_$][\w$]*)/g)];
 

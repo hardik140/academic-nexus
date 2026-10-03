@@ -1211,7 +1211,9 @@ describe("model observations", () => {
   it("has no write policy of any kind on timetable_slots", async () => {
     const policies = await verify<{ cmd: string }>(
       db,
-      `SELECT cmd FROM pg_policies WHERE schemaname='public' AND tablename='timetable_slots'`
+      // PERMISSIVE only: a restrictive policy (053's tenant_access_gate) can only
+      // narrow access, never grant a write.
+      `SELECT cmd FROM pg_policies WHERE schemaname='public' AND tablename='timetable_slots' AND permissive='PERMISSIVE'`
     );
     expect(policies.map((p) => p.cmd)).toEqual(["SELECT"]);
 

@@ -29,6 +29,10 @@ const SECTIONS = [
   "request-decision",
   "field-validation",
   "table-error",
+  "college-unavailable",
+  "college-lifecycle",
+  "sessions",
+  "session-enforcement",
   "session",
 ];
 
