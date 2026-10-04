@@ -1,4 +1,5 @@
 import { redisLogSampleRate } from "@/lib/redis-config";
+import { recordRedisMetric, type RedisMetric } from "@/lib/redis-metrics";
 
 /**
  * Structured Redis events.
@@ -17,6 +18,10 @@ import { redisLogSampleRate } from "@/lib/redis-config";
  * Volume: success events are sampled (REDIS_LOG_SAMPLE_RATE, default 1 %),
  * every failure is written. Alert thresholds that read these events are in
  * REDIS_RATE_LIMIT_DESIGN.md §10.
+ *
+ * Every event — sampled or not — is ALSO written, unsampled, as a metric data
+ * point (lib/redis-metrics.ts → Workers Analytics Engine). Logs answer "what
+ * went wrong"; metrics answer "how often, how fast, what ratio".
  */
 
 export type RedisFailureReason =
@@ -28,7 +33,7 @@ export type RedisFailureReason =
   | "error";
 
 export type RedisEvent =
-  | { event: "redis.op"; op: string; outcome: "ok" | RedisFailureReason; ms: number }
+  | { event: "redis.op"; op: string; outcome: "ok" | RedisFailureReason; ms: number; route?: string }
   | { event: "redis.retry"; op: "request" }
   | { event: "redis.circuit"; state: "open" | "closed" }
   | {
@@ -37,13 +42,17 @@ export type RedisEvent =
       outcome: "allowed" | "denied" | "fail_open" | "fail_closed";
       reason?: RedisFailureReason;
       ms: number;
+      route?: string;
     }
   | {
       event: "redis.cache";
       family: string;
-      outcome: "hit" | "miss" | "bypass" | "error" | "invalidated" | "stale_version";
+      outcome: "hit" | "miss" | "bypass" | "error" | "invalidated" | "stale_version" | "stored";
       reason?: RedisFailureReason | "unscoped_key" | "uncacheable_query";
       ms?: number;
+      /** Serialised size of a stored value (outcome "stored" only). */
+      bytes?: number;
+      route?: string;
     };
 
 const FAILURE_OUTCOMES = new Set(["denied", "fail_open", "fail_closed", "error", "bypass", "open"]);
@@ -80,8 +89,33 @@ function signature(e: RedisEvent): string {
   return JSON.stringify(rest);
 }
 
+/** The metric data point for an event (lib/redis-metrics.ts layout). */
+export function metricFor(e: RedisEvent): RedisMetric {
+  switch (e.event) {
+    case "redis.op":
+      return { metric: "redis.command", operation: e.op, outcome: e.outcome, ms: e.ms, route: e.route };
+    case "redis.retry":
+      return { metric: "redis.retry", operation: e.op, outcome: "retry" };
+    case "redis.circuit":
+      return { metric: "redis.circuit", operation: "breaker", outcome: e.state };
+    case "redis.ratelimit":
+      return { metric: "redis.rate_limit", operation: e.bucket, outcome: e.outcome, reason: e.reason, ms: e.ms, route: e.route };
+    case "redis.cache":
+      return {
+        metric: "redis.cache",
+        operation: e.family,
+        outcome: e.outcome === "stale_version" ? "stale" : e.outcome,
+        reason: e.reason,
+        ms: e.ms,
+        bytes: e.bytes,
+        route: e.route,
+      };
+  }
+}
+
 export function emitRedisEvent(e: RedisEvent): void {
   if (recording) recordedRedisEvents.push(e);
+  recordRedisMetric(metricFor(e));
   if (!isFailure(e)) {
     if (Math.random() < redisLogSampleRate()) console.log(e);
     return;

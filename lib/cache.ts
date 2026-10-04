@@ -65,6 +65,8 @@ export interface CacheOptions {
   scope?: string;
   /** Default true. See KEY LAYOUT above for the one exception. */
   buildScoped?: boolean;
+  /** Metrics only: a normalised route label (lib/redis-metrics.ts routeLabel). Never part of the key. */
+  route?: string;
 }
 
 /**
@@ -123,8 +125,9 @@ export async function getCached<T>(
       ? { ...options, family: keyOrSpec.family, scope: keyOrSpec.scope }
       : options;
   const family = familyLabel(key ?? "uncacheable", opts);
+  const route = opts?.route;
   if (key === null) {
-    emitRedisEvent({ event: "redis.cache", family, outcome: "bypass", reason: "uncacheable_query" });
+    emitRedisEvent({ event: "redis.cache", family, outcome: "bypass", reason: "uncacheable_query", route });
     return fetcher();
   }
   if (!REDIS_NAMESPACE) return fetcher();
@@ -134,7 +137,7 @@ export async function getCached<T>(
     (opts?.family !== undefined ? unscopedSegment(`${opts.family}:${opts.scope ?? ""}`) : null);
   if (missing) {
     console.error("[cache] refusing a key with a missing scope segment", { family, segment: missing });
-    emitRedisEvent({ event: "redis.cache", family, outcome: "bypass", reason: "unscoped_key" });
+    emitRedisEvent({ event: "redis.cache", family, outcome: "bypass", reason: "unscoped_key", route });
     return fetcher();
   }
   const versioned = opts?.family !== undefined && opts.scope !== undefined;
@@ -146,36 +149,39 @@ export async function getCached<T>(
   let currentVersion = 0;
 
   if (versioned) {
-    const read = await redisOp("cache.read", (r) =>
-      r.mget<[Versioned<T> | null, number | string | null]>(vKey, versionKey(opts.family!, opts.scope!))
+    const read = await redisOp(
+      "cache.read",
+      (r) => r.mget<[Versioned<T> | null, number | string | null]>(vKey, versionKey(opts.family!, opts.scope!)),
+      undefined,
+      route
     );
     if (read.ok) {
       const [entry, version] = read.value;
       currentVersion = Number(version ?? 0) || 0;
       if (entry && typeof entry === "object" && "v" in entry) {
         if (entry.v === currentVersion) {
-          emitRedisEvent({ event: "redis.cache", family, outcome: "hit", ms: read.ms });
+          emitRedisEvent({ event: "redis.cache", family, outcome: "hit", ms: read.ms, route });
           return entry.d;
         }
-        emitRedisEvent({ event: "redis.cache", family, outcome: "stale_version", ms: read.ms });
+        emitRedisEvent({ event: "redis.cache", family, outcome: "stale_version", ms: read.ms, route });
       } else {
-        emitRedisEvent({ event: "redis.cache", family, outcome: "miss", ms: read.ms });
+        emitRedisEvent({ event: "redis.cache", family, outcome: "miss", ms: read.ms, route });
       }
     } else {
-      emitRedisEvent({ event: "redis.cache", family, outcome: "error", reason: read.reason, ms: read.ms });
+      emitRedisEvent({ event: "redis.cache", family, outcome: "error", reason: read.reason, ms: read.ms, route });
       return fetcher();
     }
   } else {
-    const read = await redisOp("cache.read", (r) => r.get<T>(vKey));
+    const read = await redisOp("cache.read", (r) => r.get<T>(vKey), undefined, route);
     if (read.ok && read.value !== null && read.value !== undefined) {
-      emitRedisEvent({ event: "redis.cache", family, outcome: "hit", ms: read.ms });
+      emitRedisEvent({ event: "redis.cache", family, outcome: "hit", ms: read.ms, route });
       return read.value;
     }
     if (!read.ok) {
-      emitRedisEvent({ event: "redis.cache", family, outcome: "error", reason: read.reason, ms: read.ms });
+      emitRedisEvent({ event: "redis.cache", family, outcome: "error", reason: read.reason, ms: read.ms, route });
       return fetcher();
     }
-    emitRedisEvent({ event: "redis.cache", family, outcome: "miss", ms: read.ms });
+    emitRedisEvent({ event: "redis.cache", family, outcome: "miss", ms: read.ms, route });
   }
 
   const fresh = await fetcher();
@@ -183,11 +189,27 @@ export async function getCached<T>(
   // Stamped with the version read BEFORE the fetch: if a write bumped the
   // counter meanwhile, this entry is already stale and the next read misses.
   const stored: unknown = versioned ? ({ v: currentVersion, d: fresh } satisfies Versioned<T>) : fresh;
-  const write = await redisOp("cache.write", (r) => r.set(vKey, stored, { ex: ttlSeconds }));
+  const write = await redisOp("cache.write", (r) => r.set(vKey, stored, { ex: ttlSeconds }), undefined, route);
   if (!write.ok) {
-    emitRedisEvent({ event: "redis.cache", family, outcome: "error", reason: write.reason, ms: write.ms });
+    emitRedisEvent({ event: "redis.cache", family, outcome: "error", reason: write.reason, ms: write.ms, route });
+  } else {
+    emitRedisEvent({ event: "redis.cache", family, outcome: "stored", ms: write.ms, bytes: serializedSize(stored), route });
   }
   return fresh;
+}
+
+/**
+ * Size of a stored value as the client sends it (it JSON-encodes every
+ * non-string value), for the payload-size metric. Measured on the miss path
+ * only, after the write; a second serialisation costs about 0.3 ms per
+ * 100 KB (bench/results/redis-audit.json, serialization).
+ */
+function serializedSize(value: unknown): number {
+  try {
+    return typeof value === "string" ? value.length : (JSON.stringify(value) ?? "").length;
+  } catch {
+    return 0;
+  }
 }
 
 /**
