@@ -81,6 +81,18 @@ function classify(status: number, body: ZohoEnvelope): { kind: Parameters<typeof
   return { kind: "validation", code };
 }
 
+/**
+ * Errors that mean the request never left this machine: the name did not
+ * resolve, or nothing accepted the connection. Node's fetch puts the system
+ * code on `cause`; anything without one of these codes (including the
+ * Workers runtime's "Network connection lost") is treated as possibly sent.
+ */
+const NEVER_CONNECTED = new Set(["ENOTFOUND", "EAI_AGAIN", "ECONNREFUSED", "ENETUNREACH", "EHOSTUNREACH", "UND_ERR_CONNECT_TIMEOUT"]);
+function neverConnected(err: unknown): boolean {
+  const e = err as { code?: string; cause?: { code?: string } } | null;
+  return NEVER_CONNECTED.has(e?.cause?.code ?? e?.code ?? "");
+}
+
 async function call<T>(
   ctx: ProviderContext,
   path: string,
@@ -141,6 +153,19 @@ async function call<T>(
     if (aborted || sent) {
       return fail("unknown_result", "TIMEOUT",
         "Zoho did not respond in time. The request may or may not have been applied.", "unsafe");
+    }
+    // fetch() rejecting is NOT proof the request never arrived. A connection
+    // reset after the body was written — Zoho created the payment, the
+    // response was lost — rejects exactly like a refused connection. The old
+    // code called every rejection "network" (safe to retry), so a lost
+    // response on a POST could be retried into a second receipt. Only an
+    // error that proves no connection was ever made is safe for a POST;
+    // anything else is an unknown result and goes to reconciliation. A GET
+    // creates nothing, so it may stay "network".
+    const method = (init.method ?? "GET").toUpperCase();
+    if (method !== "GET" && !neverConnected(err)) {
+      return fail("unknown_result", "CONNECTION_LOST",
+        "The connection to Zoho failed while the request was in flight. It may or may not have been applied.", "unsafe");
     }
     return fail("network", "NETWORK", (err as Error)?.message ?? "Could not reach Zoho Books.", "safe");
   } finally {
