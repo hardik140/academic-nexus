@@ -1,0 +1,83 @@
+{
+  "label": "before",
+  "model": {
+    "redisRttMs": 4,
+    "dbMs": 10,
+    "authMs": 15,
+    "rpcShape": "054"
+  },
+  "note": "LOCAL. Counts are exact; latency is modelled (fixed delays), not a network measurement.",
+  "middleware": {
+    "cold": {
+      "latencyMs": {
+        "n": 40,
+        "p50": 61.1,
+        "p95": 73.9,
+        "p99": 80.8
+      },
+      "redisRoundTripsPerRequest": 3,
+      "redisCommandsPerRequest": 3,
+      "dbQueriesPerRequest": 2,
+      "authCallsPerRequest": 1
+    },
+    "warm": {
+      "latencyMs": {
+        "n": 360,
+        "p50": 41.2,
+        "p95": 43.8,
+        "p99": 49.5
+      },
+      "redisRoundTripsPerRequest": 2,
+      "redisCommandsPerRequest": 2,
+      "dbQueriesPerRequest": 1,
+      "authCallsPerRequest": 1
+    }
+  },
+  "stampede": {
+    "concurrent_1": {
+      "dbQueries": 1,
+      "redisRoundTrips": 2,
+      "redisCommands": 2,
+      "wallMs": 25
+    },
+    "concurrent_10": {
+      "dbQueries": 10,
+      "redisRoundTrips": 11,
+      "redisCommands": 20,
+      "wallMs": 56
+    },
+    "concurrent_50": {
+      "dbQueries": 50,
+      "redisRoundTrips": 51,
+      "redisCommands": 100,
+      "wallMs": 215
+    },
+    "concurrent_100": {
+      "dbQueries": 100,
+      "redisRoundTrips": 101,
+      "redisCommands": 200,
+      "wallMs": 280
+    }
+  },
+  "cacheSequential": {
+    "missLatencyMs": {
+      "n": 100,
+      "p50": 23.6,
+      "p95": 25.4,
+      "p99": 51.3
+    },
+    "hitLatencyMs": {
+      "n": 100,
+      "p50": 6.6,
+      "p95": 7.5,
+      "p99": 11.9
+    },
+    "hitRatio": 0.5,
+    "redisRoundTripsPer200Reads": 300
+  },
+  "paymentInvalidation": {
+    "redisRoundTrips": 3,
+    "redisCommands": 6,
+    "latencyMs": 22
+  }
+}
