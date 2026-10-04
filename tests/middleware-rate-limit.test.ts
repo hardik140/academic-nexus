@@ -1,15 +1,23 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from "vitest";
 import { NextRequest } from "next/server";
 import { keyDigest } from "@/lib/redis-config";
+import { resetSessionIdentity } from "@/lib/auth/session-identity";
+import { makeSigner, claims, hs256Token, sessionCookie, jwksFetch, SUPABASE_URL, type Signer } from "./support/session-tokens";
 
 /**
  * Which middleware bucket a request spends.
  *
  * The campus problem: a whole college can reach the app through ONE public
- * IP. Before this change every request — signed in or not — spent the same
- * `ip:` bucket (100/min), so a class of signed-in students could lock the
- * whole college out. Now anonymous traffic keeps the strict per-IP bucket,
- * and authenticated traffic is counted per user.
+ * IP. The bucket therefore follows a PROVEN identity — the access token's
+ * signature is verified locally (lib/auth/session-identity.ts) — never the
+ * mere presence of a cookie:
+ *
+ *   verified token            -> user:<id>             only
+ *   none / forged / garbled   -> ip:<campus ip>        strict, shared
+ *   unverifiable (HS256 etc.) -> ipCredentialed:<ip>   then user:<id> after getUser()
+ *
+ * Real ES256 tokens, real cookie formats; the limiter and Supabase Auth are
+ * mocked (tests/middleware-campus-isolation.test.ts runs the real limiter).
  */
 
 const h = vi.hoisted(() => ({
@@ -32,7 +40,9 @@ vi.mock("@/lib/rate-limit", () => {
     }),
   };
 });
-vi.mock("@supabase/ssr", () => ({
+// Only the Auth call is faked; the cookie helpers session-identity uses stay real.
+vi.mock("@supabase/ssr", async (original) => ({
+  ...(await original<typeof import("@supabase/ssr")>()),
   createServerClient: () => ({ auth: { getUser: async () => ({ data: { user: h.user } }) } }),
 }));
 vi.mock("@/lib/cache", () => ({
@@ -46,7 +56,22 @@ const { checkRateLimit } = await import("@/lib/rate-limit");
 
 const CAMPUS_IP = "203.0.113.9";
 const IP = keyDigest(CAMPUS_IP);
-const SESSION = "sb-abcdefghijklmnop-auth-token";
+const STUDENT_1 = "00000004-0000-4000-8000-000000000001";
+const STUDENT_2 = "00000004-0000-4000-8000-000000000002";
+const jwks = { calls: 0, down: false };
+let project: Signer;
+let attacker: Signer;
+
+beforeAll(async () => {
+  project = await makeSigner("project-key");
+  attacker = await makeSigner("project-key");
+  vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", SUPABASE_URL);
+  vi.stubGlobal("fetch", jwksFetch([project], jwks));
+});
+afterAll(() => {
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
+});
 
 function req(path: string, opts: { cookie?: string; bearer?: string; ip?: string } = {}) {
   const headers = new Headers({ "cf-connecting-ip": opts.ip ?? CAMPUS_IP });
@@ -54,11 +79,14 @@ function req(path: string, opts: { cookie?: string; bearer?: string; ip?: string
   if (opts.bearer) headers.set("authorization", `Bearer ${opts.bearer}`);
   return new NextRequest(`https://nexus.example${path}`, { headers });
 }
+const signedIn = async (sub: string, opts: { expiredSecondsAgo?: number } = {}) => sessionCookie(await project.sign(claims(sub, opts)));
 
 beforeEach(() => {
   h.keys = [];
   h.user = null;
   h.denyBucket = null;
+  jwks.down = false;
+  resetSessionIdentity();
   vi.mocked(checkRateLimit).mockClear();
 });
 
@@ -70,7 +98,7 @@ describe("anonymous traffic keeps per-IP protection", () => {
   });
 
   it("an empty session cookie is not a session", async () => {
-    await updateSession(req("/login", { cookie: `${SESSION}=` }));
+    await updateSession(req("/login", { cookie: "sb-qa-project-auth-token=" }));
     expect(h.keys).toEqual([`ip:${IP}`]);
   });
 
@@ -82,68 +110,104 @@ describe("anonymous traffic keeps per-IP protection", () => {
   });
 });
 
-describe("authenticated traffic is counted per user, not per campus", () => {
-  it("spends the credentialed ceiling, then the user's own bucket — never the anonymous one", async () => {
-    h.user = { id: "student-1" };
-    await updateSession(req("/login", { cookie: `${SESSION}=token` }));
-    expect(h.keys).toEqual([`ipCredentialed:${IP}`, "user:student-1"]);
-    expect(checkRateLimit).toHaveBeenCalledWith(`ipCredentialed:${IP}`, CREDENTIALED_IP_LIMIT, 60);
-    expect(checkRateLimit).toHaveBeenCalledWith("user:student-1", USER_LIMIT, 60);
+describe("a verified session spends only its own bucket — no shared bucket at all", () => {
+  it("one user bucket, charged before Supabase Auth, and not charged twice", async () => {
+    h.user = { id: STUDENT_1 };
+    await updateSession(req("/login", { cookie: await signedIn(STUDENT_1) }));
+    expect(h.keys).toEqual([`user:${STUDENT_1}`]);
+    expect(checkRateLimit).toHaveBeenCalledWith(`user:${STUDENT_1}`, USER_LIMIT, 60);
   });
 
-  it("recognises a chunked session cookie", async () => {
-    h.user = { id: "student-1" };
-    await updateSession(req("/login", { cookie: `${SESSION}.0=part1; ${SESSION}.1=part2` }));
-    expect(h.keys[0]).toBe(`ipCredentialed:${IP}`);
+  it("recognises chunked and raw-JSON session cookies", async () => {
+    h.user = { id: STUDENT_1 };
+    const token = await project.sign(claims(STUDENT_1));
+    await updateSession(req("/login", { cookie: sessionCookie(token, { chunkSize: 100 }) }));
+    await updateSession(req("/login", { cookie: sessionCookie(token, { encoding: "raw" }) }));
+    expect(h.keys).toEqual([`user:${STUDENT_1}`, `user:${STUDENT_1}`]);
   });
 
-  it("two students behind one campus IP spend different buckets", async () => {
-    h.user = { id: "student-1" };
-    await updateSession(req("/login", { cookie: `${SESSION}=t1` }));
-    h.user = { id: "student-2" };
-    await updateSession(req("/login", { cookie: `${SESSION}=t2` }));
-    const perUser = h.keys.filter((k) => k.startsWith("user:"));
-    expect(perUser).toEqual(["user:student-1", "user:student-2"]);
-    expect(h.keys.filter((k) => k.startsWith("ip:"))).toEqual([]);
+  it("an expired-but-signed token (the hourly case) still counts against its own user, not the campus", async () => {
+    h.user = { id: STUDENT_1 }; // getUser() refreshes it
+    await updateSession(req("/login", { cookie: await signedIn(STUDENT_1, { expiredSecondsAgo: 600 }) }));
+    expect(h.keys).toEqual([`user:${STUDENT_1}`]);
+  });
+
+  it("two students behind one campus IP spend different buckets and nothing shared", async () => {
+    h.user = { id: STUDENT_1 };
+    await updateSession(req("/login", { cookie: await signedIn(STUDENT_1) }));
+    h.user = { id: STUDENT_2 };
+    await updateSession(req("/login", { cookie: await signedIn(STUDENT_2) }));
+    expect(h.keys).toEqual([`user:${STUDENT_1}`, `user:${STUDENT_2}`]);
   });
 
   it("the per-user ceiling is enforced", async () => {
-    h.user = { id: "student-1" };
+    h.user = { id: STUDENT_1 };
     h.denyBucket = "user";
-    const res = await updateSession(req("/login", { cookie: `${SESSION}=t1` }));
+    const res = await updateSession(req("/login", { cookie: await signedIn(STUDENT_1) }));
     expect(res.status).toBe(429);
   });
 
-  it("the credentialed ceiling is generous enough for a campus (≥ 10× the anonymous one)", () => {
-    expect(CREDENTIALED_IP_LIMIT).toBeGreaterThanOrEqual(10 * ANONYMOUS_IP_LIMIT);
+  it("a mobile bearer token is verified the same way", async () => {
+    await updateSession(req("/api/mobile/attendance", { bearer: await project.sign(claims(STUDENT_1)) }));
+    expect(h.keys).toEqual([`user:${STUDENT_1}`]);
   });
 });
 
-describe("a forged session cannot escape the anonymous limit", () => {
-  it("a session cookie that does not verify also spends the strict per-IP bucket", async () => {
+describe("forged and dead sessions are anonymous", () => {
+  it("a random cookie value spends the strict per-IP bucket, once", async () => {
+    await updateSession(req("/login", { cookie: "sb-qa-project-auth-token=forged" }));
+    expect(h.keys).toEqual([`ip:${IP}`]);
+  });
+
+  it("a token signed with someone else's key, naming a real user, cannot spend that user's bucket", async () => {
+    const forged = sessionCookie(await attacker.sign(claims(STUDENT_1)));
+    await updateSession(req("/login", { cookie: forged }));
+    expect(h.keys).toEqual([`ip:${IP}`]);
+    expect(h.keys.some((k) => k.startsWith("user:"))).toBe(false);
+  });
+
+  it("a forged bearer token spends the strict per-IP bucket", async () => {
+    await updateSession(req("/api/mobile/attendance", { bearer: "not.a.jwt" }));
+    expect(h.keys).toEqual([`ip:${IP}`]);
+  });
+
+  it("a signed token whose session is dead (getUser fails) also spends the strict per-IP bucket", async () => {
     h.user = null;
-    await updateSession(req("/login", { cookie: `${SESSION}=forged` }));
-    expect(h.keys).toEqual([`ipCredentialed:${IP}`, `ip:${IP}`]);
+    await updateSession(req("/login", { cookie: await signedIn(STUDENT_1, { expiredSecondsAgo: 86_400 * 30 }) }));
+    expect(h.keys).toEqual([`user:${STUDENT_1}`, `ip:${IP}`]);
   });
 
   it("and is refused when that bucket is spent", async () => {
     h.denyBucket = "ip";
-    const res = await updateSession(req("/login", { cookie: `${SESSION}=forged` }));
+    const res = await updateSession(req("/login", { cookie: "sb-qa-project-auth-token=forged" }));
     expect(res.status).toBe(429);
   });
 });
 
-describe("mobile API (bearer token, no cookie)", () => {
-  it("spends the credentialed ceiling only; the route verifies the token and applies per-user buckets", async () => {
-    await updateSession(req("/api/mobile/attendance", { bearer: "jwt" }));
-    expect(h.keys).toEqual([`ipCredentialed:${IP}`]);
+describe("tokens this isolate cannot verify keep the old, generous shared ceiling", () => {
+  it("an HS256 token: credentialed ceiling, then the user's bucket once Supabase confirms it", async () => {
+    h.user = { id: STUDENT_1 };
+    await updateSession(req("/login", { cookie: sessionCookie(hs256Token(STUDENT_1)) }));
+    expect(h.keys).toEqual([`ipCredentialed:${IP}`, `user:${STUDENT_1}`]);
+    expect(checkRateLimit).toHaveBeenCalledWith(`ipCredentialed:${IP}`, CREDENTIALED_IP_LIMIT, 60);
+  });
+
+  it("the key set unreachable: same fallback, never reclassified as an attacker", async () => {
+    jwks.down = true;
+    h.user = { id: STUDENT_1 };
+    await updateSession(req("/login", { cookie: await signedIn(STUDENT_1) }));
+    expect(h.keys).toEqual([`ipCredentialed:${IP}`, `user:${STUDENT_1}`]);
+  });
+
+  it("the fallback ceiling is generous enough for a campus (≥ 10× the anonymous one)", () => {
+    expect(CREDENTIALED_IP_LIMIT).toBeGreaterThanOrEqual(10 * ANONYMOUS_IP_LIMIT);
   });
 });
 
 describe("keys never hold a raw IP", () => {
   it("stores a digest", async () => {
     await updateSession(req("/login"));
-    await updateSession(req("/login", { cookie: `${SESSION}=x` }));
+    await updateSession(req("/login", { cookie: "sb-qa-project-auth-token=x" }));
     for (const k of h.keys) expect(k).not.toContain(CAMPUS_IP);
   });
 

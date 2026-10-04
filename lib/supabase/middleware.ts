@@ -5,6 +5,7 @@ import { checkRateLimit, RateLimitError, RateLimiterUnavailableError } from "@/l
 import { clientIp } from "@/lib/client-ip";
 import { getCached, middlewareProfileCacheKey, MIDDLEWARE_PROFILE_CACHE } from "@/lib/cache";
 import { keyDigest } from "@/lib/redis-config";
+import { sessionIdentity } from "@/lib/auth/session-identity";
 import type { Database, UserRole, UserStatus } from "@/types/database";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
@@ -61,23 +62,36 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.next({ request });
   }
 
-  // Coarse first line of defense — checked before any Supabase call so a
-  // flood doesn't even cost an auth lookup. Keyed on the one header the edge
-  // sets and the client cannot choose (lib/client-ip.ts), stored as a digest.
+  // First line of defense — checked before any Supabase Auth call, so a flood
+  // doesn't even cost an auth lookup. The bucket follows a PROVEN identity
+  // (lib/auth/session-identity.ts verifies the access token's signature
+  // locally, no network):
   //
-  // Anonymous and credentialed traffic are counted separately. A whole
-  // college can sit behind ONE public IP; with a single per-IP bucket,
-  // 60 signed-in students opening the app could exhaust it for everyone.
-  // So: an anonymous request spends the strict per-IP bucket; a request that
-  // carries a session spends a generous per-IP ceiling here and, once the
-  // session is verified below, its own per-user bucket. A forged or expired
-  // session cookie falls back to the strict anonymous bucket.
+  //   verified token (expired or not)  -> user:<id>              that person only
+  //   no credentials                   -> ip:<campus ip>         strict, shared
+  //   forged / garbled credentials     -> ip:<campus ip>         strict, shared
+  //   unverifiable token (HS256 project
+  //     or the key set unreachable)    -> ipCredentialed:<ip>    generous, shared
+  //
+  // WHY. A whole college can sit behind ONE public IP. This used to charge
+  // every request that merely CARRIED a session cookie to one per-IP bucket
+  // (2000/min) before the cookie was checked, so one device sending random
+  // strings as its cookie locked every signed-in user on the campus out
+  // (Redis audit E1; bench/audit/middleware-flood.audit.ts). A signed-in
+  // user's requests no longer touch any shared bucket, so another person —
+  // forging cookies, or signed in and hammering — cannot spend them.
+  //
+  // Anonymous traffic on one NAT still shares the strict IP bucket: without
+  // an identity there is nothing else to count by. That is the documented
+  // trade-off (REDIS_RATE_LIMIT_DESIGN.md §11).
   const ipId = keyDigest(clientIp(request.headers).ip);
-  const credentialed = carriesCredentials(request);
-  const preAuth = await limitedResponse(
-    credentialed ? `ipCredentialed:${ipId}` : `ip:${ipId}`,
-    credentialed ? CREDENTIALED_IP_LIMIT : ANONYMOUS_IP_LIMIT
-  );
+  const identity = await sessionIdentity(request);
+  const preAuth =
+    identity.kind === "verified"
+      ? await limitedResponse(`user:${identity.userId}`, USER_LIMIT)
+      : identity.kind === "unverifiable"
+        ? await limitedResponse(`ipCredentialed:${ipId}`, CREDENTIALED_IP_LIMIT)
+        : await limitedResponse(`ip:${ipId}`, ANONYMOUS_IP_LIMIT);
   if (preAuth) return preAuth;
 
   let supabaseResponse = NextResponse.next({ request });
@@ -117,15 +131,22 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Post-auth: a verified session spends its own bucket, never the campus's.
-  // A request that claimed a session cookie but has no valid session is
-  // anonymous after all. A bearer-token request is not verified here (the
-  // mobile /api routes verify it themselves, then apply per-user, per-action
-  // buckets), so it keeps only the credentialed ceiling above.
+  // Post-auth, only for what the pre-auth step could not settle:
+  // - a session that checked out but was not already charged to its own
+  //   bucket (the token was unverifiable locally, or a refresh changed whose
+  //   it is) now spends that user's bucket;
+  // - a session cookie that did NOT check out is anonymous after all. A
+  //   verified-but-dead session (signed, then revoked or past its refresh)
+  //   spends the strict IP bucket too, so replaying an old token costs the
+  //   same as having none. A forged one already did, above.
+  // A bearer token is not exchanged here (the mobile /api routes verify it
+  // themselves and apply per-user, per-action buckets).
   if (user) {
-    const perUser = await limitedResponse(`user:${user.id}`, USER_LIMIT);
-    if (perUser) return perUser;
-  } else if (hasSessionCookie(request)) {
+    if (identity.kind !== "verified" || identity.userId !== user.id) {
+      const perUser = await limitedResponse(`user:${user.id}`, USER_LIMIT);
+      if (perUser) return perUser;
+    }
+  } else if (hasSessionCookie(request) && identity.kind !== "invalid" && identity.kind !== "none") {
     const anonymous = await limitedResponse(`ip:${ipId}`, ANONYMOUS_IP_LIMIT);
     if (anonymous) return anonymous;
   }
