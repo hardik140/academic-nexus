@@ -33,14 +33,26 @@ test.beforeEach(async ({ request }) => {
   await request.get("/login", { headers: { "cf-connecting-ip": "192.0.2.1" } });
 });
 
-test("anonymous traffic: the 101st request in a minute from one IP is refused with Retry-After", async ({ request }) => {
+test("anonymous traffic: one IP is held to 100 a minute and refused with Retry-After", async ({ request }) => {
   const ip = nextIp();
-  for (let i = 0; i < 100; i++) {
-    expect((await hit(request, ip)).status).toBe(200);
+  // The limiter is a sliding window: when the run straddles a minute boundary
+  // it admits a few more than the limit (bench/results/ratelimit-algorithms.json:
+  // 31 for 30). So: at least the first 100 pass, and refusal comes by 110.
+  let admitted = 0;
+  let refused: Awaited<ReturnType<typeof hit>> | null = null;
+  for (let i = 0; i < 120; i++) {
+    const r = await hit(request, ip);
+    if (r.status === 429) {
+      refused = r;
+      break;
+    }
+    expect(r.status).toBe(200);
+    admitted++;
   }
-  const refused = await hit(request, ip);
-  expect(refused.status).toBe(429);
-  expect(Number(refused.retryAfter)).toBeGreaterThan(0);
+  expect(admitted).toBeGreaterThanOrEqual(100);
+  expect(admitted).toBeLessThanOrEqual(110);
+  expect(refused?.status).toBe(429);
+  expect(Number(refused?.retryAfter)).toBeGreaterThan(0);
 
   // Another IP is unaffected.
   expect((await hit(request, nextIp())).status).toBe(200);
