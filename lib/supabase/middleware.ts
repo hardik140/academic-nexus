@@ -5,6 +5,7 @@ import { checkRateLimit, RateLimitError, RateLimiterUnavailableError } from "@/l
 import { clientIp } from "@/lib/client-ip";
 import { getCached, middlewareProfileCacheKey, MIDDLEWARE_PROFILE_CACHE } from "@/lib/cache";
 import { keyDigest } from "@/lib/redis-config";
+import { routeLabel } from "@/lib/redis-metrics";
 import type { Database, UserRole, UserStatus } from "@/types/database";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
@@ -73,10 +74,13 @@ export async function updateSession(request: NextRequest) {
   // session is verified below, its own per-user bucket. A forged or expired
   // session cookie falls back to the strict anonymous bucket.
   const ipId = keyDigest(clientIp(request.headers).ip);
+  // Metrics label only (lib/redis-metrics.ts): two path segments, ids removed.
+  const route = routeLabel(request.nextUrl.pathname);
   const credentialed = carriesCredentials(request);
   const preAuth = await limitedResponse(
     credentialed ? `ipCredentialed:${ipId}` : `ip:${ipId}`,
-    credentialed ? CREDENTIALED_IP_LIMIT : ANONYMOUS_IP_LIMIT
+    credentialed ? CREDENTIALED_IP_LIMIT : ANONYMOUS_IP_LIMIT,
+    route
   );
   if (preAuth) return preAuth;
 
@@ -123,10 +127,10 @@ export async function updateSession(request: NextRequest) {
   // mobile /api routes verify it themselves, then apply per-user, per-action
   // buckets), so it keeps only the credentialed ceiling above.
   if (user) {
-    const perUser = await limitedResponse(`user:${user.id}`, USER_LIMIT);
+    const perUser = await limitedResponse(`user:${user.id}`, USER_LIMIT, route);
     if (perUser) return perUser;
   } else if (hasSessionCookie(request)) {
-    const anonymous = await limitedResponse(`ip:${ipId}`, ANONYMOUS_IP_LIMIT);
+    const anonymous = await limitedResponse(`ip:${ipId}`, ANONYMOUS_IP_LIMIT, route);
     if (anonymous) return anonymous;
   }
 
@@ -165,7 +169,7 @@ export async function updateSession(request: NextRequest) {
         .single();
       return data;
     },
-    MIDDLEWARE_PROFILE_CACHE
+    { ...MIDDLEWARE_PROFILE_CACHE, route }
   );
 
   // No profile row for an authenticated user. This used to `return
@@ -303,9 +307,9 @@ export function carriesCredentials(request: NextRequest): boolean {
 }
 
 /** Null when the request may proceed; otherwise the 429/503 to return. */
-async function limitedResponse(key: string, limit: number): Promise<NextResponse | null> {
+async function limitedResponse(key: string, limit: number, route: string): Promise<NextResponse | null> {
   try {
-    await checkRateLimit(key, limit, WINDOW_SECONDS);
+    await checkRateLimit(key, limit, WINDOW_SECONDS, { route });
     return null;
   } catch (err) {
     if (err instanceof RateLimitError) {

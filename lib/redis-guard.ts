@@ -1,6 +1,7 @@
 import { redis } from "@/lib/redis";
 import { redisNamespace, redisTimeoutMs, resolveRedisEnvironment } from "@/lib/redis-config";
 import { emitRedisEvent, type RedisFailureReason } from "@/lib/redis-telemetry";
+import { setRedisMetricsEnvironment } from "@/lib/redis-metrics";
 
 /**
  * THE one way application code talks to Redis. It returns an outcome instead
@@ -34,6 +35,7 @@ const environment = resolveRedisEnvironment();
 
 /** `<environment>:nexus`, or null when this process may not use Redis. */
 export const REDIS_NAMESPACE: string | null = environment.ok ? redisNamespace(environment.environment) : null;
+setRedisMetricsEnvironment(environment.ok ? environment.environment : "unresolved");
 
 export const CIRCUIT_THRESHOLD = 3;
 export const CIRCUIT_COOLDOWN_MS = 10_000;
@@ -100,7 +102,9 @@ function recordSuccess(): void {
 export async function redisOp<T>(
   op: string,
   run: (client: NonNullable<typeof redis>) => Promise<T>,
-  validate?: (value: T) => RedisFailureReason | null
+  validate?: (value: T) => RedisFailureReason | null,
+  /** A normalised route label for metrics (lib/redis-metrics.ts routeLabel). */
+  route?: string
 ): Promise<RedisOutcome<T>> {
   const started = Date.now();
   const elapsed = () => Date.now() - started;
@@ -109,7 +113,7 @@ export async function redisOp<T>(
     return { ok: false, reason: "unconfigured", ms: 0 };
   }
   if (circuitIsOpen(started)) {
-    emitRedisEvent({ event: "redis.op", op, outcome: "circuit_open", ms: 0 });
+    emitRedisEvent({ event: "redis.op", op, outcome: "circuit_open", ms: 0, route });
     return { ok: false, reason: "circuit_open", ms: 0 };
   }
   if (openUntil !== 0) {
@@ -127,16 +131,16 @@ export async function redisOp<T>(
     const invalid = validate ? validate(value) : null;
     if (invalid) {
       recordFailure();
-      emitRedisEvent({ event: "redis.op", op, outcome: invalid, ms: elapsed() });
+      emitRedisEvent({ event: "redis.op", op, outcome: invalid, ms: elapsed(), route });
       return { ok: false, reason: invalid, ms: elapsed() };
     }
     recordSuccess();
-    emitRedisEvent({ event: "redis.op", op, outcome: "ok", ms: elapsed() });
+    emitRedisEvent({ event: "redis.op", op, outcome: "ok", ms: elapsed(), route });
     return { ok: true, value, ms: elapsed() };
   } catch (err) {
     const reason = classify(err);
     recordFailure();
-    emitRedisEvent({ event: "redis.op", op, outcome: reason, ms: elapsed() });
+    emitRedisEvent({ event: "redis.op", op, outcome: reason, ms: elapsed(), route });
     return { ok: false, reason, ms: elapsed() };
   } finally {
     if (timer) clearTimeout(timer);

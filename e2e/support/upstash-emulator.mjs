@@ -10,7 +10,7 @@
  * protocol), not just against mocks. This server speaks the same wire
  * protocol on loopback.
  *
- * Supported: GET, SET (EX), DEL, MGET, INCR, EXPIRE, PING, EVALSHA/EVAL of
+ * Supported: GET, SET (EX), DEL, MGET, INCR, EXPIRE, PING, SCAN, EVALSHA/EVAL of
  * the sliding-window limit script, POST /pipeline and /multi-exec, and the
  * base64 response encoding the client asks for.
  *
@@ -100,6 +100,14 @@ function run(cmd) {
     case "EVALSHA":
     case "EVAL":
       return slidingWindow(args);
+    case "SCAN": {
+      // One page, everything: [cursor "0", keys]. MATCH supports a trailing "*" only.
+      const at = args.findIndex((a) => String(a).toUpperCase() === "MATCH");
+      const pattern = at === -1 ? "*" : String(args[at + 1]);
+      const prefix = pattern.endsWith("*") ? pattern.slice(0, -1) : pattern;
+      const keys = [...data.keys()].filter((k) => live(k) && (pattern.endsWith("*") ? k.startsWith(prefix) : k === pattern));
+      return ["0", keys];
+    }
     default:
       throw new Error(`ERR emulator does not support ${name}`);
   }

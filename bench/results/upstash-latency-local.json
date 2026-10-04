@@ -1,0 +1,230 @@
+{
+  "label": "LOCAL",
+  "probedAt": "2026-10-04T12:49:42.802Z",
+  "runs": [
+    {
+      "round": 1,
+      "httpStatus": 200,
+      "clientRoundTripMs": 3558,
+      "ok": true,
+      "label": "PREVIEW",
+      "environment": "preview",
+      "colo": "DEL",
+      "iterations": 20,
+      "at": "2026-10-04T12:49:17.862Z",
+      "firstCommandInIsolateMs": 342,
+      "isolateWasWarm": false,
+      "pingMs": {
+        "n": 20,
+        "p50": 4,
+        "p95": 144,
+        "p99": 144,
+        "max": 144
+      },
+      "getMissMs": {
+        "n": 20,
+        "p50": 3,
+        "p95": 46,
+        "p99": 46,
+        "max": 46
+      },
+      "mgetTwoKeysMs": {
+        "n": 20,
+        "p50": 4,
+        "p95": 53,
+        "p99": 53,
+        "max": 53
+      },
+      "payload": {
+        "1KB": {
+          "setMs": {
+            "n": 5,
+            "p50": 4,
+            "p95": 71,
+            "p99": 71,
+            "max": 71
+          },
+          "getMs": {
+            "n": 5,
+            "p50": 3,
+            "p95": 4,
+            "p99": 4,
+            "max": 4
+          }
+        },
+        "10KB": {
+          "setMs": {
+            "n": 5,
+            "p50": 4,
+            "p95": 59,
+            "p99": 59,
+            "max": 59
+          },
+          "getMs": {
+            "n": 5,
+            "p50": 4,
+            "p95": 5,
+            "p99": 5,
+            "max": 5
+          }
+        },
+        "100KB": {
+          "setMs": {
+            "n": 5,
+            "p50": 31,
+            "p95": 120,
+            "p99": 120,
+            "max": 120
+          },
+          "getMs": {
+            "n": 5,
+            "p50": 7,
+            "p95": 8,
+            "p99": 8,
+            "max": 8
+          }
+        }
+      },
+      "threeSequentialMs": {
+        "n": 20,
+        "p50": 10,
+        "p95": 56,
+        "p99": 56,
+        "max": 56
+      },
+      "threeConcurrentMs": {
+        "n": 20,
+        "p50": 4,
+        "p95": 255,
+        "p99": 255,
+        "max": 255
+      },
+      "rateLimitCheckMs": {
+        "n": 20,
+        "p50": 4,
+        "p95": 39,
+        "p99": 39,
+        "max": 39
+      },
+      "authFailureMs": {
+        "n": 5,
+        "p50": 4,
+        "p95": 46,
+        "p99": 46,
+        "max": 46
+      }
+    },
+    {
+      "round": 2,
+      "httpStatus": 200,
+      "clientRoundTripMs": 1624,
+      "ok": true,
+      "label": "PREVIEW",
+      "environment": "preview",
+      "colo": "DEL",
+      "iterations": 20,
+      "at": "2026-10-04T12:49:41.190Z",
+      "firstCommandInIsolateMs": 134,
+      "isolateWasWarm": true,
+      "pingMs": {
+        "n": 20,
+        "p50": 4,
+        "p95": 36,
+        "p99": 36,
+        "max": 36
+      },
+      "getMissMs": {
+        "n": 20,
+        "p50": 3,
+        "p95": 37,
+        "p99": 37,
+        "max": 37
+      },
+      "mgetTwoKeysMs": {
+        "n": 20,
+        "p50": 3,
+        "p95": 37,
+        "p99": 37,
+        "max": 37
+      },
+      "payload": {
+        "1KB": {
+          "setMs": {
+            "n": 5,
+            "p50": 3,
+            "p95": 4,
+            "p99": 4,
+            "max": 4
+          },
+          "getMs": {
+            "n": 5,
+            "p50": 3,
+            "p95": 4,
+            "p99": 4,
+            "max": 4
+          }
+        },
+        "10KB": {
+          "setMs": {
+            "n": 5,
+            "p50": 3,
+            "p95": 38,
+            "p99": 38,
+            "max": 38
+          },
+          "getMs": {
+            "n": 5,
+            "p50": 3,
+            "p95": 4,
+            "p99": 4,
+            "max": 4
+          }
+        },
+        "100KB": {
+          "setMs": {
+            "n": 5,
+            "p50": 5,
+            "p95": 5,
+            "p99": 5,
+            "max": 5
+          },
+          "getMs": {
+            "n": 5,
+            "p50": 7,
+            "p95": 59,
+            "p99": 59,
+            "max": 59
+          }
+        }
+      },
+      "threeSequentialMs": {
+        "n": 20,
+        "p50": 10,
+        "p95": 282,
+        "p99": 282,
+        "max": 282
+      },
+      "threeConcurrentMs": {
+        "n": 20,
+        "p50": 3,
+        "p95": 44,
+        "p99": 44,
+        "max": 44
+      },
+      "rateLimitCheckMs": {
+        "n": 20,
+        "p50": 4,
+        "p95": 43,
+        "p99": 43,
+        "max": 43
+      },
+      "authFailureMs": {
+        "n": 5,
+        "p50": 3,
+        "p95": 4,
+        "p99": 4,
+        "max": 4
+      }
+    }
+  ]
+}

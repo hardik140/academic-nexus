@@ -66,7 +66,7 @@ describe("anonymous traffic keeps per-IP protection", () => {
   it("spends only the strict per-IP bucket", async () => {
     await updateSession(req("/login"));
     expect(h.keys).toEqual([`ip:${IP}`]);
-    expect(checkRateLimit).toHaveBeenCalledWith(`ip:${IP}`, ANONYMOUS_IP_LIMIT, 60);
+    expect(checkRateLimit).toHaveBeenCalledWith(`ip:${IP}`, ANONYMOUS_IP_LIMIT, 60, { route: "/login" });
   });
 
   it("an empty session cookie is not a session", async () => {
@@ -87,8 +87,8 @@ describe("authenticated traffic is counted per user, not per campus", () => {
     h.user = { id: "student-1" };
     await updateSession(req("/login", { cookie: `${SESSION}=token` }));
     expect(h.keys).toEqual([`ipCredentialed:${IP}`, "user:student-1"]);
-    expect(checkRateLimit).toHaveBeenCalledWith(`ipCredentialed:${IP}`, CREDENTIALED_IP_LIMIT, 60);
-    expect(checkRateLimit).toHaveBeenCalledWith("user:student-1", USER_LIMIT, 60);
+    expect(checkRateLimit).toHaveBeenCalledWith(`ipCredentialed:${IP}`, CREDENTIALED_IP_LIMIT, 60, { route: "/login" });
+    expect(checkRateLimit).toHaveBeenCalledWith("user:student-1", USER_LIMIT, 60, { route: "/login" });
   });
 
   it("recognises a chunked session cookie", async () => {
