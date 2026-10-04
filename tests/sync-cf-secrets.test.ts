@@ -1,5 +1,4 @@
 import { describe, it, expect } from "vitest";
-// @ts-expect-error — a plain .mjs script with no type declarations
 import { planSecretSync, PRODUCTION_ONLY_KEYS } from "../scripts/sync-cf-secrets.mjs";
 
 /**
