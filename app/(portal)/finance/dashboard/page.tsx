@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { getCached } from "@/lib/cache";
-import { computeEffectiveFeeStatus } from "@/lib/finance-status";
+import { feeTotals } from "@/lib/finance/fee-totals";
 import { getFinanceExceptions } from "../exceptions/actions";
 import { assertRead } from "@/lib/read-result-server";
 import { formatMoney } from "@/lib/format";
@@ -18,23 +18,19 @@ export default async function FinanceDashboard() {
     .single();
   assertRead(viewerProfileError);
 
-  // Fee stats — pulls every fee row to aggregate client-side (a known,
-  // already-flagged cost; see Implementation Status.md), so caching this
-  // college-scoped result matters more here than almost anywhere else.
+  // Fee stats — summed in PostgreSQL (migration 057, lib/finance/fee-totals.ts).
+  // This used to select every fee row and sum in JavaScript, which PostgREST's
+  // row cap (1,000 by default) silently truncated on a large college. The
+  // result is a handful of numbers, so the cache now holds a small, complete
+  // answer instead of one computed from the first page of rows.
+  const collegeId = viewerProfile?.college_id;
   const { totalBilled, totalCollected, totalOverdue, collectionRate } = await getCached(
-    `dashboard:finance:${viewerProfile?.college_id}:fee-stats`,
+    `dashboard:finance:${collegeId}:fee-stats`,
     60,
     async () => {
-      const { data: allFees, error: allFeesError } = await supabase.from("fees").select("amount, paid_amount, status, due_date");
-      assertRead(allFeesError);
-      const totalBilled = allFees?.reduce((s, f) => s + f.amount, 0) || 0;
-      const totalCollected = allFees?.reduce((s, f) => s + f.paid_amount, 0) || 0;
-      // Computed live — nothing ever sets fees.status = 'overdue' (see
-      // lib/finance-status.ts), so a raw status === "overdue" filter here
-      // always read zero.
-      const totalOverdue = allFees?.filter(f => computeEffectiveFeeStatus(f) === "overdue").reduce((s, f) => s + (f.amount - f.paid_amount), 0) || 0;
-      const collectionRate = totalBilled > 0 ? (totalCollected / totalBilled) * 100 : 0;
-      return { totalBilled, totalCollected, totalOverdue, collectionRate };
+      const t = collegeId ? await feeTotals(supabase, collegeId) : { billed: 0, collected: 0, overdue: 0 };
+      const collectionRate = t.billed > 0 ? (t.collected / t.billed) * 100 : 0;
+      return { totalBilled: t.billed, totalCollected: t.collected, totalOverdue: t.overdue, collectionRate };
     }
   );
 
