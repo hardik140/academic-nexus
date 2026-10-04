@@ -5,7 +5,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib/rbac";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { getCached, invalidateCache } from "@/lib/cache";
+import { getCached, invalidateCacheFamily, versionedKey } from "@/lib/cache";
 import { resolveListSort, listCacheKey } from "@/lib/cached-list";
 import { logAudit } from "@/lib/audit";
 import { PERMISSIONS } from "@/lib/permissions";
@@ -23,6 +23,7 @@ const PAYMENTS_CACHE_PREFIX = "list:payments";
 // invoices tab reuses finance/invoices' listInvoices — same table, same
 // select, same search field; not worth a second near-identical query.
 const FEES_CACHE_PREFIX = "list:fees";
+const FEE_STATS_FAMILY = "stats:fees";
 const FEES_SORT_COLUMNS = ["type", "amount", "due_date"] as const;
 
 export { listInvoices };
@@ -32,7 +33,7 @@ export async function listPayments(q: DataTableQuery) {
   const supabase = await createClient();
 
   const { column, ascending } = resolveListSort(PAYMENTS_SORT_COLUMNS, "created_at", false, q);
-  const cacheKey = listCacheKey(PAYMENTS_CACHE_PREFIX, actor.collegeId, q, column);
+  const cacheKey = versionedKey(listCacheKey(PAYMENTS_CACHE_PREFIX, actor.collegeId, q, column), PAYMENTS_CACHE_PREFIX, actor.collegeId);
 
   return getCached(cacheKey, 30, async () => {
     let dbQuery = supabase
@@ -64,7 +65,7 @@ export async function getFeeStats() {
   const actor = await requireRole(PERMISSIONS.payment_read);
   const supabase = await createClient();
 
-  return getCached(`stats:fees:${actor.collegeId}`, 30, async () => {
+  return getCached(versionedKey(`stats:fees:${actor.collegeId}`, FEE_STATS_FAMILY, actor.collegeId), 30, async () => {
     const { data, error: dataError } = await supabase.from("fees").select("amount, paid_amount, status, due_date").eq("college_id", actor.collegeId);
     assertRead(dataError);
     const f = data || [];
@@ -164,10 +165,7 @@ export async function recordPayment(
   amount: number,
   method: PaymentMethod,
   transactionRef?: string,
-  notes?: string,
-  feesViewQuery?: DataTableQuery,
-  paymentsViewQuery?: DataTableQuery
-) {
+  notes?: string) {
   const actor = await requireRole(PERMISSIONS.payment_record);
   const supabase = await createClient();
   await recordPaymentCore(supabase, actor, { feeId, amount, method, transactionRef, notes });
@@ -177,15 +175,9 @@ export async function recordPayment(
 
   // A payment touches all three cached reads on this page: the fee's own
   // row (status/paid_amount), a new payments row, and the KPI sums.
-  await invalidateCache(`stats:fees:${actor.collegeId}`);
-  if (feesViewQuery) {
-    const { column } = resolveListSort(FEES_SORT_COLUMNS, "due_date", false, feesViewQuery);
-    await invalidateCache(listCacheKey(FEES_CACHE_PREFIX, actor.collegeId, feesViewQuery, column));
-  }
-  if (paymentsViewQuery) {
-    const { column } = resolveListSort(PAYMENTS_SORT_COLUMNS, "created_at", false, paymentsViewQuery);
-    await invalidateCache(listCacheKey(PAYMENTS_CACHE_PREFIX, actor.collegeId, paymentsViewQuery, column));
-  }
+  await invalidateCacheFamily(FEE_STATS_FAMILY, actor.collegeId);
+  await invalidateCacheFamily(FEES_CACHE_PREFIX, actor.collegeId);
+  await invalidateCacheFamily(PAYMENTS_CACHE_PREFIX, actor.collegeId);
 }
 
 /** Called by app/api/mobile/finance/payment/route.ts. */

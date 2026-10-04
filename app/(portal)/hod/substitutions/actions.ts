@@ -5,15 +5,17 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/rbac";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { getCached, invalidateCache } from "@/lib/cache";
+import { getCached, invalidateCacheFamily, versionedKey } from "@/lib/cache";
 import { logAudit } from "@/lib/audit";
 import { assertClaimed } from "@/lib/concurrent-claim";
 import { PERMISSIONS } from "@/lib/permissions";
 import { dbError } from "@/lib/internal-error";
 import { assertRead } from "@/lib/read-result-server";
 
-function substitutionsCacheKey(hodUserId: string) {
-  return `hod-substitutions:${hodUserId}`;
+const SUBSTITUTIONS_FAMILY = "hod-substitutions";
+
+function substitutionsCacheKey(hodUserId: string, collegeId: string) {
+  return versionedKey(`hod-substitutions:${hodUserId}`, SUBSTITUTIONS_FAMILY, collegeId);
 }
 
 /** Resolves the department a HOD actor owns, via departments.hod_id — same as hod/approvals. */
@@ -39,7 +41,7 @@ export async function listSubstitutionNeeds() {
   const actor = await requireRole(PERMISSIONS.substitution_manage);
   const supabase = await createClient();
 
-  return getCached(substitutionsCacheKey(actor.userId), 30, async () => {
+  return getCached(substitutionsCacheKey(actor.userId, actor.collegeId), 30, async () => {
     if (actor.role === "admin") {
       const baseQuery = () => supabase.from("substitution_assignments").select(SELECT_COLS);
       const [neededRes, assignedRes] = await Promise.all([
@@ -176,7 +178,7 @@ export async function assignSubstitute(idRaw: string, substituteTeacherIdRaw: st
     link: `/teacher/attendance?offering=${row.offering_id}`,
   });
 
-  await invalidateCache(substitutionsCacheKey(actor.userId));
+  await invalidateCacheFamily(SUBSTITUTIONS_FAMILY, actor.collegeId);
   revalidatePath("/hod/substitutions");
   revalidatePath("/hod/dashboard");
 }

@@ -5,7 +5,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/rbac";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { getCached, invalidateCache } from "@/lib/cache";
+import { getCached, invalidateCacheFamily, versionedKey } from "@/lib/cache";
 import { logAudit } from "@/lib/audit";
 import { resolveListSort, listCacheKey } from "@/lib/cached-list";
 import type { DataTableQuery } from "@/components/ui/data-table";
@@ -54,7 +54,15 @@ export async function listStudentPlacementRecords(q: DataTableQuery) {
   const supabase = await createClient();
 
   const { column, ascending } = resolveListSort(RECORDS_SORT_COLUMNS, "enrollment_number", true, q);
-  const cacheKey = listCacheKey(RECORDS_CACHE_PREFIX, actor.collegeId, q, column);
+  // Role-scoped: placement_cell, director and admin see DIFFERENT rows here
+  // (students_read_staff excludes placement_cell; student_placement_profiles
+  // excludes director), so one college-wide entry served one role's data to
+  // another. See tests/cache-scope-registry.test.ts.
+  const cacheKey = versionedKey(
+    listCacheKey(RECORDS_CACHE_PREFIX, `${actor.collegeId}:${actor.role}`, q, column),
+    RECORDS_CACHE_PREFIX,
+    actor.collegeId
+  );
 
   return getCached(cacheKey, 30, async () => {
     let dbQuery = supabase
@@ -102,9 +110,7 @@ const UpdateStatusSchema = z.object({
 export async function updateStudentPlacementStatus(
   studentId: string,
   placementStatus: (typeof PLACEMENT_STATUSES)[number],
-  notes?: string,
-  viewQuery?: DataTableQuery
-) {
+  notes?: string) {
   const actor = await requireRole(OPERATOR_ROLES);
   const supabase = await createClient();
   const parsed = UpdateStatusSchema.parse({ studentId, placementStatus, notes });
@@ -132,8 +138,5 @@ export async function updateStudentPlacementStatus(
 
   await logAudit(supabase, actor, `Updated placement record to ${parsed.placementStatus}`, "student_placement_profiles", parsed.studentId);
   revalidatePath("/placement-cell/records");
-  if (viewQuery) {
-    const { column } = resolveListSort(RECORDS_SORT_COLUMNS, "enrollment_number", true, viewQuery);
-    await invalidateCache(listCacheKey(RECORDS_CACHE_PREFIX, actor.collegeId, viewQuery, column));
-  }
+  await invalidateCacheFamily(RECORDS_CACHE_PREFIX, actor.collegeId);
 }

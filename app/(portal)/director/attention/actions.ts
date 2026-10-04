@@ -5,7 +5,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole, type AuthorizedActor } from "@/lib/rbac";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { getCached, invalidateCache } from "@/lib/cache";
+import { getCached, invalidateCacheFamily, versionedKey } from "@/lib/cache";
 import { logAudit } from "@/lib/audit";
 import { assertClaimed } from "@/lib/concurrent-claim";
 import { PERMISSIONS } from "@/lib/permissions";
@@ -15,8 +15,11 @@ import type { Database } from "@/types/database";
 import { dbError } from "@/lib/internal-error";
 import { assertRead } from "@/lib/read-result-server";
 
-function attentionCacheKey(scopeKey: string) {
-  return `attention:${scopeKey}`;
+const ATTENTION_CACHE_FAMILY = "attention";
+
+/** Every attention read is one family per college: any flag change invalidates them all. */
+function attentionCacheKey(scopeKey: string, collegeId: string) {
+  return versionedKey(`attention:${scopeKey}`, ATTENTION_CACHE_FAMILY, collegeId);
 }
 
 /** Resolves the department a HOD actor owns, via departments.hod_id — same as hod/approvals. */
@@ -40,7 +43,7 @@ export async function listRiskFlags() {
     departmentId = await resolveHodDepartmentId(supabase, actor);
   }
 
-  const cacheKey = attentionCacheKey(actor.role === "hod" ? `hod:${actor.userId}` : `director:${actor.collegeId}`);
+  const cacheKey = attentionCacheKey(actor.role === "hod" ? `hod:${actor.userId}` : `director:${actor.collegeId}`, actor.collegeId);
 
   return getCached(cacheKey, 30, async () => {
     const baseQuery = () => {
@@ -67,7 +70,7 @@ export async function listMyRiskFlagAssignments() {
   const actor = await requireRole(PERMISSIONS.escalation_acknowledge);
   const supabase = await createClient();
 
-  return getCached(attentionCacheKey(`assigned:${actor.userId}`), 30, async () => {
+  return getCached(attentionCacheKey(`assigned:${actor.userId}`, actor.collegeId), 30, async () => {
     const { data, error: dataError } = await supabase
       .from("risk_flags")
       .select("*, department:department_id(name, code)")
@@ -115,7 +118,8 @@ export async function getStudentRiskOverview() {
   }
 
   const cacheKey = attentionCacheKey(
-    `student-risk:${actor.role === "hod" ? `hod:${actor.userId}` : `director:${actor.collegeId}`}`
+    `student-risk:${actor.role === "hod" ? `hod:${actor.userId}` : `director:${actor.collegeId}`}`,
+    actor.collegeId
   );
 
   return getCached(cacheKey, 120, async () => {
@@ -230,7 +234,7 @@ export async function createManualRiskFlag(params: ManualFlagParams) {
     newValue: { status: "open", flag_type: parsed.flagType, severity: parsed.severity },
   });
 
-  await invalidateCache(attentionCacheKey(`director:${actor.collegeId}`));
+  await invalidateCacheFamily(ATTENTION_CACHE_FAMILY, actor.collegeId);
   revalidatePath("/director/attention");
   return { id: data.id as string };
 }
@@ -290,7 +294,7 @@ export async function assignRiskFlag(params: { flagId: string; assigneeId: strin
     link: `/director/attention/${flagId}`,
   });
 
-  await invalidateCache(attentionCacheKey(`director:${actor.collegeId}`));
+  await invalidateCacheFamily(ATTENTION_CACHE_FAMILY, actor.collegeId);
   revalidatePath("/director/attention");
   revalidatePath(`/director/attention/${flagId}`);
 }
@@ -377,8 +381,7 @@ export async function actOnRiskFlag(params: { flagId: string; action: "acknowled
     }
   }
 
-  await invalidateCache(attentionCacheKey(`assigned:${actor.userId}`));
-  await invalidateCache(attentionCacheKey(`director:${actor.collegeId}`));
+  await invalidateCacheFamily(ATTENTION_CACHE_FAMILY, actor.collegeId);
   revalidatePath("/director/attention");
   revalidatePath(`/director/attention/${flagId}`);
 }
@@ -455,7 +458,7 @@ export async function reviewRiskFlag(params: { flagId: string; outcome: "accept"
     });
   }
 
-  await invalidateCache(attentionCacheKey(`director:${actor.collegeId}`));
+  await invalidateCacheFamily(ATTENTION_CACHE_FAMILY, actor.collegeId);
   revalidatePath("/director/attention");
   revalidatePath(`/director/attention/${flagId}`);
 }

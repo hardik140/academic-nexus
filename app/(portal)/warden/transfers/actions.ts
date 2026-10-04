@@ -5,7 +5,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole, type AuthorizedActor } from "@/lib/rbac";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { getCached, invalidateCache } from "@/lib/cache";
+import { getCached, invalidateCacheFamily, versionedKey } from "@/lib/cache";
 import { logAudit } from "@/lib/audit";
 import { assertClaimed } from "@/lib/concurrent-claim";
 import { PERMISSIONS } from "@/lib/permissions";
@@ -14,8 +14,10 @@ import type { Database } from "@/types/database";
 import { dbError } from "@/lib/internal-error";
 import { assertRead } from "@/lib/read-result-server";
 
-function transfersCacheKey(scopeKey: string) {
-  return `warden-transfers:${scopeKey}`;
+const TRANSFERS_FAMILY = "warden-transfers";
+
+function transfersCacheKey(scopeKey: string, collegeId: string) {
+  return versionedKey(`warden-transfers:${scopeKey}`, TRANSFERS_FAMILY, collegeId);
 }
 
 /** Resolves the hostel blocks this warden owns, same pattern as warden/rooms/actions.ts. */
@@ -54,7 +56,7 @@ export async function listRoomTransferRequests() {
   const actor = await requireRole(PERMISSIONS.room_transfer_review);
   const supabase = await createClient();
 
-  return getCached(transfersCacheKey(actor.role === "admin" ? actor.collegeId : actor.userId), 30, async () => {
+  return getCached(transfersCacheKey(actor.role === "admin" ? actor.collegeId : actor.userId, actor.collegeId), 30, async () => {
     const blockIds = await resolveWardenBlockIds(supabase, actor);
 
     const baseQuery = () => supabase.from("room_transfer_requests").select(SELECT_COLS).eq("college_id", actor.collegeId);
@@ -153,7 +155,7 @@ export async function rejectRoomTransfer(requestIdRaw: string, reviewNotesRaw: s
     });
   }
 
-  await invalidateCache(transfersCacheKey(actor.role === "admin" ? actor.collegeId : actor.userId));
+  await invalidateCacheFamily(TRANSFERS_FAMILY, actor.collegeId);
   revalidatePath("/warden/transfers");
   revalidatePath("/warden/dashboard");
 }
@@ -287,7 +289,7 @@ export async function approveRoomTransfer(requestIdRaw: string, newRoomIdRaw: st
     });
   }
 
-  await invalidateCache(transfersCacheKey(actor.role === "admin" ? actor.collegeId : actor.userId));
+  await invalidateCacheFamily(TRANSFERS_FAMILY, actor.collegeId);
   revalidatePath("/warden/transfers");
   revalidatePath("/warden/dashboard");
   revalidatePath("/warden/rooms");

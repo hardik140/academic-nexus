@@ -45,6 +45,10 @@ const ISOLATED_ENV: Record<string, string> = {
   NEXT_PUBLIC_SUPABASE_ANON_KEY: "e2e-isolated-anon-key",
   NEXT_PUBLIC_APP_URL: BASE_URL,
   ENABLE_SENTRY: "",
+  // Redis credentials are blanked above (no Upstash is reachable); the
+  // namespace is pinned anyway, so a credential ever added to this list by
+  // mistake could never touch production keys.
+  REDIS_ENV: "e2e",
   NEXT_TELEMETRY_DISABLED: "1",
 };
 

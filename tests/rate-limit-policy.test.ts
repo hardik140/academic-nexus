@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { FAIL_OPEN, bucketName, bucketPolicy } from "@/lib/rate-limit-policy";
+import { FAIL_OPEN, HIGH_RISK, bucketName, bucketPolicy, riskClass } from "@/lib/rate-limit-policy";
 import { clientIp } from "@/lib/client-ip";
 
 /**
@@ -75,6 +75,37 @@ describe("money, identity and authority never run uncounted", () => {
   it.each(MUST_FAIL_CLOSED)("%s fails closed", (name) => {
     expect(bucketPolicy(`${name}:user-123`)).toBe("deny");
   });
+
+  it.each(MUST_FAIL_CLOSED)("%s is classified high-risk in the library's own list", (name) => {
+    // This test keeps its own copy of the list on purpose: shrinking
+    // HIGH_RISK in lib/ cannot silently shrink what is enforced here.
+    expect(riskClass(`${name}:user-123`)).toBe("high");
+  });
+
+  it("no high-risk bucket is in the fail-open table", () => {
+    expect(HIGH_RISK.filter((name) => name in FAIL_OPEN)).toEqual([]);
+  });
+});
+
+describe("risk classes", () => {
+  it.each([
+    ["ip:abc", "flood"],
+    ["ipCredentialed:abc", "flood"],
+    ["user:u1", "flood"],
+    ["saveAttendance:t1", "low"],
+    ["gateScan:g1", "low"],
+    ["recordPayment:u1", "high"],
+    ["approveRefund:u1", "high"],
+    ["inviteStudent:u1", "protected"],
+    ["aBucketAddedTomorrow:u1", "protected"],
+  ])("%s is %s", (key, cls) => {
+    expect(riskClass(key)).toBe(cls);
+  });
+
+  it("only flood and low classes may fail open; high and protected are refused", () => {
+    for (const key of ["ip:a", "ipCredentialed:a", "user:a", "saveAttendance:a"]) expect(bucketPolicy(key)).toBe("allow");
+    for (const key of ["recordPayment:a", "inviteStudent:a", "aBucketAddedTomorrow:a"]) expect(bucketPolicy(key)).toBe("deny");
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -94,6 +125,9 @@ function sourceFiles(dir: string, acc: string[] = []): string[] {
 /** Every bucket name the application actually asks for. */
 function bucketsInSource(): Set<string> {
   const CALL = /checkRateLimit\(\s*`([^`]+)`/g;
+  // The middleware's flood ceilings go through its own limitedResponse()
+  // helper, sometimes as a ternary between two buckets.
+  const MIDDLEWARE = /`(ip|ipCredentialed|user):\$\{/g;
   const found = new Set<string>();
   for (const file of [...sourceFiles("app"), ...sourceFiles("lib")]) {
     const src = readFileSync(file, "utf8");
@@ -102,6 +136,9 @@ function bucketsInSource(): Set<string> {
       // `${transition}` is interpolated; its two values are asserted above.
       if (name.startsWith("${")) continue;
       found.add(name);
+    }
+    if (file.split(String.fromCharCode(92)).join("/").endsWith("lib/supabase/middleware.ts")) {
+      for (const m of src.matchAll(MIDDLEWARE)) found.add(m[1]);
     }
   }
   return found;
@@ -226,13 +263,14 @@ describe("an unreachable limiter", () => {
     await expect(checkRateLimit("saveAttendance:t1", 30, 60)).resolves.toBeUndefined();
   });
 
-  it("logs the refusal so an operator can see the window", async () => {
+  it("logs the refusal so an operator can see the window — by bucket, never by key", async () => {
     const { checkRateLimit } = await loadLimiter(null, "production");
     await checkRateLimit("recordPayment:u1", 15, 60).catch(() => {});
-    expect(console.error).toHaveBeenCalledWith(
-      expect.stringContaining("fail-closed"),
-      expect.objectContaining({ key: "recordPayment:u1" })
+    expect(console.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ event: "redis.ratelimit", bucket: "recordPayment", outcome: "fail_closed", reason: "unconfigured" })
     );
+    const logged = JSON.stringify(vi.mocked(console.warn).mock.calls);
+    expect(logged).not.toContain("u1");
   });
 
   it("never discloses the Redis fault to the caller", async () => {

@@ -9,7 +9,11 @@ export async function getPlacementCellDashboard() {
   const actor = await requireRole(["placement_cell", "director", "admin"]);
   const supabase = await createClient();
 
-  return getCached(`placement:cell-dashboard:${actor.collegeId}`, 60, async () => {
+  // Role-scoped: placement_cell, director and admin see DIFFERENT rows here
+  // (students_read_staff excludes placement_cell; student_placement_profiles
+  // excludes director), so one college-wide entry served one role's data to
+  // another. See tests/cache-scope-registry.test.ts.
+  return getCached(`placement:cell-dashboard:${actor.collegeId}:${actor.role}`, 60, async () => {
     const [
       totalStudentsRes,
       eligibleRes,

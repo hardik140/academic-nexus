@@ -56,6 +56,9 @@ vi.mock("@/lib/cache", () => ({
   getCached: vi.fn(async (_key: string, _ttl: number, fetcher: () => Promise<unknown>) => fetcher()),
   middlewareProfileCacheKey: (id: string) => `profile:${id}`,
   invalidateCache: vi.fn(),
+  invalidateCacheFamily: vi.fn(),
+  versionedKey: (key: string | null) => key,
+  MIDDLEWARE_PROFILE_CACHE: {},
 }));
 vi.mock("@upstash/qstash/nextjs", () => ({ verifySignatureAppRouter: (handler: () => unknown) => handler }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => h.adminClient }));

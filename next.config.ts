@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 import { PHASE_DEVELOPMENT_SERVER } from "next/constants";
 import { withSentryConfig } from "@sentry/nextjs";
+import { execSync } from "node:child_process";
 
 const supabaseConnectSrc = "https://*.supabase.co wss://*.supabase.co";
 
@@ -48,7 +49,26 @@ const scannerHeaders = [
   { key: "Permissions-Policy", value: "camera=(self), microphone=(), geolocation=()" },
 ];
 
+/**
+ * Identifies this build to lib/redis-config.ts redisBuildId(), so cached
+ * values written by one deployed build are never read by another during a
+ * rollout (their shapes can differ). The commit SHA in CI, the local commit
+ * otherwise; a timestamp only when neither exists. Not a secret.
+ */
+function redisBuildId(): string {
+  const fromCi = process.env.GITHUB_SHA?.slice(0, 12);
+  if (fromCi) return fromCi;
+  try {
+    return execSync("git rev-parse --short=12 HEAD", { stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
+  } catch {
+    return Date.now().toString(36);
+  }
+}
+
 const nextConfig: NextConfig = {
+  env: {
+    NEXT_PUBLIC_REDIS_BUILD_ID: process.env.NEXT_PUBLIC_REDIS_BUILD_ID || redisBuildId(),
+  },
   // Enable experimental features for Next.js 15
   experimental: {
     // Server Actions are stable in Next.js 15

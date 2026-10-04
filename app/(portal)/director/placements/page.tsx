@@ -111,8 +111,7 @@ export default function DirectorPlacements() {
         form.package_lpa ? Number(form.package_lpa) : null,
         form.placement_date,
         form.offer_type,
-        form.status,
-        query
+        form.status
       );
       setForm({ student_id: "", company_name: "", role_title: "", package_lpa: "", placement_date: "", offer_type: "full_time", status: "placed" });
       setShowCreate(false);

@@ -195,7 +195,7 @@ function AdminUsersInner() {
     setLoading(true);
     setError(null);
     try {
-      await updateUserProfile(editUser.id, editUser.full_name, editUser.role, editUser.phone || undefined, query);
+      await updateUserProfile(editUser.id, editUser.full_name, editUser.role, editUser.phone || undefined);
       setNotice(`${editUser.full_name} updated.`);
       setEditUser(null);
       void loadUsers(query);
@@ -244,7 +244,7 @@ function AdminUsersInner() {
     setAcademicLoading(true);
     setAcademicError(null);
     try {
-      await updateStudentAcademicStatus(editUser.id, academicStatusDraft as any, query);
+      await updateStudentAcademicStatus(editUser.id, academicStatusDraft as any);
     } catch (e) {
       setAcademicError(await toFeedbackError(e, "Failed to update academic status."));
       return;
@@ -262,7 +262,7 @@ function AdminUsersInner() {
     setStatusPending(true);
     setStatusError(null);
     try {
-      await updateUserStatusAction(statusTarget.id, statusTarget.status, query);
+      await updateUserStatusAction(statusTarget.id, statusTarget.status);
       setNotice(`${statusTarget.name} ${statusTarget.status === "suspended" ? "suspended" : "reactivated"}.`);
       setStatusTarget(null);
       void loadUsers(query);

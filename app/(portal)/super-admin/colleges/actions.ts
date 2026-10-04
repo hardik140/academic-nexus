@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib/rbac";
 import { logAudit } from "@/lib/audit";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { getCached, invalidateCache } from "@/lib/cache";
+import { getCached, invalidateCacheFamily, versionedKey } from "@/lib/cache";
 import { resolveListSort, listCacheKey } from "@/lib/cached-list";
 import { PLATFORM_COLLEGE_ID } from "@/lib/constants";
 import { inviteUserCore, resendInvitationCore, revokeInvitationCore, type InviteUserParams } from "@/lib/invitations";
@@ -33,7 +33,9 @@ export async function listColleges(q: DataTableQuery) {
   const supabase = await createClient();
 
   const { column, ascending } = resolveListSort(COLLEGES_SORT_COLUMNS, "created_at", false, q);
-  const cacheKey = listCacheKey(COLLEGES_CACHE_PREFIX, actor.collegeId, q, column);
+  // Every super admin sees every college: the scope is the platform, not
+  // the super admin's own (possibly empty) college id.
+  const cacheKey = versionedKey(listCacheKey(COLLEGES_CACHE_PREFIX, "platform", q, column), COLLEGES_CACHE_PREFIX, "platform");
 
   return getCached(cacheKey, 30, async () => {
     let dbQuery = supabase
@@ -104,15 +106,12 @@ export async function createCollegeCore(
   return { collegeId: college.id };
 }
 
-export async function createCollege(params: CreateCollegeParams, viewQuery?: DataTableQuery) {
+export async function createCollege(params: CreateCollegeParams) {
   const actor = await requireRole(["super_admin"]);
   const supabase = await createClient();
   const result = await createCollegeCore(supabase, actor, params);
   revalidatePath("/super-admin/colleges");
-  if (viewQuery) {
-    const { column } = resolveListSort(COLLEGES_SORT_COLUMNS, "created_at", false, viewQuery);
-    await invalidateCache(listCacheKey(COLLEGES_CACHE_PREFIX, actor.collegeId, viewQuery, column));
-  }
+  await invalidateCacheFamily(COLLEGES_CACHE_PREFIX, "platform");
   return result;
 }
 
@@ -174,7 +173,7 @@ export type SetCollegeLifecycleParams = z.input<typeof LifecycleSchema>;
  * it leaves ACTIVE); this validates the shape first so the form can say what
  * is wrong, and refreshes the cached list.
  */
-export async function setCollegeLifecycle(params: SetCollegeLifecycleParams, viewQuery?: DataTableQuery) {
+export async function setCollegeLifecycle(params: SetCollegeLifecycleParams) {
   const actor = await requireRole(["super_admin"]);
   const parsed = LifecycleSchema.parse(params);
   await checkRateLimit(`collegeLifecycle:${actor.userId}`, 20, 60);
@@ -194,10 +193,7 @@ export async function setCollegeLifecycle(params: SetCollegeLifecycleParams, vie
   );
 
   revalidatePath("/super-admin/colleges");
-  if (viewQuery) {
-    const { column } = resolveListSort(COLLEGES_SORT_COLUMNS, "created_at", false, viewQuery);
-    await invalidateCache(listCacheKey(COLLEGES_CACHE_PREFIX, actor.collegeId, viewQuery, column));
-  }
+  await invalidateCacheFamily(COLLEGES_CACHE_PREFIX, "platform");
 }
 
 export interface LifecycleEvent {
