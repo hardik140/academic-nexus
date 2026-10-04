@@ -42,7 +42,7 @@ function refuse(status, error) {
   return Response.json({ ok: false, error }, { status });
 }
 
-export default {
+const probe = {
   async fetch(request, env) {
     if (!env.PROBE_KEY || request.headers.get("x-probe-key") !== env.PROBE_KEY) return refuse(401, "missing or wrong x-probe-key");
     const redisEnv = (env.REDIS_ENV ?? "").trim();
@@ -123,3 +123,5 @@ export default {
     return Response.json(result, { headers: { "cache-control": "no-store" } });
   },
 };
+
+export default probe;
