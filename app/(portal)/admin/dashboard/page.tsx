@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { getCached } from "@/lib/cache";
+import { getCachedWriteBehind } from "@/lib/cache";
 import { assertRead } from "@/lib/read-result-server";
 
 export default async function AdminDashboard() {
@@ -27,7 +27,7 @@ export default async function AdminDashboard() {
     totalDepartments,
     pendingComplaints,
     pendingGatePasses,
-  ] = await getCached(
+  ] = await getCachedWriteBehind(
     `dashboard:admin:${viewerProfile?.college_id}:counts`,
     60,
     async () => {

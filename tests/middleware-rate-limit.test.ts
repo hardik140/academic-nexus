@@ -45,9 +45,6 @@ vi.mock("@supabase/ssr", async (original) => ({
   ...(await original<typeof import("@supabase/ssr")>()),
   createServerClient: () => ({ auth: { getUser: async () => ({ data: { user: h.user } }) } }),
 }));
-vi.mock("@/lib/cache", () => ({
-  getCached: vi.fn(),
-}));
 
 const { updateSession, ANONYMOUS_IP_LIMIT, CREDENTIALED_IP_LIMIT, USER_LIMIT } = await import("@/lib/supabase/middleware");
 const { checkRateLimit } = await import("@/lib/rate-limit");

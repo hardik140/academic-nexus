@@ -5,7 +5,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole, type AuthorizedActor } from "@/lib/rbac";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { getCached } from "@/lib/cache";
+import { getCachedWriteBehind } from "@/lib/cache";
 import { logAudit } from "@/lib/audit";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { assertClaimed } from "@/lib/concurrent-claim";
@@ -228,7 +228,7 @@ export async function getPlacementOverview() {
   const actor = await requireRole(["director", "admin"]);
   const supabase = await createClient();
 
-  return getCached(`placement:overview:${actor.collegeId}`, 60, async () => {
+  return getCachedWriteBehind(`placement:overview:${actor.collegeId}`, 60, async () => {
     const [summaryRes, companiesRes, activeDrivesRes, applicationsRes, cellRes] = await Promise.all([
       supabase.from("mv_placement_summary").select("*").maybeSingle(),
       supabase.from("companies").select("*", { count: "exact", head: true }).eq("college_id", actor.collegeId),

@@ -41,7 +41,7 @@ export type RedisEvent =
   | {
       event: "redis.cache";
       family: string;
-      outcome: "hit" | "miss" | "bypass" | "error" | "invalidated" | "stale_version";
+      outcome: "hit" | "miss" | "bypass" | "error" | "invalidated" | "stale_version" | "coalesced";
       reason?: RedisFailureReason | "unscoped_key" | "uncacheable_query";
       ms?: number;
     };

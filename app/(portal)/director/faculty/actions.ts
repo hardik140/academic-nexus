@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/rbac";
-import { getCached } from "@/lib/cache";
+import { getCachedWriteBehind } from "@/lib/cache";
 import { resolveListSort, listCacheKey } from "@/lib/cached-list";
 import { DEFAULT_QUERY_LIMIT } from "@/lib/constants";
 import type { DataTableQuery } from "@/components/ui/data-table";
@@ -28,7 +28,7 @@ export async function listFaculty(q: DataTableQuery) {
   const { column, ascending } = resolveListSort(FACULTY_SORT_COLUMNS, "full_name", true, q);
   const cacheKey = listCacheKey(FACULTY_CACHE_PREFIX, actor.collegeId, q, column);
 
-  return getCached(cacheKey, 30, async () => {
+  return getCachedWriteBehind(cacheKey, 30, async () => {
     const [facultyRes, offeringsRes, slotsRes] = await Promise.all([
       (() => {
         let dbQuery = supabase

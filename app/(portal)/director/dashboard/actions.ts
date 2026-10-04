@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib/rbac";
-import { getCached } from "@/lib/cache";
+import { getCachedWriteBehind } from "@/lib/cache";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { sendExpoPushNotifications } from "@/lib/push";
 import { PERMISSIONS } from "@/lib/permissions";
@@ -18,7 +18,7 @@ export async function getDashboardStats() {
   const actor = await requireRole(["director", "admin"]);
   const supabase = await createClient();
 
-  return getCached(`dashboard:director:${actor.collegeId}:counts`, 60, async () => {
+  return getCachedWriteBehind(`dashboard:director:${actor.collegeId}:counts`, 60, async () => {
     const [studentsRes, facultyRes, deptsRes] = await Promise.all([
       supabase.from("profiles").select("*", { count: "exact", head: true }).eq("role", "student"),
       supabase.from("profiles").select("*", { count: "exact", head: true }).eq("role", "teacher"),

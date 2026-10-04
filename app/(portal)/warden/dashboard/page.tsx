@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { getCached } from "@/lib/cache";
+import { getCachedWriteBehind } from "@/lib/cache";
 import { RequestDecisionButton } from "@/components/portal/request-decision-modal";
 import { DirectorEscalationsPanel } from "@/components/portal/director-escalations-panel";
 import { listPendingGatePasses, getGateOperationsSnapshot } from "../gatepasses/actions";
@@ -20,7 +20,7 @@ export default async function WardenDashboard() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { blocks, rooms, openComplaints } = await getCached(
+  const { blocks, rooms, openComplaints } = await getCachedWriteBehind(
     `dashboard:warden:${user.id}:overview`,
     60,
     async () => {

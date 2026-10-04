@@ -5,7 +5,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib/rbac";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { getCached, invalidateCacheFamily, versionedKey } from "@/lib/cache";
+import { getCachedWriteBehind, invalidateCacheFamily, versionedKey } from "@/lib/cache";
 import { resolveListSort, listCacheKey } from "@/lib/cached-list";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
@@ -29,7 +29,7 @@ export async function listPlacements(q: DataTableQuery) {
   const { column, ascending } = resolveListSort(PLACEMENTS_SORT_COLUMNS, "placement_date", false, q);
   const cacheKey = versionedKey(listCacheKey(PLACEMENTS_CACHE_PREFIX, actor.collegeId, q, column), PLACEMENTS_CACHE_PREFIX, actor.collegeId);
 
-  return getCached(cacheKey, 30, async () => {
+  return getCachedWriteBehind(cacheKey, 30, async () => {
     let dbQuery = supabase
       .from("placements")
       .select("*, students:student_id(enrollment_number, profiles:user_id(full_name), departments(name))", { count: "exact" });

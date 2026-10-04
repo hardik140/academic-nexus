@@ -68,6 +68,8 @@ vi.mock("@/lib/supabase/server", () => ({ createClient: async () => h.client }))
 vi.mock("next/navigation", () => ({ redirect: () => { throw new Error("redirected"); } }));
 vi.mock("@/lib/cache", () => ({
   getCached: (_key: string, _ttl: number, fetcher: () => unknown) => fetcher(),
+  getCachedWriteBehind: (_key: string, _ttl: number, fetcher: () => unknown) => fetcher(),
+  invalidateCacheFamilies: async () => {},
   invalidateCacheFamily: async () => {},
   versionedKey: (key: string | null) => key,
 }));

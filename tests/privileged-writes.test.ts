@@ -23,6 +23,8 @@ vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 vi.mock("@/lib/redis", () => ({ redis: null }));
 vi.mock("@/lib/cache", () => ({
   getCached: async (_k: string, _t: number, fn: () => unknown) => fn(),
+  getCachedWriteBehind: async (_k: string, _t: number, fn: () => unknown) => fn(),
+  invalidateCacheFamilies: async () => {},
   invalidateCacheFamily: async () => {},
   versionedKey: (key: string | null) => key,
 }));

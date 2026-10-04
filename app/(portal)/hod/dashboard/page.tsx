@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { getCached } from "@/lib/cache";
+import { getCachedWriteBehind } from "@/lib/cache";
 import { RequestDecisionButton } from "@/components/portal/request-decision-modal";
 import { DirectorEscalationsPanel } from "@/components/portal/director-escalations-panel";
 import { listHodApprovals, listCorrectionApprovals } from "../approvals/actions";
@@ -34,7 +34,7 @@ export default async function HodDashboard() {
     .single();
   assertRead(departmentError);
 
-  const { faculty, courses } = await getCached(
+  const { faculty, courses } = await getCachedWriteBehind(
     `dashboard:hod:${department?.id}:faculty-courses`,
     60,
     async () => {

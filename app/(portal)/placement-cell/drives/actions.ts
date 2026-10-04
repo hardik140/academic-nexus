@@ -5,7 +5,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole, type AuthorizedActor } from "@/lib/rbac";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { getCached, invalidateCacheFamily, versionedKey } from "@/lib/cache";
+import { getCachedWriteBehind, invalidateCacheFamily, versionedKey } from "@/lib/cache";
 import { logAudit } from "@/lib/audit";
 import { assertClaimed } from "@/lib/concurrent-claim";
 import { resolveListSort, listCacheKey } from "@/lib/cached-list";
@@ -46,7 +46,7 @@ export async function listDrives(q: DataTableQuery) {
   const { column, ascending } = resolveListSort(DRIVES_SORT_COLUMNS, "application_deadline", true, q);
   const cacheKey = versionedKey(listCacheKey(DRIVES_CACHE_PREFIX, actor.collegeId, q, column), DRIVES_CACHE_PREFIX, actor.collegeId);
 
-  return getCached(cacheKey, 30, async () => {
+  return getCachedWriteBehind(cacheKey, 30, async () => {
     let dbQuery = supabase
       .from("placement_drives")
       .select("*, companies:company_id(name), placement_applications(count)", { count: "exact" });

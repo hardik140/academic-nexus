@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/rbac";
-import { getCached } from "@/lib/cache";
+import { getCachedWriteBehind } from "@/lib/cache";
 import { PERMISSIONS } from "@/lib/permissions";
 import { assertRead } from "@/lib/read-result-server";
 
@@ -16,7 +16,7 @@ export async function getInstitutionPlacementFunnel() {
   const actor = await requireRole(PERMISSIONS.institution_placement_funnel_read);
   const supabase = await createClient();
 
-  return getCached(`placement-funnel:${actor.collegeId}`, 60, async () => {
+  return getCachedWriteBehind(`placement-funnel:${actor.collegeId}`, 60, async () => {
     const { data, error: dataError } = await supabase.from("mv_placement_funnel").select("*").order("department_name");
     assertRead(dataError);
     const departments = data || [];

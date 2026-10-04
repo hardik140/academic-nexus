@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/rbac";
-import { getCached } from "@/lib/cache";
+import { getCachedWriteBehind } from "@/lib/cache";
 import { resolveListSort, listCacheKey } from "@/lib/cached-list";
 import { PERMISSIONS } from "@/lib/permissions";
 import type { DataTableQuery } from "@/components/ui/data-table";
@@ -26,7 +26,7 @@ export async function listWardenRooms(q: DataTableQuery) {
   // warden's page be served to another warden (or to an admin) for 30 s.
   const cacheKey = listCacheKey(ROOMS_CACHE_PREFIX, actor.role === "admin" ? actor.collegeId : actor.userId, q, column);
 
-  return getCached(cacheKey, 30, async () => {
+  return getCachedWriteBehind(cacheKey, 30, async () => {
     // Resolved server-side from the authenticated actor, never trusted from
     // the client — matches the "never trust client-picked ids" precedent
     // used throughout this codebase's assignHodCore/assignWardenCore.

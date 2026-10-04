@@ -5,7 +5,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/rbac";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { getCached, invalidateCacheFamily, versionedKey } from "@/lib/cache";
+import { getCachedWriteBehind, invalidateCacheFamily, versionedKey } from "@/lib/cache";
 import { logAudit } from "@/lib/audit";
 import { resolveListSort, listCacheKey } from "@/lib/cached-list";
 import type { DataTableQuery } from "@/components/ui/data-table";
@@ -64,7 +64,7 @@ export async function listStudentPlacementRecords(q: DataTableQuery) {
     actor.collegeId
   );
 
-  return getCached(cacheKey, 30, async () => {
+  return getCachedWriteBehind(cacheKey, 30, async () => {
     let dbQuery = supabase
       .from("students")
       .select(

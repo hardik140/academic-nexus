@@ -54,6 +54,8 @@ vi.mock("@/lib/rate-limit", () => ({
 }));
 vi.mock("@/lib/cache", () => ({
   getCached: vi.fn(async (_key: string, _ttl: number, fetcher: () => Promise<unknown>) => fetcher()),
+  getCachedWriteBehind: vi.fn(async (_key: string, _ttl: number, fetcher: () => Promise<unknown>) => fetcher()),
+  invalidateCacheFamilies: vi.fn(),
   invalidateCacheFamily: vi.fn(),
   versionedKey: (key: string | null) => key,
 }));
