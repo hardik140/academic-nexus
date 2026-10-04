@@ -1,0 +1,100 @@
+{
+  "limit": 30,
+  "windowSeconds": 60,
+  "redisCost": {
+    "fixed window": "1 EVALSHA, 1 key",
+    "sliding window (current: @upstash/ratelimit approximation)": "1 EVALSHA, 2 keys",
+    "sliding log (exact)": "1 EVAL, 1 sorted set of up to LIMIT members (ZREMRANGEBYSCORE + ZCARD + ZADD)",
+    "token bucket / GCRA (capacity = limit, refill limit per window)": "1 EVALSHA, 1 hash (tokens + timestamp)"
+  },
+  "results": {
+    "boundary burst: limit just before and just after a window edge": {
+      "fixed window": {
+        "offered": 60,
+        "admitted": 60,
+        "worstInAnyRollingWindow": 60
+      },
+      "sliding window (current: @upstash/ratelimit approximation)": {
+        "offered": 60,
+        "admitted": 31,
+        "worstInAnyRollingWindow": 31
+      },
+      "sliding log (exact)": {
+        "offered": 60,
+        "admitted": 30,
+        "worstInAnyRollingWindow": 30
+      },
+      "token bucket / GCRA (capacity = limit, refill limit per window)": {
+        "offered": 60,
+        "admitted": 30,
+        "worstInAnyRollingWindow": 30
+      }
+    },
+    "steady abuse at 4x the limit for 10 minutes": {
+      "fixed window": {
+        "offered": 1200,
+        "admitted": 300,
+        "worstInAnyRollingWindow": 30
+      },
+      "sliding window (current: @upstash/ratelimit approximation)": {
+        "offered": 1200,
+        "admitted": 300,
+        "worstInAnyRollingWindow": 30
+      },
+      "sliding log (exact)": {
+        "offered": 1200,
+        "admitted": 300,
+        "worstInAnyRollingWindow": 30
+      },
+      "token bucket / GCRA (capacity = limit, refill limit per window)": {
+        "offered": 1200,
+        "admitted": 329,
+        "worstInAnyRollingWindow": 59
+      }
+    },
+    "burst of 200 in one second, then silence": {
+      "fixed window": {
+        "offered": 200,
+        "admitted": 30,
+        "worstInAnyRollingWindow": 30
+      },
+      "sliding window (current: @upstash/ratelimit approximation)": {
+        "offered": 200,
+        "admitted": 30,
+        "worstInAnyRollingWindow": 30
+      },
+      "sliding log (exact)": {
+        "offered": 200,
+        "admitted": 30,
+        "worstInAnyRollingWindow": 30
+      },
+      "token bucket / GCRA (capacity = limit, refill limit per window)": {
+        "offered": 200,
+        "admitted": 30,
+        "worstInAnyRollingWindow": 30
+      }
+    },
+    "legitimate: 25 clicks spread over a minute, repeated 5 minutes": {
+      "fixed window": {
+        "offered": 125,
+        "admitted": 125,
+        "worstInAnyRollingWindow": 25
+      },
+      "sliding window (current: @upstash/ratelimit approximation)": {
+        "offered": 125,
+        "admitted": 125,
+        "worstInAnyRollingWindow": 25
+      },
+      "sliding log (exact)": {
+        "offered": 125,
+        "admitted": 125,
+        "worstInAnyRollingWindow": 25
+      },
+      "token bucket / GCRA (capacity = limit, refill limit per window)": {
+        "offered": 125,
+        "admitted": 125,
+        "worstInAnyRollingWindow": 25
+      }
+    }
+  }
+}
