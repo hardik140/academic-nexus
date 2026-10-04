@@ -12,7 +12,7 @@
 -- also carries
 --   role, college_id, profile_status
 -- of the CALLER (auth.uid()) — data the caller could already read through
--- the profiles_select_own policy. An inactive profile now comes back as
+-- the profiles_read_self policy. An inactive profile now comes back as
 -- { state: 'inactive', profile_status: … } so the middleware can still tell
 -- "suspended" from "no profile" (which stays a bare { state: 'inactive' }).
 -- Admission logic, locking, counting, auditing and grants are unchanged:

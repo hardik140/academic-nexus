@@ -18,6 +18,8 @@ vi.setConfig({ testTimeout: 300_000, hookTimeout: 300_000 });
 
 const M53 = "053_college_lifecycle.sql";
 const M54 = "054_session_registry.sql";
+// register_current_session() was redefined by 058 (it returns the profile too): mutate that one.
+const M58 = "058_admission_returns_profile.sql";
 const REASON = "Scheduled database maintenance window";
 const sid = (n: number) => `5e550000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 
@@ -190,7 +192,7 @@ describe("session controls (054)", () => {
 
   it("the limit comparison removed: a student's second device is admitted", async () => {
     await withDb(mutatedFiles("no limit", {
-      [M54]: (sql) => sql.replace("IF v_limit IS NULL OR v_count < v_limit THEN", () => "IF true THEN"),
+      [M58]: (sql) => sql.replace("IF v_limit IS NULL OR v_count < v_limit THEN", () => "IF true THEN"),
     }), async (d) => {
       expect(await register(d, U.studentA, sid(1))).toBe("active");
       expect(await register(d, U.studentA, sid(2))).toBe("active");
