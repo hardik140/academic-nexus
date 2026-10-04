@@ -411,6 +411,13 @@ export async function runOperation(
   // post a payment, ask the provider whether it already holds a document
   // with our reference. Found: link it and stop, nothing is posted. Lookup
   // failed: post nothing this attempt — absence was not proven.
+  //
+  // UNVERIFIED EXTERNAL PROVIDER ASSUMPTION: that the provider's search
+  // shows a payment immediately after creating it. Not verified against real
+  // Zoho Books (no test organisation is available). If its search lags, a
+  // retry soon after a 5xx that DID create the payment can post a second one;
+  // the window is the gap between creation and searchability. Zoho has no
+  // idempotency key, so this is the strongest check the protocol allows.
   if (attempt > 1 && built.kind === "payment" && adapter.findByReference) {
     const req = built.request as PaymentRequest;
     const reference = req.receiptNumber ?? req.reference;
