@@ -113,3 +113,38 @@ describe("no code takes rpc off its client", () => {
     expect(offenders).toEqual([]);
   });
 });
+
+describe("a bound rpc runs as the signed-in user, so RLS sees that user", () => {
+  it("every helper sends the session's own access token, not the anon key", async () => {
+    const b64url = (s: string) => Buffer.from(s).toString("base64url");
+    const accessToken = `${b64url('{"alg":"ES256","typ":"JWT"}')}.${b64url(
+      JSON.stringify({ sub: "user-1", role: "authenticated", exp: Math.floor(Date.now() / 1000) + 3600 })
+    )}.sig`;
+    const session = {
+      access_token: accessToken,
+      refresh_token: "r",
+      token_type: "bearer",
+      expires_in: 3600,
+      expires_at: Math.floor(Date.now() / 1000) + 3600,
+      user: { id: "user-1", aud: "authenticated", role: "authenticated" },
+    };
+    const auth: Array<[string, string | null]> = [];
+    const recording = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const fn = String(input).match(/\/rest\/v1\/rpc\/([a-z_]+)/)?.[1];
+      if (fn) auth.push([fn, new Headers(init?.headers).get("authorization")]);
+      return fetchStub(input, init);
+    }) as typeof fetch;
+    const c = createServerClient<Database>(URL_, "anon-key", {
+      cookies: { getAll: () => [{ name: "sb-qa-project-auth-token", value: `base64-${b64url(JSON.stringify(session))}` }], setAll: () => {} },
+      global: { fetch: recording },
+    }) as unknown as SupabaseClient<Database>;
+
+    await registerSession(c, { client: "web" });
+    await readAccessState(c);
+    await academicRpc(c, "start_department_term", { p_department_id: "d" });
+    await callRpc(c, "scan_gate_credential", { p_token: "t" });
+
+    expect(auth.map(([fn]) => fn)).toEqual(["register_current_session", "my_access_state", "start_department_term", "scan_gate_credential"]);
+    for (const [, header] of auth) expect(header).toBe(`Bearer ${accessToken}`);
+  });
+});
