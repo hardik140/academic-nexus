@@ -58,6 +58,8 @@ vi.mock("@/lib/college-access", () => ({
 let emulator: ChildProcess;
 let project: Signer;
 let attacker: Signer;
+/** The project's published key set; a test may rotate it. */
+const published: Signer[] = [];
 
 function freePort(): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -75,6 +77,7 @@ beforeAll(async () => {
   await new Promise<void>((resolve) => emulator.stdout!.on("data", (d) => String(d).includes("listening") && resolve()));
   project = await makeSigner("project-key");
   attacker = await makeSigner("project-key");
+  published.push(project);
   vi.stubEnv("NODE_ENV", "production");
   vi.stubEnv("REDIS_ENV", "test");
   vi.stubEnv("UPSTASH_REDIS_REST_URL", `http://127.0.0.1:${h.port}`);
@@ -82,7 +85,7 @@ beforeAll(async () => {
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", SUPABASE_URL);
   // JWKS for session-identity; everything else (the limiter's Upstash calls) goes to the real fetch.
   const realFetch = globalThis.fetch;
-  const keys = jwksFetch([project]);
+  const keys = jwksFetch(published);
   vi.stubGlobal("fetch", ((input: string | URL | Request, init?: RequestInit) =>
     String(input).includes("/.well-known/jwks.json") ? keys(input) : realFetch(input, init)) as typeof fetch);
   vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -192,6 +195,24 @@ describe("one malicious campus client cannot spend unrelated users' authenticate
     heldTo(20 * 120 - limited, 20 * mw.ANONYMOUS_IP_LIMIT);
     expect((await mw.updateSession(req("/finance/dashboard", { cookie: await signed(uid(31)) }))).status).toBe(200);
   }, 180_000);
+});
+
+describe("key rotation", () => {
+  it("the project rotates its signing key: 100 users on the new key, inside the refetch window, are not treated as forged", async () => {
+    const mw = await fresh();
+    // This isolate caches the key set as it was before the rotation.
+    expect((await mw.updateSession(req("/finance/dashboard", { cookie: await signed(uid(500)) }))).status).not.toBe(429);
+    const rotated = await makeSigner("rotated-key");
+    published.push(rotated);
+    try {
+      const cookies = await Promise.all(Array.from({ length: 100 }, (_, n) => rotated.sign(claims(uid(600 + n))).then(sessionCookie)));
+      const limited = await send(mw, 100 * 5, (i) => req("/finance/dashboard", { cookie: cookies[i % 100] }));
+      // Called forged, these 500 requests would share the 100/min anonymous bucket: 400 refused.
+      expect(limited).toBe(0);
+    } finally {
+      published.splice(published.indexOf(rotated), 1);
+    }
+  }, 300_000);
 });
 
 describe("many legitimate users behind one NAT", () => {
