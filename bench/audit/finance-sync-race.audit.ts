@@ -105,7 +105,7 @@ function fakeDb(): SupabaseClient<Database> {
     // Every statement takes DB_MS, like a round trip to Supabase, and takes
     // effect when it arrives, not when it is issued.
     const settle = (): Promise<{ data: unknown; error: unknown }> =>
-      new Promise((r) => setTimeout(r, DB_MS)).then(settleNow);
+      new Promise((r) => setTimeout(r, DB_MS)).then(() => settleNow() as Promise<{ data: unknown; error: unknown }>);
     const settleNow = () => {
       if (mode === "update") {
         state.updates.push({ table, patch: payload });
