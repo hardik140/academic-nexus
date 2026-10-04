@@ -13,7 +13,7 @@ import type { AcademicContext } from "@/lib/academic/types";
  * and throws (owner decision D5: a failed read is never shown as nothing).
  */
 export async function readAcademicContext(supabase: SupabaseClient<Database>): Promise<AcademicContext | null> {
-  const call = supabase.rpc as unknown as (name: string) => PromiseLike<{ data: unknown; error: { code?: string; message?: string } | null }>;
+  const call = supabase.rpc.bind(supabase) as unknown as (name: string) => PromiseLike<{ data: unknown; error: { code?: string; message?: string } | null }>;
   const { data, error } = await call("my_academic_context");
   if (error && (error.code === "PGRST202" || error.code === "42883")) return null;
   if (error) throw dbError(error);

@@ -44,7 +44,7 @@ export type SessionState = "present" | "missing" | "unknown" | "ended" | "colleg
  */
 async function accessBlock(client: ReturnType<typeof createClient>): Promise<SessionState | null> {
   try {
-    const rpc = client.rpc as unknown as (name: string) => PromiseLike<{ data: unknown; error: unknown }>;
+    const rpc = client.rpc.bind(client) as unknown as (name: string) => PromiseLike<{ data: unknown; error: unknown }>;
     const { data, error } = await rpc("my_access_state");
     const state = data as { allowed?: boolean; profile_status?: string; role?: string; college_state?: string } | null;
     if (error || !state || state.allowed !== false) return null;
