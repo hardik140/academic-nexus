@@ -88,3 +88,8 @@ Two Phase 1 items do not depend on any Redis infrastructure: the finance
 double-posting fix (PostgreSQL only) and the campus-lockout fix (application
 code, testable on the stand-in). If you want them before the gate passes,
 say so; the brief's ordering otherwise holds them.
+
+**Update 2026-10-05.** The owner's continuation brief authorized the two infrastructure-independent Phase 1
+fixes; they are #125 (finance) and #126 (rate limit). The Phase 0 gate itself
+is unchanged: still blocked on the owner steps in §4. Current state of the
+whole program: `REDIS_TRANSFORMATION_CURRENT_STATUS.md`.
