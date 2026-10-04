@@ -137,3 +137,56 @@ describe("reading the token from a request", () => {
     expect(await sessionIdentity(req({ authorization: `Bearer ${t}` }), deps())).toEqual({ kind: "verified", userId: ALICE, expired: false });
   });
 });
+
+describe("key rotation", () => {
+  it("a key the project rotated to inside the refetch window is 'unverifiable', not forged; after the window it verifies", async () => {
+    const published = [project];
+    const d = () => ({ fetchImpl: jwksFetch(published, state), supabaseUrl: SUPABASE_URL, apiKey: "anon", now: () => clock });
+    expect((await verifySessionToken(await project.sign(claims(ALICE)), d())).kind).toBe("verified"); // cache: old key only
+    const rotated = await makeSigner("rotated-key");
+    published.push(rotated);
+    const token = await rotated.sign(claims(ALICE));
+
+    clock += 10_000; // inside the window: no refetch allowed yet
+    expect(await verifySessionToken(token, d())).toEqual({ kind: "unverifiable" });
+    expect(state.calls).toBe(1);
+
+    clock += 60_000; // window passed: one refetch finds the new key
+    expect(await verifySessionToken(token, d())).toEqual({ kind: "verified", userId: ALICE, expired: false });
+    expect(state.calls).toBe(2);
+    // And the old key still verifies (sessions issued before the rotation).
+    expect((await verifySessionToken(await project.sign(claims(ALICE)), d())).kind).toBe("verified");
+    expect(state.calls).toBe(2);
+  });
+
+  it("an unknown kid is only called forged by a key set fetched for that request", async () => {
+    const stranger = await makeSigner("other-key");
+    // Cold isolate: the set is fetched for this request and lacks the kid.
+    expect(await verifySessionToken(await stranger.sign(claims(ALICE)), deps())).toEqual({ kind: "invalid" });
+    expect(state.calls).toBe(1);
+    // Warm, inside the window: not provable either way, no refetch.
+    clock += 5_000;
+    expect(await verifySessionToken(await stranger.sign(claims(ALICE)), deps())).toEqual({ kind: "unverifiable" });
+    expect(state.calls).toBe(1);
+  });
+
+  it("a failed rotation refetch is 'unverifiable' and backs off instead of refetching per request", async () => {
+    await verifySessionToken(await project.sign(claims(ALICE)), deps());
+    const stranger = await makeSigner("other-key");
+    clock += 120_000;
+    state.down = true;
+    expect(await verifySessionToken(await stranger.sign(claims(ALICE)), deps())).toEqual({ kind: "unverifiable" });
+    expect(state.calls).toBe(2);
+    for (let i = 0; i < 20; i++) {
+      clock += 100;
+      expect((await verifySessionToken(await stranger.sign(claims(ALICE)), deps())).kind).toBe("unverifiable");
+    }
+    expect(state.calls).toBe(2);
+    // The project's own, known key keeps verifying from the cached set meanwhile.
+    expect((await verifySessionToken(await project.sign(claims(ALICE)), deps())).kind).toBe("verified");
+    clock += FAILURE_BACKOFF_MS;
+    state.down = false;
+    expect(await verifySessionToken(await stranger.sign(claims(ALICE)), deps())).toEqual({ kind: "invalid" });
+    expect(state.calls).toBe(3);
+  });
+});

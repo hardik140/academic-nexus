@@ -138,21 +138,32 @@ async function fetchKeys(deps: IdentityDeps): Promise<Jwk[] | null> {
   return inflight;
 }
 
-/** The key for `kid`; null = not in the (fresh) set; "unavailable" = no key set. */
+/**
+ * The key for `kid`. null = a key set fetched for this request does not have
+ * it: forged. "unavailable" = no key set, or an unknown kid we may not refetch
+ * for yet. A key the project rotated to inside the refetch window must not be
+ * called forged, or every signed-in user would fall into the strict anonymous
+ * bucket until the window passed. That gives an attacker nothing new: any
+ * HS256 header already reaches "unverifiable", and the middleware still
+ * charges a request Supabase rejects to the strict per-IP bucket.
+ */
 async function keyFor(kid: string, deps: IdentityDeps): Promise<Jwk | null | "unavailable"> {
   const now = (deps.now ?? Date.now)();
   const stale = !keys || now - keys.fetchedAt > JWKS_TTL_MS;
+  let fetchedNow = false;
   if (stale) {
     if (!keys && failedAt && now - failedAt < FAILURE_BACKOFF_MS) return "unavailable";
     const list = await fetchKeys(deps);
     if (!list && !keys) return "unavailable";
+    fetchedNow = list !== null;
   }
-  let hit = keys!.list.find((k) => k.kid === kid) ?? null;
-  if (!hit && now - keys!.fetchedAt > UNKNOWN_KID_REFETCH_MS) {
-    await fetchKeys(deps); // rotation: a new key may have been published
-    hit = keys!.list.find((k) => k.kid === kid) ?? null;
-  }
-  return hit;
+  const hit = keys!.list.find((k) => k.kid === kid) ?? null;
+  if (hit || fetchedNow) return hit;
+  if (now - keys!.fetchedAt <= UNKNOWN_KID_REFETCH_MS) return "unavailable";
+  if (failedAt && now - failedAt < FAILURE_BACKOFF_MS) return "unavailable";
+  const fresh = await fetchKeys(deps); // rotation: a new key may have been published
+  if (!fresh) return "unavailable";
+  return fresh.find((k) => k.kid === kid) ?? null;
 }
 
 // ── Verification ──────────────────────────────────────────────

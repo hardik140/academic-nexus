@@ -648,7 +648,7 @@ middleware picks the bucket by what was proven:
 | forged / garbled cookie or bearer | `ip:<campus>` 100/min (shared) | — |
 | correctly signed token, valid or expired | `user:<id>` 300/min (that person only) | — |
 | correctly signed, but the session is dead | `user:<id>` | also `ip:<campus>` |
-| unverifiable: an HS256 token, or JWKS unreachable | `ipCredentialed:<campus>` 2,000/min (shared) | `user:<id>` |
+| unverifiable: an HS256 token, JWKS unreachable, or a key ID not in this isolate's cached set that it may not refetch for yet (≤ 60 s since the last fetch) | `ipCredentialed:<campus>` 2,000/min (shared) | `user:<id>`, or `ip:<campus>` when Supabase rejects it |
 
 Nothing here authorizes anything: `getUser()`, session admission,
 `requireRole()` and RLS are unchanged. The identity only chooses a bucket.
@@ -665,9 +665,15 @@ middleware and limiter against the Upstash emulator, real ES256 tokens):
 | 5 attacker accounts × 400 | held to 5 × 300; nobody else affected |
 | 20 IPs × 120 forged requests | held to 100 per IP; campus users unaffected |
 | 10 and 100 signed-in users × 50 requests, one IP | nobody refused (the old 2,000/min shared bucket would refuse 3,000 of 5,000) |
+| key rotation: 100 users on a newly rotated key, inside the refetch window | nobody refused (calling them forged would put 500 requests in the 100/min anonymous bucket) |
 
 Against the previous middleware, the forged-flood, account-rotation and
 100-user tests fail.
+
+A key ID is called forged only by a key set fetched for that request. Calling
+it "unverifiable" otherwise gives an attacker nothing: any HS256 header
+already reaches that path, and a token Supabase rejects is still charged to
+the strict per-IP bucket. A failed rotation refetch backs off for 30 s.
 
 **Trade-offs, stated.**
 
@@ -685,7 +691,7 @@ Against the previous middleware, the forged-flood, account-rotation and
 - *A stolen token* (correctly signed) can spend its owner's bucket. That
   presupposes the account is already compromised.
 - **Residual risk — owner check.** The project's JWKS publishes an ES256 key
-  (read 2026-10-04 from the public endpoint), but whether it is the CURRENT
+  (read 2026-10-04 and again 2026-10-05 from the public endpoint: one key, ES256 on P-256), but whether it is the CURRENT
   signing key — or a standby while sessions are still signed HS256 with the
   legacy secret — is hosted state this repository cannot read. If sessions are
   HS256, every token is "unverifiable" and the shared 2,000/min ceiling applies
