@@ -57,8 +57,10 @@ export function isMissingFunction(error: RpcError | null | undefined): boolean {
 
 // types/database.ts declares Functions as Record<string, never> (see
 // lib/gate-security/rpc.ts); this is the same narrow escape hatch.
+// BOUND to the client: SupabaseClient.rpc is `return this.rest.rpc(...)`, so a
+// detached reference throws on every call (tests/supabase-rpc-binding.test.ts).
 function rpc(supabase: SupabaseClient<Database>) {
-  return supabase.rpc as unknown as (
+  return supabase.rpc.bind(supabase) as unknown as (
     name: string,
     params?: Record<string, unknown>
   ) => PromiseLike<{ data: unknown; error: RpcError | null }>;
