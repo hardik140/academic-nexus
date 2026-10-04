@@ -628,3 +628,82 @@ in production, and sustained load (still §8).
 - A coalesced failure count still pending in an isolate that is recycled is
   lost; alert totals are approximate by that margin.
 - 052/F-01 and D7 are unrelated and unchanged.
+
+## 11. Admission order: the bucket follows a proven identity (2026-10-04, Phase 1B)
+
+**The defect (Redis audit E1, reproduced).** The middleware charged every
+request that *carried* a session cookie to one per-campus-IP bucket
+(`ipCredentialed`, 2,000/min) **before** the cookie was checked. 2,000
+requests with random cookie values from one device made every signed-in user
+on that campus IP — and every anonymous visitor — get 429.
+
+**The fix.** `lib/auth/session-identity.ts` verifies the access token's
+signature locally, against the project's published keys (JWKS, fetched at
+most once per 10 min per isolate; no network on the request path), and the
+middleware picks the bucket by what was proven:
+
+| Request | Pre-auth bucket | After `getUser()` |
+|---|---|---|
+| no credentials | `ip:<campus>` 100/min (shared) | — |
+| forged / garbled cookie or bearer | `ip:<campus>` 100/min (shared) | — |
+| correctly signed token, valid or expired | `user:<id>` 300/min (that person only) | — |
+| correctly signed, but the session is dead | `user:<id>` | also `ip:<campus>` |
+| unverifiable: an HS256 token, JWKS unreachable, or a key ID not in this isolate's cached set that it may not refetch for yet (≤ 60 s since the last fetch) | `ipCredentialed:<campus>` 2,000/min (shared) | `user:<id>`, or `ip:<campus>` when Supabase rejects it |
+
+Nothing here authorizes anything: `getUser()`, session admission,
+`requireRole()` and RLS are unchanged. The identity only chooses a bucket.
+
+**Attack results** (`tests/middleware-campus-isolation.test.ts`: the real
+middleware and limiter against the Upstash emulator, real ES256 tokens):
+
+| Attack | Result |
+|---|---|
+| one user, 400 requests | held to 300; a neighbour on the same IP gets 200 |
+| 2,000 forged-cookie requests | held to the anonymous 100; every signed-in campus user gets 200 |
+| forged tokens naming a real user (wrong key) | cannot touch that user's bucket |
+| dead session, signed, replayed 150 times | held to the anonymous 100 |
+| 5 attacker accounts × 400 | held to 5 × 300; nobody else affected |
+| 20 IPs × 120 forged requests | held to 100 per IP; campus users unaffected |
+| 10 and 100 signed-in users × 50 requests, one IP | nobody refused (the old 2,000/min shared bucket would refuse 3,000 of 5,000) |
+| key rotation: 100 users on a newly rotated key, inside the refetch window | nobody refused (calling them forged would put 500 requests in the 100/min anonymous bucket) |
+
+Against the previous middleware, the forged-flood, account-rotation and
+100-user tests fail.
+
+A key ID is called forged only by a key set fetched for that request. Calling
+it "unverifiable" otherwise gives an attacker nothing: any HS256 header
+already reaches that path, and a token Supabase rejects is still charged to
+the strict per-IP bucket. A failed rotation refetch backs off for 30 s.
+
+**Trade-offs, stated.**
+
+- *Anonymous traffic on one NAT still shares one bucket.* Without an identity
+  there is nothing else to count by. One device flooding anonymously (or with
+  forged cookies) can make the login page answer 429 for other not-yet-signed-in
+  people on that IP; signed-in people are unaffected. Edge rules (Cloudflare
+  WAF / rate limiting) are the layer for this; none is configured by this repo.
+- *IP rotation* defeats any per-IP limit, by definition. Each address is held
+  to 100/min.
+- *Account rotation* is bounded by accounts held: accounts are invite-only and
+  each is held to 300/min, attributable and revocable. There is deliberately no
+  shared ceiling for verified users — a shared ceiling is exactly what one
+  campus can exhaust.
+- *A stolen token* (correctly signed) can spend its owner's bucket. That
+  presupposes the account is already compromised.
+- **Residual risk — owner check.** The project's JWKS publishes an ES256 key
+  (read 2026-10-04 and again 2026-10-05 from the public endpoint: one key, ES256 on P-256), but whether it is the CURRENT
+  signing key — or a standby while sessions are still signed HS256 with the
+  legacy secret — is hosted state this repository cannot read. If sessions are
+  HS256, every token is "unverifiable" and the shared 2,000/min ceiling applies
+  again (the last test in the file shows it). Check Supabase dashboard →
+  Project Settings → JWT Keys: the current key should be ECC (P-256).
+
+**What each layer controls.**
+
+| Control | Academic Nexus | Redis | Supabase Auth (GoTrue) |
+|---|---|---|---|
+| password attempts, sign-in, password-reset emails | no — the browser calls GoTrue directly (§9) | no | yes, its own limits (dashboard; values unread) |
+| page and API request floods | yes, the middleware | holds the counters | — |
+| per-action limits (payments, approvals, …) | yes, every action | holds the counters | — |
+| session validity, revocation, device limits | yes, `register_current_session` (PostgreSQL) | no | issues and refreshes tokens |
+| who a token belongs to (for rate limiting) | yes, signature check against GoTrue's public keys | no | signs the tokens |
