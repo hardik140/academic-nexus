@@ -36,7 +36,8 @@ let warnedMissing = false;
 
 export async function feeTotals(supabase: SupabaseClient<Database>, collegeId: string): Promise<FeeTotals> {
   // Database["public"]["Functions"] is not modelled in the hand-written types.
-  const rpc = supabase.rpc as unknown as (
+  // Bound: SupabaseClient.rpc uses `this`; a detached reference throws on every call.
+  const rpc = supabase.rpc.bind(supabase) as unknown as (
     name: string,
     params: Record<string, unknown>
   ) => PromiseLike<{ data: FeeTotalsRow[] | null; error: { message: string; code?: string } | null }>;
