@@ -42,3 +42,24 @@ describe("feeTotals", () => {
     await expect(feeTotals(c, "college-1")).rejects.toThrow();
   });
 });
+
+describe("feeTotals on a REAL supabase-js client (network stubbed)", () => {
+  it("calls POST /rest/v1/rpc/fee_totals with the college id — rpc stays bound to its client", async () => {
+    const { createClient } = await import("@supabase/supabase-js");
+    const seen: { url: string; body: string }[] = [];
+    const real = createClient<Database>("https://qa-project.supabase.co", "anon-key", {
+      global: {
+        fetch: (async (input: RequestInfo | URL, init?: RequestInit) => {
+          seen.push({ url: String(input), body: String(init?.body ?? "") });
+          return new Response(JSON.stringify([{ total_billed: 10, total_collected: 4, total_pending: 6, total_overdue: 0, fee_count: 1 }]), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        }) as typeof fetch,
+      },
+    });
+    expect(await feeTotals(real, "c-1")).toEqual({ billed: 10, collected: 4, pending: 6, overdue: 0, feeCount: 1 });
+    expect(seen[0].url).toMatch(/\/rest\/v1\/rpc\/fee_totals$/);
+    expect(JSON.parse(seen[0].body)).toEqual({ p_college_id: "c-1" });
+  });
+});
