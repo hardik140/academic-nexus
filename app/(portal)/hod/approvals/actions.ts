@@ -5,7 +5,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib/rbac";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { getCached, invalidateCache } from "@/lib/cache";
+import { getCached, invalidateCacheFamily, versionedKey } from "@/lib/cache";
 import { logAudit } from "@/lib/audit";
 import { assertClaimed, assertPersisted } from "@/lib/concurrent-claim";
 import { assertNotSelfApproval } from "@/lib/segregation-of-duties";
@@ -23,8 +23,11 @@ const ActOnLeaveRequestSchema = z.object({
 
 const PROCESSED_LIMIT = 20;
 
-function hodApprovalsCacheKey(hodUserId: string) {
-  return `hod-approvals:${hodUserId}`;
+const HOD_APPROVALS_FAMILY = "hod-approvals";
+const HOD_CORRECTIONS_FAMILY = "hod-corrections";
+
+function hodApprovalsCacheKey(hodUserId: string, collegeId: string) {
+  return versionedKey(`hod-approvals:${hodUserId}`, HOD_APPROVALS_FAMILY, collegeId);
 }
 
 /**
@@ -38,7 +41,7 @@ export async function listHodApprovals() {
   const actor = await requireRole(["hod"]);
   const supabase = await createClient();
 
-  return getCached(hodApprovalsCacheKey(actor.userId), 30, async () => {
+  return getCached(hodApprovalsCacheKey(actor.userId, actor.collegeId), 30, async () => {
     const { data: department, error: departmentError } = await supabase.from("departments").select("id").eq("hod_id", actor.userId).single();
     assertRead(departmentError);
     if (!department) {
@@ -357,14 +360,9 @@ export async function actOnLeaveRequest(
   const supabase = await createClient();
   await actOnLeaveRequestCore(supabase, actor, requestId, action);
   revalidatePath("/hod/approvals");
-  if (actor.role === "hod") {
-    await invalidateCache(hodApprovalsCacheKey(actor.userId));
-  }
-  // else: admin acting on a HOD-owned request (the unrestricted branch in
-  // actOnLeaveRequestCore above) — that HOD's cache isn't invalidated here,
-  // it just rides out the 30s TTL. Rare path (admin bypassing the normal
-  // per-department UI), not worth an extra query to resolve whose cache
-  // to bust.
+  // The family is per college, so an admin acting on an HOD's request
+  // clears that HOD's list too (it used to wait out the TTL).
+  await invalidateCacheFamily(HOD_APPROVALS_FAMILY, actor.collegeId);
 }
 
 /** Called by app/api/mobile/leave/act/route.ts. */
@@ -377,8 +375,8 @@ export async function actOnLeaveRequestViaRequest(
   await actOnLeaveRequestCore(supabase, actor, requestId, action);
 }
 
-function correctionsCacheKey(hodUserId: string) {
-  return `hod-corrections:${hodUserId}`;
+function correctionsCacheKey(hodUserId: string, collegeId: string) {
+  return versionedKey(`hod-corrections:${hodUserId}`, HOD_CORRECTIONS_FAMILY, collegeId);
 }
 
 /**
@@ -395,7 +393,7 @@ export async function listCorrectionApprovals() {
   const actor = await requireRole(PERMISSIONS.attendance_correction_review);
   const supabase = await createClient();
 
-  return getCached(correctionsCacheKey(actor.userId), 30, async () => {
+  return getCached(correctionsCacheKey(actor.userId, actor.collegeId), 30, async () => {
     const selectCols = "*, courses:course_id(name, code), profiles:submitted_by(full_name), students:student_id(enrollment_number)";
 
     if (actor.role === "admin") {
@@ -521,7 +519,5 @@ export async function actOnAttendanceCorrection(requestId: string, action: "appr
   await actOnAttendanceCorrectionCore(supabase, actor, requestId, action);
   revalidatePath("/hod/approvals");
   revalidatePath("/teacher/attendance");
-  if (actor.role === "hod") {
-    await invalidateCache(correctionsCacheKey(actor.userId));
-  }
+  await invalidateCacheFamily(HOD_CORRECTIONS_FAMILY, actor.collegeId);
 }

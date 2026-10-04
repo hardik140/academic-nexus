@@ -5,7 +5,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib/rbac";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { getCached, invalidateCache } from "@/lib/cache";
+import { getCached, invalidateCacheFamily, versionedKey } from "@/lib/cache";
 import { resolveListSort, listCacheKey } from "@/lib/cached-list";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
@@ -27,7 +27,7 @@ export async function listPlacements(q: DataTableQuery) {
   const supabase = await createClient();
 
   const { column, ascending } = resolveListSort(PLACEMENTS_SORT_COLUMNS, "placement_date", false, q);
-  const cacheKey = listCacheKey(PLACEMENTS_CACHE_PREFIX, actor.collegeId, q, column);
+  const cacheKey = versionedKey(listCacheKey(PLACEMENTS_CACHE_PREFIX, actor.collegeId, q, column), PLACEMENTS_CACHE_PREFIX, actor.collegeId);
 
   return getCached(cacheKey, 30, async () => {
     let dbQuery = supabase
@@ -111,18 +111,13 @@ export async function createPlacement(
   packageLpa: number | null,
   placementDate: string,
   offerType?: OfferType,
-  status?: PlacementStatus,
-  viewQuery?: DataTableQuery
-) {
+  status?: PlacementStatus) {
   const actor = await requireRole(["director", "admin"]);
   const supabase = await createClient();
   await createPlacementCore(supabase, actor, { studentId, companyName, roleTitle, packageLpa, placementDate, offerType, status });
   revalidatePath("/director/placements");
   revalidatePath("/director/analytics");
-  if (viewQuery) {
-    const { column } = resolveListSort(PLACEMENTS_SORT_COLUMNS, "placement_date", false, viewQuery);
-    await invalidateCache(listCacheKey(PLACEMENTS_CACHE_PREFIX, actor.collegeId, viewQuery, column));
-  }
+  await invalidateCacheFamily(PLACEMENTS_CACHE_PREFIX, actor.collegeId);
 }
 
 /** Called by app/api/mobile/director/placement/route.ts. */

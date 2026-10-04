@@ -85,9 +85,9 @@ export default function PlacementCellCompanies() {
     setNotice(null);
     try {
       if (editingId) {
-        await updateCompany(editingId, form, query);
+        await updateCompany(editingId, form);
       } else {
-        await createCompany(form, query);
+        await createCompany(form);
       }
       setShowForm(false);
       setNotice(editingId ? `${form.name} saved.` : `${form.name} added.`);

@@ -115,9 +115,9 @@ export default function PlacementCellDrives() {
     setNotice(null);
     try {
       if (editingId) {
-        await updateDrive(editingId, form, query);
+        await updateDrive(editingId, form);
       } else {
-        await createDrive(form, query);
+        await createDrive(form);
       }
       setShowForm(false);
       setNotice(editingId ? `Drive for ${form.jobRole} saved.` : `Drive for ${form.jobRole} created.`);
@@ -136,7 +136,7 @@ export default function PlacementCellDrives() {
     setNotice(null);
     try {
       const next = drive.status === "published" ? "closed" : "published";
-      await setDriveStatus(drive.id, next, query);
+      await setDriveStatus(drive.id, next);
       setNotice(`Drive for ${drive.job_role} ${next === "published" ? "published" : "unpublished"}.`);
       void loadDrives(query);
     } catch (e) {

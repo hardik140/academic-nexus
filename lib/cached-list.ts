@@ -1,4 +1,5 @@
 import type { DataTableQuery } from "@/components/ui/data-table";
+import { keyDigest } from "@/lib/redis-config";
 
 /**
  * Shared sort-resolution + cache-key logic for Phase 3's cached, paginated
@@ -25,6 +26,49 @@ export function resolveListSort(
   return { column: defaultColumn, ascending: defaultAscending };
 }
 
-export function listCacheKey(prefix: string, collegeId: string, q: DataTableQuery, sortColumn: string): string {
-  return `${prefix}:${collegeId}:${q.page}:${sortColumn}:${q.sortDir}:${q.search}`;
+/**
+ * The longest search that is cached. Longer searches still run — they go
+ * straight to the database — because a 2,000-character search is not a
+ * query anyone repeats, and caching it would only spend Redis memory and
+ * commands on a key nobody reads twice.
+ */
+export const MAX_CACHED_SEARCH_LENGTH = 100;
+const MAX_CACHED_PAGE = 10_000;
+
+/**
+ * The search as it appears in a key. Never the raw text: it is user input,
+ * of any length and any characters (colons, spaces, Unicode), and keys must
+ * neither grow with it nor be shaped by it. The empty search ("no filter":
+ * list queries test `if (q.search)`) gets its own token; a whitespace-only
+ * search IS a filter (it reaches .ilike) and is hashed like any other, so
+ * the key never claims two different queries are the same.
+ *
+ * Case and whitespace are NOT folded: the key must describe the query that
+ * actually runs, and the query receives q.search verbatim. Folding here
+ * would make two different queries share one cached answer.
+ */
+function searchToken(search: string): string | null {
+  if (search === "") return "-";
+  if (search.length > MAX_CACHED_SEARCH_LENGTH) return null;
+  return `s${keyDigest(search.normalize("NFC"))}`;
+}
+
+/**
+ * Key for one page of a cached list, or null when the query is not cacheable
+ * (getCached then reads the database directly). `scopeId` is the visibility
+ * scope of the rows — the college for college-wide lists, the user where
+ * the query is narrowed per user — never just "the college" by habit
+ * (see tests/cache-scope-registry.test.ts).
+ *
+ * Server Actions are directly callable, so every part is validated, not
+ * trusted: an invalid page or sort direction makes the query uncacheable
+ * rather than minting a new key per garbage value.
+ */
+export function listCacheKey(prefix: string, scopeId: string, q: DataTableQuery, sortColumn: string): string | null {
+  if (!Number.isInteger(q.page) || q.page < 0 || q.page > MAX_CACHED_PAGE) return null;
+  if (q.sortDir !== "asc" && q.sortDir !== "desc") return null;
+  if (typeof q.search !== "string") return null;
+  const search = searchToken(q.search);
+  if (search === null) return null;
+  return `${prefix}:${scopeId}:${q.page}:${sortColumn}:${q.sortDir}:${search}`;
 }

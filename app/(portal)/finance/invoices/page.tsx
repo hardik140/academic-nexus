@@ -67,7 +67,7 @@ export default function FinanceInvoices() {
     setLoading(true);
     setError(null);
     try {
-      await createInvoice(form.student_id, form.type, Number(form.amount), form.due_date, form.academic_year || undefined, query);
+      await createInvoice(form.student_id, form.type, Number(form.amount), form.due_date, form.academic_year || undefined);
       setForm({ student_id: "", type: "", amount: "", due_date: "", academic_year: "" });
       setShowCreate(false);
       setNotice("Invoice raised.");

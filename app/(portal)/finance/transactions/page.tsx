@@ -113,7 +113,7 @@ export default function FinanceTransactions() {
     setLoading(true);
     setError(null);
     try {
-      await recordPayment(payFee.id, Number(form.amount), form.method, form.transaction_ref || undefined, form.notes || undefined, feesQuery, paymentsQuery);
+      await recordPayment(payFee.id, Number(form.amount), form.method, form.transaction_ref || undefined, form.notes || undefined);
       setNotice(`Payment of ${formatMoney(Number(form.amount))} recorded for ${payFee.students?.profiles?.full_name || "the student"}.`);
       setPayFee(null);
       // Refreshing the figures is not part of recording: a failure there

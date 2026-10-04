@@ -30,7 +30,8 @@ disagree. Concurrency is settled by PostgreSQL row locks and unique indexes
 
 ## 2. Algorithm and atomicity (Phase 17)
 
-The limiter is `@upstash/ratelimit` v2.0.8 `slidingWindow`, keyed per action.
+The limiter is `@upstash/ratelimit` `slidingWindow`, keyed per action (v2.0.8
+when §4 was measured; v2.2.0 installed at the §10 hardening, same script).
 
 **Rule 5 — atomic — VERIFIED.** Every limiter in that package executes as a
 single Lua script through `redis.eval`; the count-and-decide step happens
@@ -131,6 +132,11 @@ deployment — silently converted **every bucket in the application** to
 unlimited, with nothing logged and nothing surfaced.
 
 ### What it is now
+
+> **Superseded in part by §10 (2026-10-04).** "Unreachable" now also means a
+> timeout, a malformed result and an open circuit — the version described
+> below still read a slow Redis as "allowed" (§10.1). The `ip` bucket moved to
+> a separate "flood" class with two new middleware buckets.
 
 The decision is per bucket and declared in one reviewable table,
 `lib/rate-limit-policy.ts`. **The default is DENY.** A bucket nobody
@@ -281,3 +287,344 @@ logins at the production auth endpoint.
 **Status: NOT TESTED — CONTROL IS OUTSIDE THIS REPOSITORY.** This is the
 single largest remaining gap in the rate-limiting surface and it is a
 configuration item for whoever owns the Supabase project, not a code change.
+
+**Re-checked 2026-10-04 (§10): unchanged.** The repository has no
+`supabase/config.toml` and no Supabase management token, so the hosted
+`auth.rate_limit` settings (sign-in attempts, password-reset emails, token
+refresh) were not read. Proxying login through the application only to add a
+limiter was not done: it would move password handling onto this server for a
+control GoTrue already provides. The owner of the Supabase project should
+read and record those values in the dashboard (Authentication → Rate Limits).
+
+---
+
+## 10. Production hardening (2026-10-04, PR #123)
+
+Built and verified locally; **not deployed**. Every measurement in this
+section is LOCAL, against `e2e/support/upstash-emulator.mjs` on loopback — a
+stand-in for Upstash's REST API with fault modes — never against the
+production Upstash database. No production telemetry exists yet.
+
+### 10.1 Defects found
+
+| # | Defect | Where |
+|---|---|---|
+| 1 | **A slow Redis allowed protected actions.** `@upstash/ratelimit` resolves its own timeout as `{ success: true, reason: "timeout" }` instead of throwing; the limiter read only `success`. Proven on `main` with the emulator: a payment was allowed after **5,008 ms**. | `lib/rate-limit.ts` |
+| 2 | **No deadline, 5 retries.** Client defaults: exponential backoff (≈4.3 s) and an unbounded fetch. On `main`, a dropped connection cost ≈4.4 s per rate-limit check and ≈8.8 s per cached read. | `lib/redis.ts` |
+| 3 | **One per-IP bucket for everyone**, signed in or not: a campus behind one NAT address shared 100 requests/min. | `lib/supabase/middleware.ts` |
+| 4 | **No namespace.** The Worker's secrets are synced from `.env.local` (`scripts/sync-cf-secrets.mjs`), so development and production share ONE Upstash database and wrote identical keys. Raw IPs were stored in keys. | all keys |
+| 5 | **Four cached reads crossed a visibility boundary** (§10.5). | warden rooms; placement records, reports, dashboard |
+| 6 | **A write cleared only the editor's own list view**; mobile-API writes cleared nothing; an admin acting on an HOD's request left the HOD's list stale; four "goals" invalidations deleted a key that is never written. | list actions |
+| 7 | Raw, unbounded search text in keys. | `lib/cached-list.ts` |
+| 8 | Console-only diagnostics; the client's error messages embed the full command, payload included. | — |
+
+### 10.2 Architecture
+
+```text
+application ──► lib/redis-guard.ts  redisOp(op, run, validate)
+                 │  deadline: REDIS_TIMEOUT_MS (default 1000 ms), three layers:
+                 │    1. client AbortSignal — a FUNCTION, called once per command,
+                 │       covering every retry (a plain signal makes the client
+                 │       return the string "Aborted" as if it were a value)
+                 │    2. a deadline race in the guard (backstop)
+                 │    3. the limiter's own `timeout` — its result is validated
+                 │  one retry, 50 ms, network errors only (never on HTTP errors)
+                 │  failures classified by TYPE: timeout | auth | malformed | error
+                 │  circuit breaker: 3 consecutive failures → open 10 s →
+                 │    one probe → closed on success, re-opened on failure
+                 ▼
+        returns { ok, value } or { ok: false, reason } — never throws
+                 │
+   ┌─────────────┴──────────────┐
+   ▼                            ▼
+lib/rate-limit.ts           lib/cache.ts
+ reason → bucket risk class  reason → read from PostgreSQL
+```
+
+The limiter result is accepted only when it is well formed: `success` a
+boolean, `reset` and `remaining` finite, `reason` not `timeout`. Anything else
+is "unavailable".
+
+**Timeout value.** 1000 ms admits the one recorded cold call (639 ms, TLS
+handshake included, India → Upstash, §4) with margin and caps a hung Upstash
+at one second. Configurable with `REDIS_TIMEOUT_MS`, clamped to 100–5000.
+In-region Worker → Upstash latency has not been measured (§10.9).
+
+### 10.3 Failure behaviour
+
+| Failure | High-risk / protected action | Low-risk (11) and flood (3) buckets | Cached read |
+|---|---|---|---|
+| Unconfigured, in production | refused, 503 | allowed | PostgreSQL |
+| Connection error / down | refused, 503, ≤ budget (one retry) | allowed, `fail_open` logged | PostgreSQL |
+| Timeout / slow | refused, 503, ≤ ~1 s | allowed | PostgreSQL, ≤ ~1 s |
+| Malformed response | refused, 503 | allowed | miss → PostgreSQL |
+| Auth failure (revoked token) | refused, 503, not retried | allowed | PostgreSQL |
+| Partial (read ok, write fails) | — | — | fresh value served, write error logged |
+| Circuit open | refused instantly | allowed instantly | PostgreSQL instantly |
+| Recovery | after 10 s one probe; success closes the circuit | | |
+
+### 10.4 Rate limiting
+
+**Risk classes** (`lib/rate-limit-policy.ts`): `flood` and `low` may fail
+open; `high` (an explicit list — money, identity, authority, approvals,
+academic structure) and `protected` (everything else, including any bucket
+added tomorrow) are refused. A high-risk name in the fail-open table stops the
+module from loading. The complete table, generated from the call sites by
+`node scripts/redis-policy-table.mjs`:
+
+| Bucket | Risk class | Limit / window | Redis unavailable, timeout, malformed, circuit open |
+|---|---|---|---|
+| `ip` | flood | 100 / 60 s | allowed (logged fail_open) |
+| `ipCredentialed` | flood | 2000 / 60 s | allowed (logged fail_open) |
+| `user` | flood | 300 / 60 s | allowed (logged fail_open) |
+| `applyForGatePass` | low | 5 / 60 s | allowed (logged fail_open) |
+| `applyForLeave` | low | 10 / 60 s | allowed (logged fail_open) |
+| `applyToDrive` | low | 20 / 60 s | allowed (logged fail_open) |
+| `gateFeed` | low | 120 / 60 s | allowed (logged fail_open) |
+| `gatePassCredential` | low | 60 / 60 s | allowed (logged fail_open) |
+| `gateScan` | low | 120 / 60 s | allowed (logged fail_open) |
+| `requestAttendanceCorrection` | low | 20 / 60 s | allowed (logged fail_open) |
+| `requestRoomTransfer` | low | 5 / 3600 s | allowed (logged fail_open) |
+| `saveAttendance` | low | 30 / 60 s | allowed (logged fail_open) |
+| `saveMarks` | low | 30 / 60 s | allowed (logged fail_open) |
+| `submitComplaint` | low | 5 / 60 s | allowed (logged fail_open) |
+| `activate / close (academic period transitions)` | high | 30 / 60 s | refused, 503 (logged fail_closed) |
+| `actOnAttendanceCorrection` | high | 30 / 60 s | refused, 503 (logged fail_closed) |
+| `actOnGatePass` | high | 30 / 60 s | refused, 503 (logged fail_closed) |
+| `actOnLeaveRequest` | high | 30 / 60 s | refused, 503 (logged fail_closed) |
+| `approveRefund` | high | 30 / 60 s | refused, 503 (logged fail_closed) |
+| `approveRoomTransfer` | high | 30 / 60 s | refused, 503 (logged fail_closed) |
+| `assignGate` | high | 40 / 60 s | refused, 503 (logged fail_closed) |
+| `assignHod` | high | 20 / 60 s | refused, 503 (logged fail_closed) |
+| `assignWarden` | high | 20 / 60 s | refused, 503 (logged fail_closed) |
+| `authorizeSecurity` | high | 20 / 60 s | refused, 503 (logged fail_closed) |
+| `createAcademicYear` | high | 20 / 60 s | refused, 503 (logged fail_closed) |
+| `createCollege` | high | 5 / 60 s | refused, 503 (logged fail_closed) |
+| `createCourse` | high | 20 / 60 s | refused, 503 (logged fail_closed) |
+| `createDepartment` | high | 20 / 60 s | refused, 503 (logged fail_closed) |
+| `createInvoice` | high | 20 / 60 s | refused, 503 (logged fail_closed) |
+| `createScholarship` | high | 15 / 60 s | refused, 503 (logged fail_closed) |
+| `createSemester` | high | 20 / 60 s | refused, 503 (logged fail_closed) |
+| `deleteSemester` | high | 20 / 60 s | refused, 503 (logged fail_closed) |
+| `finalizeDispute` | high | 30 / 60 s | refused, 503 (logged fail_closed) |
+| `financeConnection` | high | 10 / 60 s | refused, 503 (logged fail_closed) |
+| `financeCredential` | high | 10 / 60 s | refused, 503 (logged fail_closed) |
+| `financeMapping` | high | 60 / 60 s | refused, 503 (logged fail_closed) |
+| `financeReconcile` | high | 10 / 60 s | refused, 503 (logged fail_closed) |
+| `financeReconcileApi` | high | 10 / 60 s | refused, 503 (logged fail_closed) |
+| `financeSyncNow` | high | 10 / 60 s | refused, 503 (logged fail_closed) |
+| `financeVerify` | high | 20 / 60 s | refused, 503 (logged fail_closed) |
+| `inviteUser` | high | 20 / 60 s | refused, 503 (logged fail_closed) |
+| `manualGateMovement` | high | 30 / 60 s | refused, 503 (logged fail_closed) |
+| `promoteToPlacementCell` | high | 20 / 60 s | refused, 503 (logged fail_closed) |
+| `reactivatePlacementCell` | high | 20 / 60 s | refused, 503 (logged fail_closed) |
+| `recordPayment` | high | 15 / 60 s | refused, 503 (logged fail_closed) |
+| `rejectRefund` | high | 30 / 60 s | refused, 503 (logged fail_closed) |
+| `rejectRoomTransfer` | high | 30 / 60 s | refused, 503 (logged fail_closed) |
+| `requestRefund` | high | 10 / 3600 s | refused, 503 (logged fail_closed) |
+| `resendInvitation` | high | 10 / 60 s | refused, 503 (logged fail_closed) |
+| `revokeGateCredential` | high | 30 / 60 s | refused, 503 (logged fail_closed) |
+| `revokePlacementCell` | high | 20 / 60 s | refused, 503 (logged fail_closed) |
+| `securityInstruction` | high | 20 / 60 s | refused, 503 (logged fail_closed) |
+| `securityStatus` | high | 30 / 60 s | refused, 503 (logged fail_closed) |
+| `submitDispute` | high | 10 / 3600 s | refused, 503 (logged fail_closed) |
+| `updateCollege` | high | 10 / 60 s | refused, 503 (logged fail_closed) |
+| `updateSemester` | high | 30 / 60 s | refused, 503 (logged fail_closed) |
+| `updateStudentAcademicStatus` | high | 20 / 60 s | refused, 503 (logged fail_closed) |
+| `updateUserProfile` | high | 20 / 60 s | refused, 503 (logged fail_closed) |
+| `updateUserStatus` | high | 20 / 60 s | refused, 503 (logged fail_closed) |
+| `academicStructure` | protected | 30 / 60 s | refused, 503 (logged fail_closed) |
+| `assignClassIncharge` | protected | 30 / 60 s | refused, 503 (logged fail_closed) |
+| `assignSubstitute` | protected | 30 / 60 s | refused, 503 (logged fail_closed) |
+| `collegeLifecycle` | protected | 20 / 60 s | refused, 503 (logged fail_closed) |
+| `createCompany` | protected | 20 / 60 s | refused, 503 (logged fail_closed) |
+| `createDrive` | protected | 20 / 60 s | refused, 503 (logged fail_closed) |
+| `createGoal` | protected | 20 / 3600 s | refused, 503 (logged fail_closed) |
+| `createManualRiskFlag` | protected | 20 / 3600 s | refused, 503 (logged fail_closed) |
+| `createPlacement` | protected | 20 / 60 s | refused, 503 (logged fail_closed) |
+| `decideOnDecision` | protected | 30 / 3600 s | refused, 503 (logged fail_closed) |
+| `endDepartmentTerm` | protected | 10 / 60 s | refused, 503 (logged fail_closed) |
+| `externalTeaching` | protected | 20 / 60 s | refused, 503 (logged fail_closed) |
+| `inviteStudent` | protected | 20 / 60 s | refused, 503 (logged fail_closed) |
+| `offering` | protected | 60 / 60 s | refused, 503 (logged fail_closed) |
+| `placeStudent` | protected | 60 / 60 s | refused, 503 (logged fail_closed) |
+| `revokeSession` | protected | 30 / 60 s | refused, 503 (logged fail_closed) |
+| `saveForecastScenario` | protected | 20 / 3600 s | refused, 503 (logged fail_closed) |
+| `sendAnnouncement` | protected | 10 / 3600 s | refused, 503 (logged fail_closed) |
+| `sendPlacementNotification` | protected | 10 / 3600 s | refused, 503 (logged fail_closed) |
+| `sessionEnforcement` | protected | 5 / 60 s | refused, 503 (logged fail_closed) |
+| `setDriveStatus` | protected | 20 / 60 s | refused, 503 (logged fail_closed) |
+| `startDepartmentTerm` | protected | 10 / 60 s | refused, 503 (logged fail_closed) |
+| `submitDecision` | protected | 10 / 3600 s | refused, 503 (logged fail_closed) |
+| `timetable` | protected | 60 / 60 s | refused, 503 (logged fail_closed) |
+| `updateApplicationStatus` | protected | 30 / 60 s | refused, 503 (logged fail_closed) |
+| `updateCompany` | protected | 20 / 60 s | refused, 503 (logged fail_closed) |
+| `updateComplaintStatus` | protected | 30 / 60 s | refused, 503 (logged fail_closed) |
+| `updateDrive` | protected | 20 / 60 s | refused, 503 (logged fail_closed) |
+| `updateStudentPlacementStatus` | protected | 30 / 60 s | refused, 503 (logged fail_closed) |
+
+88 buckets: 3 flood, 11 low, 45 high, 29 protected. Unknown buckets are protected (refused).
+
+**Anonymous vs authenticated** (middleware, all per 60 s, all `flood`):
+
+| Request | Buckets spent |
+|---|---|
+| No session cookie, no bearer token | `ip:<digest>` — 100 (unchanged) |
+| Session cookie, session verifies | `ipCredentialed:<digest>` — 2000, then `user:<id>` — 300 |
+| Session cookie, session does NOT verify (forged, expired) | `ipCredentialed`, then the strict `ip` bucket |
+| Bearer token (mobile `/api`) | `ipCredentialed` only; the route verifies the token and applies its per-user, per-action buckets |
+
+The credentialed ceiling and the per-user limit are sized, not measured: there
+is no production traffic to derive them from (open item, as in §3).
+
+### 10.5 Keys and cache scope
+
+```text
+<env>:nexus:rl:v1:<bucket>:<principal>:<window>     rate limit
+<env>:nexus:c:<build>:<key>                          cached value
+<env>:nexus:c:shared:mw-profile:v1:<user>            middleware profile (all builds)
+<env>:nexus:cv:<family>:<college>                    family version counter
+```
+
+- `<env>` — `REDIS_ENV`, or from the build: a built bundle is `production`,
+  `next dev` is `development`, vitest is `test`, the E2E servers are `e2e`.
+  The production namespace is **refused** outside a production build
+  (`NODE_ENV` read through the literal Next inlines, so a Worker always knows
+  it is production).
+- `<build>` — the commit SHA, inlined at build time by `next.config.ts`
+  (read through the literal `process.env.NEXT_PUBLIC_REDIS_BUILD_ID`; read any
+  other way it would be `local` on the Worker). Values are build-scoped so an
+  old and a new Worker never read each other's shapes; TTLs are 15–300 s.
+- Rate-limit keys and version counters are **not** build-scoped: a deploy must
+  not reset limits, and counters are plain integers.
+- IPs and search text are stored as SHA-256 digests (not secret — an IPv4
+  address can be enumerated — but never raw, and never growing with input). A
+  search longer than 100 characters, an invalid page or an invalid sort
+  direction is not cached at all.
+- **First deploy:** every prefix changes, so existing counters and entries are
+  abandoned once and expire on their own; limits restart from zero.
+
+**Scope.** Every cached read (46 call sites) is declared in
+`tests/cache-scope-registry.test.ts` with its scope — `user`, `split` (admin →
+college, the narrower role → user), `role`, `college`, `department`,
+`platform` — the exact roles that can reach it, and, for a multi-role college
+scope, the RLS policies that make every role see the same rows. The test fails
+on a new cached read, on a changed role set, and on a cited policy that no
+migration creates. Writing it found four reads that broke the assumption:
+
+| Read | Why one college key was wrong | Now |
+|---|---|---|
+| `warden/rooms` | admin sees every room; a warden only their blocks | `split` |
+| `placement-cell/records` | `students_read_staff` excludes `placement_cell`; a director's student list reached the placement cell | `role` |
+| `placement-cell/reports` | same, for per-department counts | `role` |
+| `placement-cell/dashboard` | same, plus `student_placement_profiles` excludes `director` | `role` |
+
+The proofs are against the repository's migrations, not the hosted database.
+
+### 10.6 Invalidation
+
+A family is versioned per college: a write calls
+`invalidateCacheFamily(family, collegeId)` — one `INCR` — and every page, sort,
+search and viewer of that family in that college misses on its next read.
+Value and version are read in one `MGET`; an entry carries the version it was
+computed under, so a write racing a read leaves the read's entry stale, not
+wrong. Counters expire a day after the last write (values live ≤ 300 s).
+Writes now invalidate unconditionally, so mobile-API writes clear the web
+lists too.
+
+| Family | Written by | Stale window after a write |
+|---|---|---|
+| `list:courses`, `list:users`, `list:placements`, `list:fees`, `list:payments`, `stats:fees`, `list:scholarships`, `finance-refunds`, `finance-disputes`, `decisions`, `attention`, `hod-approvals`, `hod-corrections`, `hod-substitutions`, `list:companies`, `list:placement_drives`, `list:student_placement_records`, `list:colleges` (scope `platform`), `list:hostel-complaints`, `gatepasses`, `warden-transfers` | the actions in the same file (web and mobile API paths) | 0 s |
+| Dashboards, analytics, reports, rooms, faculty, hostel rollup, placement overview / funnel, finance exceptions | no write path of their own | TTL (30–300 s) |
+| Middleware profile (role / status) | every role or status write, and invitation acceptance — pinned by `tests/profile-cache-invalidation.test.ts` | 0 s (20 s if the delete itself fails) |
+
+The middleware profile entry is a routing hint, never a security boundary:
+`requireRole()` re-reads role and status uncached, RLS is live, and college
+lifecycle / session admission (`registerSession`) is read uncached on every
+request. A Redis failure on that entry reads PostgreSQL.
+
+### 10.7 Observability and alerts
+
+Events go to Workers Logs (enabled in `wrangler.jsonc`), the existing
+channel — server-side Sentry is never initialised. One flat object per event
+(`lib/redis-telemetry.ts`):
+
+| Event | Fields |
+|---|---|
+| `redis.op` | `op` (`ratelimit`, `cache.read`, `cache.write`, `cache.delete`, `cache.version`), `outcome` (`ok`, `timeout`, `auth`, `malformed`, `error`, `circuit_open`), `ms` |
+| `redis.ratelimit` | `bucket`, `outcome` (`allowed`, `denied`, `fail_open`, `fail_closed`), `reason`, `ms` |
+| `redis.cache` | `family`, `outcome` (`hit`, `miss`, `stale_version`, `bypass`, `error`, `invalidated`), `reason`, `ms` |
+| `redis.retry` | one per client retry |
+| `redis.circuit` | `state` (`open`, `closed`) |
+
+Never logged: keys, user / college ids, values, the client's error messages,
+credentials, URLs. Successes are sampled (`REDIS_LOG_SAMPLE_RATE`, default
+1 %); failures are always written, but an identical failure repeated within
+5 s is coalesced into one line carrying `count` (sum `count`, absent = 1).
+
+Suggested alert thresholds (Workers Observability queries; not configured —
+creating them is a production change for the owner):
+
+| Alert | Condition | Why not noisier |
+|---|---|---|
+| Redis down | `redis.circuit` `state=open` sustained > 2 min | one blip opens and closes within 10 s |
+| Timeouts rising | `redis.op` `outcome=timeout`, sum(count) > 50 in 5 min | isolated timeouts are expected |
+| Protected actions refused | `redis.ratelimit` `outcome=fail_closed`, sum(count) > 10 in 5 min | each is a user-visible 503 |
+| Fail-open volume | `outcome=fail_open`, sum(count) > 500 in 5 min | flood buckets fail open on every request in an outage |
+| Denial spike | `outcome=denied` per `bucket`, > 5× its 7-day baseline | needs a baseline before it is meaningful |
+| Auth failure | any `outcome=auth` | a revoked or rotated token never heals itself |
+| Latency | p95 of sampled `redis.op` `ms` > 300 for 15 min | sampled, so a short window is noise |
+
+### 10.8 Tests
+
+| Suite | Count | What |
+|---|---|---|
+| `tests/redis-integration.test.ts` | 18 | the real client, limiter, guard and cache against the emulator: healthy, slow, down, malformed, auth, circuit, recovery, namespaces, build scope, family invalidation, no secrets in logs |
+| `tests/redis-keys-config.test.ts` | 34 | environment resolution (production refused outside a production build), timeout clamp, build id, list keys (empty, long, Unicode, special characters, colleges, scopes), scope guard, E2E isolation |
+| `tests/middleware-rate-limit.test.ts` | 13 | anonymous / credentialed / forged / bearer / campus bucket selection, digests |
+| `tests/cache-scope-registry.test.ts` | 95 | every cached read's scope, roles and proof |
+| `tests/profile-cache-invalidation.test.ts` | 8 | every role/status write invalidates the profile entry |
+| `tests/redis-telemetry.test.ts` | 5 | coalescing, sampling |
+| `tests/rate-limit-policy.test.ts` | 120 | risk classes, high-risk list, table ↔ code drift |
+| `e2e-redis/redis.spec.ts` (`playwright.redis.config.ts`) | 8 | the real app over HTTP: 101st anonymous request → 429, forged cookie still limited, `e2e:nexus:` keys with no raw IP, slow / down / malformed / auth pages still load fast, recovery |
+| `scripts/redis-mutations.mjs` | 14 / 14 detected | the brief's adversarial mutations, files hash-restored |
+
+The slow-Redis test was run against `main` and fails there (payment allowed
+after 5,008 ms). Removing any ONE of the three timeout layers is not detected
+by design — each alone bounds the call; removing all three is.
+
+### 10.9 Performance — LOCAL, loopback emulator
+
+In-process (`npx vitest run -c vitest.bench.config.ts`;
+`bench/results/redis-latency-*.json`), p50 / p95 ms:
+
+| | `main` | hardened |
+|---|---|---|
+| healthy — protected rate limit (n=300) | 2.8 / 5.3 | 3.0 / 5.0 |
+| healthy — cached read (n=300) | 2.2 / 2.9 | 2.4 / 3.2 |
+| Redis 3 s slow — protected rate limit (n=15) | 3039 / 3066, **allowed** | 0.1 / 1025, refused |
+| Redis down — protected rate limit (n=15) | 4464 / 4537 | 0.1 / 76 |
+| Redis down — cached read (n=15) | 8752 / 9009 | 0 / 0.2 |
+
+`GET /login` over HTTP (`bench/http-latency.mjs`, `next dev` with webpack for
+both), p50 / p95 ms:
+
+| | `main` | hardened |
+|---|---|---|
+| healthy (n=100) | 74 / 126 | 58 / 78 |
+| Redis 3 s slow (n=20) | 3061 / 3114 | 48 / 1064 (first request only) |
+| Redis down (n=20) | 4386 / 4410 | 46 / 119 |
+
+**Not measured:** in-region Worker → Upstash latency, timeout and retry rates
+in production, and sustained load (still §8).
+
+### 10.10 Known limitations
+
+- Supabase Auth's own limits remain outside this repository and unread (§9).
+- Bucket capacities — including the 2000/min credentialed ceiling and the
+  300/min per-user limit — are not derived from traffic.
+- The circuit is per isolate: each Worker isolate discovers an outage on its
+  own (three bounded calls).
+- A coalesced failure count still pending in an isolate that is recycled is
+  lost; alert totals are approximate by that margin.
+- 052/F-01 and D7 are unrelated and unchanged.

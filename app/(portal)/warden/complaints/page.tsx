@@ -48,7 +48,7 @@ export default function WardenComplaints() {
     setError(null);
     setNotice(null);
     try {
-      await updateComplaintStatus(id, status, query);
+      await updateComplaintStatus(id, status);
       setNotice(status === "resolved" ? "Complaint marked resolved." : "Complaint marked in progress.");
       void loadComplaints(query);
     } catch (e) {
