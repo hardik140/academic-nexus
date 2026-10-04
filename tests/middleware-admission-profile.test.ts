@@ -166,3 +166,20 @@ describe("profileFromAdmission", () => {
     expect(profileFromAdmission({ state: "active", role: "admin" })).toBeNull();
   });
 });
+
+describe("every role is routed from admission's answer (Phase 2.6 role matrix)", () => {
+  it("each role reaches its own portal and is sent away from another role's", async () => {
+    const { ROLE_ROUTES } = await import("@/lib/auth/role-routes");
+    const entries = Object.entries(ROLE_ROUTES) as Array<[string, string]>;
+    expect(entries.length).toBeGreaterThanOrEqual(8);
+    for (const [role, prefix] of entries) {
+      h.admission = answer058(role);
+      expect(location(await get(`${prefix}/dashboard`)), `${role} on its own portal`).toBeNull();
+      const other = entries.find(([, p]) => p !== prefix && !p.startsWith(prefix) && !prefix.startsWith(p))![1];
+      const res = location(await get(`${other}/dashboard`));
+      if (role === "admin") expect(res, "admin may open any portal").toBeNull();
+      else expect(res, `${role} on ${other}`).toBe(`${prefix}/dashboard`);
+    }
+    expect(h.profileReads).toBe(0);
+  });
+});

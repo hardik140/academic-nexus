@@ -174,7 +174,8 @@ const REGISTRY: Record<string, Entry> = {
   [`${P}warden/gatepasses/actions.ts#getGateOperationsSnapshot`]: { scope: "split", roles: ["warden", "admin"] },
   [`${P}warden/rooms/actions.ts#listWardenRooms`]: { scope: "split", roles: ["warden", "admin"] },
   [`${P}warden/transfers/actions.ts#listRoomTransferRequests`]: { scope: "split", roles: ["warden", "admin"] },
-  ["lib/supabase/middleware.ts#updateSession"]: { scope: "user", roles: "route" },
+  // lib/supabase/middleware.ts no longer caches: its profile entry was removed
+  // in Phase 2.1 (session admission returns the role, migration 058).
 };
 
 // ---------------------------------------------------------------------------
@@ -205,7 +206,7 @@ function cachedReadSites(): Site[] {
     const lines = src.split("\n");
     lines.forEach((line, i) => {
       const t = line.trim();
-      if (!line.includes("getCached(") || t.startsWith("*") || t.startsWith("//")) return;
+      if (!/getCached(WriteBehind)?\(/.test(line) || t.startsWith("*") || t.startsWith("//")) return;
       let fn = "?";
       let fnLine = 0;
       for (let j = i; j >= 0; j--) {

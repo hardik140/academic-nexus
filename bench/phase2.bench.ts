@@ -277,6 +277,31 @@ it("cache: sequential miss then hit latency (distinct keys)", async () => {
   };
 }, 600_000);
 
+it("cache: write-behind miss latency (analytics reads), when available", async () => {
+  await fresh();
+  const cache = (await import("@/lib/cache")) as Record<string, unknown>;
+  const wb = cache.getCachedWriteBehind as undefined | ((k: string, t: number, f: () => Promise<unknown>) => Promise<unknown>);
+  if (!wb) {
+    results.cacheWriteBehind = "not available in this build (plain getCached miss above applies)";
+    return;
+  }
+  const miss: number[] = [];
+  let fetches = 0;
+  for (let i = 0; i < 100; i++) {
+    const t = performance.now();
+    await wb(`bench:wb:c1:item-${i}`, 60, async () => {
+      fetches++;
+      await sleep(DB_MS);
+      return { i };
+    });
+    miss.push(performance.now() - t);
+    await drainAfter(); // the SET runs here, after the timed "response"
+  }
+  let hits = 0;
+  for (let i = 0; i < 100; i++) await wb(`bench:wb:c1:item-${i}`, 60, async () => (hits--, { i }));
+  results.cacheWriteBehind = { missLatencyMs: summary(miss), dbQueries: fetches, laterReadsServedFromCache: 100 + hits };
+}, 600_000);
+
 it("invalidation after recording a payment (three cache families)", async () => {
   await fresh();
   const cache = await import("@/lib/cache");

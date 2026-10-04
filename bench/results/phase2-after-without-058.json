@@ -1,5 +1,5 @@
 {
-  "label": "before",
+  "label": "after-without-058",
   "model": {
     "redisRttMs": 4,
     "dbMs": 10,
@@ -11,25 +11,25 @@
     "cold": {
       "latencyMs": {
         "n": 40,
-        "p50": 61.1,
-        "p95": 73.9,
-        "p99": 80.8
+        "p50": 44.7,
+        "p95": 59.9,
+        "p99": 67
       },
-      "redisRoundTripsPerRequest": 3,
-      "redisCommandsPerRequest": 3,
+      "redisRoundTripsPerRequest": 1,
+      "redisCommandsPerRequest": 1,
       "dbQueriesPerRequest": 2,
       "authCallsPerRequest": 1
     },
     "warm": {
       "latencyMs": {
         "n": 360,
-        "p50": 41.2,
-        "p95": 43.8,
-        "p99": 49.5
+        "p50": 43.9,
+        "p95": 50.3,
+        "p99": 68.3
       },
-      "redisRoundTripsPerRequest": 2,
-      "redisCommandsPerRequest": 2,
-      "dbQueriesPerRequest": 1,
+      "redisRoundTripsPerRequest": 1,
+      "redisCommandsPerRequest": 1,
+      "dbQueriesPerRequest": 2,
       "authCallsPerRequest": 1
     }
   },
@@ -38,46 +38,46 @@
       "dbQueries": 1,
       "redisRoundTrips": 2,
       "redisCommands": 2,
-      "wallMs": 25
+      "wallMs": 27
     },
     "concurrent_10": {
-      "dbQueries": 10,
-      "redisRoundTrips": 11,
-      "redisCommands": 20,
-      "wallMs": 56
+      "dbQueries": 1,
+      "redisRoundTrips": 2,
+      "redisCommands": 11,
+      "wallMs": 25
     },
     "concurrent_50": {
-      "dbQueries": 50,
-      "redisRoundTrips": 51,
-      "redisCommands": 100,
-      "wallMs": 215
+      "dbQueries": 1,
+      "redisRoundTrips": 2,
+      "redisCommands": 51,
+      "wallMs": 27
     },
     "concurrent_100": {
-      "dbQueries": 100,
-      "redisRoundTrips": 101,
-      "redisCommands": 200,
-      "wallMs": 280
+      "dbQueries": 1,
+      "redisRoundTrips": 2,
+      "redisCommands": 101,
+      "wallMs": 30
     }
   },
   "cacheSequential": {
     "missLatencyMs": {
       "n": 100,
-      "p50": 23.6,
-      "p95": 25.4,
-      "p99": 51.3
+      "p50": 23.2,
+      "p95": 24.5,
+      "p99": 31.8
     },
     "hitLatencyMs": {
       "n": 100,
-      "p50": 6.6,
-      "p95": 7.5,
-      "p99": 11.9
+      "p50": 6.5,
+      "p95": 7.9,
+      "p99": 36.5
     },
     "hitRatio": 0.5,
     "redisRoundTripsPer200Reads": 300
   },
   "paymentInvalidation": {
-    "redisRoundTrips": 3,
+    "redisRoundTrips": 1,
     "redisCommands": 6,
-    "latencyMs": 22
+    "latencyMs": 8.3
   }
 }
