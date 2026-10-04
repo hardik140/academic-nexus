@@ -11,17 +11,16 @@ import { emitRedisEvent } from "@/lib/redis-telemetry";
  *
  * KEY LAYOUT (every key Redis sees)
  *
- *   <env>:nexus:c:<build>:<key>              value, build-scoped (default)
- *   <env>:nexus:c:shared:<key>               value, buildScoped: false
+ *   <env>:nexus:c:<build>:<key>              value, build-scoped
  *   <env>:nexus:cv:<family>:<scope>          family version counter
  *
  * - `<env>:nexus` keeps development and production apart in the one shared
  *   Upstash database (lib/redis-config.ts).
  * - `<build>` keeps an old Worker and a new one from reading each other's
  *   value shapes during a rollout. TTLs are 15–300 s, so nothing piles up.
- * - The middleware's profile entry is NOT build-scoped: it is invalidated
- *   explicitly on a role/status change, and that delete must reach the entry
- *   every running build reads. Its shape carries its own version tag.
+ * - There is no exact-key delete. The one entry that needed it, the
+ *   middleware's profile, was removed in Phase 2.1: session admission
+ *   (migration 058) now returns the role and status it reads anyway.
  * - Version counters are environment-scoped only: they are plain integers,
  *   identical in meaning to every build.
  */
@@ -63,8 +62,6 @@ export interface CacheOptions {
    */
   family?: string;
   scope?: string;
-  /** Default true. See KEY LAYOUT above for the one exception. */
-  buildScoped?: boolean;
 }
 
 /**
@@ -97,9 +94,8 @@ function familyLabel(key: string, opts?: CacheOptions): string {
   return parts.length > 1 ? `${parts[0]}:${parts[1]}` : parts[0];
 }
 
-function valueKey(key: string, opts?: CacheOptions): string {
-  const build = opts?.buildScoped === false ? "shared" : redisBuildId();
-  return `${REDIS_NAMESPACE}:c:${build}:${key}`;
+function valueKey(key: string): string {
+  return `${REDIS_NAMESPACE}:c:${redisBuildId()}:${key}`;
 }
 
 function versionKey(family: string, scope: string): string {
@@ -142,7 +138,7 @@ export async function getCached<T>(
     throw new Error("getCached: a versioned entry may not outlive its version counter");
   }
 
-  const vKey = valueKey(key, opts);
+  const vKey = valueKey(key);
   let currentVersion = 0;
 
   if (versioned) {
@@ -191,28 +187,6 @@ export async function getCached<T>(
 }
 
 /**
- * Explicit delete of one exact key. Used for the middleware's profile entry,
- * where a role or status change must take effect on the next request.
- * Same fail-open posture as getCached — a failed delete means that one key
- * rides out its (20 s) TTL, never an error surfaced to the caller.
- */
-export async function invalidateCache(key: string, opts?: Pick<CacheOptions, "buildScoped">): Promise<void> {
-  if (!REDIS_NAMESPACE) return;
-  // Nothing was ever written under such a key (see getCached), so there is
-  // nothing to delete — and issuing the DEL anyway would be the one write
-  // that touches the shared entry this guard exists to avoid.
-  if (unscopedSegment(key)) return;
-  const vKey = valueKey(key, opts);
-  const result = await redisOp("cache.delete", (r) => r.del(vKey));
-  emitRedisEvent({
-    event: "redis.cache",
-    family: familyLabel(key),
-    outcome: result.ok ? "invalidated" : "error",
-    ...(result.ok ? {} : { reason: result.reason }),
-  });
-}
-
-/**
  * Invalidate every cached entry of `family` within `scope` (a college): one
  * INCR, whatever the number of pages, sorts, searches and viewers cached.
  * The counter expires a day after the last write, far beyond any value's
@@ -235,16 +209,3 @@ export async function invalidateCacheFamily(family: string, scope: string): Prom
     ...(result.ok ? {} : { reason: result.reason }),
   });
 }
-
-/**
- * Shared by lib/supabase/middleware.ts (reader) and every write that
- * changes a profile's role/status (invalidator) — a single definition so
- * the two sides can't drift into mismatched key strings. `v1` is the value
- * shape ({ role, college_id, status }); change it if the shape changes.
- */
-export function middlewareProfileCacheKey(userId: string): string {
-  return `mw-profile:v1:${userId}`;
-}
-
-/** Options every reader and invalidator of the middleware profile entry must pass. */
-export const MIDDLEWARE_PROFILE_CACHE: CacheOptions = { buildScoped: false };

@@ -25,8 +25,6 @@ vi.mock("@/lib/rate-limit", () => ({
 }));
 vi.mock("@/lib/cache", () => ({
   getCached: vi.fn(async (_key: string, _ttl: number, fetcher: () => Promise<unknown>) => fetcher()),
-  middlewareProfileCacheKey: (id: string) => `profile:${id}`,
-  MIDDLEWARE_PROFILE_CACHE: {},
 }));
 
 const { updateSession } = await import("@/lib/supabase/middleware");

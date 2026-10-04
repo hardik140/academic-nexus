@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { listCacheKey } from "@/lib/cached-list";
-import { middlewareProfileCacheKey } from "@/lib/cache";
 import type { DataTableQuery } from "@/components/ui/data-table";
 
 /**
@@ -43,6 +42,14 @@ function fakeRedis() {
         calls.push({ op: "del", key });
         return store.delete(key) ? 1 : 0;
       }),
+      pipeline: () => {
+        const p = {
+          incr: (key: string) => (calls.push({ op: "incr", key }), p),
+          expire: (key: string) => (calls.push({ op: "expire", key }), p),
+          exec: async () => [],
+        };
+        return p;
+      },
     },
   };
 }
@@ -98,11 +105,11 @@ describe("a key with a missing scope segment never reaches Redis", () => {
     expect(redis.calls).toEqual([]);
   });
 
-  it("does not issue a DEL against the shared entry either", async () => {
+  it("does not bump a shared version counter either", async () => {
     const redis = fakeRedis();
-    const { invalidateCache } = await loadCache(redis.client);
-    await invalidateCache("dashboard:hod:undefined:faculty-courses");
-    expect(redis.client.del).not.toHaveBeenCalled();
+    const { invalidateCacheFamily } = await loadCache(redis.client);
+    await invalidateCacheFamily("dashboard:hod", "undefined");
+    expect(redis.calls).toEqual([]);
   });
 
   it("logs the broken key's family so it can be found and fixed — never the key itself", async () => {
@@ -173,8 +180,15 @@ describe("the keys this repo builds centrally are scoped", () => {
     expect(a).not.toBe(b);
     expect(a).toContain("college-a");
   });
+});
 
-  it("scopes the middleware profile key by user", () => {
-    expect(middlewareProfileCacheKey("user-a")).not.toBe(middlewareProfileCacheKey("user-b"));
+describe("a well-scoped family invalidation does reach Redis (guards the test above)", () => {
+  it("bumps the counter for a real college id", async () => {
+    vi.stubEnv("UPSTASH_REDIS_REST_URL", "https://example.upstash.io");
+    const redis = fakeRedis();
+    const { invalidateCacheFamily } = await loadCache(redis.client);
+    await invalidateCacheFamily("dashboard:hod", "college-a");
+    expect(redis.calls.map((c) => c.op)).toContain("incr");
+    vi.unstubAllEnvs();
   });
 });

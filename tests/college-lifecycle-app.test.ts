@@ -54,11 +54,8 @@ vi.mock("@/lib/rate-limit", () => ({
 }));
 vi.mock("@/lib/cache", () => ({
   getCached: vi.fn(async (_key: string, _ttl: number, fetcher: () => Promise<unknown>) => fetcher()),
-  middlewareProfileCacheKey: (id: string) => `profile:${id}`,
-  invalidateCache: vi.fn(),
   invalidateCacheFamily: vi.fn(),
   versionedKey: (key: string | null) => key,
-  MIDDLEWARE_PROFILE_CACHE: {},
 }));
 vi.mock("@upstash/qstash/nextjs", () => ({ verifySignatureAppRouter: (handler: () => unknown) => handler }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => h.adminClient }));
@@ -152,10 +149,15 @@ describe("middleware admission", () => {
     expect(rpc).not.toHaveBeenCalled();
   });
 
-  it("checks account status before admission: a suspended account keeps its existing redirect", async () => {
+  it("a suspended account keeps its existing redirect, ahead of the admission refusal", async () => {
+    // Since 058 the admission call is where the profile comes from, so it runs
+    // first. For an inactive profile it answers before registering anything.
     signedIn({ role: "student", college_id: COLLEGE_A, status: "suspended" });
+    rpc.mockResolvedValue({ data: { state: "inactive" }, error: null }); // 054 answer
     expect(redirectTarget(await updateSession(request("/student/dashboard")))).toBe("/login?error=account_suspended");
-    expect(rpc).not.toHaveBeenCalled();
+    rpc.mockResolvedValue({ data: { state: "inactive", role: "student", college_id: COLLEGE_A, profile_status: "suspended" }, error: null }); // 058
+    expect(redirectTarget(await updateSession(request("/student/dashboard")))).toBe("/login?error=account_suspended");
+    expect(rpc).toHaveBeenCalledTimes(2);
   });
 });
 

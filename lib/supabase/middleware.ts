@@ -3,7 +3,6 @@ import { NextResponse, type NextRequest } from "next/server";
 import { routePrefixFor, dashboardPathFor } from "@/lib/auth/role-routes";
 import { checkRateLimit, RateLimitError, RateLimiterUnavailableError } from "@/lib/rate-limit";
 import { clientIp } from "@/lib/client-ip";
-import { getCached, middlewareProfileCacheKey, MIDDLEWARE_PROFILE_CACHE } from "@/lib/cache";
 import { keyDigest } from "@/lib/redis-config";
 import { sessionIdentity } from "@/lib/auth/session-identity";
 import type { Database, UserRole, UserStatus } from "@/types/database";
@@ -163,31 +162,34 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Fetch user profile for role-based routing — cached briefly. This is
-  // purely a routing decision (which page shell to serve), never the
-  // security boundary: every mutating action independently re-checks
-  // role/status fresh via requireRole() (lib/rbac.ts), uncached, and RLS is
-  // a third, always-live layer under that. A stale read here can, at worst,
-  // let an already-authenticated browser keep loading page shells for up to
-  // this TTL after a role/status change — it can never grant access to data
-  // those other layers wouldn't already allow. This is exactly the "short
-  // and documented" propagation window this repo's own AGENTS.md
-  // anticipates for role/permission changes (Section 3) — invalidated
-  // on every write that changes role/status: admin/users' updateUserProfile
-  // /updateUserStatus and accept-invite's pending->active transition.
-  const profile = await getCached(
-    middlewareProfileCacheKey(user.id),
-    20,
-    async (): Promise<{ role: UserRole; college_id: string; status: UserStatus } | null> => {
-      const { data } = await supabase
-        .from("profiles")
-        .select("role, college_id, status")
-        .eq("id", user.id)
-        .single();
-      return data;
-    },
-    MIDDLEWARE_PROFILE_CACHE
-  );
+  // College lifecycle and session admission (migrations 053/054), uncached:
+  // a suspension or a revocation takes effect on the very next request. The
+  // database refuses the same sessions on its own; this is what turns the
+  // refusal into the right page.
+  //
+  // Since 058 the same call also returns the caller's role, college and
+  // profile status, read from the profile row admission loads anyway. That
+  // replaced a second read of that row through a 20 s Redis cache (Redis
+  // transformation Phase 2.1), so a role or status change now takes effect
+  // on the next request instead of within 20 s.
+  const userAgent = request.headers.get("user-agent");
+  const deviceId = request.cookies.get(DEVICE_COOKIE)?.value ?? crypto.randomUUID();
+  let admission: Admission | null = null;
+  try {
+    admission = await registerSession(supabase as unknown as SupabaseClient<Database>, {
+      client: "web",
+      deviceId,
+      deviceLabel: deviceLabelFromUserAgent(userAgent),
+      userAgent,
+    });
+  } catch (err) {
+    // Fail closed — unless the database predates the feature entirely.
+    if (!(err instanceof AccessFeatureUnavailable)) return unavailable(request, "error");
+  }
+
+  // Before 058 (or 054) is applied the answer has no role: read the row
+  // directly, uncached, exactly as admission would have.
+  const profile = profileFromAdmission(admission) ?? (await readProfile(supabase, user.id));
 
   // No profile row for an authenticated user. This used to `return
   // supabaseResponse` — "for now, allow access" — which meant that every
@@ -216,24 +218,8 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // College lifecycle and session admission (migrations 053/054). Uncached,
-  // unlike the profile above: a suspension or a revocation takes effect on
-  // the very next request. The database refuses the same sessions on its
-  // own; this is what turns the refusal into the right page.
-  const userAgent = request.headers.get("user-agent");
-  const deviceId = request.cookies.get(DEVICE_COOKIE)?.value ?? crypto.randomUUID();
-  let admission: Admission | null = null;
-  try {
-    admission = await registerSession(supabase as unknown as SupabaseClient<Database>, {
-      client: "web",
-      deviceId,
-      deviceLabel: deviceLabelFromUserAgent(userAgent),
-      userAgent,
-    });
-  } catch (err) {
-    // Fail closed — unless the database predates the feature entirely.
-    if (!(err instanceof AccessFeatureUnavailable)) return unavailable(request, "error");
-  }
+  // Checked after the profile, as before: a suspended account is sent to
+  // the login page with its own message, not to /unavailable.
   if (admission && !admissionAllows(admission)) {
     return unavailable(request, unavailableReason(admission));
   }
@@ -284,6 +270,27 @@ export async function updateSession(request: NextRequest) {
   }
 
   return supabaseResponse;
+}
+
+type RoutingProfile = { role: UserRole; college_id: string; status: UserStatus };
+
+/**
+ * The routing facts admission returned (058), or null when it returned none:
+ * no admission (pre-054 database), an answer from before 058, or a bare
+ * { state: "inactive" } for a caller with no profile row.
+ */
+export function profileFromAdmission(admission: Admission | null): RoutingProfile | null {
+  if (!admission || typeof admission.role !== "string" || typeof admission.profile_status !== "string") return null;
+  return {
+    role: admission.role as UserRole,
+    college_id: String(admission.college_id ?? ""),
+    status: admission.profile_status as UserStatus,
+  };
+}
+
+async function readProfile(supabase: { from: SupabaseClient<Database>["from"] }, userId: string): Promise<RoutingProfile | null> {
+  const { data } = await supabase.from("profiles").select("role, college_id, status").eq("id", userId).single();
+  return (data as RoutingProfile | null) ?? null;
 }
 
 function unavailable(request: NextRequest, reason: UnavailableReason): NextResponse {

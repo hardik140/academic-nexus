@@ -6,7 +6,6 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAudit } from "@/lib/audit";
 import { dashboardPathFor } from "@/lib/auth/role-routes";
-import { invalidateCache, middlewareProfileCacheKey, MIDDLEWARE_PROFILE_CACHE } from "@/lib/cache";
 import { dbError } from "@/lib/internal-error";
 import { academicRpc } from "@/lib/academic/rpc";
 
@@ -82,7 +81,6 @@ export async function acceptInvitation(password: string) {
   // when the invitation was created; nothing the invitee sends is consulted.
   if (profile.role === "student") {
     await academicRpc(supabase, "accept_student_invitation", { p_invitation_id: invitation.id });
-    await invalidateCache(middlewareProfileCacheKey(user.id), MIDDLEWARE_PROFILE_CACHE);
     redirect(dashboardPathFor(profile.role));
   }
 
@@ -93,11 +91,6 @@ export async function acceptInvitation(password: string) {
   if (profileErr) {
     throw dbError(profileErr);
   }
-  // Belt-and-suspenders: /auth/accept-invite is a public route, so
-  // middleware never cached this user's (still-pending) profile in the
-  // first place — the redirect below will populate the cache fresh either
-  // way. Invalidating anyway costs nothing and removes any doubt.
-  await invalidateCache(middlewareProfileCacheKey(user.id), MIDDLEWARE_PROFILE_CACHE);
 
   const { error: invitationErr } = await admin
     .from("invitations")

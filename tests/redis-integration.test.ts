@@ -139,22 +139,6 @@ describe("Redis healthy", () => {
     expect(fb1).toHaveBeenCalledTimes(1);
   });
 
-  it("the middleware profile entry is shared across builds, so its invalidation reaches every build", async () => {
-    const m = await load();
-    const key = m.middlewareProfileCacheKey("user-1");
-    await m.getCached(key, 20, async () => ({ role: "teacher" }), m.MIDDLEWARE_PROFILE_CACHE);
-
-    vi.stubEnv("NEXT_PUBLIC_REDIS_BUILD_ID", "next-build");
-    vi.resetModules();
-    const other = await import("@/lib/cache");
-    const fetcher = vi.fn(async () => ({ role: "hod" }));
-    expect(await other.getCached(key, 20, fetcher, other.MIDDLEWARE_PROFILE_CACHE)).toEqual({ role: "teacher" });
-
-    await other.invalidateCache(key, other.MIDDLEWARE_PROFILE_CACHE);
-    expect(await m.getCached(key, 20, fetcher, m.MIDDLEWARE_PROFILE_CACHE)).toEqual({ role: "hod" });
-    vi.unstubAllEnvs();
-  });
-
   it("ordinary values are build-scoped: a new build never reads an old build's value shape", async () => {
     const m = await load();
     await m.getCached("dashboard:admin:college-a:counts", 60, async () => ({ old: "shape" }));

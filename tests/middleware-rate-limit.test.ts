@@ -47,8 +47,6 @@ vi.mock("@supabase/ssr", async (original) => ({
 }));
 vi.mock("@/lib/cache", () => ({
   getCached: vi.fn(),
-  middlewareProfileCacheKey: (id: string) => `p:${id}`,
-  MIDDLEWARE_PROFILE_CACHE: {},
 }));
 
 const { updateSession, ANONYMOUS_IP_LIMIT, CREDENTIALED_IP_LIMIT, USER_LIMIT } = await import("@/lib/supabase/middleware");
