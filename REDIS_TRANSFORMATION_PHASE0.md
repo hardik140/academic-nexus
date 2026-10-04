@@ -39,7 +39,11 @@ Raw results: `bench/results/baseline-redis-audit.json`, `bench/results/redis-inv
 | `wrangler.jsonc` binding `REDIS_METRICS` → dataset `nexus_redis_metrics` | committed, **not deployed** | takes effect on the next deploy you approve |
 | Production Upstash credentials can no longer come from `.env.local`: `npm run cf:secrets` reads them from `.env.production.local` only, and refuses when that file names the same Upstash host or token as development | built, tested | `scripts/sync-cf-secrets.mjs`, `tests/sync-cf-secrets.test.ts` |
 | Worker → Upstash latency probe: a standalone Worker using the app's client libraries; refuses production; cleans up its keys | built, validated LOCAL under `wrangler dev`, **not deployed** | `bench/upstash-probe/`, `bench/results/upstash-latency-local.json` |
-| Cache values are serialised once by the app (so their size is measurable); a cached string such as `"123"` no longer comes back as the number 123 | built, tested | `lib/cache.ts`, `tests/redis-integration.test.ts` |
+| Stored value size is measured on each cache write (the miss path only) | built, tested | `lib/cache.ts`, `tests/redis-integration.test.ts` |
+
+Found, not fixed (out of Phase 0 scope): the Upstash client stores a string
+value raw and parses it on read, so a cached string such as `"123"` would come
+back as the number 123. No cached read returns a bare string today.
 
 None of these changes Redis behaviour for any request: no key, TTL, limit,
 failure policy or command count changed.

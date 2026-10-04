@@ -189,21 +189,27 @@ export async function getCached<T>(
   // Stamped with the version read BEFORE the fetch: if a write bumped the
   // counter meanwhile, this entry is already stale and the next read misses.
   const stored: unknown = versioned ? ({ v: currentVersion, d: fresh } satisfies Versioned<T>) : fresh;
-  // A fetcher that returned undefined has nothing to store.
-  if (fresh === undefined) return fresh;
-  // Serialised here rather than by the client, so the stored size can be
-  // measured without serialising twice. For objects this is byte-for-byte
-  // what the client sends (it JSON-encodes every non-string value). A string
-  // value is now JSON-encoded too: the client used to store it raw, and its
-  // read-side JSON.parse then turned a cached "123" into the number 123.
-  const payload = JSON.stringify(stored);
-  const write = await redisOp("cache.write", (r) => r.set(vKey, payload, { ex: ttlSeconds }), undefined, route);
+  const write = await redisOp("cache.write", (r) => r.set(vKey, stored, { ex: ttlSeconds }), undefined, route);
   if (!write.ok) {
     emitRedisEvent({ event: "redis.cache", family, outcome: "error", reason: write.reason, ms: write.ms, route });
   } else {
-    emitRedisEvent({ event: "redis.cache", family, outcome: "stored", ms: write.ms, bytes: payload.length, route });
+    emitRedisEvent({ event: "redis.cache", family, outcome: "stored", ms: write.ms, bytes: serializedSize(stored), route });
   }
   return fresh;
+}
+
+/**
+ * Size of a stored value as the client sends it (it JSON-encodes every
+ * non-string value), for the payload-size metric. Measured on the miss path
+ * only, after the write; a second serialisation costs about 0.3 ms per
+ * 100 KB (bench/results/redis-audit.json, serialization).
+ */
+function serializedSize(value: unknown): number {
+  try {
+    return typeof value === "string" ? value.length : (JSON.stringify(value) ?? "").length;
+  } catch {
+    return 0;
+  }
 }
 
 /**

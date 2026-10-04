@@ -332,15 +332,7 @@ describe("metrics and stored values (lib/redis-metrics.ts)", () => {
     }
   });
 
-  it("a cached string that looks like a number comes back as the same string", async () => {
-    const m = await load();
-    const fetcher = vi.fn(async () => "123");
-    expect(await m.getCached("dashboard:director:college-a:label", 60, fetcher)).toBe("123");
-    expect(await m.getCached("dashboard:director:college-a:label", 60, fetcher)).toBe("123");
-    expect(fetcher).toHaveBeenCalledTimes(1);
-  });
-
-  it("stores objects byte-for-byte as before (pre-serialisation changes nothing on the wire)", async () => {
+  it("stores objects exactly as the client serialises them", async () => {
     const m = await load();
     const value = { a: 1, b: ["x", null], c: { d: true } };
     await m.getCached("dashboard:director:college-a:shape", 60, async () => value);
@@ -348,13 +340,5 @@ describe("metrics and stored values (lib/redis-metrics.ts)", () => {
     const k = keys.find((x: string) => x.endsWith("dashboard:director:college-a:shape"));
     const stored = await (await fetch(`http://127.0.0.1:${port}/`, { method: "POST", body: JSON.stringify(["GET", k]) })).json();
     expect(stored.result).toBe(JSON.stringify(value));
-  });
-
-  it("a fetcher that returns undefined is not stored", async () => {
-    const m = await load();
-    const fetcher = vi.fn(async () => undefined);
-    await m.getCached("dashboard:director:college-a:nothing", 60, fetcher);
-    await m.getCached("dashboard:director:college-a:nothing", 60, fetcher);
-    expect(fetcher).toHaveBeenCalledTimes(2);
   });
 });
