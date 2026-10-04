@@ -14,7 +14,7 @@ key or affect a real caller.
 | --- | --- | --- |
 | Rate limiting | `lib/rate-limit.ts` | No — an abuse ceiling |
 | Read-through cache | `lib/cache.ts` | No — PostgreSQL is re-read on miss |
-| Middleware profile cache (20 s) | `lib/supabase/middleware.ts` | No — routing only; `requireRole()` re-reads uncached |
+| ~~Middleware profile cache (20 s)~~ | removed in Phase 2.1: session admission returns the role (migration 058) | — |
 
 Nothing else. There are no distributed locks, no sessions, no queues, no
 idempotency keys and no OTPs in Redis.
@@ -482,7 +482,6 @@ is no production traffic to derive them from (open item, as in §3).
 ```text
 <env>:nexus:rl:v1:<bucket>:<principal>:<window>     rate limit
 <env>:nexus:c:<build>:<key>                          cached value
-<env>:nexus:c:shared:mw-profile:v1:<user>            middleware profile (all builds)
 <env>:nexus:cv:<family>:<college>                    family version counter
 ```
 
@@ -536,12 +535,10 @@ lists too.
 |---|---|---|
 | `list:courses`, `list:users`, `list:placements`, `list:fees`, `list:payments`, `stats:fees`, `list:scholarships`, `finance-refunds`, `finance-disputes`, `decisions`, `attention`, `hod-approvals`, `hod-corrections`, `hod-substitutions`, `list:companies`, `list:placement_drives`, `list:student_placement_records`, `list:colleges` (scope `platform`), `list:hostel-complaints`, `gatepasses`, `warden-transfers` | the actions in the same file (web and mobile API paths) | 0 s |
 | Dashboards, analytics, reports, rooms, faculty, hostel rollup, placement overview / funnel, finance exceptions | no write path of their own | TTL (30–300 s) |
-| Middleware profile (role / status) | every role or status write, and invitation acceptance — pinned by `tests/profile-cache-invalidation.test.ts` | 0 s (20 s if the delete itself fails) |
 
-The middleware profile entry is a routing hint, never a security boundary:
-`requireRole()` re-reads role and status uncached, RLS is live, and college
-lifecycle / session admission (`registerSession`) is read uncached on every
-request. A Redis failure on that entry reads PostgreSQL.
+The middleware profile entry was removed in Phase 2.1. Session admission
+(`registerSession`, read uncached on every request) returns the role and
+status since migration 058, so routing is live like `requireRole()` and RLS.
 
 ### 10.7 Observability and alerts
 
@@ -583,7 +580,7 @@ creating them is a production change for the owner):
 | `tests/redis-keys-config.test.ts` | 34 | environment resolution (production refused outside a production build), timeout clamp, build id, list keys (empty, long, Unicode, special characters, colleges, scopes), scope guard, E2E isolation |
 | `tests/middleware-rate-limit.test.ts` | 13 | anonymous / credentialed / forged / bearer / campus bucket selection, digests |
 | `tests/cache-scope-registry.test.ts` | 95 | every cached read's scope, roles and proof |
-| `tests/profile-cache-invalidation.test.ts` | 8 | every role/status write invalidates the profile entry |
+| `tests/middleware-admission-profile.test.ts` | 13 | routing comes from admission (058): no profile read, no cache, changes apply on the next request (replaced `profile-cache-invalidation.test.ts` in Phase 2.1) |
 | `tests/redis-telemetry.test.ts` | 5 | coalescing, sampling |
 | `tests/rate-limit-policy.test.ts` | 120 | risk classes, high-risk list, table ↔ code drift |
 | `e2e-redis/redis.spec.ts` (`playwright.redis.config.ts`) | 8 | the real app over HTTP: 101st anonymous request → 429, forged cookie still limited, `e2e:nexus:` keys with no raw IP, slow / down / malformed / auth pages still load fast, recovery |

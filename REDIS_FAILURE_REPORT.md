@@ -49,7 +49,7 @@ bounded by `REDIS_TIMEOUT_MS` (default 1000 ms). Full table and evidence:
 | Global ceilings (`ip`, `ipCredentialed`, `user`) | allowed, logged | FAIL OPEN (flood class) | Otherwise a Redis blip is a total site outage |
 | First-party data entry (attendance, marks, own applications) | allowed, logged | FAIL OPEN | RLS confines it; approval still required |
 | Cached list / dashboard reads | live database read | FAIL OPEN (degraded) | A cache outage must not be a data outage |
-| Middleware profile cache | live database read | FAIL OPEN (degraded) | Routing only; `requireRole()` re-reads uncached anyway |
+| ~~Middleware profile cache~~ | removed in Phase 2.1: session admission returns the role (migration 058) | — | Role and status are read live on every request |
 
 **Every FAIL OPEN is enumerated in `lib/rate-limit-policy.ts` with its
 reason, and `tests/rate-limit-policy.test.ts` fails if any entry lacks one.**
@@ -75,20 +75,14 @@ The default is now DENY: a bucket nobody classified fails closed.
 
 | Change | Invalidation | Worst case |
 | --- | --- | --- |
-| Role or status change | explicit `invalidateCache(middlewareProfileCacheKey(userId))` on every write that changes either | 0 s |
-| Invitation accepted (`pending` → `active`) | explicit | 0 s |
-| Cache delete fails during a Redis fault | none — the key rides out its TTL | **20 s** of stale routing |
+| Role or status change | none needed since Phase 2.1: the middleware reads both live from session admission (058) | 0 s |
+| Invitation accepted (`pending` → `active`) | none needed, same reason | 0 s |
 | A list or queue changes (web OR mobile API write) | the family's version counter for that college is bumped (2026-10-04); before, only the editor's own view was deleted and mobile writes deleted nothing | 0 s |
 
-Every role/status write is pinned to its invalidation by
-`tests/profile-cache-invalidation.test.ts` (2026-10-04).
-
-That 20-second worst case is bounded and does not grant access: the
-middleware profile cache decides **which page shell to serve**, never what
-data comes back. `requireRole()` re-reads role and status **uncached** on
-every mutation, and RLS is live underneath both. A stale read can at worst
-let an already-authenticated browser keep loading a shell it no longer
-belongs on, for up to 20 seconds, while every action on it is refused.
+Until Phase 2.1 a role or status change could take up to 20 s to reach
+routing if the cache delete failed. That window is gone: the middleware no
+longer caches the profile (`tests/middleware-admission-profile.test.ts`
+pins a role change and a suspension applying on the next request).
 
 **Classification: PARTIAL — accepted, bounded, documented.**
 
