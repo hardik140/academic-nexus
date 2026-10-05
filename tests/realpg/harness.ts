@@ -21,6 +21,10 @@ import { join } from "node:path";
  * A "session" is one psql process; concurrency is two processes started
  * together. Ordering inside a race is made deterministic with pg_sleep on
  * the side that must arrive second.
+ *
+ * max_connections is raised to 300 so a test can run ~100 genuinely
+ * concurrent workers (tests/realpg-finance-claim.test.ts) without hitting
+ * PostgreSQL's default ceiling of 100.
  */
 
 const CANDIDATE_BINS = [
@@ -111,7 +115,7 @@ export function startCluster(attempt = 0): Cluster {
   const logFile = join(dataDir, "server.log");
   const start = spawnSync(exe("pg_ctl"), [
     "-D", dataDir,
-    "-o", `-p ${port} -c listen_addresses=127.0.0.1 -c unix_socket_directories="${socketDir}" -c fsync=off -c synchronous_commit=off -c log_min_messages=warning`,
+    "-o", `-p ${port} -c listen_addresses=127.0.0.1 -c unix_socket_directories="${socketDir}" -c fsync=off -c synchronous_commit=off -c log_min_messages=warning -c max_connections=300`,
     "-l", logFile,
     "-w", "start"
   ], { stdio: "ignore" });
