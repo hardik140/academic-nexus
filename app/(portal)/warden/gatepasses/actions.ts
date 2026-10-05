@@ -5,7 +5,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib/rbac";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { getCached, invalidateCache } from "@/lib/cache";
+import { getCached, invalidateCacheFamily, versionedKey } from "@/lib/cache";
 import { resolveListSort, listCacheKey } from "@/lib/cached-list";
 import { logAudit } from "@/lib/audit";
 import { assertClaimed } from "@/lib/concurrent-claim";
@@ -21,8 +21,11 @@ const PROCESSED_PAGE_SIZE = 10;
 const PROCESSED_SORT_COLUMNS = ["exit_time", "destination"] as const;
 const PROCESSED_CACHE_PREFIX = "list:gatepasses";
 
-function pendingCacheKey(scopeKey: string) {
-  return `pending:gatepasses:${scopeKey}`;
+/** Pending and processed gate passes: one family per college, read per warden scope. */
+const GATEPASS_FAMILY = "gatepasses";
+
+function pendingCacheKey(scopeKey: string, collegeId: string) {
+  return versionedKey(`pending:gatepasses:${scopeKey}`, GATEPASS_FAMILY, collegeId);
 }
 
 /**
@@ -101,7 +104,7 @@ export async function listPendingGatePasses() {
   const supabase = await createClient();
   const studentIds = await resolveWardenScopedStudentIds(supabase, actor);
 
-  return getCached(pendingCacheKey(actor.role === "admin" ? actor.collegeId : actor.userId), 15, async () => {
+  return getCached(pendingCacheKey(actor.role === "admin" ? actor.collegeId : actor.userId, actor.collegeId), 15, async () => {
     if (studentIds !== null && studentIds.length === 0) return [];
     let dbQuery = supabase
       .from("gate_passes")
@@ -121,7 +124,11 @@ export async function listProcessedGatePasses(q: DataTableQuery) {
   const studentIds = await resolveWardenScopedStudentIds(supabase, actor);
 
   const { column, ascending } = resolveListSort(PROCESSED_SORT_COLUMNS, "created_at", false, q);
-  const cacheKey = listCacheKey(PROCESSED_CACHE_PREFIX, actor.role === "admin" ? actor.collegeId : actor.userId, q, column);
+  const cacheKey = versionedKey(
+    listCacheKey(PROCESSED_CACHE_PREFIX, actor.role === "admin" ? actor.collegeId : actor.userId, q, column),
+    GATEPASS_FAMILY,
+    actor.collegeId
+  );
 
   return getCached(cacheKey, 30, async () => {
     if (studentIds !== null && studentIds.length === 0) return { data: [], count: 0 };
@@ -224,22 +231,14 @@ export async function actOnGatePassCore(
 
 export async function actOnGatePass(
   passId: string,
-  action: "approved" | "rejected",
-  processedViewQuery?: DataTableQuery
-) {
+  action: "approved" | "rejected") {
   const actor = await requireRole(PERMISSIONS.gatepass_review);
   const supabase = await createClient();
   await actOnGatePassCore(supabase, actor, passId, action);
   revalidatePath("/warden/gatepasses");
   revalidatePath("/warden/dashboard");
 
-  await invalidateCache(pendingCacheKey(actor.role === "admin" ? actor.collegeId : actor.userId));
-  if (processedViewQuery) {
-    const { column } = resolveListSort(PROCESSED_SORT_COLUMNS, "created_at", false, processedViewQuery);
-    await invalidateCache(
-      listCacheKey(PROCESSED_CACHE_PREFIX, actor.role === "admin" ? actor.collegeId : actor.userId, processedViewQuery, column)
-    );
-  }
+  await invalidateCacheFamily(GATEPASS_FAMILY, actor.collegeId);
 }
 
 /** Called by app/api/mobile/gatepass/act/route.ts. */
@@ -354,7 +353,7 @@ export async function recordManualGateMovement(params: {
   const result = await recordManualGateMovementCore(supabase, actor, params);
   revalidatePath("/warden/gatepasses");
   revalidatePath("/warden/dashboard");
-  await invalidateCache(pendingCacheKey(actor.role === "admin" ? actor.collegeId : actor.userId));
+  await invalidateCacheFamily(GATEPASS_FAMILY, actor.collegeId);
   return result;
 }
 

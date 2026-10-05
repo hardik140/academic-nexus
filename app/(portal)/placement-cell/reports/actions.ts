@@ -28,7 +28,11 @@ export async function getPlacementReports() {
   const actor = await requireRole(STAFF_ROLES);
   const supabase = await createClient();
 
-  return getCached(`placement:reports:${actor.collegeId}`, 120, async () => {
+  // Role-scoped: placement_cell, director and admin see DIFFERENT rows here
+  // (students_read_staff excludes placement_cell; student_placement_profiles
+  // excludes director), so one college-wide entry served one role's data to
+  // another. See tests/cache-scope-registry.test.ts.
+  return getCached(`placement:reports:${actor.collegeId}:${actor.role}`, 120, async () => {
     const [placementsRes, totalStudentsRes] = await Promise.all([
       supabase
         .from("placements")

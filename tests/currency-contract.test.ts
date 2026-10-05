@@ -64,7 +64,11 @@ const h = vi.hoisted(() => {
 
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => h.client }));
 vi.mock("next/navigation", () => ({ redirect: () => { throw new Error("redirected"); } }));
-vi.mock("@/lib/cache", () => ({ getCached: (_key: string, _ttl: number, fetcher: () => unknown) => fetcher() }));
+vi.mock("@/lib/cache", () => ({
+  getCached: (_key: string, _ttl: number, fetcher: () => unknown) => fetcher(),
+  invalidateCacheFamily: async () => {},
+  versionedKey: (key: string | null) => key,
+}));
 vi.mock("@/app/(portal)/finance/exceptions/actions", () => ({ getFinanceExceptions: h.exceptions }));
 vi.mock("@/app/(portal)/student/fees/actions", () => ({
   requestRefund: vi.fn(),

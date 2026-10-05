@@ -3,7 +3,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { routePrefixFor, dashboardPathFor } from "@/lib/auth/role-routes";
 import { checkRateLimit, RateLimitError, RateLimiterUnavailableError } from "@/lib/rate-limit";
 import { clientIp } from "@/lib/client-ip";
-import { getCached, middlewareProfileCacheKey } from "@/lib/cache";
+import { getCached, middlewareProfileCacheKey, MIDDLEWARE_PROFILE_CACHE } from "@/lib/cache";
+import { keyDigest } from "@/lib/redis-config";
 import type { Database, UserRole, UserStatus } from "@/types/database";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
@@ -60,32 +61,24 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.next({ request });
   }
 
-  // Coarse, global first line of defense — checked before any Supabase call
-  // so a flood doesn't even cost an auth lookup. Fails open (see
-  // lib/rate-limit.ts) if Redis isn't configured or unreachable.
-  // Keyed on the one header the edge sets and the client cannot choose —
-  // see lib/client-ip.ts for why the previous `x-forwarded-for` key was not
-  // a limit at all.
-  const { ip } = clientIp(request.headers);
-  try {
-    await checkRateLimit(`ip:${ip}`, 100, 60);
-  } catch (err) {
-    if (err instanceof RateLimitError) {
-      return new NextResponse("Too many requests. Please try again shortly.", {
-        status: 429,
-        headers: { "Retry-After": String(err.retryAfterSeconds) },
-      });
-    }
-    // `ip` is classified fail-open (lib/rate-limit-policy.ts) so this should
-    // be unreachable; if the policy ever changes, a limiter outage must not
-    // become an unhandled exception on every request in the application.
-    if (err instanceof RateLimiterUnavailableError) {
-      return new NextResponse("Service temporarily unavailable.", {
-        status: 503,
-        headers: { "Retry-After": "30" },
-      });
-    }
-  }
+  // Coarse first line of defense — checked before any Supabase call so a
+  // flood doesn't even cost an auth lookup. Keyed on the one header the edge
+  // sets and the client cannot choose (lib/client-ip.ts), stored as a digest.
+  //
+  // Anonymous and credentialed traffic are counted separately. A whole
+  // college can sit behind ONE public IP; with a single per-IP bucket,
+  // 60 signed-in students opening the app could exhaust it for everyone.
+  // So: an anonymous request spends the strict per-IP bucket; a request that
+  // carries a session spends a generous per-IP ceiling here and, once the
+  // session is verified below, its own per-user bucket. A forged or expired
+  // session cookie falls back to the strict anonymous bucket.
+  const ipId = keyDigest(clientIp(request.headers).ip);
+  const credentialed = carriesCredentials(request);
+  const preAuth = await limitedResponse(
+    credentialed ? `ipCredentialed:${ipId}` : `ip:${ipId}`,
+    credentialed ? CREDENTIALED_IP_LIMIT : ANONYMOUS_IP_LIMIT
+  );
+  if (preAuth) return preAuth;
 
   let supabaseResponse = NextResponse.next({ request });
   const pathname = request.nextUrl.pathname;
@@ -124,6 +117,19 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
+  // Post-auth: a verified session spends its own bucket, never the campus's.
+  // A request that claimed a session cookie but has no valid session is
+  // anonymous after all. A bearer-token request is not verified here (the
+  // mobile /api routes verify it themselves, then apply per-user, per-action
+  // buckets), so it keeps only the credentialed ceiling above.
+  if (user) {
+    const perUser = await limitedResponse(`user:${user.id}`, USER_LIMIT);
+    if (perUser) return perUser;
+  } else if (hasSessionCookie(request)) {
+    const anonymous = await limitedResponse(`ip:${ipId}`, ANONYMOUS_IP_LIMIT);
+    if (anonymous) return anonymous;
+  }
+
   // Allow public routes
   if (PUBLIC_ROUTES.some((route) => pathname.startsWith(route))) {
     return supabaseResponse;
@@ -158,7 +164,8 @@ export async function updateSession(request: NextRequest) {
         .eq("id", user.id)
         .single();
       return data;
-    }
+    },
+    MIDDLEWARE_PROFILE_CACHE
   );
 
   // No profile row for an authenticated user. This used to `return
@@ -264,4 +271,60 @@ function unavailable(request: NextRequest, reason: UnavailableReason): NextRespo
   url.search = "";
   url.searchParams.set("reason", reason);
   return NextResponse.redirect(url);
+}
+
+/**
+ * Middleware rate-limit ceilings, per 60 s. None of these is an
+ * authorization boundary (every action has its own per-user bucket below
+ * them); they cap floods. All three are fail-open (lib/rate-limit-policy.ts).
+ *
+ * The values are NOT derived from production traffic — there is none yet —
+ * and are recorded as an open item in REDIS_RATE_LIMIT_DESIGN.md.
+ * - ANONYMOUS_IP_LIMIT: unchanged from before (100).
+ * - CREDENTIALED_IP_LIMIT: sized for a campus behind one NAT address.
+ * - USER_LIMIT: one person, including Next.js prefetches and Server Actions.
+ */
+export const ANONYMOUS_IP_LIMIT = 100;
+export const CREDENTIALED_IP_LIMIT = 2000;
+export const USER_LIMIT = 300;
+const WINDOW_SECONDS = 60;
+
+/** A Supabase session cookie (`sb-<ref>-auth-token`, possibly chunked `.0`, `.1`). */
+const SESSION_COOKIE = /^sb-[A-Za-z0-9-]+-auth-token(\.\d+)?$/;
+
+export function hasSessionCookie(request: NextRequest): boolean {
+  return request.cookies.getAll().some((c) => SESSION_COOKIE.test(c.name) && c.value !== "");
+}
+
+export function carriesCredentials(request: NextRequest): boolean {
+  if (hasSessionCookie(request)) return true;
+  const auth = request.headers.get("authorization") ?? "";
+  return /^Bearer\s+\S+/i.test(auth);
+}
+
+/** Null when the request may proceed; otherwise the 429/503 to return. */
+async function limitedResponse(key: string, limit: number): Promise<NextResponse | null> {
+  try {
+    await checkRateLimit(key, limit, WINDOW_SECONDS);
+    return null;
+  } catch (err) {
+    if (err instanceof RateLimitError) {
+      return new NextResponse("Too many requests. Please try again shortly.", {
+        status: 429,
+        headers: { "Retry-After": String(err.retryAfterSeconds) },
+      });
+    }
+    // These buckets are classified fail-open (lib/rate-limit-policy.ts) so
+    // this should be unreachable; if the policy ever changes, a limiter
+    // outage must not become an unhandled exception on every request.
+    if (err instanceof RateLimiterUnavailableError) {
+      return new NextResponse("Service temporarily unavailable.", {
+        status: 503,
+        headers: { "Retry-After": "30" },
+      });
+    }
+    // Anything else is a limiter bug, not a verdict; these are flood
+    // ceilings, so the request proceeds (as before this change).
+    return null;
+  }
 }

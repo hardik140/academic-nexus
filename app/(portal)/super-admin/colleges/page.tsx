@@ -134,7 +134,7 @@ export default function SuperAdminCollegesPage() {
     setLoading(true);
     setError(null);
     try {
-      await createCollege(createForm, query);
+      await createCollege(createForm);
       setCreateForm({ name: "", code: "", city: "", state: "", country: "India" });
       setShowCreate(false);
       setNotice(`College ${createForm.name} created. Invite its first Admin next.`);
@@ -153,7 +153,7 @@ export default function SuperAdminCollegesPage() {
     setLifecyclePending(true);
     setLifecycleError(null);
     try {
-      await setCollegeLifecycle({ collegeId: lifecycleFor.id, ...change }, query);
+      await setCollegeLifecycle({ collegeId: lifecycleFor.id, ...change });
       const what = change.state === "ACTIVE" ? "reactivated" : change.state === "MAINTENANCE" ? "put under maintenance" : "suspended";
       setNotice(`${lifecycleFor.name} ${what}.${change.state === "ACTIVE" ? "" : " Its users have been signed out."}`);
       setLifecycleFor(null);

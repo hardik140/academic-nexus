@@ -84,7 +84,7 @@ export default function FinanceScholarships() {
     setLoading(true);
     setError(null);
     try {
-      await createScholarship(form.student_id, form.name, form.type, Number(form.amount), form.academic_year || undefined, query);
+      await createScholarship(form.student_id, form.name, form.type, Number(form.amount), form.academic_year || undefined);
       setForm({ student_id: "", name: "", amount: "", type: "merit", academic_year: "" });
       setShowCreate(false);
       setNotice(`Scholarship ${form.name} awarded.`);

@@ -70,7 +70,7 @@ function AdminCoursesInner() {
     setLoading(true);
     setError(null);
     try {
-      await createCourse(form.name, form.code, form.department_id, parseInt(form.credits), parseInt(form.semester), form.type, form.description || undefined, query);
+      await createCourse(form.name, form.code, form.department_id, parseInt(form.credits), parseInt(form.semester), form.type, form.description || undefined);
       setForm({ name: "", code: "", credits: "3", semester: "1", type: "core", department_id: "", description: "" });
       setShowCreate(false);
       setNotice(`Course ${form.code} created.`);

@@ -21,7 +21,10 @@ export async function listWardenRooms(q: DataTableQuery) {
   const supabase = await createClient();
 
   const { column, ascending } = resolveListSort(ROOMS_SORT_COLUMNS, "block_name", true, q);
-  const cacheKey = listCacheKey(ROOMS_CACHE_PREFIX, actor.collegeId, q, column);
+  // Scope = what the query returns: an admin sees every room in the college,
+  // a warden only the blocks they run. Keying on the college alone let one
+  // warden's page be served to another warden (or to an admin) for 30 s.
+  const cacheKey = listCacheKey(ROOMS_CACHE_PREFIX, actor.role === "admin" ? actor.collegeId : actor.userId, q, column);
 
   return getCached(cacheKey, 30, async () => {
     // Resolved server-side from the authenticated actor, never trusted from

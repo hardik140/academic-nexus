@@ -7,7 +7,7 @@ import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib
 import { PERMISSIONS } from "@/lib/permissions";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { logAudit } from "@/lib/audit";
-import { getCached, invalidateCache } from "@/lib/cache";
+import { getCached, invalidateCacheFamily, versionedKey } from "@/lib/cache";
 import { resolveListSort, listCacheKey } from "@/lib/cached-list";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
@@ -27,7 +27,7 @@ export async function listCourses(q: DataTableQuery) {
   const supabase = await createClient();
 
   const { column, ascending } = resolveListSort(COURSES_SORT_COLUMNS, "code", true, q);
-  const cacheKey = listCacheKey(COURSES_CACHE_PREFIX, actor.collegeId, q, column);
+  const cacheKey = versionedKey(listCacheKey(COURSES_CACHE_PREFIX, actor.collegeId, q, column), COURSES_CACHE_PREFIX, actor.collegeId);
 
   return getCached(cacheKey, 30, async () => {
     let dbQuery = supabase
@@ -118,17 +118,12 @@ export async function createCourse(
   credits: number,
   semester: number,
   type: CourseType,
-  description?: string,
-  viewQuery?: DataTableQuery
-) {
+  description?: string) {
   const actor = await requireRole(PERMISSIONS.create_course);
   const supabase = await createClient();
   await createCourseCore(supabase, actor, { name, code, departmentId, credits, semester, type, description });
   revalidatePath("/admin/courses");
-  if (viewQuery) {
-    const { column } = resolveListSort(COURSES_SORT_COLUMNS, "code", true, viewQuery);
-    await invalidateCache(listCacheKey(COURSES_CACHE_PREFIX, actor.collegeId, viewQuery, column));
-  }
+  await invalidateCacheFamily(COURSES_CACHE_PREFIX, actor.collegeId);
 }
 
 /** Called by app/api/mobile/admin/create-course/route.ts. */

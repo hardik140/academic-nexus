@@ -5,7 +5,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole, type AuthorizedActor } from "@/lib/rbac";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { getCached, invalidateCache } from "@/lib/cache";
+import { getCached, invalidateCacheFamily, versionedKey } from "@/lib/cache";
 import { logAudit } from "@/lib/audit";
 import { assertClaimed } from "@/lib/concurrent-claim";
 import { assertNotSelfApproval } from "@/lib/segregation-of-duties";
@@ -40,8 +40,10 @@ const SubmitDecisionSchema = z.object({
 
 export type SubmitDecisionParams = z.infer<typeof SubmitDecisionSchema>;
 
+const DECISIONS_CACHE_FAMILY = "decisions";
+
 function decisionsCacheKey(collegeId: string) {
-  return `decisions:${collegeId}`;
+  return versionedKey(`decisions:${collegeId}`, DECISIONS_CACHE_FAMILY, collegeId);
 }
 
 /**
@@ -122,7 +124,7 @@ export async function submitDecision(params: SubmitDecisionParams) {
   await checkRateLimit(`submitDecision:${actor.userId}`, 10, 3600);
   const supabase = await createClient();
   const result = await submitDecisionCore(supabase, actor, params);
-  await invalidateCache(decisionsCacheKey(actor.collegeId));
+  await invalidateCacheFamily(DECISIONS_CACHE_FAMILY, actor.collegeId);
   revalidatePath("/director/decisions");
   return result;
 }
@@ -280,7 +282,7 @@ export async function decideOnDecision(params: DecideParams) {
   await checkRateLimit(`decideOnDecision:${actor.userId}`, 30, 3600);
   const supabase = await createClient();
   await decideOnDecisionCore(supabase, actor, params);
-  await invalidateCache(decisionsCacheKey(actor.collegeId));
+  await invalidateCacheFamily(DECISIONS_CACHE_FAMILY, actor.collegeId);
   revalidatePath("/director/decisions");
   revalidatePath(`/director/decisions/${params.decisionId}`);
 }

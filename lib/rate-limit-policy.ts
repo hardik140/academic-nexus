@@ -43,6 +43,14 @@ export const FAIL_OPEN: Record<string, string> = {
   // blip into a total site outage. It is an anti-flood ceiling, not an
   // authorization boundary — the per-action buckets underneath it are.
   ip: "global anti-flood ceiling in middleware; refusing it takes the whole site down",
+  // The same, for a request that carries a session cookie or a bearer token
+  // — checked before the session is verified, so it cannot be per-user yet.
+  // Generous on purpose: a whole campus can sit behind one public IP.
+  ipCredentialed: "pre-auth flood ceiling for credentialed requests; refusing it takes the whole site down",
+  // Per-user ceiling on every authenticated request, applied after the
+  // session is verified. Same reasoning as `ip`: an abuse ceiling, not an
+  // authorization boundary, and failing it closed is a site-wide outage.
+  user: "per-user anti-flood ceiling in middleware; refusing it takes the whole site down",
 
   // A guard's movement feed. Read-only, changes nothing. A blank screen at a
   // staffed gate is an operational hazard with no compensating security gain.
@@ -72,6 +80,63 @@ export const FAIL_OPEN: Record<string, string> = {
   requestAttendanceCorrection: "teacher's own correction request; still requires HOD approval",
   applyToDrive: "student applying to a placement drive on their own behalf",
 };
+
+/**
+ * HIGH-RISK buckets: money, identity, authority and approvals. These are the
+ * actions where a missing rate limit is itself the damage, so they may NEVER
+ * appear in FAIL_OPEN — the module refuses to load if one does (below), and
+ * tests/rate-limit-policy.test.ts pins it. Every other unlisted bucket is
+ * "protected": also fail-closed, by the deny default.
+ */
+export const HIGH_RISK = [
+  // money
+  "recordPayment", "createInvoice", "createScholarship", "requestRefund",
+  "approveRefund", "rejectRefund", "submitDispute", "finalizeDispute",
+  "financeReconcile", "financeReconcileApi", "financeSyncNow",
+  "financeConnection", "financeCredential", "financeVerify", "financeMapping",
+  // identity and authority
+  "inviteUser", "resendInvitation", "createCollege", "updateCollege",
+  "updateUserProfile", "updateUserStatus", "updateStudentAcademicStatus",
+  "assignHod", "assignWarden", "authorizeSecurity", "securityStatus",
+  "assignGate", "securityInstruction", "revokeGateCredential",
+  "promoteToPlacementCell", "revokePlacementCell", "reactivatePlacementCell",
+  // approvals — each one authorises something that then happens
+  "actOnGatePass", "actOnLeaveRequest", "actOnAttendanceCorrection",
+  "approveRoomTransfer", "rejectRoomTransfer", "manualGateMovement",
+  // academic structure, admin-only
+  "createDepartment", "createCourse", "createAcademicYear", "createSemester",
+  "updateSemester", "deleteSemester", "activate", "close",
+] as const;
+
+for (const name of HIGH_RISK) {
+  if (name in FAIL_OPEN) {
+    throw new Error(`rate-limit policy: high-risk bucket "${name}" may not fail open`);
+  }
+}
+
+/**
+ * The risk class of a bucket, which is the whole of its failure policy:
+ *
+ * | class     | Redis unavailable / timeout / malformed / circuit open |
+ * |-----------|--------------------------------------------------------|
+ * | flood     | allowed (global anti-flood ceilings in middleware)     |
+ * | low       | allowed (first-party, low-impact actions; see reasons) |
+ * | high      | REFUSED — 503                                          |
+ * | protected | REFUSED — 503 (everything unlisted, new buckets too)   |
+ *
+ * A timeout is never a "pass": it is one of the unavailable cases.
+ */
+export type RiskClass = "flood" | "low" | "high" | "protected";
+
+const FLOOD = new Set(["ip", "ipCredentialed", "user"]);
+
+export function riskClass(key: string): RiskClass {
+  const name = bucketName(key);
+  if (FLOOD.has(name)) return "flood";
+  if (name in FAIL_OPEN) return "low";
+  if ((HIGH_RISK as readonly string[]).includes(name)) return "high";
+  return "protected";
+}
 
 /**
  * Prefix of a bucket key. Keys are `actionName:...` everywhere in this repo

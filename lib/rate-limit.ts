@@ -1,6 +1,9 @@
 import { Ratelimit } from "@upstash/ratelimit";
 import { redis } from "@/lib/redis";
-import { bucketPolicy, type UnavailablePolicy } from "@/lib/rate-limit-policy";
+import { redisTimeoutMs } from "@/lib/redis-config";
+import { namespacedKey, redisOp } from "@/lib/redis-guard";
+import { emitRedisEvent, type RedisFailureReason } from "@/lib/redis-telemetry";
+import { bucketName, bucketPolicy, type UnavailablePolicy } from "@/lib/rate-limit-policy";
 
 export class RateLimitError extends Error {
   /** Seconds until the caller may retry, when the limiter could tell us. */
@@ -67,21 +70,49 @@ export class RateLimiterUnavailableError extends Error {
  * cheap but not free, and the previous code built a new one on every single
  * call — once per rate-limited action, on a serverless path where that cost
  * is paid on every invocation.
+ *
+ * `prefix` puts every bucket under `<environment>:nexus:rl`, so a development
+ * server sharing the production Upstash database never counts against a
+ * production bucket (lib/redis-config.ts).
+ *
+ * `timeout` is set explicitly, and its result is NOT trusted. On timeout,
+ * @upstash/ratelimit resolves `{ success: true, reason: "timeout" }` instead
+ * of throwing — the previous code read only `success`, so a slow Upstash
+ * turned every fail-closed bucket (payments, refunds, approvals) into
+ * unlimited. limiterResultFault() below classifies that result as a timeout,
+ * and the bucket's policy decides.
  */
 const limiters = new Map<string, Ratelimit>();
 
-function limiterFor(limit: number, windowSeconds: number): Ratelimit {
+function limiterFor(client: NonNullable<typeof redis>, limit: number, windowSeconds: number): Ratelimit {
   const cacheKey = `${limit}:${windowSeconds}`;
   let existing = limiters.get(cacheKey);
   if (!existing) {
     existing = new Ratelimit({
-      redis: redis!,
+      redis: client,
       limiter: Ratelimit.slidingWindow(limit, `${windowSeconds} s`),
-      prefix: "ratelimit",
+      prefix: namespacedKey("rl", "v1") ?? "unconfigured:rl",
+      timeout: redisTimeoutMs(),
     });
     limiters.set(cacheKey, existing);
   }
   return existing;
+}
+
+type LimitResult = { success: boolean; reset: number; remaining: number; reason?: string };
+
+/**
+ * Anything other than a well-formed verdict is a fault, never a verdict:
+ * the library's own timeout, a non-boolean `success`, a non-numeric reset.
+ */
+export function limiterResultFault(result: unknown): RedisFailureReason | null {
+  if (!result || typeof result !== "object") return "malformed";
+  const r = result as Partial<LimitResult>;
+  if (r.reason === "timeout") return "timeout";
+  if (typeof r.success !== "boolean") return "malformed";
+  if (typeof r.reset !== "number" || !Number.isFinite(r.reset)) return "malformed";
+  if (typeof r.remaining !== "number" || !Number.isFinite(r.remaining)) return "malformed";
+  return null;
 }
 
 /**
@@ -97,15 +128,11 @@ function isDeployed(): boolean {
 
 let warnedUnconfigured = false;
 
-function unavailable(key: string, policy: UnavailablePolicy, reason: string): void {
-  if (policy === "allow") return;
-  console.error("[rate-limit] refusing a fail-closed action: limiter unavailable", { key, reason });
-  throw new RateLimiterUnavailableError();
-}
-
 /**
  * Sliding-window rate limit check. Throws RateLimitError when `key` has
- * exceeded `limit` requests within `windowSeconds`.
+ * exceeded `limit` requests within `windowSeconds`, and
+ * RateLimiterUnavailableError when the limiter cannot give a trustworthy
+ * answer and the bucket's risk class is fail-closed.
  *
  * `key` must start with the action name (the convention everywhere in this
  * repo is `actionName:${actor.userId}`) — that prefix is what selects the
@@ -118,6 +145,7 @@ export async function checkRateLimit(
   windowSeconds: number
 ): Promise<void> {
   const policy = bucketPolicy(key);
+  const bucket = bucketName(key);
 
   if (!redis) {
     if (!isDeployed()) {
@@ -130,26 +158,36 @@ export async function checkRateLimit(
       }
       return;
     }
-    unavailable(key, policy, "redis-not-configured");
-    return;
+    return unavailable(bucket, policy, "unconfigured", 0);
   }
 
-  let result: { success: boolean; reset: number };
-  try {
-    result = await limiterFor(limit, windowSeconds).limit(key);
-  } catch (err) {
-    // A genuine limiter fault: network, Upstash outage, quota. Never a
-    // RateLimitError — that is thrown below, outside this try.
-    console.error("[rate-limit] limiter call failed", {
-      key,
-      reason: err instanceof Error ? err.message : String(err),
-    });
-    unavailable(key, policy, "redis-call-failed");
-    return;
-  }
+  const client = redis;
+  const outcome = await redisOp(
+    "ratelimit",
+    () => limiterFor(client, limit, windowSeconds).limit(key) as Promise<LimitResult>,
+    limiterResultFault
+  );
 
-  if (!result.success) {
-    const retryAfter = Math.max(1, Math.ceil((result.reset - Date.now()) / 1000));
+  if (!outcome.ok) return unavailable(bucket, policy, outcome.reason, outcome.ms);
+
+  if (!outcome.value.success) {
+    emitRedisEvent({ event: "redis.ratelimit", bucket, outcome: "denied", ms: outcome.ms });
+    const retryAfter = Math.max(1, Math.ceil((outcome.value.reset - Date.now()) / 1000));
     throw new RateLimitError(undefined, retryAfter);
   }
+  emitRedisEvent({ event: "redis.ratelimit", bucket, outcome: "allowed", ms: outcome.ms });
+}
+
+/**
+ * The limiter gave no trustworthy answer (unconfigured, timeout, error,
+ * malformed result, circuit open). The bucket's risk class decides, here and
+ * nowhere else.
+ */
+function unavailable(bucket: string, policy: UnavailablePolicy, reason: RedisFailureReason, ms: number): void {
+  if (policy === "allow") {
+    emitRedisEvent({ event: "redis.ratelimit", bucket, outcome: "fail_open", reason, ms });
+    return;
+  }
+  emitRedisEvent({ event: "redis.ratelimit", bucket, outcome: "fail_closed", reason, ms });
+  throw new RateLimiterUnavailableError();
 }

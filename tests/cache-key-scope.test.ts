@@ -105,13 +105,15 @@ describe("a key with a missing scope segment never reaches Redis", () => {
     expect(redis.client.del).not.toHaveBeenCalled();
   });
 
-  it("logs the broken key so it can be found and fixed", async () => {
+  it("logs the broken key's family so it can be found and fixed — never the key itself", async () => {
+    // The family and the bad segment locate the call site; the full key can
+    // carry user and college ids, which do not belong in a log line.
     const redis = fakeRedis();
     const { getCached } = await loadCache(redis.client);
     await getCached("dashboard:finance:undefined:fee-stats", 60, async () => 1);
     expect(errorSpy).toHaveBeenCalledWith(
       expect.stringContaining("missing scope"),
-      expect.objectContaining({ key: "dashboard:finance:undefined:fee-stats", segment: "undefined" })
+      { family: "dashboard:finance", segment: "undefined" }
     );
   });
 });
@@ -147,15 +149,17 @@ describe("a properly scoped key is cached as before", () => {
   });
 
   it("an empty search term is a legitimate segment, not a missing one", async () => {
-    // listCacheKey ends with q.search, which is "" when nobody typed
-    // anything. That must still be cached — the guard is about `undefined`,
-    // not about emptiness.
+    // An empty search ("nobody typed anything") is the commonest list read
+    // and must still be cached. It is written as its own token, "-", rather
+    // than an empty trailing segment — the guard now rejects empty segments,
+    // because an empty SCOPE segment is the same fault as `undefined`.
     const redis = fakeRedis();
     const { getCached } = await loadCache(redis.client);
     const q: DataTableQuery = { search: "", sortKey: null, sortDir: "asc", page: 1 };
     const key = listCacheKey("fees", COLLEGE_A, q, "due_date");
 
-    expect(key.endsWith(":")).toBe(true);
+    expect(key).not.toBeNull();
+    expect(key!.endsWith(":-")).toBe(true);
     await getCached(key, 30, async () => "rows");
     expect(redis.client.set).toHaveBeenCalledOnce();
   });
