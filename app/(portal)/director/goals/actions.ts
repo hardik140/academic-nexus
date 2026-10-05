@@ -5,7 +5,6 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole, type AuthorizedActor } from "@/lib/rbac";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { getCached, invalidateCache } from "@/lib/cache";
 import { logAudit } from "@/lib/audit";
 import { PERMISSIONS } from "@/lib/permissions";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -16,9 +15,6 @@ import { assertRead } from "@/lib/read-result-server";
 const METRIC_KEYS = ["placement_rate", "avg_cgpa", "attendance_pct", "fee_collection_pct", "hostel_occupancy_pct"] as const;
 type MetricKey = (typeof METRIC_KEYS)[number];
 
-function goalsCacheKey(collegeId: string) {
-  return `goals:${collegeId}`;
-}
 
 /**
  * Live-resolves an 'auto' goal's current_value from the same real data
@@ -156,7 +152,6 @@ export async function createGoal(params: CreateGoalParams) {
     newValue: { title: parsed.title, tracking_mode: parsed.trackingMode, target_value: parsed.targetValue },
   });
 
-  await invalidateCache(goalsCacheKey(actor.collegeId));
   revalidatePath("/director/goals");
   return { id: data.id as string };
 }
@@ -192,7 +187,6 @@ export async function updateGoal(params: { goalId: string; status?: string; curr
     newValue: update,
   });
 
-  await invalidateCache(goalsCacheKey(actor.collegeId));
   revalidatePath("/director/goals");
 }
 
@@ -217,7 +211,6 @@ export async function addMilestone(params: { goalId: string; title: string; targ
     throw dbError(error);
   }
 
-  await invalidateCache(goalsCacheKey(actor.collegeId));
   revalidatePath("/director/goals");
 }
 
@@ -234,7 +227,6 @@ export async function toggleMilestone(milestoneId: string, done: boolean) {
     throw dbError(error);
   }
 
-  await invalidateCache(goalsCacheKey(actor.collegeId));
   revalidatePath("/director/goals");
 }
 

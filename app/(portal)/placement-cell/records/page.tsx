@@ -66,7 +66,7 @@ export default function PlacementCellRecords() {
     setError(null);
     setNotice(null);
     try {
-      await updateStudentPlacementStatus(editing.id, status as any, notes, query);
+      await updateStudentPlacementStatus(editing.id, status as any, notes);
       setNotice(`Placement status updated for ${editing.profiles?.full_name || "the student"}.`);
       setEditing(null);
       void loadRecords(query);

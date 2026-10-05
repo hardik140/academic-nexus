@@ -1,0 +1,83 @@
+{
+  "label": "branch",
+  "where": "local, loopback emulator",
+  "at": "2026-10-04T09:27:07.094Z",
+  "healthy": {
+    "protectedRateLimit": {
+      "n": 300,
+      "p50": 3,
+      "p95": 5,
+      "p99": 11.5,
+      "max": 13.4,
+      "failures": 0
+    },
+    "lowRiskRateLimit": {
+      "n": 300,
+      "p50": 2.7,
+      "p95": 3.5,
+      "p99": 8.3,
+      "max": 9.2,
+      "failures": 0
+    },
+    "cachedRead": {
+      "n": 300,
+      "p50": 2.4,
+      "p95": 3.2,
+      "p99": 8.7,
+      "max": 28.2,
+      "failures": 0
+    }
+  },
+  "slow (emulator answers after 3000 ms)": {
+    "protectedRateLimit": {
+      "n": 15,
+      "p50": 0.1,
+      "p95": 1025.4,
+      "p99": 1025.4,
+      "max": 1025.4,
+      "failures": 15
+    },
+    "lowRiskRateLimit": {
+      "n": 15,
+      "p50": 0,
+      "p95": 0.1,
+      "p99": 0.1,
+      "max": 0.1,
+      "failures": 0
+    },
+    "cachedRead": {
+      "n": 15,
+      "p50": 0,
+      "p95": 0.5,
+      "p99": 0.5,
+      "max": 0.5,
+      "failures": 0
+    }
+  },
+  "down (connection dropped)": {
+    "protectedRateLimit": {
+      "n": 15,
+      "p50": 0.1,
+      "p95": 75.8,
+      "p99": 75.8,
+      "max": 75.8,
+      "failures": 15
+    },
+    "lowRiskRateLimit": {
+      "n": 15,
+      "p50": 0,
+      "p95": 0,
+      "p99": 0,
+      "max": 0,
+      "failures": 0
+    },
+    "cachedRead": {
+      "n": 15,
+      "p50": 0,
+      "p95": 0.2,
+      "p99": 0.2,
+      "max": 0.2,
+      "failures": 0
+    }
+  }
+}

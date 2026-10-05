@@ -5,7 +5,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib/rbac";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { getCached, invalidateCache } from "@/lib/cache";
+import { getCached, invalidateCacheFamily, versionedKey } from "@/lib/cache";
 import { resolveListSort, listCacheKey } from "@/lib/cached-list";
 import { logAudit } from "@/lib/audit";
 import { assertClaimed } from "@/lib/concurrent-claim";
@@ -55,7 +55,11 @@ export async function listHostelComplaints(q: DataTableQuery) {
   const submitterIds = await resolveWardenScopedSubmitterIds(supabase, actor);
 
   const { column, ascending } = resolveListSort(COMPLAINTS_SORT_COLUMNS, "created_at", false, q);
-  const cacheKey = listCacheKey(COMPLAINTS_CACHE_PREFIX, actor.role === "admin" ? actor.collegeId : actor.userId, q, column);
+  const cacheKey = versionedKey(
+    listCacheKey(COMPLAINTS_CACHE_PREFIX, actor.role === "admin" ? actor.collegeId : actor.userId, q, column),
+    COMPLAINTS_CACHE_PREFIX,
+    actor.collegeId
+  );
 
   return getCached(cacheKey, 30, async () => {
     if (submitterIds !== null && submitterIds.length === 0) return { data: [], count: 0 };
@@ -149,18 +153,13 @@ export async function updateComplaintStatusCore(
 
 export async function updateComplaintStatus(
   complaintId: string,
-  status: "in_progress" | "resolved",
-  viewQuery?: DataTableQuery
-) {
+  status: "in_progress" | "resolved") {
   const actor = await requireRole(PERMISSIONS.hostel_complaint_manage);
   const supabase = await createClient();
   await updateComplaintStatusCore(supabase, actor, complaintId, status);
   revalidatePath("/warden/complaints");
   revalidatePath("/warden/dashboard");
-  if (viewQuery) {
-    const { column } = resolveListSort(COMPLAINTS_SORT_COLUMNS, "created_at", false, viewQuery);
-    await invalidateCache(listCacheKey(COMPLAINTS_CACHE_PREFIX, actor.collegeId, viewQuery, column));
-  }
+  await invalidateCacheFamily(COMPLAINTS_CACHE_PREFIX, actor.collegeId);
 }
 
 /** Called by app/api/mobile/complaints/status/route.ts. */

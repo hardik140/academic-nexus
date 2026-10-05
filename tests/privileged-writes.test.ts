@@ -25,6 +25,9 @@ vi.mock("@/lib/cache", () => ({
   getCached: async (_k: string, _t: number, fn: () => unknown) => fn(),
   invalidateCache: async () => {},
   middlewareProfileCacheKey: (id: string) => `mw:${id}`,
+  invalidateCacheFamily: async () => {},
+  versionedKey: (key: string | null) => key,
+  MIDDLEWARE_PROFILE_CACHE: {},
 }));
 
 type Row = Record<string, unknown>;

@@ -66,7 +66,7 @@ export default function WardenGatePasses() {
     setError(null);
     setNotice(null);
     try {
-      await actOnGatePass(id, action, processedQuery);
+      await actOnGatePass(id, action);
       setNotice(`Gate pass ${action}.`);
       // Reloading reports its own failure, never as a failed decision.
       pendingResource.reload();

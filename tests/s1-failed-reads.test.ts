@@ -92,6 +92,18 @@ const h = vi.hoisted(() => {
       return "OK";
     }),
     del: vi.fn(async (key: string) => (store.delete(key) ? 1 : 0)),
+    // Versioned families (lib/cache.ts) read value + version in one MGET and
+    // bump the version through a pipeline.
+    mget: vi.fn(async (...keys: string[]) => keys.map((k) => (store.has(k) ? store.get(k) : null))),
+    pipeline: () => {
+      const ops: Array<() => unknown> = [];
+      const p = {
+        incr: (k: string) => (ops.push(() => store.set(k, Number(store.get(k) ?? 0) + 1)), p),
+        expire: () => p,
+        exec: async () => ops.map((op) => op()),
+      };
+      return p;
+    },
   };
   const actor = () => ({ userId: ID, collegeId: ID, role: state.role, departmentId: ID, status: "active" });
   return { ID, DB_MESSAGE, state, client, redis, store, actor };
@@ -439,7 +451,14 @@ for (const [area, name, role, reads, ttl] of p0Cases) {
       if (mode === "rows") expect(h.state.reads).toHaveLength(reads);
       if (ttl) {
         expect(h.redis.set).toHaveBeenCalledTimes(1);
-        expect(h.redis.set).toHaveBeenLastCalledWith(expect.any(String), result, { ex: ttl });
+        // A versioned family (lib/cache.ts) stores { v, d }; the cached
+        // payload must be exactly the result either way. Compared by
+        // identity: the fake rows are proxies, not plain data.
+        const [, stored, opts] = h.redis.set.mock.lastCall! as unknown as [string, unknown, unknown];
+        expect(opts).toEqual({ ex: ttl });
+        const payload =
+          stored && typeof stored === "object" && "v" in stored && "d" in stored ? (stored as { d: unknown }).d : stored;
+        expect(payload).toBe(result);
         expect(await call()).toEqual(result);
         expect(h.redis.set).toHaveBeenCalledTimes(1);
       }

@@ -5,7 +5,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib/rbac";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { getCached, invalidateCache } from "@/lib/cache";
+import { getCached, invalidateCacheFamily, versionedKey } from "@/lib/cache";
 import { resolveListSort, listCacheKey } from "@/lib/cached-list";
 import { logAudit } from "@/lib/audit";
 import { PERMISSIONS } from "@/lib/permissions";
@@ -28,7 +28,7 @@ export async function listInvoices(q: DataTableQuery) {
   const supabase = await createClient();
 
   const { column, ascending } = resolveListSort(FEES_SORT_COLUMNS, "due_date", false, q);
-  const cacheKey = listCacheKey(FEES_CACHE_PREFIX, actor.collegeId, q, column);
+  const cacheKey = versionedKey(listCacheKey(FEES_CACHE_PREFIX, actor.collegeId, q, column), FEES_CACHE_PREFIX, actor.collegeId);
 
   return getCached(cacheKey, 30, async () => {
     let dbQuery = supabase
@@ -111,19 +111,14 @@ export async function createInvoice(
   type: string,
   amount: number,
   dueDate: string,
-  academicYear?: string,
-  viewQuery?: DataTableQuery
-) {
+  academicYear?: string) {
   const actor = await requireRole(PERMISSIONS.invoice_create);
   const supabase = await createClient();
   await createInvoiceCore(supabase, actor, { studentId, type, amount, dueDate, academicYear });
   revalidatePath("/finance/invoices");
   revalidatePath("/finance/transactions");
   revalidatePath("/finance/dashboard");
-  if (viewQuery) {
-    const { column } = resolveListSort(FEES_SORT_COLUMNS, "due_date", false, viewQuery);
-    await invalidateCache(listCacheKey(FEES_CACHE_PREFIX, actor.collegeId, viewQuery, column));
-  }
+  await invalidateCacheFamily(FEES_CACHE_PREFIX, actor.collegeId);
 }
 
 /** Called by app/api/mobile/finance/invoice/route.ts. */

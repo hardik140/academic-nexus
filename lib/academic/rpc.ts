@@ -22,7 +22,7 @@ export async function academicRpc<T>(
   fn: string,
   args: Record<string, unknown> = {}
 ): Promise<T> {
-  const call = supabase.rpc as unknown as (name: string, params?: Record<string, unknown>) => RpcResult;
+  const call = supabase.rpc.bind(supabase) as unknown as (name: string, params?: Record<string, unknown>) => RpcResult;
   const { data, error } = await call(fn, args);
   if (error) throw dbError(error);
   return data as T;
