@@ -56,6 +56,8 @@ const h = vi.hoisted(() => {
   }
   const client = {
     from: (table: string) => query(table),
+    // An RPC returns the rows set for the table named after it (e.g. fee_totals).
+    rpc: async (fn: string) => ({ data: tables[fn] ?? [], error: null }),
     auth: { getUser: async () => ({ data: { user: { id: "user-1" } }, error: null }) },
   };
   const exceptions = vi.fn();
@@ -102,7 +104,13 @@ function expectRupeesOnly(html: string, amounts: string[]) {
 
 describe("money screens render INR, never USD", () => {
   it("finance dashboard: KPIs and recent transactions", async () => {
-    setTables({ profiles: [{ college_id: "c1" }], fees: FEES, payments: [PAYMENT] });
+    setTables({
+      profiles: [{ college_id: "c1" }],
+      fees: FEES,
+      payments: [PAYMENT],
+      // What fee_totals() (057) returns for FEES.
+      fee_totals: [{ total_billed: 125000, total_collected: 50000, total_pending: 0, total_overdue: 75000, fee_count: 2 }],
+    });
     h.exceptions.mockResolvedValue(NO_EXCEPTIONS);
     const { default: Page } = await import("@/app/(portal)/finance/dashboard/page");
     expectRupeesOnly(await render(Page), ["₹1,25,000.00", "₹50,000.00", "₹75,000.00", "₹1,234.50"]);

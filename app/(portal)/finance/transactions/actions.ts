@@ -9,7 +9,7 @@ import { getCached, invalidateCacheFamily, versionedKey } from "@/lib/cache";
 import { resolveListSort, listCacheKey } from "@/lib/cached-list";
 import { logAudit } from "@/lib/audit";
 import { PERMISSIONS } from "@/lib/permissions";
-import { computeEffectiveFeeStatus } from "@/lib/finance-status";
+import { feeTotals } from "@/lib/finance/fee-totals";
 import { listInvoices } from "../invoices/actions";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
@@ -52,34 +52,22 @@ export async function listPayments(q: DataTableQuery) {
 }
 
 /**
- * KPI-card stats — still unbounded (sums over the *entire* fees table, not
- * one page of it, so .range() doesn't apply the way it does above), but now
- * at least cached rather than re-summed on every load. Short TTL (30s):
- * this is money the finance team is actively reconciling, unlike the
- * dashboards' 60s stat counts. The real fix — extending mv_fee_summary
- * (migration 007) with a "pending" aggregate so this becomes an indexed
- * materialized-view read instead of a live SUM — is a schema change, a
- * different and larger scope than caching the existing query.
+ * KPI-card stats over EVERY fee of the college, summed in PostgreSQL
+ * (migration 057, lib/finance/fee-totals.ts). This used to select every fee
+ * row and sum in JavaScript, which PostgREST's row cap (1,000 by default)
+ * silently truncated on a large college. "Pending" and "overdue" follow
+ * lib/finance-status.ts computeEffectiveFeeStatus exactly; a parity test
+ * (tests/staging-fee-totals.test.ts) holds the two together. Short TTL
+ * (30s), invalidated on every payment write: this is money the finance team
+ * is actively reconciling.
  */
 export async function getFeeStats() {
   const actor = await requireRole(PERMISSIONS.payment_read);
   const supabase = await createClient();
 
   return getCached(versionedKey(`stats:fees:${actor.collegeId}`, FEE_STATS_FAMILY, actor.collegeId), 30, async () => {
-    const { data, error: dataError } = await supabase.from("fees").select("amount, paid_amount, status, due_date").eq("college_id", actor.collegeId);
-    assertRead(dataError);
-    const f = data || [];
-    // "overdue" is computed live (computeEffectiveFeeStatus), not the stored
-    // status column — nothing anywhere ever sets fees.status = 'overdue'
-    // (no cron, no trigger), so a raw status === "overdue" filter here
-    // always read zero. See lib/finance-status.ts.
-    const withEffectiveStatus = f.map((i) => ({ ...i, effectiveStatus: computeEffectiveFeeStatus(i) }));
-    return {
-      total: f.reduce((s, i) => s + (i.amount || 0), 0),
-      collected: f.reduce((s, i) => s + (i.paid_amount || 0), 0),
-      pending: withEffectiveStatus.filter((i) => i.effectiveStatus === "pending").reduce((s, i) => s + (i.amount - i.paid_amount), 0),
-      overdue: withEffectiveStatus.filter((i) => i.effectiveStatus === "overdue").reduce((s, i) => s + (i.amount - i.paid_amount), 0),
-    };
+    const t = await feeTotals(supabase, actor.collegeId);
+    return { total: t.billed, collected: t.collected, pending: t.pending, overdue: t.overdue };
   });
 }
 
