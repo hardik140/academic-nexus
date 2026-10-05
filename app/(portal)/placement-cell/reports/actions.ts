@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/rbac";
-import { getCached } from "@/lib/cache";
+import { getCachedWriteBehind } from "@/lib/cache";
 import { assertRead } from "@/lib/read-result-server";
 
 const STAFF_ROLES = ["placement_cell", "director", "admin"] as const;
@@ -32,7 +32,7 @@ export async function getPlacementReports() {
   // (students_read_staff excludes placement_cell; student_placement_profiles
   // excludes director), so one college-wide entry served one role's data to
   // another. See tests/cache-scope-registry.test.ts.
-  return getCached(`placement:reports:${actor.collegeId}:${actor.role}`, 120, async () => {
+  return getCachedWriteBehind(`placement:reports:${actor.collegeId}:${actor.role}`, 120, async () => {
     const [placementsRes, totalStudentsRes] = await Promise.all([
       supabase
         .from("placements")

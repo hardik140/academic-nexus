@@ -35,6 +35,14 @@ export interface Admission {
   max_sessions?: number | null;
   /** Present with no_session_claim. */
   enforcement?: "register" | "enforce";
+  /**
+   * The caller's own routing facts (migration 058), present on every answer
+   * once the profile row was found. Absent before 058 is applied, and on a
+   * bare { state: "inactive" }, which means there is no profile row.
+   */
+  role?: string;
+  college_id?: string;
+  profile_status?: string;
 }
 
 /** The function does not exist: migrations 053/054 are not applied yet. */

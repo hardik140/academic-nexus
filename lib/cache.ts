@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import { redisBuildId } from "@/lib/redis-config";
 import { REDIS_NAMESPACE, redisOp } from "@/lib/redis-guard";
 import { emitRedisEvent } from "@/lib/redis-telemetry";
@@ -11,17 +12,16 @@ import { emitRedisEvent } from "@/lib/redis-telemetry";
  *
  * KEY LAYOUT (every key Redis sees)
  *
- *   <env>:nexus:c:<build>:<key>              value, build-scoped (default)
- *   <env>:nexus:c:shared:<key>               value, buildScoped: false
+ *   <env>:nexus:c:<build>:<key>              value, build-scoped
  *   <env>:nexus:cv:<family>:<scope>          family version counter
  *
  * - `<env>:nexus` keeps development and production apart in the one shared
  *   Upstash database (lib/redis-config.ts).
  * - `<build>` keeps an old Worker and a new one from reading each other's
  *   value shapes during a rollout. TTLs are 15–300 s, so nothing piles up.
- * - The middleware's profile entry is NOT build-scoped: it is invalidated
- *   explicitly on a role/status change, and that delete must reach the entry
- *   every running build reads. Its shape carries its own version tag.
+ * - There is no exact-key delete. The one entry that needed it, the
+ *   middleware's profile, was removed in Phase 2.1: session admission
+ *   (migration 058) now returns the role and status it reads anyway.
  * - Version counters are environment-scoped only: they are plain integers,
  *   identical in meaning to every build.
  */
@@ -56,6 +56,19 @@ export function unscopedSegment(key: string): string | null {
 
 export interface CacheOptions {
   /**
+   * Store the fresh value AFTER the response is sent (Next's after(), which
+   * OpenNext runs on the Worker's waitUntil) instead of before it. Saves one
+   * Redis round trip on every miss. Default false.
+   *
+   * Only for data where a missing or late entry costs nothing but a repeat
+   * database read: analytics, catalogs, counts. Never for authorization,
+   * financial, security, lifecycle or approval state, where the caller
+   * should not even risk the write racing a later one. Versioned entries
+   * are safe either way: a write that lands after an invalidation carries
+   * the old version and is never served.
+   */
+  backgroundWrite?: boolean;
+  /**
    * Versioned invalidation. A write calls invalidateCacheFamily(family,
    * scope), which bumps one counter; every entry of that family in that
    * scope — every page, sort, search and viewer — becomes unreachable at
@@ -63,8 +76,6 @@ export interface CacheOptions {
    */
   family?: string;
   scope?: string;
-  /** Default true. See KEY LAYOUT above for the one exception. */
-  buildScoped?: boolean;
 }
 
 /**
@@ -97,9 +108,8 @@ function familyLabel(key: string, opts?: CacheOptions): string {
   return parts.length > 1 ? `${parts[0]}:${parts[1]}` : parts[0];
 }
 
-function valueKey(key: string, opts?: CacheOptions): string {
-  const build = opts?.buildScoped === false ? "shared" : redisBuildId();
-  return `${REDIS_NAMESPACE}:c:${build}:${key}`;
+function valueKey(key: string): string {
+  return `${REDIS_NAMESPACE}:c:${redisBuildId()}:${key}`;
 }
 
 function versionKey(family: string, scope: string): string {
@@ -142,8 +152,10 @@ export async function getCached<T>(
     throw new Error("getCached: a versioned entry may not outlive its version counter");
   }
 
-  const vKey = valueKey(key, opts);
+  const vKey = valueKey(key);
   let currentVersion = 0;
+  // Which in-flight fill this caller may share: same entry, same version.
+  let flight = `${vKey}|v0`;
 
   if (versioned) {
     const read = await redisOp("cache.read", (r) =>
@@ -152,6 +164,7 @@ export async function getCached<T>(
     if (read.ok) {
       const [entry, version] = read.value;
       currentVersion = Number(version ?? 0) || 0;
+      flight = `${vKey}|v${currentVersion}`;
       if (entry && typeof entry === "object" && "v" in entry) {
         if (entry.v === currentVersion) {
           emitRedisEvent({ event: "redis.cache", family, outcome: "hit", ms: read.ms });
@@ -163,7 +176,7 @@ export async function getCached<T>(
       }
     } else {
       emitRedisEvent({ event: "redis.cache", family, outcome: "error", reason: read.reason, ms: read.ms });
-      return fetcher();
+      return coalesce(`${vKey}|unread`, family, fetcher);
     }
   } else {
     const read = await redisOp("cache.read", (r) => r.get<T>(vKey));
@@ -173,43 +186,102 @@ export async function getCached<T>(
     }
     if (!read.ok) {
       emitRedisEvent({ event: "redis.cache", family, outcome: "error", reason: read.reason, ms: read.ms });
-      return fetcher();
+      return coalesce(`${vKey}|unread`, family, fetcher);
     }
     emitRedisEvent({ event: "redis.cache", family, outcome: "miss", ms: read.ms });
   }
 
-  const fresh = await fetcher();
-
-  // Stamped with the version read BEFORE the fetch: if a write bumped the
-  // counter meanwhile, this entry is already stale and the next read misses.
-  const stored: unknown = versioned ? ({ v: currentVersion, d: fresh } satisfies Versioned<T>) : fresh;
-  const write = await redisOp("cache.write", (r) => r.set(vKey, stored, { ex: ttlSeconds }));
-  if (!write.ok) {
-    emitRedisEvent({ event: "redis.cache", family, outcome: "error", reason: write.reason, ms: write.ms });
-  }
-  return fresh;
+  const version = currentVersion;
+  return coalesce(flight, family, async () => {
+    const fresh = await fetcher();
+    // Stamped with the version read BEFORE the fetch: if a write bumped the
+    // counter meanwhile, this entry is already stale and the next read misses.
+    const stored: unknown = versioned ? ({ v: version, d: fresh } satisfies Versioned<T>) : fresh;
+    const write = async () => {
+      const result = await redisOp("cache.write", (r) => r.set(vKey, stored, { ex: ttlSeconds }));
+      if (!result.ok) {
+        emitRedisEvent({ event: "redis.cache", family, outcome: "error", reason: result.reason, ms: result.ms });
+      }
+    };
+    if (opts?.backgroundWrite) {
+      try {
+        after(write);
+        return fresh;
+      } catch {
+        // Outside a request (a script, a test): nowhere to defer to.
+      }
+    }
+    await write();
+    return fresh;
+  });
 }
 
 /**
- * Explicit delete of one exact key. Used for the middleware's profile entry,
- * where a role or status change must take effect on the next request.
- * Same fail-open posture as getCached — a failed delete means that one key
- * rides out its (20 s) TTL, never an error surfaced to the caller.
+ * Stampede protection (Phase 2.3): concurrent misses of the same entry in
+ * this isolate share ONE database read. A Worker isolate serves many
+ * requests at once, so a popular dashboard expiring under load used to send
+ * every one of them to PostgreSQL; now the first runs the fetcher and the
+ * rest await its promise.
+ *
+ * Per isolate, deliberately: across isolates a miss costs at most one read
+ * per isolate, and coordinating that would need a distributed lock, which
+ * this phase does not introduce.
+ *
+ * Callers share only what they would have shared through Redis anyway: the
+ * flight key is the full value key (environment, build, tenant- and
+ * viewer-scoped cache key) plus the version that was read. A failure is
+ * shared by the callers waiting on it and is never kept: the entry is
+ * removed when the fetch settles, so the next request tries again.
  */
-export async function invalidateCache(key: string, opts?: Pick<CacheOptions, "buildScoped">): Promise<void> {
+const inflight = new Map<string, Promise<unknown>>();
+
+function coalesce<T>(flightKey: string, family: string, fill: () => Promise<T>): Promise<T> {
+  const existing = inflight.get(flightKey);
+  if (existing) {
+    emitRedisEvent({ event: "redis.cache", family, outcome: "coalesced" });
+    return existing as Promise<T>;
+  }
+  const promise = fill();
+  inflight.set(flightKey, promise);
+  const clear = () => {
+    if (inflight.get(flightKey) === promise) inflight.delete(flightKey);
+  };
+  promise.then(clear, clear);
+  return promise;
+}
+
+/** Fills in flight in this isolate (tests and diagnostics). */
+export function inflightFills(): number {
+  return inflight.size;
+}
+
+/**
+ * Several families of one tenant in ONE round trip (Phase 2.2): a payment
+ * changes the fee stats, the fee list and the payment list. Each family is
+ * still its own INCR + EXPIRE; only the HTTP request is shared. Failure is
+ * the same as before: fail-open, each entry rides out its TTL. A transport
+ * failure now misses all of them together instead of possibly some.
+ */
+export async function invalidateCacheFamilies(families: string[], scope: string): Promise<void> {
   if (!REDIS_NAMESPACE) return;
-  // Nothing was ever written under such a key (see getCached), so there is
-  // nothing to delete — and issuing the DEL anyway would be the one write
-  // that touches the shared entry this guard exists to avoid.
-  if (unscopedSegment(key)) return;
-  const vKey = valueKey(key, opts);
-  const result = await redisOp("cache.delete", (r) => r.del(vKey));
-  emitRedisEvent({
-    event: "redis.cache",
-    family: familyLabel(key),
-    outcome: result.ok ? "invalidated" : "error",
-    ...(result.ok ? {} : { reason: result.reason }),
+  const valid = families.filter((family) => !unscopedSegment(`${family}:${scope}`));
+  if (valid.length === 0) return;
+  const result = await redisOp("cache.version", async (r) => {
+    const pipe = r.pipeline();
+    for (const family of valid) {
+      pipe.incr(versionKey(family, scope));
+      pipe.expire(versionKey(family, scope), VERSION_TTL_SECONDS);
+    }
+    return pipe.exec();
   });
+  for (const family of valid) {
+    emitRedisEvent({
+      event: "redis.cache",
+      family,
+      outcome: result.ok ? "invalidated" : "error",
+      ...(result.ok ? {} : { reason: result.reason }),
+    });
+  }
 }
 
 /**
@@ -237,14 +309,15 @@ export async function invalidateCacheFamily(family: string, scope: string): Prom
 }
 
 /**
- * Shared by lib/supabase/middleware.ts (reader) and every write that
- * changes a profile's role/status (invalidator) — a single definition so
- * the two sides can't drift into mismatched key strings. `v1` is the value
- * shape ({ role, college_id, status }); change it if the shape changes.
+ * getCached with backgroundWrite (see CacheOptions): for analytics, catalogs
+ * and counts only. The read sites that use it are listed, with the reason
+ * each is safe, in REDIS_TRANSFORMATION_CURRENT_STATUS.md (Phase 2.4).
  */
-export function middlewareProfileCacheKey(userId: string): string {
-  return `mw-profile:v1:${userId}`;
+export function getCachedWriteBehind<T>(
+  keyOrSpec: string | VersionedKey | null,
+  ttlSeconds: number,
+  fetcher: () => Promise<T>,
+  options?: CacheOptions
+): Promise<T> {
+  return getCached(keyOrSpec, ttlSeconds, fetcher, { ...options, backgroundWrite: true });
 }
-
-/** Options every reader and invalidator of the middleware profile entry must pass. */
-export const MIDDLEWARE_PROFILE_CACHE: CacheOptions = { buildScoped: false };

@@ -16,8 +16,13 @@
  *
  * Control (loopback only):
  *   POST /__mode   {"mode":"healthy"|"slow"|"down"|"malformed"|"auth","delayMs":3000}
- *   POST /__reset  clears data, recorded keys and counters
- *   GET  /__state  { mode, requests, keys: [...distinct keys seen] }
+ *   POST /__rtt    {"ms":5}  a fixed delay on EVERY answer, in any mode: a
+ *                  network round trip, for benchmarks (0 = none, the default)
+ *   POST /__reset  clears data, recorded keys and counters (not the rtt)
+ *   GET  /__state  { mode, requests, commands: {NAME: count}, keys: [...] }
+ *
+ * `requests` counts HTTP round trips; `commands` counts Redis commands, so a
+ * pipeline of three is one request and three commands.
  *
  * "down" destroys the socket without answering (the client sees a network
  * error and retries). "slow" answers after delayMs. "malformed" answers 200
@@ -32,6 +37,8 @@ const port = Number(process.argv[2] ?? process.env.UPSTASH_EMULATOR_PORT ?? 3199
 let mode = "healthy";
 let delayMs = 0;
 let requests = 0;
+let rttMs = 0;
+const commands = {};
 const data = new Map(); // key -> { value: string, expiresAt: number | null }
 const seenKeys = new Set();
 
@@ -52,6 +59,7 @@ function see(...keys) {
 function run(cmd) {
   const [rawName, ...args] = cmd;
   const name = String(rawName).toUpperCase();
+  commands[name] = (commands[name] ?? 0) + 1;
   switch (name) {
     case "PING":
       return "PONG";
@@ -141,6 +149,19 @@ function encode(result, base64) {
   return result;
 }
 
+/**
+ * The benchmark round trip. setTimeout fires in ~15.6 ms steps on Windows,
+ * which would turn a modelled 4 ms into 16, so this polls a monotonic clock
+ * with setImmediate instead: accurate to well under a millisecond, and it
+ * never blocks other requests.
+ */
+function afterRtt(fn) {
+  if (rttMs <= 0) return fn();
+  const end = performance.now() + rttMs;
+  const tick = () => (performance.now() >= end ? fn() : setImmediate(tick));
+  tick();
+}
+
 function reply(res, status, body) {
   res.writeHead(status, { "content-type": "application/json" });
   res.end(typeof body === "string" ? body : JSON.stringify(body));
@@ -158,16 +179,21 @@ const server = createServer((req, res) => {
       delayMs = Number(body.delayMs ?? 0);
       return reply(res, 200, { mode, delayMs });
     }
+    if (path === "/__rtt") {
+      rttMs = Number((raw ? JSON.parse(raw) : {}).ms ?? 0);
+      return reply(res, 200, { rttMs });
+    }
     if (path === "/__reset") {
       data.clear();
       seenKeys.clear();
       requests = 0;
+      for (const k of Object.keys(commands)) delete commands[k];
       mode = "healthy";
       delayMs = 0;
       return reply(res, 200, { ok: true });
     }
     if (path === "/__state") {
-      return reply(res, 200, { mode, delayMs, requests, keys: [...seenKeys] });
+      return reply(res, 200, { mode, delayMs, rttMs, requests, commands, keys: [...seenKeys] });
     }
 
     requests++;
@@ -201,8 +227,8 @@ const server = createServer((req, res) => {
         return reply(res, 400, { error: e.message });
       }
     };
-    if (mode === "slow" && delayMs > 0) setTimeout(respond, delayMs);
-    else respond();
+    if (mode === "slow" && delayMs > 0) setTimeout(() => afterRtt(respond), delayMs);
+    else afterRtt(respond);
   });
 });
 

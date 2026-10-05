@@ -5,7 +5,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole, type AuthorizedActor } from "@/lib/rbac";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { getCached, invalidateCache, middlewareProfileCacheKey, MIDDLEWARE_PROFILE_CACHE } from "@/lib/cache";
+import { getCachedWriteBehind } from "@/lib/cache";
 import { logAudit } from "@/lib/audit";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { assertClaimed } from "@/lib/concurrent-claim";
@@ -109,7 +109,6 @@ export async function promoteToPlacementCellCore(
   }
   assertClaimed(promoted, "staff member");
 
-  await invalidateCache(middlewareProfileCacheKey(userId), MIDDLEWARE_PROFILE_CACHE);
   await logAudit(supabase, actor, "Promoted to Placement Cell", "profiles", userId);
 }
 
@@ -183,7 +182,6 @@ export async function revokePlacementCellCore(
   }
   assertClaimed(revoked, "Placement Cell user");
 
-  await invalidateCache(middlewareProfileCacheKey(userId), MIDDLEWARE_PROFILE_CACHE);
   await logAudit(supabase, actor, "Revoked Placement Cell access", "profiles", userId);
 }
 
@@ -216,7 +214,6 @@ export async function reactivatePlacementCell(userId: string) {
   }
   assertClaimed(reactivated, "Placement Cell user");
 
-  await invalidateCache(middlewareProfileCacheKey(validatedId), MIDDLEWARE_PROFILE_CACHE);
   await logAudit(supabase, actor, "Re-activated Placement Cell access", "profiles", validatedId);
   revalidatePath("/director/placement-cell");
 }
@@ -231,7 +228,7 @@ export async function getPlacementOverview() {
   const actor = await requireRole(["director", "admin"]);
   const supabase = await createClient();
 
-  return getCached(`placement:overview:${actor.collegeId}`, 60, async () => {
+  return getCachedWriteBehind(`placement:overview:${actor.collegeId}`, 60, async () => {
     const [summaryRes, companiesRes, activeDrivesRes, applicationsRes, cellRes] = await Promise.all([
       supabase.from("mv_placement_summary").select("*").maybeSingle(),
       supabase.from("companies").select("*", { count: "exact", head: true }).eq("college_id", actor.collegeId),

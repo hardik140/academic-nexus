@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { startCluster, session, concurrently, owner, REAL_PG_AVAILABLE, type Cluster } from "./realpg/harness";
 import { U, COLLEGE_A } from "./staging/harness";
 
@@ -44,9 +44,17 @@ function registration(uid: string, session: string, opts: { delay?: number; hold
 
 const firstLine = (s: string) => s.split(/\r?\n/).map((l) => l.trim()).find((l) => l.length > 0) ?? "";
 
-/** 054's register_current_session(), with one control removed. */
+/** The newest migration's register_current_session() (058 today), so a mutation tests what ships. */
+function latestRegisterMigration(): string {
+  const files = readdirSync("supabase/migrations").filter((f) => f.endsWith(".sql")).sort().reverse();
+  const file = files.find((f) => readFileSync(`supabase/migrations/${f}`, "utf8").includes("FUNCTION public.register_current_session("));
+  if (!file) throw new Error("no migration defines register_current_session");
+  return readFileSync(`supabase/migrations/${file}`, "utf8").replace(/\r\n/g, "\n");
+}
+
+/** The current register_current_session(), with one control removed. */
 function registerFunctionWithout(control: string): string {
-  const sql = readFileSync("supabase/migrations/054_session_registry.sql", "utf8").replace(/\r\n/g, "\n");
+  const sql = latestRegisterMigration();
   const start = sql.indexOf("CREATE OR REPLACE FUNCTION public.register_current_session(");
   const end = sql.indexOf("\n$$;", start) + "\n$$;".length;
   const fn = sql.slice(start, end);
@@ -61,6 +69,31 @@ maybe("real-PostgreSQL session registry", () => {
 
   const active = (db: string, uid: string) =>
     Number(owner(cluster, db, `SELECT count(*) FROM user_sessions WHERE user_id='${uid}' AND status='active'`));
+
+  it("058: every answer carries the caller's own role, college and status; no profile, none", async () => {
+    const db = cluster.fork();
+    try {
+      const answer = async (uid: string, session_: string) => {
+        const r = await session(cluster, db, as(uid, session_) + "SELECT public.register_current_session('web')::text;");
+        expect(r.code, r.stderr).toBe(0);
+        const line = r.stdout.split(/\r?\n/).map((l) => l.trim()).find((l) => l.startsWith("{"));
+        return JSON.parse(line ?? "null");
+      };
+      expect(await answer(U.teacherA, sid(40))).toMatchObject({ state: "active", role: "teacher", college_id: COLLEGE_A, profile_status: "active" });
+      // Only the CALLER's facts: another user's call answers with theirs.
+      expect(await answer(U.finance, sid(41))).toMatchObject({ role: "finance", college_id: COLLEGE_A, profile_status: "active" });
+
+      owner(cluster, db, "UPDATE profiles SET status = 'suspended' WHERE id = '" + U.studentA + "'");
+      expect(await answer(U.studentA, sid(42))).toEqual({ state: "inactive", role: "student", college_id: COLLEGE_A, profile_status: "suspended" });
+
+      expect(await answer("00000009-0000-4000-8000-000000000999", sid(43))).toEqual({ state: "inactive" });
+
+      // A refusal carries the profile too, and admission's own counting is
+      // unchanged: a student has one slot.
+      expect((await answer(U.studentB, sid(44))).state).toBe("active");
+      expect(await answer(U.studentB, sid(45))).toMatchObject({ state: "rejected", role: "student", profile_status: "active", max_sessions: 1 });
+    } finally { cluster.drop(db); }
+  });
 
   it("two logins racing for a student's ONE slot: exactly one is admitted, the other waits on the lock and is rejected", async () => {
     const db = cluster.fork();

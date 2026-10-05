@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/rbac";
-import { getCached } from "@/lib/cache";
+import { getCachedWriteBehind } from "@/lib/cache";
 import { PERMISSIONS } from "@/lib/permissions";
 import { assertRead } from "@/lib/read-result-server";
 
@@ -26,7 +26,7 @@ export async function listDepartmentFacultyWorkload() {
 
   const cacheKey = `hod-workload:${actor.role === "hod" ? actor.userId : actor.collegeId}`;
 
-  return getCached(cacheKey, 60, async () => {
+  return getCachedWriteBehind(cacheKey, 60, async () => {
     let departmentId: string | null = null;
     if (actor.role === "hod") {
       const { data: department, error: departmentError } = await supabase.from("departments").select("id").eq("hod_id", actor.userId).single();

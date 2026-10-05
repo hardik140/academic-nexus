@@ -17,7 +17,8 @@ const T = {
   registry: "tests/cache-scope-registry.test.ts",
   policy: "tests/rate-limit-policy.test.ts",
   middleware: "tests/middleware-rate-limit.test.ts",
-  invalidation: "tests/profile-cache-invalidation.test.ts",
+  admission: "tests/middleware-admission-profile.test.ts",
+  efficiency: "tests/cache-efficiency.test.ts",
 };
 
 const MUTATIONS = [
@@ -54,8 +55,14 @@ const MUTATIONS = [
     'const MISSING_SEGMENTS = new Set(["undefined", "null", "NaN", ""]);', "const MISSING_SEGMENTS = new Set<string>();", [T.cacheScope, T.keys]],
   ["13. development may use the production namespace", "lib/redis-config.ts",
     'if (environment === "production" && nodeEnv !== "production") {', "if (false) {", [T.keys]],
-  ["14. invalidation after a role change removed", "app/(portal)/admin/users/actions.ts",
-    "await invalidateCache(middlewareProfileCacheKey(targetUserId), MIDDLEWARE_PROFILE_CACHE);", "", [T.invalidation], null, 1],
+  ["14. the middleware ignores the account status admission returns", "lib/supabase/middleware.ts",
+    "status: admission.profile_status as UserStatus,", 'status: "active" as UserStatus,', [T.admission]],
+  ["15. stampede protection removed (every miss reads the database)", "lib/cache.ts",
+    "  if (existing) {", "  if (existing && false) {", [T.efficiency]],
+  ["16. write-behind ignored (the response waits for the SET)", "lib/cache.ts",
+    "    if (opts?.backgroundWrite) {", "    if (false) {", [T.efficiency]],
+  ["17. coalescing ignores the cache version (a post-invalidation read joins an old fill)", "lib/cache.ts",
+    "      flight = `${vKey}|v${currentVersion}`;", "", [T.efficiency]],
 ];
 
 const sha = (s) => createHash("sha256").update(s).digest("hex");

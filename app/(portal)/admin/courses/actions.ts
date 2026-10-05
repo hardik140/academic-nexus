@@ -7,7 +7,7 @@ import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib
 import { PERMISSIONS } from "@/lib/permissions";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { logAudit } from "@/lib/audit";
-import { getCached, invalidateCacheFamily, versionedKey } from "@/lib/cache";
+import { getCachedWriteBehind, invalidateCacheFamily, versionedKey } from "@/lib/cache";
 import { resolveListSort, listCacheKey } from "@/lib/cached-list";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
@@ -29,7 +29,7 @@ export async function listCourses(q: DataTableQuery) {
   const { column, ascending } = resolveListSort(COURSES_SORT_COLUMNS, "code", true, q);
   const cacheKey = versionedKey(listCacheKey(COURSES_CACHE_PREFIX, actor.collegeId, q, column), COURSES_CACHE_PREFIX, actor.collegeId);
 
-  return getCached(cacheKey, 30, async () => {
+  return getCachedWriteBehind(cacheKey, 30, async () => {
     let dbQuery = supabase
       .from("courses")
       // No instructor join: courses.instructor_id is deprecated (047) and a

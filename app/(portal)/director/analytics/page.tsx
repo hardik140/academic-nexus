@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { getCached } from "@/lib/cache";
+import { getCachedWriteBehind } from "@/lib/cache";
 import { assertRead } from "@/lib/read-result-server";
 
 export default async function DirectorAnalytics() {
@@ -17,7 +17,7 @@ export default async function DirectorAnalytics() {
 
   // The views themselves now refresh every 15 min (scheduled via QStash),
   // so this is a second, finer cache layer on top of that.
-  const { attendance, fees, enrollment, placement, deptHealth, facultyCount } = await getCached(
+  const { attendance, fees, enrollment, placement, deptHealth, facultyCount } = await getCachedWriteBehind(
     `analytics:director:${viewerProfile?.college_id}:mv`,
     60,
     async () => {

@@ -9,10 +9,7 @@ import { assertClaimed } from "@/lib/concurrent-claim";
 import { checkRateLimit } from "@/lib/rate-limit";
 import {
   getCached,
-  invalidateCache,
   invalidateCacheFamily,
-  middlewareProfileCacheKey,
-  MIDDLEWARE_PROFILE_CACHE,
   versionedKey,
 } from "@/lib/cache";
 import { listCacheKey } from "@/lib/cached-list";
@@ -172,10 +169,8 @@ export async function updateUserProfileCore(
   if (error) throw dbError(error);
   assertClaimed(updated, "user profile");
 
-  // Changes `role`, which middleware's route-access check reads (cached,
-  // see lib/supabase/middleware.ts) — bust it so the propagation window is
-  // the documented TTL, not TTL-plus-whatever-this-request's-latency-was.
-  await invalidateCache(middlewareProfileCacheKey(targetUserId), MIDDLEWARE_PROFILE_CACHE);
+  // The middleware reads `role` fresh on every request (session admission,
+  // migration 058), so the change applies to that user's next request.
 
   await logAudit(supabase, actor, `Updated profile (role: ${role})`, "profiles", targetUserId);
 }
@@ -234,10 +229,8 @@ export async function updateUserStatusCore(
   if (error) throw dbError(error);
   assertClaimed(updated, "user profile");
 
-  // Changes `status`, which middleware's active-account check reads
-  // (cached) — a suspended user's browser should stop being routed to
-  // portal pages within the documented TTL, not TTL-plus-request-latency.
-  await invalidateCache(middlewareProfileCacheKey(targetUserId), MIDDLEWARE_PROFILE_CACHE);
+  // The middleware reads `status` fresh on every request (session
+  // admission, migration 058): a suspended user's next request is refused.
 
   await logAudit(supabase, actor, `Changed status to ${status}`, "profiles", targetUserId);
 }
@@ -354,10 +347,8 @@ export async function updateStudentAcademicStatusCore(
 
   const mappedProfileStatus = resolveProfileStatusForAcademicTransition(status);
   if (mappedProfileStatus) {
+    // Read fresh by the middleware on the next request (migration 058).
     await supabase.from("profiles").update({ status: mappedProfileStatus }).eq("id", targetUserId).eq("college_id", actor.collegeId);
-    // Changes profiles.status, which middleware's active-account check
-    // reads (cached) — same cache-bust updateUserStatusCore does above.
-    await invalidateCache(middlewareProfileCacheKey(targetUserId), MIDDLEWARE_PROFILE_CACHE);
   }
 
   await logAudit(supabase, actor, "student_academic_status_changed", "students", student.id, {

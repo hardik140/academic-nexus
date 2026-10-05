@@ -5,7 +5,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib/rbac";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { getCached, invalidateCacheFamily, versionedKey } from "@/lib/cache";
+import { getCached, invalidateCacheFamilies, versionedKey } from "@/lib/cache";
 import { resolveListSort, listCacheKey } from "@/lib/cached-list";
 import { logAudit } from "@/lib/audit";
 import { PERMISSIONS } from "@/lib/permissions";
@@ -163,9 +163,7 @@ export async function recordPayment(
 
   // A payment touches all three cached reads on this page: the fee's own
   // row (status/paid_amount), a new payments row, and the KPI sums.
-  await invalidateCacheFamily(FEE_STATS_FAMILY, actor.collegeId);
-  await invalidateCacheFamily(FEES_CACHE_PREFIX, actor.collegeId);
-  await invalidateCacheFamily(PAYMENTS_CACHE_PREFIX, actor.collegeId);
+  await invalidateCacheFamilies([FEE_STATS_FAMILY, FEES_CACHE_PREFIX, PAYMENTS_CACHE_PREFIX], actor.collegeId);
 }
 
 /** Called by app/api/mobile/finance/payment/route.ts. */

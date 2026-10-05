@@ -1,0 +1,129 @@
+{
+  "note": "LOCAL; median of 3 alternating runs; counts exact, latency modelled (Redis 4 ms, DB 10 ms, Auth 15 ms per call)",
+  "before": {
+    "middlewareWarm": {
+      "p50": 40.9,
+      "p95": 43.2,
+      "p99": 48.9,
+      "redisRoundTrips": 2,
+      "redisCommands": 2,
+      "dbQueries": 1
+    },
+    "middlewareCold": {
+      "p50": 59.4,
+      "p95": 68.9,
+      "p99": 74.9,
+      "redisRoundTrips": 3,
+      "redisCommands": 3,
+      "dbQueries": 2
+    },
+    "cacheMissPlain": {
+      "p50": 23.1,
+      "p95": 24.3,
+      "p99": 31.9
+    },
+    "cacheMissWriteBehind": {},
+    "cacheHit": {
+      "p50": 6.5,
+      "p95": 7.3,
+      "p99": 12.4
+    },
+    "hitRatio": 0.5,
+    "stampede": {
+      "1": {
+        "dbQueries": 1,
+        "redisRoundTrips": 2,
+        "redisCommands": 2,
+        "wallMs": 24
+      },
+      "10": {
+        "dbQueries": 10,
+        "redisRoundTrips": 11,
+        "redisCommands": 20,
+        "wallMs": 54
+      },
+      "50": {
+        "dbQueries": 50,
+        "redisRoundTrips": 51,
+        "redisCommands": 100,
+        "wallMs": 172
+      },
+      "100": {
+        "dbQueries": 100,
+        "redisRoundTrips": 101,
+        "redisCommands": 200,
+        "wallMs": 297
+      }
+    },
+    "paymentInvalidation": {
+      "redisRoundTrips": 3,
+      "redisCommands": 6,
+      "latencyMs": 22.2
+    }
+  },
+  "after": {
+    "middlewareWarm": {
+      "p50": 33.9,
+      "p95": 36.1,
+      "p99": 41.3,
+      "redisRoundTrips": 1,
+      "redisCommands": 1,
+      "dbQueries": 1
+    },
+    "middlewareCold": {
+      "p50": 34.5,
+      "p95": 41.3,
+      "p99": 43.3,
+      "redisRoundTrips": 1,
+      "redisCommands": 1,
+      "dbQueries": 1
+    },
+    "cacheMissPlain": {
+      "p50": 23.3,
+      "p95": 24.7,
+      "p99": 29
+    },
+    "cacheMissWriteBehind": {
+      "p50": 16.5,
+      "p95": 17.5,
+      "p99": 22.5
+    },
+    "cacheHit": {
+      "p50": 6.6,
+      "p95": 7.4,
+      "p99": 8.2
+    },
+    "hitRatio": 0.5,
+    "stampede": {
+      "1": {
+        "dbQueries": 1,
+        "redisRoundTrips": 2,
+        "redisCommands": 2,
+        "wallMs": 27
+      },
+      "10": {
+        "dbQueries": 1,
+        "redisRoundTrips": 2,
+        "redisCommands": 11,
+        "wallMs": 25
+      },
+      "50": {
+        "dbQueries": 1,
+        "redisRoundTrips": 2,
+        "redisCommands": 51,
+        "wallMs": 27
+      },
+      "100": {
+        "dbQueries": 1,
+        "redisRoundTrips": 2,
+        "redisCommands": 101,
+        "wallMs": 30
+      }
+    },
+    "paymentInvalidation": {
+      "redisRoundTrips": 1,
+      "redisCommands": 6,
+      "latencyMs": 8.2
+    }
+  }
+}

@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/rbac";
-import { getCached } from "@/lib/cache";
+import { getCachedWriteBehind } from "@/lib/cache";
 import { PERMISSIONS } from "@/lib/permissions";
 import { assertRead } from "@/lib/read-result-server";
 
@@ -22,7 +22,7 @@ export async function listDepartmentHealth() {
     departmentId = await resolveHodDepartmentId(supabase, actor.userId);
   }
 
-  return getCached(`dept-performance:${actor.role === "hod" ? `hod:${actor.userId}` : `director:${actor.collegeId}`}`, 60, async () => {
+  return getCachedWriteBehind(`dept-performance:${actor.role === "hod" ? `hod:${actor.userId}` : `director:${actor.collegeId}`}`, 60, async () => {
     let healthQuery = supabase.from("mv_department_health").select("*").order("department_name");
     if (departmentId) healthQuery = healthQuery.eq("department_id", departmentId);
 

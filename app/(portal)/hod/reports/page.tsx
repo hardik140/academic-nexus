@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { getCached } from "@/lib/cache";
+import { getCachedWriteBehind } from "@/lib/cache";
 import { assertRead } from "@/lib/read-result-server";
 import { NO_MATCH_ID } from "@/lib/read-result";
 
@@ -18,7 +18,7 @@ export default async function HodReports() {
 
   const deptId = dept?.id || "";
 
-  const { enrollment, attendance, backlogs } = await getCached(
+  const { enrollment, attendance, backlogs } = await getCachedWriteBehind(
     `reports:hod:${deptId}:mv`,
     60,
     async () => {
