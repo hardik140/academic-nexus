@@ -6,9 +6,6 @@ import { createClient } from "@/lib/supabase/server";
 import { requireRole, type AuthorizedActor } from "@/lib/rbac";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { getCached, invalidateCacheFamily, versionedKey } from "@/lib/cache";
-import { logAudit } from "@/lib/audit";
-import { assertClaimed } from "@/lib/concurrent-claim";
-import { assertNotSelfApproval } from "@/lib/segregation-of-duties";
 import { PERMISSIONS } from "@/lib/permissions";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
@@ -57,66 +54,31 @@ export async function submitDecisionCore(
   params: SubmitDecisionParams
 ) {
   const parsed = SubmitDecisionSchema.parse(params);
-
-  let departmentId: string | null = null;
-  if (actor.role === "hod") {
-    const { data: department } = await supabase
-      .from("departments")
-      .select("id")
-      .eq("hod_id", actor.userId)
-      .single();
-    departmentId = department?.id ?? null;
-  }
-
-  const { data, error } = await supabase
-    .from("decisions")
-    .insert({
-      college_id: actor.collegeId,
-      category: parsed.category,
-      title: parsed.title,
-      description: parsed.description,
-      requested_by: actor.userId,
-      department_id: departmentId,
-      urgency: parsed.urgency,
-      financial_impact: parsed.financialImpact ?? null,
-      student_impact_count: parsed.studentImpactCount ?? null,
-      institutional_impact_summary: parsed.institutionalImpactSummary ?? null,
-      recommendation: parsed.recommendation ?? null,
-      deadline: parsed.deadline ?? null,
-    })
-    .select("id")
-    .single();
-
-  if (error || !data) {
-    throw dbError({ ...error, message: error?.message || "Failed to submit decision." });
-  }
-
-  // Decisions have no single owner — notify every Director in the college.
-  const { data: directors } = await supabase
-    .from("profiles")
-    .select("id")
-    .eq("college_id", actor.collegeId)
-    .eq("role", "director");
-
-  if (directors && directors.length > 0) {
-    await supabase.from("notifications").insert(
-      directors.map((d) => ({
-        college_id: actor.collegeId,
-        title: "New decision required",
-        message: `${parsed.title} (${parsed.urgency} urgency)`,
-        receiver_id: d.id,
-        sender_id: actor.userId,
-        type: "action_required" as const,
-        link: `/director/decisions/${data.id}`,
-      }))
-    );
-  }
-
-  await logAudit(supabase, actor, "decision_submitted", "decisions", data.id, {
-    newValue: { status: "pending", category: parsed.category, urgency: parsed.urgency },
+  const rpc = supabase.rpc.bind(supabase) as unknown as (
+    name: string,
+    params: Record<string, unknown>
+  ) => PromiseLike<{
+    data: Array<{ decision_id: string }> | null;
+    error: { message: string; code?: string } | null;
+  }>;
+  const { data, error } = await rpc("submit_decision", {
+    p_category: parsed.category,
+    p_title: parsed.title,
+    p_description: parsed.description,
+    p_urgency: parsed.urgency,
+    p_financial_impact: parsed.financialImpact ?? null,
+    p_student_impact_count: parsed.studentImpactCount ?? null,
+    p_institutional_impact_summary: parsed.institutionalImpactSummary ?? null,
+    p_recommendation: parsed.recommendation ?? null,
+    p_deadline: parsed.deadline ?? null,
   });
+  const decision = data?.[0];
 
-  return { id: data.id as string };
+  if (error || !decision) {
+    throw dbError(error ?? { message: "Failed to submit decision." });
+  }
+
+  return { id: decision.decision_id };
 }
 
 export async function submitDecision(params: SubmitDecisionParams) {
@@ -182,99 +144,28 @@ const DecideSchema = z.object({
 
 export type DecideParams = z.infer<typeof DecideSchema>;
 
-const DECIDE_MESSAGES: Record<string, (title: string, reason?: string) => string> = {
-  approved: (title) => `Your request "${title}" was approved.`,
-  rejected: (title, reason) => `Your request "${title}" was declined.${reason ? ` Reason: ${reason}` : ""}`,
-  sent_back: (title, reason) => `"${title}" needs more information before it can be decided.${reason ? ` ${reason}` : ""}`,
-  info_requested: (title, reason) => `More information was requested for "${title}".${reason ? ` ${reason}` : ""}`,
-  delegated: (title) => `"${title}" has been delegated for review.`,
-  withdrawn: (title) => `"${title}" was withdrawn.`,
-};
-
 export async function decideOnDecisionCore(
   supabase: SupabaseClient<Database>,
   actor: AuthorizedActor,
   params: DecideParams
 ) {
   const { decisionId, action, reason, delegateTo } = DecideSchema.parse(params);
-
-  const { data: existing } = await supabase
-    .from("decisions")
-    .select("status, requested_by, delegated_to, title")
-    .eq("id", decisionId)
-    .eq("college_id", actor.collegeId)
-    .single();
-
-  if (!existing) {
-    throw new Error("Decision not found.");
-  }
-  if (!["pending", "info_requested", "sent_back"].includes(existing.status)) {
-    throw new Error("This decision has already been decided.");
-  }
-  assertNotSelfApproval(actor, existing.requested_by, "decision request");
-
-  const update: Database["public"]["Tables"]["decisions"]["Update"] = {
-    status: action,
-    decision_reason: reason ?? null,
-  };
-  if (action === "approved" || action === "rejected") {
-    update.decided_by = actor.userId;
-    update.decided_at = new Date().toISOString();
-  }
-  if (action === "delegated") {
-    if (!delegateTo) {
-      throw new Error("A delegate is required.");
-    }
-    update.delegated_to = delegateTo;
-  }
-
-  // Compare-and-swap on the exact status read above, so two directors (or
-  // one double-click) can't both record a decision and both notify the
-  // requester. See lib/concurrent-claim.ts.
-  const { data: claimed, error } = await supabase
-    .from("decisions")
-    .update(update)
-    .eq("id", decisionId)
-    .eq("college_id", actor.collegeId)
-    .eq("status", existing.status)
-    .select("id");
-
-  if (error) {
-    throw dbError(error);
-  }
-  assertClaimed(claimed, "decision");
-
-  await logAudit(supabase, actor, `decision_${action}`, "decisions", decisionId, {
-    oldValue: { status: existing.status },
-    newValue: { status: action, decision_reason: reason ?? null, delegated_to: delegateTo ?? null },
+  const rpc = supabase.rpc.bind(supabase) as unknown as (
+    name: string,
+    params: Record<string, unknown>
+  ) => PromiseLike<{
+    data: Array<{ decision_id: string }> | null;
+    error: { message: string; code?: string } | null;
+  }>;
+  const { data, error } = await rpc("decide_decision", {
+    p_decision_id: decisionId,
+    p_action: action,
+    p_reason: reason ?? null,
+    p_delegate_to: delegateTo ?? null,
   });
-
-  // Requester always gets notified. The delegate, if any, gets a separate,
-  // differently-worded row — no accessible screen exists yet for either
-  // outside the Director portal (route-prefix-restricted, see proxy.ts), so
-  // neither notification carries a link.
-  const recipients = [existing.requested_by];
-  if (action === "delegated" && delegateTo) {
-    recipients.push(delegateTo);
+  if (error || !data?.[0]) {
+    throw dbError(error ?? { message: "Decision could not be updated." });
   }
-
-  let notificationType: "success" | "error" | "action_required" = "action_required";
-  if (action === "approved") notificationType = "success";
-  else if (action === "rejected") notificationType = "error";
-
-  await supabase.from("notifications").insert(
-    recipients.map((receiverId) => ({
-      college_id: actor.collegeId,
-      title: action === "delegated" && receiverId === delegateTo ? "Decision delegated to you" : "Decision update",
-      message:
-        action === "delegated" && receiverId === delegateTo
-          ? `"${existing.title}" has been delegated to you for review.`
-          : DECIDE_MESSAGES[action](existing.title, reason),
-      receiver_id: receiverId,
-      sender_id: actor.userId,
-      type: notificationType,
-    }))
-  );
 }
 
 export async function decideOnDecision(params: DecideParams) {

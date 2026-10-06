@@ -105,46 +105,28 @@ export async function recordPaymentCore(
   const { feeId, amount, method, transactionRef, notes } = RecordPaymentSchema.parse(params);
   await checkRateLimit(`recordPayment:${actor.userId}`, 15, 60);
 
-  const { data: fee, error: feeError } = await supabase
-    .from("fees")
-    .select("id, college_id, student_id, amount, paid_amount")
-    .eq("id", feeId)
-    .single();
-
-  if (feeError || !fee) {
-    throw new Error("Invoice not found.");
-  }
-  if (fee.college_id !== actor.collegeId) {
-    throw new Error("Invoice not found in your college.");
-  }
-
-  const outstanding = fee.amount - fee.paid_amount;
-  if (amount > outstanding) {
-    throw new Error(`Payment amount exceeds the outstanding balance of ${outstanding.toFixed(2)}.`);
-  }
-
-  const { data: payment, error } = await supabase
-    .from("payments")
-    .insert({
-      college_id: actor.collegeId,
-      fee_id: fee.id,
-      student_id: fee.student_id,
-      amount,
-      method,
-      transaction_ref: transactionRef || null,
-      notes: notes || null,
-      status: "cleared",
-      processed_by: actor.userId,
-    })
-    .select("id")
-    .single();
+  const rpc = supabase.rpc.bind(supabase) as unknown as (
+    name: string,
+    params: Record<string, unknown>
+  ) => PromiseLike<{
+    data: Array<{ payment_id: string; fee_id: string; amount: number }> | null;
+    error: { message: string; code?: string } | null;
+  }>;
+  const { data, error } = await rpc("record_payment", {
+    p_fee_id: feeId,
+    p_amount: amount,
+    p_method: method,
+    p_transaction_ref: transactionRef || null,
+    p_notes: notes || null,
+  });
+  const payment = data?.[0];
 
   if (error || !payment) {
-    throw dbError({ ...error, message: error?.message || "Failed to record payment." });
+    throw dbError(error ?? { message: "Failed to record payment." });
   }
 
-  await logAudit(supabase, actor, "payment_recorded", "payments", payment.id, {
-    newValue: { fee_id: fee.id, amount, method },
+  await logAudit(supabase, actor, "payment_recorded", "payments", payment.payment_id, {
+    newValue: { fee_id: payment.fee_id, amount, method },
   });
 }
 

@@ -106,6 +106,19 @@ describe("the real migration chain applies to an empty database", () => {
     }
   });
 
+  it("installs record_payment as an invoker function with a pinned search_path", async () => {
+    const res = await db.query<{ prosecdef: boolean; proconfig: string[] | null }>(
+      `SELECT prosecdef, proconfig FROM pg_proc
+        WHERE pronamespace = 'public'::regnamespace
+          AND proname = 'record_payment'`
+    );
+    expect(res.rows).toHaveLength(1);
+    expect(res.rows[0].prosecdef, "record_payment must not bypass RLS").toBe(false);
+    expect(String(res.rows[0].proconfig ?? ""), "record_payment has no pinned search_path").toMatch(
+      /search_path=/
+    );
+  });
+
   it("drops every pre-047 policy that 047 supersedes", async () => {
     const res = await db.query<{ policyname: string }>(
       `SELECT policyname FROM pg_policies WHERE schemaname='public'
