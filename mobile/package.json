@@ -39,6 +39,13 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
+    "eas:configure": "eas init",
+    "build:android:preview": "eas build --platform android --profile preview",
+    "build:ios:preview": "eas build --platform ios --profile preview",
+    "build:android:production": "eas build --platform android --profile production",
+    "build:ios:production": "eas build --platform ios --profile production",
+    "submit:android:production": "eas submit --platform android --profile production",
+    "submit:ios:production": "eas submit --platform ios --profile production",
     "lint": "expo lint",
     "test": "jest --passWithNoTests",
     "test:ci": "jest --ci --maxWorkers=2 --passWithNoTests"
