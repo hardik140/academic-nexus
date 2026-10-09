@@ -31,7 +31,7 @@ beforeAll(async () => {
 
 const CAP = 1000; // PostgREST's default max_rows
 
-async function txn<T>(seed: () => Promise<void>, body: () => Promise<T>): Promise<T> {
+async function txn<T>(seed: () => Promise<unknown>, body: () => Promise<T>): Promise<T> {
   await db.exec("BEGIN");
   try {
     await db.exec("SET session_replication_role = replica");
