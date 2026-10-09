@@ -29,38 +29,6 @@ function pendingCacheKey(scopeKey: string, collegeId: string) {
 }
 
 /**
- * Block-scoping resolver shared by every function below — same
- * hostel_blocks.warden_id -> blockIds -> allocated-student-ids chain
- * warden/rooms/actions.ts's listWardenRooms already uses for hostel_rooms.
- * Returns null for admin (unrestricted); an array (possibly empty) of
- * students(id) values for warden.
- */
-export async function resolveWardenScopedStudentIds(
-  supabase: SupabaseClient<Database>,
-  actor: AuthorizedActor
-): Promise<string[] | null> {
-  if (actor.role === "admin") return null;
-
-  const { data: blocks, error: blocksError } = await supabase.from("hostel_blocks").select("id").eq("warden_id", actor.userId);
-  assertRead(blocksError);
-  const blockIds = (blocks || []).map((b) => b.id);
-  if (blockIds.length === 0) return [];
-
-  const { data: rooms, error: roomsError } = await supabase.from("hostel_rooms").select("id").in("block_id", blockIds);
-  assertRead(roomsError);
-  const roomIds = (rooms || []).map((r) => r.id);
-  if (roomIds.length === 0) return [];
-
-  const { data: allocations, error: allocationsError } = await supabase
-    .from("hostel_allocations")
-    .select("student_id")
-    .in("room_id", roomIds)
-    .eq("status", "active");
-  assertRead(allocationsError);
-  return (allocations || []).map((a) => a.student_id);
-}
-
-/**
  * Single-record version of the same check, used by the act/verify
  * functions below — a warden must own the block the pass's STUDENT is
  * currently allocated to. Throws for warden if out of scope; no-ops
@@ -102,17 +70,20 @@ async function assertGatePassInWardenScope(
 export async function listPendingGatePasses() {
   const actor = await requireRole(PERMISSIONS.gatepass_review);
   const supabase = await createClient();
-  const studentIds = await resolveWardenScopedStudentIds(supabase, actor);
 
   return getCached(pendingCacheKey(actor.role === "admin" ? actor.collegeId : actor.userId, actor.collegeId), 15, async () => {
-    if (studentIds !== null && studentIds.length === 0) return [];
-    let dbQuery = supabase
+    // Block scope is PostgreSQL's (gate_passes_staff_read, migration 050:
+    // a warden reads only passes of students allocated in their own rooms;
+    // an admin, the college). The old app-side copy of that scope resolved
+    // the warden's students into an id list — capped at PostgREST's 1,000
+    // rows — and sent it back as a URL filter, so in a large block some
+    // students' passes were silently out of scope.
+    const { data, error: dataError } = await supabase
       .from("gate_passes")
       .select("*, students:student_id(enrollment_number, profiles:user_id(full_name))")
       .eq("status", "pending")
-      .eq("college_id", actor.collegeId);
-    if (studentIds !== null) dbQuery = dbQuery.in("student_id", studentIds);
-    const { data, error: dataError } = await dbQuery.order("created_at", { ascending: false });
+      .eq("college_id", actor.collegeId)
+      .order("created_at", { ascending: false });
     assertRead(dataError);
     return data || [];
   });
@@ -121,7 +92,6 @@ export async function listPendingGatePasses() {
 export async function listProcessedGatePasses(q: DataTableQuery) {
   const actor = await requireRole(PERMISSIONS.gatepass_review);
   const supabase = await createClient();
-  const studentIds = await resolveWardenScopedStudentIds(supabase, actor);
 
   const { column, ascending } = resolveListSort(PROCESSED_SORT_COLUMNS, "created_at", false, q);
   const cacheKey = versionedKey(
@@ -131,14 +101,17 @@ export async function listProcessedGatePasses(q: DataTableQuery) {
   );
 
   return getCached(cacheKey, 30, async () => {
-    if (studentIds !== null && studentIds.length === 0) return { data: [], count: 0 };
-    let dbQuery = supabase
+    // Block scope is PostgreSQL's (gate_passes_staff_read, migration 050:
+    // a warden reads only passes of students allocated in their own rooms;
+    // an admin, the college). The old app-side copy of that scope resolved
+    // the warden's students into an id list — capped at PostgREST's 1,000
+    // rows — and sent it back as a URL filter, so in a large block some
+    // students' passes were silently out of scope.
+    const { data, count, error: dataError } = await supabase
       .from("gate_passes")
       .select("*, students:student_id(enrollment_number, profiles:user_id(full_name))", { count: "exact" })
       .neq("status", "pending")
-      .eq("college_id", actor.collegeId);
-    if (studentIds !== null) dbQuery = dbQuery.in("student_id", studentIds);
-    const { data, count, error: dataError } = await dbQuery
+      .eq("college_id", actor.collegeId)
       .order(column, { ascending })
       .range(q.page * PROCESSED_PAGE_SIZE, q.page * PROCESSED_PAGE_SIZE + PROCESSED_PAGE_SIZE - 1);
     assertRead(dataError);
@@ -434,7 +407,13 @@ export interface GateOperationsSnapshot {
   outsideCount: number;
   lateReturns: { passId: string; studentName: string; returnTime: string; minutesLate: number }[];
   pendingExitVerifications: { passId: string; studentName: string; exitTime: string; minutesOverdue: number }[];
+  /** How many there are in all; each list above holds at most GATE_OPS_LIST_LIMIT, oldest first. */
+  lateReturnCount: number;
+  pendingExitCount: number;
 }
+
+/** Entries listed per exception list; the counts are always complete. */
+const GATE_OPS_LIST_LIMIT = 100;
 
 /**
  * Residential Presence + Hostel Exceptions in one pass, block-scoped.
@@ -449,71 +428,76 @@ export async function getGateOperationsSnapshot(): Promise<GateOperationsSnapsho
   const supabase = await createClient();
 
   return getCached(`gate-ops:${actor.role === "admin" ? actor.collegeId : actor.userId}`, 30, async () => {
-    const studentIds = await resolveWardenScopedStudentIds(supabase, actor);
-    if (studentIds !== null && studentIds.length === 0) {
-      return { inHostelCount: 0, outsideCount: 0, lateReturns: [], pendingExitVerifications: [] };
-    }
-
-    const totalResidentsQuery =
-      studentIds === null
-        ? supabase.from("hostel_allocations").select("student_id", { count: "exact", head: true }).eq("college_id", actor.collegeId).eq("status", "active")
-        : Promise.resolve({ count: studentIds.length, error: null });
-
-    let gatePassesQuery = supabase
-      .from("gate_passes")
-      .select("id, status, return_time, exit_time, students:student_id(profiles:user_id(full_name))")
-      .in("status", ["active", "approved"])
-      .eq("college_id", actor.collegeId);
-    if (studentIds !== null) gatePassesQuery = gatePassesQuery.in("student_id", studentIds);
-
-    const [totalResidentsRes, gatePassesRes] = await Promise.all([totalResidentsQuery, gatePassesQuery]);
-    assertRead(totalResidentsRes.error);
-    assertRead(gatePassesRes.error);
-    const totalResidents = (totalResidentsRes as { count: number | null }).count ?? 0;
-
+    // Block scope is PostgreSQL's: since 047/050 RLS shows a warden only the
+    // allocations of their own rooms and the passes of students allocated
+    // there (hostel_allocations_staff_manage, gate_passes_staff_read via
+    // wardens_room / wardens_student), and an admin the whole college.
+    //
+    // Every number is a count PostgreSQL makes, and each exception list is a
+    // bounded, oldest-first page. This used to resolve the warden's students
+    // into an id list (capped at PostgREST's 1,000 rows, then sent back as a
+    // URL filter) and read every active and approved pass to count here, so
+    // a large block undercounted who was outside and could miss a late
+    // return entirely.
     const now = Date.now();
-    const graceMs = LATE_RETURN_GRACE_MINUTES * 60 * 1000;
-    let outsideCount = 0;
-    const lateReturns: GateOperationsSnapshot["lateReturns"] = [];
-    const pendingExitVerifications: GateOperationsSnapshot["pendingExitVerifications"] = [];
+    const lateCutoff = new Date(now - LATE_RETURN_GRACE_MINUTES * 60 * 1000).toISOString();
+    const nowIso = new Date(now).toISOString();
+    const name = "students:student_id(profiles:user_id(full_name))";
 
-    for (const p of (gatePassesRes.data || []) as unknown as {
-      id: string;
-      status: "active" | "approved";
-      return_time: string;
-      exit_time: string;
-      students: { profiles: { full_name: string } | null } | null;
-    }[]) {
-      const studentName = p.students?.profiles?.full_name || "Unknown";
-      if (p.status === "active") {
-        outsideCount++;
-        const dueAt = new Date(p.return_time).getTime() + graceMs;
-        if (now > dueAt) {
-          lateReturns.push({
-            passId: p.id,
-            studentName,
-            returnTime: p.return_time,
-            minutesLate: Math.round((now - new Date(p.return_time).getTime()) / 60000),
-          });
-        }
-      } else if (p.status === "approved") {
-        const exitAt = new Date(p.exit_time).getTime();
-        if (now > exitAt) {
-          pendingExitVerifications.push({
-            passId: p.id,
-            studentName,
-            exitTime: p.exit_time,
-            minutesOverdue: Math.round((now - exitAt) / 60000),
-          });
-        }
-      }
-    }
+    const [residentsRes, outsideRes, lateRes, exitRes] = await Promise.all([
+      supabase
+        .from("hostel_allocations")
+        .select("student_id", { count: "exact", head: true })
+        .eq("college_id", actor.collegeId)
+        .eq("status", "active"),
+      supabase
+        .from("gate_passes")
+        .select("id", { count: "exact", head: true })
+        .eq("college_id", actor.collegeId)
+        .eq("status", "active"),
+      supabase
+        .from("gate_passes")
+        .select(`id, return_time, ${name}`, { count: "exact" })
+        .eq("college_id", actor.collegeId)
+        .eq("status", "active")
+        .lt("return_time", lateCutoff)
+        .order("return_time", { ascending: true })
+        .range(0, GATE_OPS_LIST_LIMIT - 1),
+      supabase
+        .from("gate_passes")
+        .select(`id, exit_time, ${name}`, { count: "exact" })
+        .eq("college_id", actor.collegeId)
+        .eq("status", "approved")
+        .lt("exit_time", nowIso)
+        .order("exit_time", { ascending: true })
+        .range(0, GATE_OPS_LIST_LIMIT - 1),
+    ]);
+    assertRead(residentsRes.error);
+    assertRead(outsideRes.error);
+    assertRead(lateRes.error);
+    assertRead(exitRes.error);
+
+    type Named = { students: { profiles: { full_name: string } | null } | null };
+    const studentName = (p: Named) => p.students?.profiles?.full_name || "Unknown";
+    const outsideCount = outsideRes.count ?? 0;
 
     return {
-      inHostelCount: Math.max(totalResidents - outsideCount, 0),
+      inHostelCount: Math.max((residentsRes.count ?? 0) - outsideCount, 0),
       outsideCount,
-      lateReturns,
-      pendingExitVerifications,
+      lateReturns: ((lateRes.data || []) as unknown as (Named & { id: string; return_time: string })[]).map((p) => ({
+        passId: p.id,
+        studentName: studentName(p),
+        returnTime: p.return_time,
+        minutesLate: Math.round((now - new Date(p.return_time).getTime()) / 60000),
+      })),
+      pendingExitVerifications: ((exitRes.data || []) as unknown as (Named & { id: string; exit_time: string })[]).map((p) => ({
+        passId: p.id,
+        studentName: studentName(p),
+        exitTime: p.exit_time,
+        minutesOverdue: Math.round((now - new Date(p.exit_time).getTime()) / 60000),
+      })),
+      lateReturnCount: lateRes.count ?? 0,
+      pendingExitCount: exitRes.count ?? 0,
     };
   });
 }

@@ -136,6 +136,13 @@ export default async function WardenDashboard() {
           {gateOps.lateReturns.length === 0 && gateOps.pendingExitVerifications.length === 0 && (
             <div className="p-xl text-center text-sm text-outline">No hostel exceptions detected.</div>
           )}
+          {(gateOps.lateReturnCount > gateOps.lateReturns.length ||
+            gateOps.pendingExitCount > gateOps.pendingExitVerifications.length) && (
+            <div className="px-lg py-md text-xs text-outline">
+              Showing the oldest {gateOps.lateReturns.length} of {gateOps.lateReturnCount} late returns and{" "}
+              {gateOps.pendingExitVerifications.length} of {gateOps.pendingExitCount} pending exit verifications.
+            </div>
+          )}
         </div>
       </div>
 

@@ -10,7 +10,6 @@ import { resolveListSort, listCacheKey } from "@/lib/cached-list";
 import { logAudit } from "@/lib/audit";
 import { assertClaimed } from "@/lib/concurrent-claim";
 import { PERMISSIONS } from "@/lib/permissions";
-import { resolveWardenScopedStudentIds } from "../gatepasses/actions";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import type { DataTableQuery } from "@/components/ui/data-table";
@@ -23,23 +22,30 @@ const COMPLAINTS_CACHE_PREFIX = "list:hostel-complaints";
 const HOSTEL_CATEGORIES = ["hostel", "mess", "plumbing", "electrical", "ac_hvac", "carpentry", "cleaning", "safety"] as const;
 
 /**
- * `complaints.submitted_by` references `profiles(id)`, while
- * `resolveWardenScopedStudentIds` (shared with gatepasses/actions.ts)
- * returns `students(id)` values allocated to the warden's own block(s) — two
- * different id spaces — so this resolves through `students.user_id` to get
- * the set of profile ids a block-scoped warden may see. Returns null for
- * admin (unrestricted), same convention as the resolver it wraps.
+ * Whether a complaint's submitter is in this warden's block scope: their
+ * student record has an ACTIVE allocation in one of the warden's rooms.
+ *
+ * One record, two bounded reads. hostel_allocations is already scoped to
+ * the warden's own rooms by RLS (hostel_allocations_staff_manage, 047), so
+ * "an active allocation is visible" is exactly "allocated in my block".
+ * This replaced membership in an id list of the whole block, which
+ * PostgREST capped at 1,000 rows: in a larger block a warden was refused on
+ * a complaint that was theirs to handle.
+ *
+ * complaints.submitted_by references profiles(id), allocations students(id),
+ * hence the hop through students.user_id.
  */
-async function resolveWardenScopedSubmitterIds(
-  supabase: SupabaseClient<Database>,
-  actor: AuthorizedActor
-): Promise<string[] | null> {
-  const studentIds = await resolveWardenScopedStudentIds(supabase, actor);
-  if (studentIds === null) return null;
-  if (studentIds.length === 0) return [];
-  const { data: students, error: studentsError } = await supabase.from("students").select("user_id").in("id", studentIds);
-  assertRead(studentsError);
-  return (students || []).map((s) => s.user_id);
+async function wardenScopesSubmitter(supabase: SupabaseClient<Database>, submittedBy: string): Promise<boolean> {
+  const { data: student, error: studentError } = await supabase.from("students").select("id").eq("user_id", submittedBy).maybeSingle();
+  assertRead(studentError);
+  if (!student) return false;
+  const { count, error: allocationError } = await supabase
+    .from("hostel_allocations")
+    .select("id", { count: "exact", head: true })
+    .eq("student_id", student.id)
+    .eq("status", "active");
+  assertRead(allocationError);
+  return (count ?? 0) > 0;
 }
 
 /**
@@ -52,7 +58,6 @@ async function resolveWardenScopedSubmitterIds(
 export async function listHostelComplaints(q: DataTableQuery) {
   const actor = await requireRole(PERMISSIONS.hostel_complaint_manage);
   const supabase = await createClient();
-  const submitterIds = await resolveWardenScopedSubmitterIds(supabase, actor);
 
   const { column, ascending } = resolveListSort(COMPLAINTS_SORT_COLUMNS, "created_at", false, q);
   const cacheKey = versionedKey(
@@ -62,13 +67,15 @@ export async function listHostelComplaints(q: DataTableQuery) {
   );
 
   return getCached(cacheKey, 30, async () => {
-    if (submitterIds !== null && submitterIds.length === 0) return { data: [], count: 0 };
-
+    // Block scope is PostgreSQL's (complaints_staff, migration 047: a warden
+    // reads only complaints submitted by students allocated in their own
+    // rooms; an admin, the college). The old app-side copy resolved the
+    // block's students into id lists capped at PostgREST's 1,000 rows and
+    // sent them back as a URL filter.
     let dbQuery = supabase
       .from("complaints")
       .select("*, profiles:submitted_by(full_name)", { count: "exact" })
       .in("category", HOSTEL_CATEGORIES);
-    if (submitterIds !== null) dbQuery = dbQuery.in("submitted_by", submitterIds);
 
     if (q.search) dbQuery = dbQuery.ilike("title", `%${q.search}%`);
     dbQuery = dbQuery.order(column, { ascending });
@@ -108,11 +115,8 @@ export async function updateComplaintStatusCore(
     throw new Error("Complaint not found or already resolved.");
   }
 
-  if (actor.role === "warden") {
-    const submitterIds = await resolveWardenScopedSubmitterIds(supabase, actor);
-    if (submitterIds !== null && !submitterIds.includes(existing.submitted_by)) {
-      throw new Error("You can only act on complaints from students in your own hostel block(s).");
-    }
+  if (actor.role === "warden" && !(await wardenScopesSubmitter(supabase, existing.submitted_by))) {
+    throw new Error("You can only act on complaints from students in your own hostel block(s).");
   }
 
   // Compare-and-swap on the exact status read above. See
