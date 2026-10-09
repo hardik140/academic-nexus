@@ -56,42 +56,47 @@ STABLE
 SECURITY INVOKER
 SET search_path = public, pg_catalog
 AS $$
-  WITH s AS (
-    SELECT st.id, st.department_id, st.cgpa
+  -- One row per (student, fact), then ONE hash GROUP BY per student: no
+  -- student-to-fee join. Under RLS the planner cannot estimate how many rows
+  -- survive the policies; given a join it chose a nested loop that
+  -- re-scanned the overdue fees once per student (20,006 students: 26.9 s
+  -- on PostgreSQL 18). This shape is linear in the rows read.
+  WITH facts AS (
+    SELECT st.id, st.department_id, 1 AS is_student,
+           CASE WHEN st.cgpa IS NOT NULL AND st.cgpa < 5 THEN 1 ELSE 0 END AS w
     FROM public.students st
     WHERE st.college_id = p_college_id
       AND st.status = 'active'
       AND (p_department_id IS NULL OR st.department_id = p_department_id)
-  ),
-  overdue AS (
-    SELECT DISTINCT f.student_id
+    UNION ALL
+    SELECT DISTINCT f.student_id, NULL::uuid, 0, 1
     FROM public.fees f
     WHERE f.college_id = p_college_id
       AND public.fee_effective_status(f.amount, f.paid_amount, f.status, f.due_date) = 'overdue'
-  ),
-  backlog AS (
-    SELECT DISTINCT e.student_id
+    UNION ALL
+    SELECT DISTINCT e.student_id, NULL::uuid, 0, 1
     FROM public.course_enrollments e
     WHERE e.college_id = p_college_id AND e.status = 'failed'
   ),
-  scored AS (
-    SELECT s.department_id,
-           (CASE WHEN s.cgpa IS NOT NULL AND s.cgpa < 5 THEN 1 ELSE 0 END)
-         + (CASE WHEN o.student_id IS NOT NULL THEN 1 ELSE 0 END)
-         + (CASE WHEN b.student_id IS NOT NULL THEN 1 ELSE 0 END) AS factors
-    FROM s
-    LEFT JOIN overdue o ON o.student_id = s.id
-    LEFT JOIN backlog b ON b.student_id = s.id
+  per_student AS (
+    SELECT (array_agg(department_id) FILTER (WHERE is_student = 1))[1] AS department_id,
+           sum(w) AS factors
+    FROM facts
+    GROUP BY id
+    HAVING max(is_student) = 1
+  ),
+  per_department AS (
+    SELECT department_id,
+           count(*) AS total_students,
+           count(*) FILTER (WHERE factors >= 1) AS at_risk,
+           count(*) FILTER (WHERE factors >= 2) AS critical
+    FROM per_student
+    GROUP BY department_id
   )
-  SELECT sc.department_id,
-         COALESCE(d.name, 'Unknown'),
-         COALESCE(d.code, ''),
-         count(*),
-         count(*) FILTER (WHERE sc.factors >= 1),
-         count(*) FILTER (WHERE sc.factors >= 2)
-  FROM scored sc
-  LEFT JOIN public.departments d ON d.id = sc.department_id
-  GROUP BY sc.department_id, d.name, d.code
+  SELECT pd.department_id, COALESCE(d.name, 'Unknown'), COALESCE(d.code, ''),
+         pd.total_students, pd.at_risk, pd.critical
+  FROM per_department pd
+  LEFT JOIN public.departments d ON d.id = pd.department_id
   ORDER BY COALESCE(d.name, 'Unknown');
 $$;
 REVOKE ALL ON FUNCTION public.student_risk_overview(UUID, UUID) FROM PUBLIC, anon;
@@ -199,13 +204,7 @@ STABLE
 SECURITY INVOKER
 SET search_path = public, pg_catalog
 AS $$
-  WITH lbl AS (
-    SELECT st.id AS student_id, COALESCE(p.full_name, 'Unknown') AS name, COALESCE(st.enrollment_number, '—') AS enrollment
-    FROM public.students st
-    LEFT JOIN public.profiles p ON p.id = st.user_id
-    WHERE st.college_id = p_college_id
-  ),
-  overdue AS (
+  WITH overdue AS (
     SELECT f.id::text AS item_id, f.student_id, f.amount - f.paid_amount AS amount, 'Due ' || f.due_date::text AS detail, f.due_date AS sort_key
     FROM public.fees f
     WHERE f.college_id = p_college_id
@@ -259,9 +258,13 @@ AS $$
     (SELECT 'disputesNeedingAttention', d.item_id, d.student_id, d.amount, d.detail, (SELECT count(*) FROM disp)
      FROM disp d ORDER BY d.created_at, d.item_id LIMIT p_limit)
   )
-  SELECT r.category, r.item_id, COALESCE(l.name, 'Unknown'), COALESCE(l.enrollment, '—'), r.amount, r.detail, r.total
+  -- Names are looked up for the listed rows only (at most 5 × p_limit), by
+  -- primary key: joining every student of the college to them made the
+  -- planner materialize the whole roster per listed row.
+  SELECT r.category, r.item_id, COALESCE(p.full_name, 'Unknown'), COALESCE(st.enrollment_number, '—'), r.amount, r.detail, r.total
   FROM items r
-  LEFT JOIN lbl l ON l.student_id = r.student_id;
+  LEFT JOIN public.students st ON st.id = r.student_id AND st.college_id = p_college_id
+  LEFT JOIN public.profiles p ON p.id = st.user_id;
 $$;
 REVOKE ALL ON FUNCTION public.finance_exceptions(UUID, INTEGER) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.finance_exceptions(UUID, INTEGER) TO authenticated;

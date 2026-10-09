@@ -1,0 +1,119 @@
+{
+  "note": "LOCAL (PGlite, in-process WASM). Query and row counts exact; times comparative only, not server or network latency.",
+  "rows_1000": {
+    "dataset": {
+      "students": 1006,
+      "fees": 1002,
+      "payments": 1000
+    },
+    "riskOverview": {
+      "before": {
+        "queries": 3,
+        "rowsToApp": 2000,
+        "studentsSeen": 1000,
+        "ms": 51
+      },
+      "after": {
+        "queries": 1,
+        "rowsToApp": 1,
+        "studentsCounted": 1006,
+        "ms": 180
+      }
+    },
+    "feeStatusBreakdown": {
+      "before": {
+        "queries": 1,
+        "rowsToApp": 1000,
+        "feesCounted": 1000,
+        "ms": 23.1
+      },
+      "after": {
+        "queries": 1,
+        "rowsToApp": 2,
+        "feesCounted": 1002,
+        "ms": 73.3
+      }
+    },
+    "financeExceptions": {
+      "before": {
+        "queries": 4,
+        "rowsToApp": 2000,
+        "paymentsSeen": 1000,
+        "ms": 51.1
+      },
+      "after": {
+        "queries": 1,
+        "rowsToApp": 200,
+        "ms": 417.2
+      }
+    },
+    "syncNowRequests": {
+      "before": {
+        "requests": "2 + (2 to 3) × min(1000, 1000)",
+        "paymentsConsidered": 1000
+      },
+      "after": {
+        "requests": 2,
+        "paymentsConsidered": 1000
+      }
+    }
+  },
+  "rows_20000": {
+    "dataset": {
+      "students": 20006,
+      "fees": 20002,
+      "payments": 20000
+    },
+    "riskOverview": {
+      "before": {
+        "queries": 3,
+        "rowsToApp": 2000,
+        "studentsSeen": 1000,
+        "ms": 46.3
+      },
+      "after": {
+        "queries": 1,
+        "rowsToApp": 1,
+        "studentsCounted": 20006,
+        "ms": 3114.3
+      }
+    },
+    "feeStatusBreakdown": {
+      "before": {
+        "queries": 1,
+        "rowsToApp": 1000,
+        "feesCounted": 1000,
+        "ms": 20.2
+      },
+      "after": {
+        "queries": 1,
+        "rowsToApp": 2,
+        "feesCounted": 20002,
+        "ms": 1324.4
+      }
+    },
+    "financeExceptions": {
+      "before": {
+        "queries": 4,
+        "rowsToApp": 2000,
+        "paymentsSeen": 1000,
+        "ms": 55.7
+      },
+      "after": {
+        "queries": 1,
+        "rowsToApp": 200,
+        "ms": 4755.3
+      }
+    },
+    "syncNowRequests": {
+      "before": {
+        "requests": "2 + (2 to 3) × min(20000, 1000)",
+        "paymentsConsidered": 1000
+      },
+      "after": {
+        "requests": 40,
+        "paymentsConsidered": 20000
+      }
+    }
+  }
+}

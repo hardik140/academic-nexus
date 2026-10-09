@@ -1,0 +1,26 @@
+# Phase 3 — LOCAL, real PostgreSQL 18 (tests/realpg harness), best of 3, milliseconds. Called as the named role through RLS.
+# rows	path / role	ms
+1000	risk_overview / director	173.1
+1000	risk_overview / owner, no RLS	8.7
+1000	fee_status_breakdown / finance	114.9
+1000	fee_department_breakdown / finance	176.9
+1000	finance_exceptions / finance	114.7
+1000	placement_report / director	155.8
+1000	OLD capped students select / director	69.6
+1000	OLD capped fees select / finance	71.6
+5000	risk_overview / director	746.9
+5000	risk_overview / owner, no RLS	42.2
+5000	fee_status_breakdown / finance	435.0
+5000	fee_department_breakdown / finance	834.6
+5000	finance_exceptions / finance	444.6
+5000	placement_report / director	748.0
+5000	OLD capped students select / director	71.1
+5000	OLD capped fees select / finance	69.6
+20000	risk_overview / director	3442.0
+20000	risk_overview / owner, no RLS	169.7
+20000	fee_status_breakdown / finance	1765.0
+20000	fee_department_breakdown / finance	3371.3
+20000	finance_exceptions / finance	1886.5
+20000	placement_report / director	3266.2
+20000	OLD capped students select / director	75.2
+20000	OLD capped fees select / finance	83.4
