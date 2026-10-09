@@ -559,7 +559,7 @@ describe("finance_mapping_usage", () => {
     await txn(
       async () => {
         await owner(
-          
+
 `INSERT INTO public.fees (college_id, student_id, type, amount, paid_amount, due_date, status, created_at)
            SELECT $1, $2, CASE WHEN g > 1490 THEN 'QA Rare Head' ELSE 'QA Tuition' END, 100, 0, DATE '2030-01-01', 'pending',
                   TIMESTAMPTZ '2000-01-01' + (g || ' seconds')::interval
