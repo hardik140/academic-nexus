@@ -206,3 +206,62 @@ Revert the branch, then drop the 059 functions and the
 **Deploy order: apply 059 before deploying this code.** There is no fallback
 to the capped computation by design; without 059 the affected pages show
 their error state.
+
+## Performance
+
+**Labels.** Everything here is **LOCAL**. Nothing is **PREVIEW** or
+**PRODUCTION**: migration 059 is applied nowhere hosted, and Phase 0's
+telemetry is blocked. Nothing is **MODELLED**.
+
+### Rows to the application, and queries
+
+These are exact counts, from `bench/phase3.bench.ts` at 20,000 students,
+fees and payments.
+
+| Path | Before | After |
+|---|---|---|
+| Risk overview | 3 queries, 2,000 rows, counted 1,000 of 20,006 students | 1 query, 1 row per department, counts all 20,006 |
+| Fee status breakdown | 1 query, 1,000 rows, counted 1,000 of 20,002 fees | 1 query, 1 row per status, counts all 20,002 |
+| Finance exceptions | 4 queries, 2,000 rows, saw 1,000 of 20,000 payments | 1 query, at most 5 × 200 rows, complete totals |
+| Sync Now, requests | 2 + (2 to 3) × min(payments, 1,000) | ceil(payments ÷ 500) |
+| Announcement fan-out | recipients read (capped) + one insert carrying them | one statement, one row back |
+
+### Time
+
+Real PostgreSQL 18 (`tests/realpg` harness), best of 3, called as the
+named role through RLS. Full table: `bench/results/phase3-realpg-local.tsv`.
+
+| Rows | Risk overview | Same, as owner (no RLS) | Fee status breakdown | Finance exceptions | Old capped read |
+|---:|---:|---:|---:|---:|---:|
+| 1,000 | 173 ms | 9 ms | 115 ms | 115 ms | 70 ms |
+| 5,000 | 747 ms | 42 ms | 435 ms | 445 ms | 70 ms |
+| 20,000 | 3,442 ms | 170 ms | 1,765 ms | 1,887 ms | 75 ms |
+
+**A defect found and fixed while measuring.** The first version of the
+risk overview took 16.6 s at 20,000 students. Under RLS the planner chose a
+nested loop that re-scanned the overdue fees once per student. Both it and
+finance exceptions now avoid that join, and every function is linear.
+
+**The old read was fast because it was wrong.** It stopped at 1,000 rows.
+The comparison that matters is a complete answer against an incomplete
+one.
+
+### Known limitation: per-row RLS cost
+
+**What the gap is.** The difference between the RLS and owner columns,
+about 85 µs per row, is the existing policies. Each calls
+`get_my_college_id()` and `get_my_role()` for every row they check. The
+old reads paid this too, but only for 1,000 rows. A complete answer pays
+it for every row.
+
+**What it means at a typical size.** A 3,000-student college with 12,000
+fees reads in roughly 0.3–1 s. Those results sit behind the existing 30–120 s
+caches.
+
+**Recommended follow-up, as its own security-reviewed PR.** Wrap those
+helper calls as `(SELECT public.get_my_role())` in the policies on the hot
+tables (students, fees, payments, placements, profiles), the standard
+Supabase pattern. That makes PostgreSQL evaluate them once per statement,
+not once per row. It should bring the RLS figures close to the owner
+figures. It changes existing security policies, so it is deliberately not
+part of this phase.
