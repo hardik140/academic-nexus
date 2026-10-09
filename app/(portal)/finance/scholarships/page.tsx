@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { DataTable, type DataTableQuery } from "@/components/ui/data-table";
 import { Modal, Button, FormField, StatusBadge } from "@/components/ui/modal";
+import { StudentSearchField } from "@/components/student-search-field";
 import { Alert } from "@/components/ui/alert";
 import { ErrorAlert } from "@/components/ui/error-alert";
 import { useAsyncResource } from "@/hooks/use-async-resource";
@@ -68,17 +69,6 @@ export default function FinanceScholarships() {
     }
   };
 
-  const studentsResource = useAsyncResource(
-    async () =>
-      requireRows(
-        await supabase
-          .from("students")
-          .select("id, enrollment_number, profiles:user_id(full_name)")
-          .order("enrollment_number")
-      ),
-    []
-  );
-  const students: any[] = studentsResource.data ?? [];
 
   const handleCreate = async () => {
     setLoading(true);
@@ -95,11 +85,6 @@ export default function FinanceScholarships() {
       setLoading(false);
     }
   };
-
-  const studentOptions = students.map((s) => ({
-    value: s.id,
-    label: `${s.enrollment_number} — ${(s.profiles as any)?.full_name || ""}`,
-  }));
 
   return (
     <div className="space-y-lg">
@@ -153,19 +138,8 @@ export default function FinanceScholarships() {
         }
       >
         <ErrorAlert error={error} className="mb-md" />
-        <Alert
-          tone="error"
-          className="mb-md"
-          action={<Button variant="outline" size="sm" onClick={studentsResource.reload}>Try again</Button>}
-        >
-          {studentsResource.status === "error" ? (
-            <>
-              Students couldn&apos;t be loaded, so none can be chosen yet.
-            </>
-          ) : null}
-        </Alert>
         <div className="space-y-md">
-          <FormField label="Student" id="student" type="select" value={form.student_id} onChange={(v) => setForm({ ...form, student_id: v })} options={studentOptions} required />
+          <StudentSearchField id="student" value={form.student_id} onChange={(v) => setForm({ ...form, student_id: v })} required />
           <FormField label="Scholarship Name" id="name" value={form.name} onChange={(v) => setForm({ ...form, name: v })} placeholder="e.g. Dean's Merit Award" required />
           <FormField label="Type" id="type" type="select" value={form.type} onChange={(v) => setForm({ ...form, type: v as ScholarshipType })} options={SCHOLARSHIP_TYPES} required />
           <FormField label="Amount" id="amount" type="number" value={form.amount} onChange={(v) => setForm({ ...form, amount: v })} placeholder="0.00" required />
