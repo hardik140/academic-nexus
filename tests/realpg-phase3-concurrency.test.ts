@@ -76,7 +76,21 @@ const CLAIM = `WITH c AS (SELECT id, attempt_number FROM public.finance_sync_ope
              FROM c WHERE o.id = c.id AND o.status = 'QUEUED' AND o.attempt_number = c.attempt_number
            RETURNING o.id)
 SELECT 'WON ' || id FROM w;`;
-const WORKER = Array.from({ length: 400 }, (_, i) => (i % 20 === 19 ? "SELECT pg_sleep(0.02);" : CLAIM)).join("\n");
+/**
+ * The worker first waits (up to 60 s) until a press has committed an
+ * operation, so the claims really do overlap the presses whatever the
+ * machine's load: under a busy full suite the workers could otherwise finish
+ * before the first press had queued anything.
+ */
+const WAIT_FOR_WORK = `DO $$
+DECLARE i int := 0;
+BEGIN
+  WHILE i < 6000 AND NOT EXISTS (SELECT 1 FROM public.finance_sync_operations WHERE connection_id = '${CONN}' AND status = 'QUEUED') LOOP
+    PERFORM pg_sleep(0.01);
+    i := i + 1;
+  END LOOP;
+END $$;`;
+const WORKER = [WAIT_FOR_WORK, ...Array.from({ length: 400 }, (_, i) => (i % 20 === 19 ? "SELECT pg_sleep(0.02);" : CLAIM))].join("\n");
 
 const lines = (stdout: string, tag: string) => stdout.split(/\r?\n/).filter((l) => l.startsWith(`${tag} `)).map((l) => l.slice(tag.length + 1).trim());
 
