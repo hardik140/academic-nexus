@@ -95,6 +95,7 @@ describe("feedback contract", () => {
       "app/(portal)/security/scanner/scanner-client.tsx: requestAnimationFrame(",
       "app/(portal)/security/scanner/scanner-client.tsx: requestAnimationFrame(",
       "components/portal/portal-shell.tsx: setTimeout(", // the navigation marker's 150ms show delay
+      "components/student-search-field.tsx: setTimeout(", // debounces the student search (Phase 3: pickers search instead of listing every student)
       "components/ui/confirmation-dialog.tsx: setTimeout(", // ends the focus-return watch
       "components/ui/data-table.tsx: setTimeout(", // debounces the search box
       "components/ui/toast.tsx: setInterval(", // the toast clock: at least 6s, paused while hovered, focused, hidden or under a dialog

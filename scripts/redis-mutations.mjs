@@ -19,7 +19,11 @@ const T = {
   middleware: "tests/middleware-rate-limit.test.ts",
   admission: "tests/middleware-admission-profile.test.ts",
   efficiency: "tests/cache-efficiency.test.ts",
+  businessReads: "tests/staging-business-reads.test.ts",
+  phase3Concurrency: "tests/realpg-phase3-concurrency.test.ts",
 };
+
+const M059 = "supabase/migrations/059_business_reads_in_postgres.sql";
 
 const MUTATIONS = [
   ["1. timeout result read as allowed", "lib/rate-limit.ts",
@@ -63,6 +67,15 @@ const MUTATIONS = [
     "    if (opts?.backgroundWrite) {", "    if (false) {", [T.efficiency]],
   ["17. coalescing ignores the cache version (a post-invalidation read joins an old fill)", "lib/cache.ts",
     "      flight = `${vKey}|v${currentVersion}`;", "", [T.efficiency]],
+  // Phase 3 (migration 059): the rules that keep the new SQL safe.
+  ["18. push tokens returned to anyone holding an announcement id (sender check removed)", M059,
+    "         AND n.sender_id = auth.uid()\n", "", [T.businessReads]],
+  ["19. any role may announce to the whole college (role gate removed)", M059,
+    "OR public.get_my_role() NOT IN ('director', 'admin') THEN", "OR false THEN", [T.businessReads]],
+  ["20. the risk overview bypasses RLS (SECURITY DEFINER)", M059,
+    "  critical BIGINT\n)\nLANGUAGE sql\nSTABLE\nSECURITY INVOKER", "  critical BIGINT\n)\nLANGUAGE sql\nSTABLE\nSECURITY DEFINER", [T.businessReads]],
+  ["21. concurrent Sync Now presses race the unique key (ON CONFLICT removed)", M059,
+    "    ON CONFLICT (connection_id, idempotency_key) DO NOTHING\n", "", [T.phase3Concurrency]],
 ];
 
 const sha = (s) => createHash("sha256").update(s).digest("hex");

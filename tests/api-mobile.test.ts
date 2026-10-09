@@ -30,7 +30,7 @@ const mockSendInvitationEmail = vi.hoisted(() => vi.fn());
 
 // Resolves an awaited .select().eq()/.in() chain that never calls
 // .single() — the array-returning shape used by block-resolution helpers
-// like resolveWardenScopedStudentIds (warden/gatepasses/actions.ts). Default
+// such as a warden's room list. Default
 // {data: []} matches this codebase's universal `(data || []).map(...)`/
 // `.length === 0` guard pattern, so any test that doesn't care about this
 // path (e.g. createSubstitutionNeeds's timetable_slots lookup) still no-ops
@@ -644,18 +644,16 @@ describe("app/api/mobile/* — HTTP-boundary authorization matrix", () => {
     // updateComplaintStatusCore's own existing-row lookup (used for the
     // audit diff and — only on 'resolved' — the student notification;
     // this test uses 'in_progress' so no further .single() calls happen).
+    // (3) the complainant's student record, then (4) whether that student
+    // has an active allocation this warden can see — hostel_allocations is
+    // RLS-scoped to the warden's own rooms, so a count of 1 means "in my
+    // block". (Phase 3: one record, two bounded reads, instead of the whole
+    // block's id list, which PostgREST capped at 1,000.)
     mockSingle
       .mockResolvedValueOnce({ data: { role: "warden", college_id: "c1", status: "active" } })
-      .mockResolvedValueOnce({ data: { status: "open", submitted_by: UUID_TARGET_USER, title: "Leaky tap" } });
-    // resolveWardenScopedSubmitterIds's chain: hostel_blocks -> hostel_rooms
-    // -> hostel_allocations -> students, resolving the complainant's block
-    // as one this warden owns (submitted_by === UUID_TARGET_USER above must
-    // land in the final students->user_id result for the scope check to pass).
-    mockSelectResolve
-      .mockResolvedValueOnce({ data: [{ id: UUID_BLOCK }] })
-      .mockResolvedValueOnce({ data: [{ id: UUID_STUDENT_ROW }] })
-      .mockResolvedValueOnce({ data: [{ student_id: UUID_STUDENT }] })
-      .mockResolvedValueOnce({ data: [{ user_id: UUID_TARGET_USER }] });
+      .mockResolvedValueOnce({ data: { status: "open", submitted_by: UUID_TARGET_USER, title: "Leaky tap" } })
+      .mockResolvedValueOnce({ data: { id: UUID_STUDENT }, error: null });
+    mockSelectResolve.mockResolvedValueOnce({ count: 1, error: null });
     const res = await updateComplaintStatus(makeRequest(COMPLAINT_STATUS_BODY, "good-token"));
     expect(res.status).toBe(200);
     expect(mockUpdate).toHaveBeenCalledWith(
@@ -674,12 +672,11 @@ describe("app/api/mobile/* — HTTP-boundary authorization matrix", () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
     mockSingle
       .mockResolvedValueOnce({ data: { role: "warden", college_id: "c1", status: "active" } })
-      .mockResolvedValueOnce({ data: { status: "open", submitted_by: UUID_TARGET_USER, title: "Leaky tap" } });
-    mockSelectResolve
-      .mockResolvedValueOnce({ data: [{ id: UUID_BLOCK }] }) // this warden's own block
-      .mockResolvedValueOnce({ data: [{ id: UUID_STUDENT_ROW }] })
-      .mockResolvedValueOnce({ data: [{ student_id: UUID_STUDENT }] })
-      .mockResolvedValueOnce({ data: [{ user_id: UUID_SELF }] }); // resolves to a DIFFERENT profile than UUID_TARGET_USER
+      .mockResolvedValueOnce({ data: { status: "open", submitted_by: UUID_TARGET_USER, title: "Leaky tap" } })
+      .mockResolvedValueOnce({ data: { id: UUID_STUDENT }, error: null });
+    // The complainant is allocated in ANOTHER warden's room: RLS hides that
+    // allocation from this warden, so the count is 0.
+    mockSelectResolve.mockResolvedValueOnce({ count: 0, error: null });
     const res = await updateComplaintStatus(makeRequest(COMPLAINT_STATUS_BODY, "good-token"));
     expect(res.status).toBe(400);
     const body = await res.json();

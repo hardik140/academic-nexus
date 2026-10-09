@@ -88,7 +88,14 @@ const FEES = [
   { id: "f2", type: "hostel", amount: 25000, paid_amount: 25000, status: "paid", due_date: PAST, students: { departments: { name: "Science", code: "SCI" } } },
 ];
 const PAYMENT = { id: "p1", amount: 1234.5, method: "upi", status: "cleared", transaction_ref: "TXN-000000000001", created_at: "2026-09-01T04:00:00Z", profiles: { full_name: "Asha" } };
-const NO_EXCEPTIONS = { overdueFees: [], duplicatePayments: [], overpayments: [], refundsAwaitingApproval: [], disputesNeedingAttention: [] };
+const NO_EXCEPTIONS = {
+  overdueFees: [],
+  duplicatePayments: [],
+  overpayments: [],
+  refundsAwaitingApproval: [],
+  disputesNeedingAttention: [],
+  totals: { overdueFees: 0, duplicatePayments: 0, overpayments: 0, refundsAwaitingApproval: 0, disputesNeedingAttention: 0 },
+};
 
 function setTables(tables: Record<string, unknown[]>) {
   for (const key of Object.keys(h.tables)) delete h.tables[key];
@@ -119,7 +126,16 @@ describe("money screens render INR, never USD", () => {
   });
 
   it("finance reports: institution totals and department breakdown", async () => {
-    setTables({ profiles: [{ college_id: "c1" }], mv_fee_summary: [{ total_billed: 12345678.9, total_collected: 5000 }], fees: FEES });
+    setTables({
+      profiles: [{ college_id: "c1" }],
+      mv_fee_summary: [{ total_billed: 12345678.9, total_collected: 5000 }],
+      // What 059's fee_department_breakdown() / fee_status_breakdown() return for FEES.
+      fee_department_breakdown: [{ department_name: "Science", department_code: "SCI", billed: 125000, collected: 50000 }],
+      fee_status_breakdown: [
+        { effective_status: "overdue", fee_count: 1, outstanding: 75000 },
+        { effective_status: "paid", fee_count: 1, outstanding: 0 },
+      ],
+    });
     const { default: Page } = await import("@/app/(portal)/finance/reports/page");
     expectRupeesOnly(await render(Page), ["₹1,23,45,678.90", "₹5,000.00", "₹75,000.00", "₹50,000.00 / ₹1,25,000.00"]);
   });
@@ -128,6 +144,7 @@ describe("money screens render INR, never USD", () => {
     h.exceptions.mockResolvedValue({
       ...NO_EXCEPTIONS,
       overdueFees: [{ id: "e1", studentName: "Asha", enrollmentNumber: "EN1", amount: 250000.5, detail: "Tuition" }],
+      totals: { ...NO_EXCEPTIONS.totals, overdueFees: 1 },
     });
     const { default: Page } = await import("@/app/(portal)/finance/exceptions/page");
     expectRupeesOnly(await render(Page), ["₹2,50,000.50"]);

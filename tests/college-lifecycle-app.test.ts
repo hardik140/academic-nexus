@@ -264,6 +264,11 @@ describe("background jobs respect the lifecycle", () => {
         if (table === "colleges") return { data: [{ id: COLLEGE_A }, { id: COLLEGE_B }] };
         return { data: [] };
       }),
+      // The per-college inputs come from college_health_inputs() since 059.
+      rpc: async (fn: string) =>
+        fn === "college_health_inputs"
+          ? { data: [COLLEGE_A, COLLEGE_B].map((college_id) => ({ college_id, active_students: 10, faculty_count: 1, hostel_capacity: 0 })), error: null }
+          : { data: [], error: null },
     };
     const { POST } = await import("@/app/api/cron/snapshot-health-score/route");
     await POST(cron());

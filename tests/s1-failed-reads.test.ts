@@ -251,10 +251,10 @@ describe("Warden gate passes", () => {
     h.redis.set.mockClear();
     use("warden", "rows", { gate_passes: "fail" });
     await expectReadFailure(load, { cached: true });
-    for (const table of ["hostel_blocks", "hostel_rooms", "hostel_allocations"]) {
-      use("warden", "rows", { [table]: "fail" });
-      await expectReadFailure(load, { cached: true });
-    }
+    // There is no scope lookup to fail any more: the warden's block scope is
+    // PostgreSQL's (gate_passes_staff_read, migration 050), applied to this
+    // one read. The old capped id-list lookups are gone (Phase 3).
+    expect([...new Set(h.state.reads)]).toEqual(["gate_passes"]);
   });
 
   it("gate operations snapshot: a failed read is an error, not zero passes out or zero residents", async () => {
@@ -313,12 +313,11 @@ describe("Director attention", () => {
     const mod = await actions();
     use("director", "rows", { risk_flags: "fail" });
     await expectReadFailure(() => mod.listMyRiskFlagAssignments(), { cached: false });
-    for (const table of ["students", "fees", "course_enrollments"]) {
-      use("director", "rows", { [table]: "fail" });
-      h.store.clear();
-      h.redis.set.mockClear();
-      await expectReadFailure(() => mod.getStudentRiskOverview(), { cached: true });
-    }
+    // One database call since Phase 3 (student_risk_overview, migration 059).
+    use("director", "rows", { "rpc:student_risk_overview": "fail" });
+    h.store.clear();
+    h.redis.set.mockClear();
+    await expectReadFailure(() => mod.getStudentRiskOverview(), { cached: true });
   });
 });
 
@@ -370,25 +369,34 @@ describe("placement notifications: a failed recipient lookup cannot report a sen
     (await import("@/app/(portal)/placement-cell/notifications/actions")).sendPlacementNotification(params as never);
   const base = { title: "Drive tomorrow", message: "Report at 10:00." };
 
-  it("a successful lookup sends, and says to how many", async () => {
+  // Since Phase 3 the recipients are selected and their notifications
+  // written by ONE database call (send_placement_notification, 059): there
+  // is no client-side insert to observe, so the call itself is.
+  const sent = (count: number) => (h.state.overrides["rpc:send_placement_notification"] = { recipient_count: count, announcement_id: h.ID });
+
+  it("a successful send says to how many", async () => {
     use("placement_cell", "rows");
+    sent(2);
     await expect(send({ ...base, targetType: "college" })).resolves.toEqual({ recipientCount: 2 });
-    expect(h.state.writes).toContain("insert:notifications");
+    expect(h.state.reads).toContain("rpc:send_placement_notification");
   });
 
-  it("a successful lookup that finds nobody keeps its explicit 'No recipients' error", async () => {
-    use("placement_cell", "rows", { students: "empty" });
+  it("a send that reaches nobody keeps its explicit 'No recipients' error, and pushes nothing", async () => {
+    use("placement_cell", "rows", { "rpc:send_placement_notification": "empty" });
+    const { sendExpoPushNotifications } = await import("@/lib/push");
+    vi.mocked(sendExpoPushNotifications).mockClear();
     await expect(send({ ...base, targetType: "college" })).rejects.toThrow("No recipients found for the selected audience.");
-    expect(h.state.writes).not.toContain("insert:notifications");
+    expect(sendExpoPushNotifications).not.toHaveBeenCalled();
   });
 
-  it("a failed lookup fails the send — no notification rows, no false success", async () => {
-    use("placement_cell", "rows", { students: "fail" });
+  it("a failed send or a failed audience check fails loudly — no false success", async () => {
+    use("placement_cell", "rows", { "rpc:send_placement_notification": "fail" });
     await expectReadFailure(() => send({ ...base, targetType: "college" }), { cached: false });
-    expect(h.state.writes).not.toContain("insert:notifications");
     use("placement_cell", "rows", { departments: "fail" });
+    sent(2);
+    h.state.reads = [];
     await expectReadFailure(() => send({ ...base, targetType: "department", departmentId: h.ID }), { cached: false });
-    expect(h.state.writes).not.toContain("insert:notifications");
+    expect(h.state.reads).not.toContain("rpc:send_placement_notification"); // the audience check failed before any send
   });
 });
 
@@ -425,15 +433,18 @@ const p0Cases = [
   ["hod/approvals", "listCorrectionApprovals", "admin", 2, 30],
   ["finance/refunds", "listRefundRequests", "finance", 2, 30],
   ["warden/transfers", "listRoomTransferRequests", "warden", 3, 30],
-  ["warden/gatepasses", "listPendingGatePasses", "warden", 4, 15],
-  ["warden/gatepasses", "listProcessedGatePasses", "warden", 4, 30],
+  // Phase 3: one read each, scoped by RLS; the capped scope lookups are gone.
+  ["warden/gatepasses", "listPendingGatePasses", "warden", 1, 15],
+  ["warden/gatepasses", "listProcessedGatePasses", "warden", 1, 30],
+  // Residents, outside, late returns, pending exits — four counted reads for both roles.
   ["warden/gatepasses", "getGateOperationsSnapshot", "warden", 4, 30],
-  ["warden/gatepasses", "getGateOperationsSnapshot", "admin", 2, 30],
+  ["warden/gatepasses", "getGateOperationsSnapshot", "admin", 4, 30],
   ["director/dashboard", "getCommandCenterData", "director", 5, 0],
   ["director/attention", "listRiskFlags", "hod", 3, 30],
   ["director/attention", "listRiskFlags", "director", 2, 30],
   ["director/attention", "listMyRiskFlagAssignments", "hod", 1, 30],
-  ["director/attention", "getStudentRiskOverview", "hod", 4, 120],
+  // The HOD's department, then one database call (student_risk_overview).
+  ["director/attention", "getStudentRiskOverview", "hod", 2, 120],
   ["director/briefing", "getExecutiveBriefing", "director", 4, 0],
   ["placement-cell/dashboard", "getPlacementCellDashboard", "placement_cell", 8, 60],
 ] as const;
@@ -475,10 +486,11 @@ for (const [area, name, role, reads, ttl] of p0Cases) {
 
 describe("recipient lookup: every audience and every read", () => {
   const cases = [
+    // The audience check (department / drive), then the one send call.
     { targetType: "college", reads: 1 },
     { targetType: "department", departmentId: h.ID, reads: 2 },
     { targetType: "batch_year", batchYear: 2026, reads: 1 },
-    { targetType: "eligible", driveId: h.ID, reads: 3 },
+    { targetType: "eligible", driveId: h.ID, reads: 2 },
     { targetType: "custom", studentUserIds: [h.ID], reads: 1 },
   ];
   for (const audience of cases) {
@@ -486,9 +498,10 @@ describe("recipient lookup: every audience and every read", () => {
     it(`${audience.targetType}: success and zero-recipient semantics`, async () => {
       use("placement_cell", "rows");
       h.state.overrides.placement_drives = { min_cgpa: 0, eligible_batch_years: [] };
+      h.state.overrides["rpc:send_placement_notification"] = { recipient_count: 2, announcement_id: h.ID };
       await expect(send()).resolves.toEqual({ recipientCount: 2 });
       h.state.writes = [];
-      h.state.tables.students = "empty";
+      h.state.tables["rpc:send_placement_notification"] = "empty";
       await expect(send()).rejects.toThrow("No recipients found for the selected audience.");
       expect(h.state.writes).toEqual([]);
     });
@@ -496,6 +509,7 @@ describe("recipient lookup: every audience and every read", () => {
       it(`${audience.targetType}: read ${ordinal} fails before any send`, async () => {
         use("placement_cell", "rows");
         h.state.overrides.placement_drives = { min_cgpa: 0, eligible_batch_years: [] };
+        h.state.overrides["rpc:send_placement_notification"] = { recipient_count: 2, announcement_id: h.ID };
         h.state.failAt = ordinal;
         const { sendExpoPushNotifications } = await import("@/lib/push");
         vi.mocked(sendExpoPushNotifications).mockClear();
@@ -511,7 +525,7 @@ describe("shared helpers: read callers opt in without changing write decisions",
   it.each([
     ["placement_rate", "mv_department_health"], ["avg_cgpa", "mv_department_enrollment"],
     ["attendance_pct", "mv_department_health"], ["fee_collection_pct", "mv_fee_summary"],
-    ["hostel_occupancy_pct", "hostel_blocks"], ["hostel_occupancy_pct", "hostel_rooms"],
+    ["hostel_occupancy_pct", "hostel_blocks"], ["hostel_occupancy_pct", "rpc:hostel_block_capacity"],
   ])("auto goal %s propagates a failed %s lookup", async (metric, table) => {
     use("director", "rows", { [table]: "fail" });
     h.state.overrides.strategic_goals = { tracking_mode: "auto", metric_key: metric };

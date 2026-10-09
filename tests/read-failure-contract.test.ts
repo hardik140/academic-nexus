@@ -129,7 +129,7 @@ export const READ_CONTRACT_EXCLUSIONS: Record<string, string> = {
 const VIEW_STATE_READS = new Set(["director/dashboard.getCommandCenterData", "director/briefing.getExecutiveBriefing"]);
 
 /** A call to an imported write action — invitations, for instance. */
-const IMPORTED_WRITE = /\bawait\s+(?!create(?:Admin)?Client\b)(invite|resend|revoke|create|update|delete|assign|approve|reject|send|record|submit|apply|cancel)[A-Z]\w*\s*\(/;
+const IMPORTED_WRITE = /\bawait\s+(?!create(?:Admin)?Client\b)(invite|resend|revoke|create|update|delete|assign|approve|reject|send|record|submit|apply|cancel|fanOut|push)[A-Z]\w*\s*\(/;
 
 // Every function that writes: mutations are not read functions. A state-
 // changing database function reached through lib/college-access's

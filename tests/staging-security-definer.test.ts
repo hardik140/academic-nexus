@@ -98,6 +98,13 @@ describe("inventory", () => {
       // privileged decisions in 053/054, never for per-row policies.
       "my_operational_college_id", "my_operational_role",
       "my_security_personnel_id",
+      // 059: push tokens of ONE announcement, only to its sender, only active
+      // recipients of the sender's own college, a page of at most 1,000.
+      // Definer because device_tokens_own lets nobody read another user's
+      // token; the rules it enforces instead are tested in
+      // staging-business-reads.test.ts (other users get nothing, even with
+      // the announcement id).
+      "notification_push_tokens",
       // 054: one boolean about an id the caller already holds — keeps
       // super_admin sessions out of a College Admin's view and reach.
       "profile_is_super_admin",
