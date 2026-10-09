@@ -329,24 +329,44 @@ interface LocalPayment {
   fee_id: string;
 }
 
+/** Rows per page when loading a period's payments; PostgREST caps a page at 1,000 anyway. */
+export const RECONCILE_PAGE = 1000;
+
 async function loadLocalPayments(db: Db, input: ReconcileInput): Promise<LocalPayment[]> {
   // Only cleared payments are accounting events (047 §7i, §57). A pending or
   // failed row missing from the provider is correct, not a discrepancy.
-  const { data, error } = await db
-    .from("payments")
-    .select("id, amount, created_at, student_id, fee_id")
-    .eq("college_id", input.collegeId)
-    .eq("status", "cleared")
-    .gte("created_at", `${input.periodStart}T00:00:00Z`)
-    .lte("created_at", `${input.periodEnd}T23:59:59Z`);
-  if (error) throw dbError(error);
-  return (data ?? []).map((p) => ({
-    id: p.id,
-    amount: Number(p.amount),
-    date: String(p.created_at).slice(0, 10),
-    student_id: p.student_id,
-    fee_id: p.fee_id,
-  }));
+  //
+  // EVERY payment of the period, a page at a time in a fixed order. This
+  // used to be one unranged select, which PostgREST capped at 1,000 rows:
+  // in a period with more, every payment past the cap looked "missing
+  // locally" against the provider's list — false discrepancies — and a real
+  // one could hide among them. Reconciliation compares payment by payment,
+  // so it does need each row; what it must not do is see only some of them.
+  const out: LocalPayment[] = [];
+  for (let page = 0; ; page++) {
+    const from = page * RECONCILE_PAGE;
+    const { data, error } = await db
+      .from("payments")
+      .select("id, amount, created_at, student_id, fee_id")
+      .eq("college_id", input.collegeId)
+      .eq("status", "cleared")
+      .gte("created_at", `${input.periodStart}T00:00:00Z`)
+      .lte("created_at", `${input.periodEnd}T23:59:59Z`)
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, from + RECONCILE_PAGE - 1);
+    if (error) throw dbError(error);
+    for (const p of data ?? []) {
+      out.push({
+        id: p.id,
+        amount: Number(p.amount),
+        date: String(p.created_at).slice(0, 10),
+        student_id: p.student_id,
+        fee_id: p.fee_id,
+      });
+    }
+    if ((data ?? []).length < RECONCILE_PAGE) return out;
+  }
 }
 
 async function loadExternalTransactions(

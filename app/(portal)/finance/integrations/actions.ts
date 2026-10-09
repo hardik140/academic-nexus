@@ -20,6 +20,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Json } from "@/types/database";
 import { dbError } from "@/lib/internal-error";
 import { assertRead } from "@/lib/read-result-server";
+import { businessRpc, num } from "@/lib/business-rpc";
 
 /**
  * Finance Integration Hub — the operator-facing actions.
@@ -598,6 +599,19 @@ const SyncNowSchema = z.object({
 
 export type SyncNowParams = z.infer<typeof SyncNowSchema>;
 
+/** Payments queued per database call: one statement of this many inserts stays well inside a statement timeout. */
+const SYNC_BATCH = 500;
+/** A hard stop per press (SYNC_BATCH × this payments); pressing again continues where it left off. */
+const MAX_SYNC_BATCHES = 200;
+
+interface SyncBatchRow {
+  scanned: number | string;
+  queued: number | string;
+  skipped: number | string;
+  last_created: string | null;
+  last_id: string | null;
+}
+
 /**
  * Queues every postable payment in a window. Queues only — the worker posts.
  *
@@ -605,6 +619,20 @@ export type SyncNowParams = z.infer<typeof SyncNowSchema>;
  * window, that do not already carry an external link. A payment that is
  * already linked is skipped rather than re-queued, so pressing Sync Now
  * twice cannot produce two receipts even before the pipeline's own guards.
+ *
+ * BOUNDED BATCHES IN THE DATABASE (migration 059, queue_finance_sync_batch).
+ * Each call queues up to SYNC_BATCH of the window's payments in ONE
+ * transaction and returns a keyset cursor; this loops until a batch comes
+ * back short. This used to select the window's payments (capped at
+ * PostgREST's 1,000 rows — and a failed read was taken for "nothing to
+ * queue"), then enqueue them one by one, two or three requests each.
+ *
+ * Exactly the rows enqueue() makes: the same idempotency key (parity-tested),
+ * so the unique (connection_id, idempotency_key) index resolves two
+ * concurrent presses, or a press and any other enqueue, to ONE operation.
+ * A failure part-way leaves the earlier batches queued, which is correct:
+ * pressing again finds them queued and skips them. Posting is unchanged —
+ * the worker claims each operation with the 056 compare-and-swap.
  */
 export async function syncNow(params: SyncNowParams) {
   const actor = await requireRole(PERMISSIONS.finance_sync_execute);
@@ -617,48 +645,41 @@ export async function syncNow(params: SyncNowParams) {
     throw new Error(`This connection is ${conn.status}. Only an ACTIVE connection can synchronise.`);
   }
 
-  const { data: payments } = await supabase
-    .from("payments")
-    .select("id")
-    .eq("college_id", actor.collegeId)
-    .eq("status", "cleared")
-    .gte("created_at", `${from}T00:00:00Z`)
-    .lte("created_at", `${to}T23:59:59Z`);
-
-  const ids = (payments ?? []).map((p) => p.id);
-  if (ids.length === 0) return { queued: 0, skipped: 0 };
-
-  const { data: linked } = await supabase
-    .from("finance_external_links")
-    .select("entity_id")
-    .eq("connection_id", connectionId)
-    .eq("entity_type", "payment")
-    .in("entity_id", ids);
-  const already = new Set((linked ?? []).map((l) => l.entity_id));
-
   let queued = 0;
-  for (const id of ids) {
-    if (already.has(id)) continue;
-    const op = await enqueue(supabase, {
-      collegeId: actor.collegeId,
-      connectionId,
-      provider: conn.provider,
-      entityType: "payment",
-      entityId: id,
-      operation: "create_payment",
-      createdBy: actor.userId,
-    });
-    if (op.status === "PENDING") {
-      await supabase.from("finance_sync_operations").update({ status: "QUEUED" }).eq("id", op.id).eq("status", "PENDING");
-      queued++;
+  let skipped = 0;
+  let candidates = 0;
+  let batches = 0;
+  let complete = false;
+  let afterCreated: string | null = null;
+  let afterId: string | null = null;
+  while (batches < MAX_SYNC_BATCHES) {
+    const rows: SyncBatchRow[] = await businessRpc<SyncBatchRow>(supabase, "queue_finance_sync_batch", {
+        p_connection_id: connectionId,
+        p_from: from,
+        p_to: to,
+        p_after_created: afterCreated,
+        p_after_id: afterId,
+        p_limit: SYNC_BATCH,
+      });
+    const batch = rows[0];
+    batches++;
+    const scanned = num(batch?.scanned);
+    candidates += scanned;
+    queued += num(batch?.queued);
+    skipped += num(batch?.skipped);
+    if (scanned < SYNC_BATCH) {
+      complete = true;
+      break;
     }
+    afterCreated = batch.last_created;
+    afterId = batch.last_id;
   }
 
   await logAudit(supabase, actor, "finance_sync_started", "finance_integration_connections", connectionId, {
-    newValue: { from, to, queued, candidates: ids.length },
+    newValue: { from, to, queued, candidates, batches, complete },
   });
   revalidate();
-  return { queued, skipped: already.size };
+  return { queued, skipped, complete };
 }
 
 /**
