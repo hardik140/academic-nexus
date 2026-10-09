@@ -3,6 +3,10 @@ import { verifySignatureAppRouter } from "@upstash/qstash/nextjs";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { unavailableCollegeIds } from "@/lib/college-access";
 import type { Database } from "@/types/database";
+import { businessRpc, num } from "@/lib/business-rpc";
+
+/** Open flags read per page when auto-resolving. */
+const FLAG_PAGE = 1000;
 
 /**
  * Scheduled endpoint (QStash cron, same pattern as
@@ -121,18 +125,25 @@ function placementSignal(row: DeptHealthRow): Signal | null {
 async function hostelSignals(
   supabase: ReturnType<typeof createAdminClient>
 ): Promise<Signal[]> {
-  const { data: blocks } = await supabase.from("hostel_blocks").select("id, college_id, name");
-  const { data: rooms } = await supabase.from("hostel_rooms").select("block_id, capacity, occupancy");
-  if (!blocks || !rooms) return [];
+  // Per-block capacity summed in PostgreSQL (migration 059,
+  // hostel_block_capacity_all; service role only). Reading every room of
+  // every college here was capped at PostgREST's 1,000 rows across the whole
+  // platform, so blocks past the cap read empty and an over-capacity block
+  // could go unflagged.
+  let perBlock: { college_id: string; block_id: string; block_name: string; capacity: number | string; occupancy: number | string }[];
+  try {
+    perBlock = await businessRpc(supabase, "hostel_block_capacity_all", {});
+  } catch {
+    return [];
+  }
 
   const byCollege = new Map<string, { blockId: string; name: string; capacity: number; occupancy: number }[]>();
-  for (const block of blocks) {
-    const blockRooms = rooms.filter((r) => r.block_id === block.id);
-    const capacity = blockRooms.reduce((s, r) => s + r.capacity, 0);
-    const occupancy = blockRooms.reduce((s, r) => s + r.occupancy, 0);
+  for (const block of perBlock) {
+    const capacity = num(block.capacity);
+    const occupancy = num(block.occupancy);
     if (capacity === 0) continue;
     const list = byCollege.get(block.college_id) || [];
-    list.push({ blockId: block.id, name: block.name, capacity, occupancy });
+    list.push({ blockId: block.block_id, name: block.block_name, capacity, occupancy });
     byCollege.set(block.college_id, list);
   }
 
@@ -232,14 +243,29 @@ async function handler() {
     created++;
   }
 
-  // Auto-resolve open system-computed flags whose signal has cleared.
-  const { data: openSystemFlags } = await supabase
-    .from("risk_flags")
-    .select("id, college_id, flag_type, department_id")
-    .eq("source", "system_computed")
-    .in("status", OPEN_STATUSES);
+  // Auto-resolve open system-computed flags whose signal has cleared —
+  // EVERY open one, a keyset page (by id) at a time. One unranged select was
+  // capped at PostgREST's 1,000 rows across all colleges, so flags past the
+  // cap never auto-resolved. Keyset, not offset: resolving a flag removes it
+  // from this set while we walk it, which would make an offset skip rows.
+  const openSystemFlags: { id: string; college_id: string; flag_type: string; department_id: string | null }[] = [];
+  for (let after = ""; ; ) {
+    let page = supabase
+      .from("risk_flags")
+      .select("id, college_id, flag_type, department_id")
+      .eq("source", "system_computed")
+      .in("status", OPEN_STATUSES)
+      .order("id", { ascending: true })
+      .limit(FLAG_PAGE);
+    if (after) page = page.gt("id", after);
+    const { data, error } = await page;
+    if (error || !data || data.length === 0) break;
+    openSystemFlags.push(...data);
+    if (data.length < FLAG_PAGE) break;
+    after = data[data.length - 1].id;
+  }
 
-  for (const flag of openSystemFlags || []) {
+  for (const flag of openSystemFlags) {
     if (blocked.has(flag.college_id)) continue;
     const stillSignaled = liveSignals.some(
       (s) => s.collegeId === flag.college_id && s.flagType === flag.flag_type && s.departmentId === flag.department_id

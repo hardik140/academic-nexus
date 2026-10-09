@@ -45,11 +45,11 @@ export default async function FinanceDashboard() {
   assertRead(recentPaymentsError);
 
   const actionItems = [
-    { label: "refund request", count: exceptions.refundsAwaitingApproval.length, href: "/finance/refunds", severity: "high" as const },
-    { label: "dispute needing attention", count: exceptions.disputesNeedingAttention.length, href: "/finance/disputes", severity: "high" as const },
-    { label: "overdue fee", count: exceptions.overdueFees.length, href: "/finance/exceptions", severity: "medium" as const },
-    { label: "possible duplicate payment", count: exceptions.duplicatePayments.length, href: "/finance/exceptions", severity: "medium" as const },
-    { label: "overpayment", count: exceptions.overpayments.length, href: "/finance/exceptions", severity: "medium" as const },
+    { label: "refund request", count: exceptions.totals.refundsAwaitingApproval, href: "/finance/refunds", severity: "high" as const },
+    { label: "dispute needing attention", count: exceptions.totals.disputesNeedingAttention, href: "/finance/disputes", severity: "high" as const },
+    { label: "overdue fee", count: exceptions.totals.overdueFees, href: "/finance/exceptions", severity: "medium" as const },
+    { label: "possible duplicate payment", count: exceptions.totals.duplicatePayments, href: "/finance/exceptions", severity: "medium" as const },
+    { label: "overpayment", count: exceptions.totals.overpayments, href: "/finance/exceptions", severity: "medium" as const },
   ].filter((i) => i.count > 0);
 
   return (

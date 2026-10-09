@@ -5,6 +5,7 @@ import { requireRole } from "@/lib/rbac";
 import { getCachedWriteBehind } from "@/lib/cache";
 import { PERMISSIONS } from "@/lib/permissions";
 import { assertRead } from "@/lib/read-result-server";
+import { businessRpc, num } from "@/lib/business-rpc";
 
 /**
  * Institution + department-level funnel from mv_placement_funnel (the real
@@ -68,22 +69,33 @@ export async function listDriveFunnels() {
 
   if (!drives || drives.length === 0) return [];
 
-  const driveIds = drives.map((d: any) => d.id);
-  const { data: applications, error: applicationsError } = await supabase.from("placement_applications").select("drive_id, status").in("drive_id", driveIds);
-  assertRead(applicationsError);
+  // Applications counted per drive and status in PostgreSQL (migration 059,
+  // placement_drive_funnel). Reading the applications of 20 drives here was
+  // capped at PostgREST's 1,000 rows: busy drives undercounted, and the
+  // drives listed last could read zero.
+  const driveIds = drives.map((d: any) => d.id as string);
+  const counts = await businessRpc<{
+    drive_id: string;
+    applied: number | string;
+    shortlisted: number | string;
+    interview: number | string;
+    selected: number | string;
+    rejected: number | string;
+  }>(supabase, "placement_drive_funnel", { p_college_id: actor.collegeId, p_drive_ids: driveIds });
+  const byDrive = new Map(counts.map((c) => [c.drive_id, c]));
 
   return drives.map((drive: any) => {
-    const apps = (applications || []).filter((a) => a.drive_id === drive.id);
+    const c = byDrive.get(drive.id);
     return {
       id: drive.id,
       jobRole: drive.job_role,
       companyName: (drive as any).companies?.name || "Unknown",
       status: drive.status,
-      applied: apps.length,
-      shortlisted: apps.filter((a) => a.status === "shortlisted").length,
-      interview: apps.filter((a) => a.status === "interview").length,
-      selected: apps.filter((a) => a.status === "selected").length,
-      rejected: apps.filter((a) => a.status === "rejected").length,
+      applied: num(c?.applied),
+      shortlisted: num(c?.shortlisted),
+      interview: num(c?.interview),
+      selected: num(c?.selected),
+      rejected: num(c?.rejected),
     };
   });
 }

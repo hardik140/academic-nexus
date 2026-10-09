@@ -11,6 +11,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import { dbError } from "@/lib/internal-error";
 import { assertRead } from "@/lib/read-result-server";
+import { businessRpc, num } from "@/lib/business-rpc";
 
 const METRIC_KEYS = ["placement_rate", "avg_cgpa", "attendance_pct", "fee_collection_pct", "hostel_occupancy_pct"] as const;
 type MetricKey = (typeof METRIC_KEYS)[number];
@@ -51,12 +52,19 @@ async function resolveAutoMetricValue(supabase: SupabaseClient<Database>, actor:
     case "hostel_occupancy_pct": {
       const { data: blocks, error: blocksError } = await supabase.from("hostel_blocks").select("id").eq("college_id", actor.collegeId);
       if (requireSuccessfulRead) assertRead(blocksError);
-      const blockIds = (blocks || []).map((b) => b.id);
-      if (blockIds.length === 0) return null;
-      const { data: rooms, error: roomsError } = await supabase.from("hostel_rooms").select("capacity, occupancy").in("block_id", blockIds);
-      if (requireSuccessfulRead) assertRead(roomsError);
-      const capacity = (rooms || []).reduce((s, r) => s + r.capacity, 0);
-      const occupancy = (rooms || []).reduce((s, r) => s + r.occupancy, 0);
+      if ((blocks || []).length === 0) return null;
+      // Summed in PostgreSQL (migration 059): reading the rooms here was
+      // capped at PostgREST's 1,000 rows, so a large hostel's rate was wrong.
+      // A failed read is tolerated exactly as before unless the caller asked
+      // for a successful one.
+      let perBlock: { capacity: number | string; occupancy: number | string }[] = [];
+      try {
+        perBlock = await businessRpc(supabase, "hostel_block_capacity", { p_college_id: actor.collegeId });
+      } catch (err) {
+        if (requireSuccessfulRead) throw err;
+      }
+      const capacity = perBlock.reduce((s, b) => s + num(b.capacity), 0);
+      const occupancy = perBlock.reduce((s, b) => s + num(b.occupancy), 0);
       return capacity > 0 ? Math.round((occupancy / capacity) * 1000) / 10 : null;
     }
   }

@@ -5,6 +5,7 @@ import { requireRole } from "@/lib/rbac";
 import { getCached } from "@/lib/cache";
 import { PERMISSIONS } from "@/lib/permissions";
 import { assertRead } from "@/lib/read-result-server";
+import { businessRpc, num } from "@/lib/business-rpc";
 
 /**
  * Institution-wide version of warden/dashboard's per-warden tiles — same
@@ -18,33 +19,38 @@ export async function getHostelRollup() {
   const supabase = await createClient();
 
   return getCached(`hostel-rollup:${actor.collegeId}`, 60, async () => {
-    const [blocksRes, roomsRes, gatePassesRes, complaintsRes] = await Promise.all([
+    // Capacity and occupancy are summed per block in PostgreSQL (migration
+    // 059, hostel_block_capacity), and the two counts are PostgreSQL's
+    // (count: "exact"). This used to read every room, every pending gate
+    // pass and every open complaint — each capped at PostgREST's 1,000 rows —
+    // and add them up here.
+    const [blocksRes, capacityRows, gatePassesRes, complaintsRes] = await Promise.all([
       supabase.from("hostel_blocks").select("*").eq("college_id", actor.collegeId),
-      supabase.from("hostel_rooms").select("block_id, capacity, occupancy").eq("college_id", actor.collegeId),
+      businessRpc<{ block_id: string; capacity: number | string; occupancy: number | string }>(supabase, "hostel_block_capacity", {
+        p_college_id: actor.collegeId,
+      }),
       supabase
         .from("gate_passes")
-        .select("id")
+        .select("id", { count: "exact", head: true })
         .eq("college_id", actor.collegeId)
         .eq("status", "pending"),
       supabase
         .from("complaints")
-        .select("id, category")
+        .select("id", { count: "exact", head: true })
         .eq("college_id", actor.collegeId)
         .eq("status", "open")
         .in("category", ["hostel", "mess", "plumbing", "electrical", "cleaning"]),
     ]);
     assertRead(blocksRes.error);
-    assertRead(roomsRes.error);
     assertRead(gatePassesRes.error);
     assertRead(complaintsRes.error);
 
     const blocks = blocksRes.data || [];
-    const rooms = roomsRes.data || [];
+    const byBlock = new Map(capacityRows.map((r) => [r.block_id, r]));
 
     const blockBreakdown = blocks.map((b) => {
-      const blockRooms = rooms.filter((r) => r.block_id === b.id);
-      const capacity = blockRooms.reduce((s, r) => s + r.capacity, 0);
-      const occupancy = blockRooms.reduce((s, r) => s + r.occupancy, 0);
+      const capacity = num(byBlock.get(b.id)?.capacity);
+      const occupancy = num(byBlock.get(b.id)?.occupancy);
       return {
         id: b.id,
         name: b.name,
@@ -64,8 +70,8 @@ export async function getHostelRollup() {
       totalCapacity,
       totalOccupancy,
       occupancyPct: totalCapacity > 0 ? Math.round((totalOccupancy / totalCapacity) * 1000) / 10 : null,
-      pendingGatePasses: gatePassesRes.data?.length || 0,
-      openComplaints: complaintsRes.data?.length || 0,
+      pendingGatePasses: gatePassesRes.count ?? 0,
+      openComplaints: complaintsRes.count ?? 0,
       blocks: blockBreakdown,
     };
   });

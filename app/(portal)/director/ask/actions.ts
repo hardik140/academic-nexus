@@ -79,14 +79,20 @@ export async function answerQuestion(key: QuestionKey): Promise<AnswerResult> {
     }
 
     case "student_risk": {
-      const { data: students, error: studentsError } = await supabase.from("students").select("id").eq("college_id", actor.collegeId).eq("status", "active");
+      // An exact count (PostgreSQL's), not the length of a row page: reading
+      // the ids capped this at PostgREST's 1,000 rows.
+      const { count: activeStudents, error: studentsError } = await supabase
+        .from("students")
+        .select("id", { count: "exact", head: true })
+        .eq("college_id", actor.collegeId)
+        .eq("status", "active");
       assertRead(studentsError);
-      if (!students || students.length === 0) {
+      if (!activeStudents) {
         return { answer: "Insufficient data — no active student records available yet.", supportingMetrics: [], dataSource: "students", drillDownUrl: null, insufficientData: true };
       }
       return {
         answer: "See the Attention Center's Student Risk Overview for a real-time, department-by-department breakdown of at-risk and critical student counts.",
-        supportingMetrics: [`${students.length} active students institution-wide`],
+        supportingMetrics: [`${activeStudents} active students institution-wide`],
         dataSource: "students, fees, course_enrollments",
         drillDownUrl: "/director/attention",
         insufficientData: false,

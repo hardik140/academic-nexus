@@ -4,6 +4,9 @@ import { getCachedWriteBehind } from "@/lib/cache";
 import { assertRead } from "@/lib/read-result-server";
 import { NO_MATCH_ID } from "@/lib/read-result";
 
+/** Backlog rows listed; the count above them is always complete. */
+const BACKLOG_LIST_LIMIT = 200;
+
 export default async function HodReports() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -18,7 +21,7 @@ export default async function HodReports() {
 
   const deptId = dept?.id || "";
 
-  const { enrollment, attendance, backlogs } = await getCachedWriteBehind(
+  const { enrollment, attendance, backlogs, backlogCount } = await getCachedWriteBehind(
     `reports:hod:${deptId}:mv`,
     60,
     async () => {
@@ -40,19 +43,31 @@ export default async function HodReports() {
       const deptOfferings = deptOfferingsRes.data;
       const offeringIds = ((deptOfferings as { id: string }[] | null) || []).map((o) => o.id);
 
+      // The backlog COUNT is PostgreSQL's (count: "exact"), over every failed
+      // enrolment; the list shows the first BACKLOG_LIST_LIMIT. This used to
+      // read the rows unbounded and show their length, which PostgREST's
+      // 1,000-row cap made silently low for a large department.
       const backlogsRes = offeringIds.length
         ? await supabase
             .from("course_enrollments")
             .select(
-              "*, course_offerings:offering_id(courses:course_id(name, code), sections:section_id(name)), students:student_id(profiles:user_id(full_name))"
+              "*, course_offerings:offering_id(courses:course_id(name, code), sections:section_id(name)), students:student_id(profiles:user_id(full_name))",
+              { count: "exact" }
             )
             .in("offering_id", offeringIds)
             .eq("status", "failed")
-        : { data: [], error: null };
+            .order("id")
+            .range(0, BACKLOG_LIST_LIMIT - 1)
+        : { data: [], error: null, count: 0 };
       assertRead(backlogsRes.error);
       const backlogs = backlogsRes.data;
 
-      return { enrollment: enrollRes.data, attendance: attendanceRes.data || [], backlogs: backlogs || [] };
+      return {
+        enrollment: enrollRes.data,
+        attendance: attendanceRes.data || [],
+        backlogs: backlogs || [],
+        backlogCount: backlogsRes.count ?? 0,
+      };
     }
   );
 
@@ -79,7 +94,7 @@ export default async function HodReports() {
         </div>
         <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-lg shadow-sm">
           <div className="text-xs font-semibold text-outline uppercase tracking-wider mb-sm">Backlogs</div>
-          <div className="text-2xl font-extrabold text-error">{(backlogs || []).length}</div>
+          <div className="text-2xl font-extrabold text-error">{backlogCount}</div>
         </div>
       </div>
 
@@ -138,6 +153,9 @@ export default async function HodReports() {
             </div>
           )) : (
             <div className="p-xl text-center text-sm text-outline">🎉 No backlogs in this department.</div>
+          )}
+          {backlogCount > (backlogs || []).length && (
+            <div className="px-lg py-md text-xs text-outline">Showing the first {(backlogs || []).length} of {backlogCount}.</div>
           )}
         </div>
       </div>

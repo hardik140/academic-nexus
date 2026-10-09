@@ -2,8 +2,8 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { formatMoney } from "@/lib/format";
 import { getCached } from "@/lib/cache";
-import { computeEffectiveFeeStatus } from "@/lib/finance-status";
 import { assertRead } from "@/lib/read-result-server";
+import { businessRpc, num } from "@/lib/business-rpc";
 
 export default async function FinanceReports() {
   const supabase = await createClient();
@@ -17,47 +17,41 @@ export default async function FinanceReports() {
     .single();
   assertRead(viewerProfileError);
 
-  // NOTE: `fees` is intentionally unbounded — the department/status breakdowns
-  // below sum over the full result set client-side. A naive .limit() would
-  // silently understate totals past the cap. Real fix is pushing this
-  // aggregation into Postgres (extend mv_fee_summary or add a grouped view);
-  // same deferred issue as finance/transactions.tsx. Caching this college-
-  // scoped result at least keeps that full-table pull off the hot path.
-  const { summary, fees } = await getCached(
+  // Both breakdowns are computed in PostgreSQL (migration 059,
+  // fee_department_breakdown and fee_status_breakdown), over EVERY fee of
+  // the college. This page used to select every fee row and sum here; past
+  // PostgREST's 1,000-row cap the department totals, status counts and the
+  // overdue outstanding were silently low. The effective status is
+  // lib/finance-status.ts's rule, in SQL (parity-tested).
+  const collegeId = viewerProfile?.college_id ?? "";
+  const { summary, deptBreakdown, statusRows } = await getCached(
     `reports:finance:${viewerProfile?.college_id}:mv`,
     60,
     async () => {
-      const [summaryRes, feesRes] = await Promise.all([
+      const [summaryRes, deptRows, statusRows] = await Promise.all([
         supabase.from("mv_fee_summary").select("*").maybeSingle(),
-        supabase.from("fees").select("amount, paid_amount, status, due_date, students(departments(name, code))"),
+        businessRpc<{ department_name: string; department_code: string; billed: number | string; collected: number | string }>(
+          supabase,
+          "fee_department_breakdown",
+          { p_college_id: collegeId }
+        ),
+        businessRpc<{ effective_status: string; fee_count: number | string; outstanding: number | string }>(
+          supabase,
+          "fee_status_breakdown",
+          { p_college_id: collegeId }
+        ),
       ]);
-      for (const res of [summaryRes, feesRes]) assertRead(res.error);
-      return { summary: summaryRes.data, fees: feesRes.data || [] };
+      assertRead(summaryRes.error);
+      return {
+        summary: summaryRes.data,
+        deptBreakdown: deptRows.map((d) => ({ name: d.department_name, code: d.department_code, billed: num(d.billed), collected: num(d.collected) })),
+        statusRows: statusRows.map((s) => ({ status: s.effective_status, count: num(s.fee_count), outstanding: num(s.outstanding) })),
+      };
     }
   );
 
-  // Department-wise breakdown
-  const byDept: Record<string, { name: string; code: string; billed: number; collected: number }> = {};
-  fees.forEach((f: any) => {
-    const dept = f.students?.departments;
-    if (!dept) return;
-    const key = dept.code;
-    if (!byDept[key]) byDept[key] = { name: dept.name, code: dept.code, billed: 0, collected: 0 };
-    byDept[key].billed += f.amount;
-    byDept[key].collected += f.paid_amount;
-  });
-  const deptBreakdown = Object.values(byDept);
-
-  // Status breakdown — computed live (computeEffectiveFeeStatus), since
-  // mv_fee_summary's total_overdue and the raw stored status both inherit
-  // the same dead-'overdue' problem documented in lib/finance-status.ts.
-  const statusCounts: Record<string, number> = {};
-  let totalOutstandingOverdue = 0;
-  fees.forEach((f: any) => {
-    const effective = computeEffectiveFeeStatus(f);
-    statusCounts[effective] = (statusCounts[effective] || 0) + 1;
-    if (effective === "overdue") totalOutstandingOverdue += f.amount - f.paid_amount;
-  });
+  const statusCounts: Record<string, number> = Object.fromEntries(statusRows.map((s) => [s.status, s.count]));
+  const totalOutstandingOverdue = statusRows.find((s) => s.status === "overdue")?.outstanding ?? 0;
 
   return (
     <div className="space-y-lg">

@@ -6,6 +6,7 @@ function ExceptionSection({
   title,
   severity,
   items,
+  total,
   emptyMessage,
   showAmount = true,
 }: {
@@ -13,6 +14,8 @@ function ExceptionSection({
   title: string;
   severity: "high" | "medium";
   items: ExceptionEntry[];
+  /** How many there are in all; `items` may hold only the first of them. */
+  total: number;
   emptyMessage: string;
   showAmount?: boolean;
 }) {
@@ -23,7 +26,7 @@ function ExceptionSection({
           {icon} {title}
         </h2>
         <span className={`text-xs font-semibold px-sm py-xs rounded-full ${severity === "high" ? "bg-error/10 text-error" : "bg-warning-container text-on-warning-container"}`}>
-          {items.length}
+          {total}
         </span>
       </div>
       <div className="divide-y divide-outline-variant">
@@ -38,6 +41,9 @@ function ExceptionSection({
         )) : (
           <div className="p-xl text-center text-sm text-outline">{emptyMessage}</div>
         )}
+        {total > items.length && (
+          <div className="px-lg py-md text-xs text-outline">Showing the first {items.length} of {total}.</div>
+        )}
       </div>
     </div>
   );
@@ -45,12 +51,7 @@ function ExceptionSection({
 
 export default async function FinanceExceptions() {
   const exceptions = await getFinanceExceptions();
-  const totalCount =
-    exceptions.overdueFees.length +
-    exceptions.duplicatePayments.length +
-    exceptions.overpayments.length +
-    exceptions.refundsAwaitingApproval.length +
-    exceptions.disputesNeedingAttention.length;
+  const totalCount = Object.values(exceptions.totals).reduce((sum, n) => sum + n, 0);
 
   return (
     <div className="space-y-lg">
@@ -66,6 +67,7 @@ export default async function FinanceExceptions() {
         title="Refunds Awaiting Approval"
         severity="high"
         items={exceptions.refundsAwaitingApproval}
+        total={exceptions.totals.refundsAwaitingApproval}
         emptyMessage="No refund requests pending."
       />
       <ExceptionSection
@@ -73,6 +75,7 @@ export default async function FinanceExceptions() {
         title="Disputes Needing Attention"
         severity="high"
         items={exceptions.disputesNeedingAttention}
+        total={exceptions.totals.disputesNeedingAttention}
         showAmount={false}
         emptyMessage="No open financial disputes."
       />
@@ -81,6 +84,7 @@ export default async function FinanceExceptions() {
         title="Overdue Fees"
         severity="medium"
         items={exceptions.overdueFees}
+        total={exceptions.totals.overdueFees}
         emptyMessage="No overdue fees."
       />
       <ExceptionSection
@@ -88,6 +92,7 @@ export default async function FinanceExceptions() {
         title="Possible Duplicate Payments"
         severity="medium"
         items={exceptions.duplicatePayments}
+        total={exceptions.totals.duplicatePayments}
         emptyMessage="No duplicate-payment risk detected."
       />
       <ExceptionSection
@@ -95,6 +100,7 @@ export default async function FinanceExceptions() {
         title="Overpayments"
         severity="medium"
         items={exceptions.overpayments}
+        total={exceptions.totals.overpayments}
         emptyMessage="No overpayments detected."
       />
     </div>
