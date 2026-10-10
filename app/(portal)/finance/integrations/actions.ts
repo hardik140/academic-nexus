@@ -601,15 +601,32 @@ export type SyncNowParams = z.infer<typeof SyncNowSchema>;
 
 /** Payments queued per database call: one statement of this many inserts stays well inside a statement timeout. */
 const SYNC_BATCH = 500;
-/** A hard stop per press (SYNC_BATCH × this payments); pressing again continues where it left off. */
+/** Batches per press (SYNC_BATCH × this payments). The run's cursor is durable, so the next press continues from it. */
 const MAX_SYNC_BATCHES = 200;
 
-interface SyncBatchRow {
+interface SyncStepRow {
+  run_id: string;
+  run_status: "RUNNING" | "COMPLETE";
   scanned: number | string;
   queued: number | string;
   skipped: number | string;
-  last_created: string | null;
-  last_id: string | null;
+  run_scanned: number | string;
+  run_queued: number | string;
+  run_skipped: number | string;
+  run_batches: number | string;
+  cutoff_at: string;
+  error: string | null;
+}
+
+export interface SyncNowResult {
+  runId: string;
+  /** Queued / already posted by THIS press. */
+  queued: number;
+  skipped: number;
+  /** True only when every payment of the run's set has been queued or was already posted. */
+  complete: boolean;
+  /** The run's totals so far, across every press that has driven it. */
+  run: { scanned: number; queued: number; skipped: number; batches: number; cutoffAt: string };
 }
 
 /**
@@ -620,23 +637,26 @@ interface SyncBatchRow {
  * already linked is skipped rather than re-queued, so pressing Sync Now
  * twice cannot produce two receipts even before the pipeline's own guards.
  *
- * BOUNDED BATCHES IN THE DATABASE (migration 059, queue_finance_sync_batch).
- * Each call queues up to SYNC_BATCH of the window's payments in ONE
- * transaction and returns a keyset cursor; this loops until a batch comes
- * back short. This used to select the window's payments (capped at
- * PostgREST's 1,000 rows — and a failed read was taken for "nothing to
- * queue"), then enqueue them one by one, two or three requests each.
+ * A DURABLE RUN (migration 060, finance_sync_step). The window's progress is
+ * a finance_sync_runs row: its cursor moves in the same transaction as the
+ * batch it covers, so a batch that fails, a closed tab or a crashed process
+ * loses nothing — the next call repeats the uncommitted batch. A press drives
+ * the run for at most MAX_SYNC_BATCHES batches and then answers
+ * complete: false; the next press (anyone's) continues the same run rather
+ * than starting over. Concurrent presses share the run and take turns on its
+ * row lock. The run's set is fixed when it opens (payments created up to
+ * cutoff_at); later ones are the next run's — see the migration.
  *
  * Exactly the rows enqueue() makes: the same idempotency key (parity-tested),
  * so the unique (connection_id, idempotency_key) index resolves two
  * concurrent presses, or a press and any other enqueue, to ONE operation.
- * A failure part-way leaves the earlier batches queued, which is correct:
- * pressing again finds them queued and skips them. Posting is unchanged —
- * the worker claims each operation with the 056 compare-and-swap.
+ * Posting is unchanged — the worker claims each operation with the 056
+ * compare-and-swap.
  */
-export async function syncNow(params: SyncNowParams) {
+export async function syncNow(params: SyncNowParams): Promise<SyncNowResult> {
   const actor = await requireRole(PERMISSIONS.finance_sync_execute);
   const { connectionId, from, to } = SyncNowSchema.parse(params);
+  if (to < from) throw new Error("The window's start must be on or before its end.");
   await checkRateLimit(`financeSyncNow:${actor.userId}`, 10, 60);
 
   const supabase = await createClient();
@@ -647,39 +667,48 @@ export async function syncNow(params: SyncNowParams) {
 
   let queued = 0;
   let skipped = 0;
-  let candidates = 0;
   let batches = 0;
-  let complete = false;
-  let afterCreated: string | null = null;
-  let afterId: string | null = null;
+  let step: SyncStepRow | undefined;
+  let failure: string | null = null;
   while (batches < MAX_SYNC_BATCHES) {
-    const rows: SyncBatchRow[] = await businessRpc<SyncBatchRow>(supabase, "queue_finance_sync_batch", {
-        p_connection_id: connectionId,
-        p_from: from,
-        p_to: to,
-        p_after_created: afterCreated,
-        p_after_id: afterId,
-        p_limit: SYNC_BATCH,
-      });
-    const batch = rows[0];
-    batches++;
-    const scanned = num(batch?.scanned);
-    candidates += scanned;
-    queued += num(batch?.queued);
-    skipped += num(batch?.skipped);
-    if (scanned < SYNC_BATCH) {
-      complete = true;
+    [step] = await businessRpc<SyncStepRow>(supabase, "finance_sync_step", {
+      p_connection_id: connectionId,
+      p_from: from,
+      p_to: to,
+      p_run_id: step?.run_id ?? null,
+      p_limit: SYNC_BATCH,
+    });
+    if (!step) throw new Error("Sync did not return its run. Nothing after the last saved batch was queued; press Sync Now again.");
+    if (step.error) {
+      failure = step.error;
       break;
     }
-    afterCreated = batch.last_created;
-    afterId = batch.last_id;
+    batches++;
+    queued += num(step.queued);
+    skipped += num(step.skipped);
+    if (step.run_status === "COMPLETE") break;
   }
+  const complete = step?.run_status === "COMPLETE";
+  const run = {
+    scanned: num(step?.run_scanned),
+    queued: num(step?.run_queued),
+    skipped: num(step?.run_skipped),
+    batches: num(step?.run_batches),
+    cutoffAt: step?.cutoff_at ?? "",
+  };
 
-  await logAudit(supabase, actor, "finance_sync_started", "finance_integration_connections", connectionId, {
-    newValue: { from, to, queued, candidates, batches, complete },
+  await logAudit(supabase, actor, failure ? "finance_sync_failed" : "finance_sync_started", "finance_sync_runs", step!.run_id, {
+    newValue: { connectionId, from, to, queued, skipped, batches, complete, run, ...(failure ? { error: failure } : {}) },
   });
   revalidate();
-  return { queued, skipped, complete };
+  if (failure) {
+    console.error({ event: "finance.sync_now", outcome: "batch_failed", runId: step!.run_id, message: failure });
+    throw new Error(
+      `A sync batch failed after ${queued} payment(s) were queued by this press. Everything before it is saved; ` +
+        `press Sync Now again to retry from the same place.`
+    );
+  }
+  return { runId: step!.run_id, queued, skipped, complete, run };
 }
 
 /**
@@ -824,6 +853,7 @@ export async function integrationAuditTrail(limit = 100) {
       "finance_integration_connections",
       "finance_account_mappings",
       "finance_sync_operations",
+      "finance_sync_runs",
       "finance_reconciliation_runs",
       "finance_reconciliation_items",
     ])

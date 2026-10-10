@@ -746,13 +746,32 @@ describe("send_announcement / send_placement_notification / notification_push_to
 });
 
 // ─────────────────────────────────────────────────────────────────────────
-describe("queue_finance_sync_batch", () => {
+// Migration 060: "Sync now" as a durable run. The cursor lives in
+// finance_sync_runs and moves in the batch's own transaction; a later press
+// continues the run instead of restarting it.
+// ─────────────────────────────────────────────────────────────────────────
+describe("finance_sync_step: a durable, resumable run", () => {
   const CONN = "00000094-0000-4000-8000-000000000001";
-  async function seedWindow(payments: number) {
+  const CONN_B = "00000094-0000-4000-8000-0000000000b1";
+  const B_FINANCE = "00000003-0000-4000-8000-0000000000f1";
+  const WINDOW = ["2026-08-01", "2026-08-31"] as const;
+  const pid = (g: number) => `00000092-0000-4000-8000-${String(g).padStart(12, "0")}`;
+
+  /**
+   * `payments` cleared payments in August, three to a timestamp (identical
+   * created_at, different ids: the order must break ties on id). The first
+   * `linked` are already posted. A finance user and a connection in college B.
+   */
+  async function seedWindow(payments: number, linked = 30) {
     await owner(
       `INSERT INTO public.finance_integration_connections (id, college_id, display_name, provider, status)
-       VALUES ($1, $2, 'QA Zoho', 'zoho_books', 'ACTIVE')`,
-      [CONN, COLLEGE_A]
+       VALUES ($1, $2, 'QA Zoho', 'zoho_books', 'ACTIVE'), ($3, $4, 'QA Zoho B', 'zoho_books', 'ACTIVE')`,
+      [CONN, COLLEGE_A, CONN_B, COLLEGE_B]
+    );
+    await owner(`INSERT INTO auth.users (id) VALUES ($1) ON CONFLICT DO NOTHING`, [B_FINANCE]);
+    await owner(
+      `INSERT INTO public.profiles (id, college_id, email, full_name, role, status) VALUES ($1, $2, 'bfin@qa.test', 'B Finance', 'finance', 'active')`,
+      [B_FINANCE, COLLEGE_B]
     );
     await owner(
       `INSERT INTO public.fees (id, college_id, student_id, type, amount, paid_amount, due_date, status)
@@ -761,114 +780,427 @@ describe("queue_finance_sync_batch", () => {
     );
     await owner(
       `INSERT INTO public.payments (id, college_id, fee_id, student_id, amount, method, status, created_at)
-       SELECT ${uuid("00000092", "g")}, $1, ${uuid("00000093", "g")}, $2, 1000, 'upi', 'cleared', TIMESTAMPTZ '2026-08-01 00:00Z' + (g || ' minutes')::interval
+       SELECT ${uuid("00000092", "g")}, $1, ${uuid("00000093", "g")}, $2, 1000, 'upi', 'cleared',
+              TIMESTAMPTZ '2026-08-01 00:00:00.123456Z' + ((g / 3) || ' minutes')::interval
        FROM generate_series(1, $3) g`,
       [COLLEGE_A, S.a, payments]
     );
-    // The first 30 are already posted.
     await owner(
       `INSERT INTO public.finance_external_links (college_id, connection_id, entity_type, entity_id, external_id)
-       SELECT $1, $2, 'payment', ${uuid("00000092", "g")}, 'EXT-' || g FROM generate_series(1, 30) g`,
-      [COLLEGE_A, CONN]
+       SELECT $1, $2, 'payment', ${uuid("00000092", "g")}, 'EXT-' || g FROM generate_series(1, $3) g`,
+      [COLLEGE_A, CONN, linked]
     );
   }
-  async function drain(uid: string, limit = 500) {
-    let after: [string | null, string | null] = [null, null];
-    const total = { scanned: 0, queued: 0, skipped: 0, calls: 0 };
-    for (;;) {
-      const r = await as(db, uid, `SELECT * FROM public.queue_finance_sync_batch($1, '2026-08-01', '2026-08-31', $2, $3, $4)`, [CONN, after[0], after[1], limit]);
-      if (!r.ok) throw new Error(r.error ?? "batch failed");
-      const b = r.data[0];
-      total.calls++;
-      total.scanned += n(b.scanned);
-      total.queued += n(b.queued);
-      total.skipped += n(b.skipped);
-      if (n(b.scanned) < limit) return total;
-      after = [b.last_created as string, b.last_id as string];
-    }
-  }
 
-  it("1,200 payments in a window: queued in bounded batches, linked ones skipped, every key = enqueue()'s", async () => {
+  type Step = { run_id: string; run_status: string; scanned: number; queued: number; skipped: number; error: string | null };
+  async function step(uid: string, runId: string | null, limit: number): Promise<Step> {
+    const r = await as(db, uid, `SELECT * FROM public.finance_sync_step($1, $2, $3, $4, $5)`, [CONN, WINDOW[0], WINDOW[1], runId, limit]);
+    if (!r.ok) throw new Error(r.error ?? "step failed");
+    return r.data[0] as unknown as Step;
+  }
+  /** One press, as syncNow drives it: at most `maxBatches` steps on one run. */
+  async function press(uid: string, maxBatches: number, limit: number) {
+    let s: Step | undefined;
+    const t = { scanned: 0, queued: 0, skipped: 0, batches: 0 };
+    while (t.batches < maxBatches) {
+      s = await step(uid, s?.run_id ?? null, limit);
+      if (s.error) throw new Error(s.error);
+      t.batches++;
+      t.scanned += n(s.scanned);
+      t.queued += n(s.queued);
+      t.skipped += n(s.skipped);
+      if (s.run_status === "COMPLETE") break;
+    }
+    return { ...t, complete: s?.run_status === "COMPLETE", runId: s!.run_id };
+  }
+  const opsOf = () =>
+    verify<{ n: string; d: string; q: string }>(
+      db,
+      `SELECT count(*)::text n, count(DISTINCT entity_id)::text d, count(*) FILTER (WHERE status='QUEUED')::text q FROM public.finance_sync_operations WHERE connection_id=$1`,
+      [CONN]
+    ).then((r) => ({ ops: n(r[0].n), distinct: n(r[0].d), queued: n(r[0].q) }));
+  const opsFor = async (g: number) =>
+    n((await verify<{ n: string }>(db, `SELECT count(*)::text n FROM public.finance_sync_operations WHERE connection_id=$1 AND entity_id=$2`, [CONN, pid(g)]))[0].n);
+
+  it("a press that hits its ceiling leaves a durable cursor; later presses continue it to the end, nothing restarted", async () => {
+    // 1,201 payments, batches of 10, presses of at most 20 batches: the shape
+    // of 100,000+ payments against 200 × 500 (realpg runs that size for real).
     await txn(
-      () => seedWindow(1200),
+      () => seedWindow(1201),
       async () => {
-        const t = await drain(U.finance);
-        expect(t).toMatchObject({ scanned: 1200, queued: 1170, skipped: 30, calls: 3 });
-        const ops = await verify<{ entity_id: string; idempotency_key: string; status: string; created_by: string }>(
-          db,
-          `SELECT entity_id, idempotency_key, status, created_by FROM public.finance_sync_operations WHERE connection_id=$1`,
-          [CONN]
-        );
-        expect(ops.length).toBe(1170);
-        expect(new Set(ops.map((o) => o.entity_id)).size).toBe(1170);
-        expect(ops.every((o) => o.status === "QUEUED" && o.created_by === U.finance)).toBe(true);
-        for (const o of ops.slice(0, 50)) {
-          expect(o.idempotency_key).toBe(
-            idempotencyKey({ collegeId: COLLEGE_A, connectionId: CONN, entityType: "payment", entityId: o.entity_id, operation: "create_payment" })
-          );
+        const presses = [];
+        for (let i = 0; i < 20; i++) {
+          const p = await press(U.finance, 20, 10);
+          presses.push(p);
+          if (p.complete) break;
         }
-        // Pressing again queues nothing new and creates no second row.
-        const again = await drain(U.finance);
-        expect(again.queued).toBe(0);
-        const count = await verify<{ n: string }>(db, `SELECT count(*)::text n FROM public.finance_sync_operations WHERE connection_id=$1`, [CONN]);
-        expect(n(count[0].n)).toBe(1170);
+        expect(presses.map((p) => p.complete)).toEqual([false, false, false, false, false, false, true]);
+        // Each press continued where the last stopped: their scans add up to the window, once.
+        expect(presses.reduce((s, p) => s + p.scanned, 0)).toBe(1201);
+        expect(presses.reduce((s, p) => s + p.queued, 0)).toBe(1171);
+        expect(presses.reduce((s, p) => s + p.skipped, 0)).toBe(30);
+        expect(new Set(presses.map((p) => p.runId)).size).toBe(1); // one run, resumed six times
+        // Payments past the first press's ceiling — never reached before — are queued.
+        for (const g of [201, 800, 1201]) expect(await opsFor(g), String(g)).toBe(1);
+        expect(await opsOf()).toEqual({ ops: 1171, distinct: 1171, queued: 1171 });
+        const run = await verify<Record<string, unknown>>(db, `SELECT *, scanned::text s FROM public.finance_sync_runs WHERE id=$1`, [presses[0].runId]);
+        expect(run[0]).toMatchObject({ status: "COMPLETE", batches: 121, s: "1201", created_by: U.finance, last_step_by: U.finance, cursor_id: pid(1201) });
+        expect(run[0].completed_at).not.toBeNull();
+
+        // A press after completion opens a NEW run, rescans, and creates nothing.
+        const again = await press(U.finance, 200, 500);
+        expect(again).toMatchObject({ complete: true, queued: 0, skipped: 30, scanned: 1201 });
+        expect(again.runId).not.toBe(presses[0].runId);
+        expect(await opsOf()).toEqual({ ops: 1171, distinct: 1171, queued: 1171 });
       }
     );
   });
 
-  it("a PENDING operation left by an earlier enqueue() is queued, not duplicated", async () => {
+  it("a process that dies mid-run loses nothing: a fresh press, without the run id, resumes from the saved cursor", async () => {
+    await txn(
+      () => seedWindow(95, 0),
+      async () => {
+        const first = await step(U.finance, null, 10);
+        await step(U.finance, first.run_id, 10);
+        await step(U.finance, first.run_id, 10);
+        // "Crash": the caller forgets everything. The run row remembers.
+        const saved = await verify<{ cursor_id: string; scanned: string }>(db, `SELECT cursor_id, scanned::text FROM public.finance_sync_runs WHERE id=$1`, [first.run_id]);
+        expect(saved[0]).toEqual({ cursor_id: pid(30), scanned: "30" });
+        const rest = await press(U.admin, 200, 10); // even another person
+        expect(rest).toMatchObject({ runId: first.run_id, scanned: 65, queued: 65, complete: true });
+        expect(await opsOf()).toEqual({ ops: 95, distinct: 95, queued: 95 });
+      }
+    );
+  });
+
+  it("a failed batch rolls back its operations AND its cursor, records the failure, and a retry repeats it exactly", async () => {
     await txn(
       async () => {
-        await seedWindow(10);
-        // Payment #8 already has a PENDING operation, with enqueue()'s key.
-        const key = idempotencyKey({ collegeId: COLLEGE_A, connectionId: CONN, entityType: "payment", entityId: "00000092-0000-4000-8000-000000000008", operation: "create_payment" });
-        await owner(
-          `INSERT INTO public.finance_sync_operations (college_id, connection_id, provider, entity_type, entity_id, operation, idempotency_key, status, created_by)
-           VALUES ($1, $2, 'zoho_books', 'payment', '00000092-0000-4000-8000-000000000008', 'create_payment', $3, 'PENDING', $4)`,
-          [COLLEGE_A, CONN, key, U.finance]
-        );
-        // Unlink #1..#30 from seedWindow's linked set so all 10 are postable.
-        await owner(`DELETE FROM public.finance_external_links WHERE connection_id=$1`, [CONN]);
+        await seedWindow(50, 0);
+        // Payment #27 cannot be queued until the fault is removed.
+        await owner(`CREATE FUNCTION public.qa_fail_sync() RETURNS trigger LANGUAGE plpgsql AS $$
+          BEGIN IF NEW.entity_id = '${pid(27)}' THEN RAISE EXCEPTION 'qa: injected failure'; END IF; RETURN NEW; END $$`);
+        await owner(`CREATE TRIGGER qa_fail BEFORE INSERT ON public.finance_sync_operations FOR EACH ROW EXECUTE FUNCTION public.qa_fail_sync()`);
       },
       async () => {
-        const t = await drain(U.finance);
-        expect(t).toMatchObject({ scanned: 10, queued: 10, skipped: 0 });
-        const rows = await verify<{ n: string; q: string }>(
-          db,
-          `SELECT count(*)::text n, count(*) FILTER (WHERE status='QUEUED')::text q FROM public.finance_sync_operations WHERE connection_id=$1`,
-          [CONN]
-        );
-        expect(rows[0]).toEqual({ n: "10", q: "10" }); // one row for #8, not two
+        const a = await step(U.finance, null, 10);
+        const b = await step(U.finance, a.run_id, 10);
+        expect([a.error, b.error]).toEqual([null, null]);
+        const failed = await step(U.finance, a.run_id, 10); // payments 21..30
+        expect(failed.error).toMatch(/injected failure/);
+        expect(failed.run_status).toBe("RUNNING");
+        expect([failed.scanned, failed.queued]).toEqual([0, 0]);
+        const run = await verify<Record<string, unknown>>(db, `SELECT cursor_id, failures, last_error, scanned::text s FROM public.finance_sync_runs WHERE id=$1`, [a.run_id]);
+        expect(run[0]).toMatchObject({ cursor_id: pid(20), failures: 1, s: "20" });
+        expect(String(run[0].last_error)).toMatch(/injected failure/);
+        // Nothing of the failed batch survived — not even its 9 good payments.
+        expect(await opsOf()).toEqual({ ops: 20, distinct: 20, queued: 20 });
+
+        await owner(`DROP TRIGGER qa_fail ON public.finance_sync_operations`);
+        const rest = await press(U.finance, 200, 10);
+        expect(rest).toMatchObject({ runId: a.run_id, scanned: 30, queued: 30, complete: true });
+        expect(await opsOf()).toEqual({ ops: 50, distinct: 50, queued: 50 });
+        const done = await verify<Record<string, unknown>>(db, `SELECT last_error, failures FROM public.finance_sync_runs WHERE id=$1`, [a.run_id]);
+        expect(done[0]).toEqual({ last_error: null, failures: 1 });
       }
     );
   });
 
-  it("only finance or admin of the connection's college may queue", async () => {
+  it("consistency: changes ahead of the cursor are this run's, changes behind it the next run's, and nothing is queued twice", async () => {
     await txn(
-      () => seedWindow(5),
+      () => seedWindow(60, 0),
       async () => {
-        for (const uid of [U.teacherA, U.studentA, U.director, U.bHod]) {
-          const r = await tryAs(uid, `SELECT * FROM public.queue_finance_sync_batch($1, '2026-08-01', '2026-08-31')`, [CONN]);
+        const first = await step(U.finance, null, 20); // #1..#20; cursor at #20 (00:06:00.123456)
+        expect(first.run_status).toBe("RUNNING");
+        const extra = async (g: number, created: string, status: string) => {
+          await owner(
+            `INSERT INTO public.fees (id, college_id, student_id, type, amount, paid_amount, due_date, status) VALUES ($1, $2, $3, 'QA', 1000, 0, DATE '2030-01-01', 'pending')`,
+            [`00000093-0000-4000-8000-${String(g).padStart(12, "0")}`, COLLEGE_A, S.a]
+          );
+          await owner(
+            `INSERT INTO public.payments (id, college_id, fee_id, student_id, amount, method, status, created_at) VALUES ($1, $2, $3, $4, 1000, 'upi', $5, $6)`,
+            [pid(g), COLLEGE_A, `00000093-0000-4000-8000-${String(g).padStart(12, "0")}`, S.a, status, created]
+          );
+        };
+        await owner("SET session_replication_role = replica");
+        await extra(901, "2026-08-01 00:00:00Z", "cleared"); // created behind the cursor
+        await extra(902, "2026-08-01 00:15:00Z", "cleared"); // ahead, before cutoff_at: this run's
+        await extra(903, "2026-08-01 00:16:00Z", "pending"); // ahead, cleared below: this run's
+        await owner(`UPDATE public.payments SET status='cleared' WHERE id=$1`, [pid(903)]);
+        await owner(`UPDATE public.payments SET status='refunded' WHERE id=$1`, [pid(45)]); // ahead, no longer eligible
+        await owner(`UPDATE public.payments SET status='refunded' WHERE id=$1`, [pid(5)]); // behind: already queued, stays queued
+        await owner("SET session_replication_role = origin");
+
+        const rest = await press(U.finance, 200, 20);
+        expect(rest.complete).toBe(true);
+        expect(await opsFor(901)).toBe(0); // behind the cursor: the next run's
+        expect(await opsFor(902)).toBe(1);
+        expect(await opsFor(903)).toBe(1);
+        expect(await opsFor(45)).toBe(0); // refunded before the cursor reached it
+        expect(await opsFor(5)).toBe(1);
+        expect(await opsOf()).toEqual({ ops: 61, distinct: 61, queued: 61 }); // #1..#60 − #45 + #902 + #903
+
+        // The next run picks up what the first could not see, and only that.
+        const next = await press(U.finance, 200, 20);
+        expect(next).toMatchObject({ complete: true, queued: 1 });
+        expect(await opsFor(901)).toBe(1);
+        expect(await opsOf()).toEqual({ ops: 62, distinct: 62, queued: 62 });
+      }
+    );
+  });
+
+  it("payments created after cutoff_at belong to the next run, even inside the window", async () => {
+    await txn(
+      () => seedWindow(5, 0),
+      async () => {
+        await owner(`UPDATE public.payments SET created_at = now() + interval '1 second' WHERE id=$1`, [pid(5)]);
+        const r = await as(db, U.finance, `SELECT * FROM public.finance_sync_step($1, $2, $3, NULL, 100)`, [CONN, "2026-08-01", "2099-12-31"]);
+        expect(r.ok, r.error ?? "").toBe(true);
+        expect(r.data[0]).toMatchObject({ run_status: "COMPLETE", scanned: 4 });
+        expect(await opsFor(5)).toBe(0);
+      }
+    );
+  });
+
+  it("an exactly-full last batch: the next step finds nothing and completes; a completed run is not reopened", async () => {
+    await txn(
+      () => seedWindow(20, 0),
+      async () => {
+        const a = await step(U.finance, null, 10);
+        const b = await step(U.finance, a.run_id, 10);
+        expect([a.run_status, b.run_status]).toEqual(["RUNNING", "RUNNING"]);
+        const c = await step(U.finance, a.run_id, 10);
+        expect(c).toMatchObject({ run_status: "COMPLETE", scanned: 0 });
+        const d = await step(U.finance, a.run_id, 10);
+        expect(d).toMatchObject({ run_id: a.run_id, run_status: "COMPLETE", scanned: 0 });
+        expect(n((await verify<{ n: string }>(db, `SELECT count(*)::text n FROM public.finance_sync_runs`))[0].n)).toBe(1);
+      }
+    );
+  });
+
+  it("only finance or admin of the connection's college may run a sync; nobody may write a run row directly", async () => {
+    await txn(
+      () => seedWindow(5, 0),
+      async () => {
+        for (const uid of [U.teacherA, U.studentA, U.director, U.hodCse, U.bHod, U.superAdmin]) {
+          const r = await tryAs(uid, `SELECT * FROM public.finance_sync_step($1, '2026-08-01', '2026-08-31')`, [CONN]);
           expect(r.ok, uid).toBe(false);
         }
-        const none = await verify<{ n: string }>(db, `SELECT count(*)::text n FROM public.finance_sync_operations WHERE connection_id=$1`, [CONN]);
-        expect(n(none[0].n)).toBe(0);
-        const ok = await as(db, U.admin, `SELECT * FROM public.queue_finance_sync_batch($1, '2026-08-01', '2026-08-31')`, [CONN]);
-        expect(ok.ok, ok.error ?? "").toBe(true);
+        expect(n((await verify<{ n: string }>(db, `SELECT count(*)::text n FROM public.finance_sync_runs`))[0].n)).toBe(0);
+        const own = await as(db, U.finance, `SELECT * FROM public.finance_sync_step($1, '2026-08-01', '2026-08-31', NULL, 2)`, [CONN]);
+        const runA = own.data[0].run_id as string;
+        // College B's finance: not A's connection, and not A's run through B's own connection.
+        const viaA = await tryAs(B_FINANCE, `SELECT * FROM public.finance_sync_step($1, '2026-08-01', '2026-08-31', $2)`, [CONN, runA]);
+        expect(viaA.error).toMatch(/connection not found in your college/);
+        const viaB = await tryAs(B_FINANCE, `SELECT * FROM public.finance_sync_step($1, '2026-08-01', '2026-08-31', $2)`, [CONN_B, runA]);
+        expect(viaB.error).toMatch(/run not found/);
+        // Reading: A's finance and admin see A's run; B's finance, A's teacher and director do not.
+        for (const [uid, seen] of [[U.finance, 1], [U.admin, 1], [B_FINANCE, 0], [U.teacherA, 0], [U.director, 0]] as const) {
+          const r = await as(db, uid, `SELECT id FROM public.finance_sync_runs`);
+          expect(r.data.length, uid).toBe(seen);
+        }
+        // Writing directly: refused, the run's own finance user included.
+        for (const sql of [
+          `UPDATE public.finance_sync_runs SET status='COMPLETE', completed_at=now()`,
+          `UPDATE public.finance_sync_runs SET cursor_id='${pid(5)}', cursor_created=now()`,
+          `DELETE FROM public.finance_sync_runs`,
+          `INSERT INTO public.finance_sync_runs (college_id, connection_id, period_from, period_to, created_by) VALUES ('${COLLEGE_A}', '${CONN}', '2026-09-01', '2026-09-30', '${U.finance}')`,
+        ]) {
+          const r = await tryAs(U.finance, sql);
+          expect(r.ok, sql).toBe(false);
+          expect(r.error).toMatch(/permission denied/);
+        }
+        const run = await verify<Record<string, unknown>>(db, `SELECT status, scanned::text s FROM public.finance_sync_runs WHERE id=$1`, [runA]);
+        expect(run[0]).toEqual({ status: "RUNNING", s: "2" });
+        const by = await verify<{ created_by: string }>(db, `SELECT DISTINCT created_by FROM public.finance_sync_operations WHERE connection_id=$1`, [CONN]);
+        expect(by).toEqual([{ created_by: U.finance }]);
+        // Not callable without a session at all.
+        const anon = await verify<{ step: boolean; rec: boolean }>(
+          db,
+          `SELECT has_function_privilege('anon', 'public.finance_sync_step(uuid,date,date,uuid,integer)', 'EXECUTE') step,
+                  has_function_privilege('anon', 'public.finance_reconciliation_payments(uuid,date,date,timestamptz,timestamptz,uuid,integer)', 'EXECUTE') rec`
+        );
+        expect(anon[0]).toEqual({ step: false, rec: false });
       }
     );
   });
 
-  it("an inactive connection refuses to queue", async () => {
+  it("an inactive connection, or a backwards window, refuses", async () => {
     await txn(
       async () => {
         await seedWindow(5);
         await owner(`UPDATE public.finance_integration_connections SET status='CONFIGURING' WHERE id=$1`, [CONN]);
       },
       async () => {
-        const r = await tryAs(U.finance, `SELECT * FROM public.queue_finance_sync_batch($1, '2026-08-01', '2026-08-31')`, [CONN]);
-        expect(r.ok).toBe(false);
+        const r = await tryAs(U.finance, `SELECT * FROM public.finance_sync_step($1, '2026-08-01', '2026-08-31')`, [CONN]);
         expect(r.error).toMatch(/cannot synchronise/);
+        const back = await tryAs(U.finance, `SELECT * FROM public.finance_sync_step($1, '2026-08-31', '2026-08-01')`, [CONN]);
+        expect(back.error).toMatch(/start on or before its end/);
+      }
+    );
+  });
+
+  it("059's cursorless queue_finance_sync_batch is gone: a run is the only way to queue a window", async () => {
+    const r = await verify<{ n: string }>(db, `SELECT count(*)::text n FROM pg_proc WHERE proname = 'queue_finance_sync_batch'`);
+    expect(n(r[0].n)).toBe(0);
+  });
+
+  it("a PENDING operation left by an earlier enqueue() is queued, not duplicated; every key is enqueue()'s", async () => {
+    await txn(
+      async () => {
+        await seedWindow(10, 0);
+        const key = idempotencyKey({ collegeId: COLLEGE_A, connectionId: CONN, entityType: "payment", entityId: pid(8), operation: "create_payment" });
+        await owner(
+          `INSERT INTO public.finance_sync_operations (college_id, connection_id, provider, entity_type, entity_id, operation, idempotency_key, status, created_by)
+           VALUES ($1, $2, 'zoho_books', 'payment', $3, 'create_payment', $4, 'PENDING', $5)`,
+          [COLLEGE_A, CONN, pid(8), key, U.finance]
+        );
+      },
+      async () => {
+        const t = await press(U.finance, 200, 500);
+        expect(t).toMatchObject({ scanned: 10, queued: 10, skipped: 0, complete: true });
+        expect(await opsOf()).toEqual({ ops: 10, distinct: 10, queued: 10 });
+        const keys = await verify<{ entity_id: string; idempotency_key: string }>(db, `SELECT entity_id, idempotency_key FROM public.finance_sync_operations WHERE connection_id=$1`, [CONN]);
+        for (const o of keys) {
+          expect(o.idempotency_key).toBe(idempotencyKey({ collegeId: COLLEGE_A, connectionId: CONN, entityType: "payment", entityId: o.entity_id, operation: "create_payment" }));
+        }
+      }
+    );
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// Migration 060: reconciliation's local side, a keyset page at a time.
+// ─────────────────────────────────────────────────────────────────────────
+describe("finance_reconciliation_payments: keyset pages that neither skip nor repeat", () => {
+  const pid = (g: number) => `00000092-0000-4000-8000-${String(g).padStart(12, "0")}`;
+  const AS_OF = "2026-10-01 00:00:00Z";
+
+  /** `count` cleared payments in August, four to a timestamp (microseconds included). */
+  async function seedPeriod(count: number) {
+    await owner(
+      `INSERT INTO public.fees (id, college_id, student_id, type, amount, paid_amount, due_date, status)
+       SELECT ${uuid("00000093", "g")}, $1, $2, 'QA rec', 1000, 0, DATE '2030-01-01', 'pending' FROM generate_series(1, $3) g`,
+      [COLLEGE_A, S.a, count]
+    );
+    await owner(
+      `INSERT INTO public.payments (id, college_id, fee_id, student_id, amount, method, status, created_at)
+       SELECT ${uuid("00000092", "g")}, $1, ${uuid("00000093", "g")}, $2, 100 + g, 'upi', 'cleared',
+              TIMESTAMPTZ '2026-08-01 00:00:00.000001Z' + ((g / 4) || ' seconds')::interval
+       FROM generate_series(1, $3) g`,
+      [COLLEGE_A, S.a, count]
+    );
+  }
+  type Row = { id: string; created_at: string };
+  async function page(uid: string, after: Row | null, limit: number, asOf = AS_OF): Promise<Row[]> {
+    // created_at as text: the database's own value, microseconds intact, is the cursor.
+    const r = await as(db, uid, `SELECT id, created_at::text created_at FROM public.finance_reconciliation_payments($1, '2026-08-01', '2026-08-31', $2, $3, $4, $5)`, [
+      COLLEGE_A,
+      asOf,
+      after?.created_at ?? null,
+      after?.id ?? null,
+      limit,
+    ]);
+    if (!r.ok) throw new Error(r.error ?? "page failed");
+    return r.data as unknown as Row[];
+  }
+  async function walk(uid: string, limit: number, between?: (pageNo: number) => Promise<void>): Promise<string[]> {
+    const ids: string[] = [];
+    let after: Row | null = null;
+    for (let p = 1; ; p++) {
+      const rows = await page(uid, after, limit);
+      ids.push(...rows.map((r) => r.id));
+      if (rows.length < limit) return ids;
+      after = rows[rows.length - 1];
+      if (between) await between(p);
+    }
+  }
+
+  it("1,500 payments, four to a timestamp: every one exactly once, in (created_at, id) order, across pages", async () => {
+    await txn(
+      () => seedPeriod(1500),
+      async () => {
+        const ids = await walk(U.finance, 200);
+        expect(ids).toEqual(Array.from({ length: 1500 }, (_, i) => pid(i + 1)));
+      }
+    );
+  });
+
+  it("inserts, deletes and updates between pages: what offset paging skipped, keyset reads once", async () => {
+    await txn(
+      () => seedPeriod(1200),
+      async () => {
+        // The same changes, at the same point (after 600 read), in both walks.
+        const mutate = async () => {
+          await owner("SET session_replication_role = replica");
+          await owner(`DELETE FROM public.payments WHERE id = ANY ($1::uuid[])`, [[pid(10), pid(11), pid(900)]]); // two behind, one ahead
+          await owner(`UPDATE public.payments SET status='refunded' WHERE id=$1`, [pid(1000)]); // ahead
+          await owner(`UPDATE public.payments SET amount=1 WHERE id=$1`, [pid(5)]); // behind
+          await owner(
+            `INSERT INTO public.fees (id, college_id, student_id, type, amount, paid_amount, due_date, status) VALUES (${uuid("00000093", "5000")}, $1, $2, 'QA', 1, 0, DATE '2030-01-01', 'pending')`,
+            [COLLEGE_A, S.a]
+          );
+          await owner(
+            `INSERT INTO public.payments (id, college_id, fee_id, student_id, amount, method, status, created_at)
+             VALUES (${uuid("00000092", "5000")}, $1, ${uuid("00000093", "5000")}, $2, 1, 'upi', 'cleared', TIMESTAMPTZ '2026-08-01 00:00:00.000001Z')`,
+            [COLLEGE_A, S.a]
+          ); // behind
+          await owner("SET session_replication_role = origin");
+        };
+        const survivors = Array.from({ length: 1200 }, (_, i) => pid(i + 1)).filter((id) => ![pid(10), pid(11), pid(900), pid(1000)].includes(id));
+
+        // OFFSET, as loadLocalPayments paged: the two deletions behind shift every later row back two places.
+        await owner("SAVEPOINT offset_walk");
+        const offsetIds: string[] = [];
+        for (let p = 0; ; p++) {
+          const r = await as(
+            db,
+            U.finance,
+            `SELECT id FROM public.payments WHERE college_id=$1 AND status='cleared' AND created_at >= '2026-08-01T00:00:00Z' AND created_at <= '2026-08-31T23:59:59Z'
+             ORDER BY created_at, id OFFSET $2 LIMIT 300`,
+            [COLLEGE_A, p * 300]
+          );
+          offsetIds.push(...r.data.map((x) => x.id as string));
+          if (r.data.length < 300) break;
+          if (p === 1) await mutate();
+        }
+        await owner("ROLLBACK TO SAVEPOINT offset_walk");
+        // Net one row fewer behind (two deleted, one inserted): the first unread row is skipped.
+        expect(survivors.filter((id) => !offsetIds.includes(id))).toEqual([pid(601)]); // present throughout, never read
+
+        // KEYSET.
+        const ids = await walk(U.finance, 300, async (p) => {
+          if (p === 2) await mutate();
+        });
+        expect(new Set(ids).size).toBe(ids.length); // nothing twice
+        // Every payment present throughout is read; those read before their deletion stay read;
+        // the ones removed ahead are not; the one inserted behind is the next run's.
+        expect(ids).toEqual(Array.from({ length: 1200 }, (_, i) => pid(i + 1)).filter((id) => ![pid(900), pid(1000)].includes(id)));
+        expect(ids).not.toContain(pid(5000));
+      }
+    );
+  });
+
+  it("as_of bounds the set; the period's last second is in, the next day is out", async () => {
+    await txn(
+      async () => {
+        await seedPeriod(3);
+        await owner(`UPDATE public.payments SET created_at = TIMESTAMPTZ '2026-08-31 23:59:59Z' WHERE id=$1`, [pid(1)]);
+        await owner(`UPDATE public.payments SET created_at = TIMESTAMPTZ '2026-09-01 00:00:00Z' WHERE id=$1`, [pid(2)]);
+      },
+      async () => {
+        expect((await page(U.finance, null, 100)).map((r) => r.id).sort()).toEqual([pid(1), pid(3)]);
+        expect(await page(U.finance, null, 100, "2026-08-01 00:00:00Z")).toEqual([]);
+      }
+    );
+  });
+
+  it("RLS decides: another college and an unrelated student get nothing; a page is never larger than 1,000", async () => {
+    await txn(
+      () => seedPeriod(1100),
+      async () => {
+        expect((await page(U.finance, null, 5000)).length).toBe(1000);
+        for (const uid of [U.bHod, U.bStudent, U.studentB]) expect((await page(uid, null, 1000)).length, uid).toBe(0);
       }
     );
   });

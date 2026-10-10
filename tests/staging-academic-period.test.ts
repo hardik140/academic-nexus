@@ -372,7 +372,7 @@ describe("tenant consistency across the academic structure", () => {
       // connection's college, so a College B row cannot hang off a College A
       // integration.
       "fam_connection_tenant_fkey", "fel_connection_tenant_fkey", "fic_cred_tenant_fkey",
-      "frr_connection_tenant_fkey", "fsc_connection_tenant_fkey", "fso_connection_tenant_fkey",
+      "frr_connection_tenant_fkey", "fsc_connection_tenant_fkey", "fso_connection_tenant_fkey", "fsr_connection_tenant_fkey",
       // Gate Security (050). gm_/gpc_pass_tenant_fkey are three-column —
       // (pass, college, student) — so a ledger row cannot name a pass in one
       // tenant, a college in another and a student in neither. The rest bind

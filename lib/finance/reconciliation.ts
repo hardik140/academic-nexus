@@ -4,6 +4,7 @@ import { adapterFor } from "./providers/registry";
 import { isUsable, type CapabilityMap, type ExternalTransaction, type ProviderContext } from "./providers/types";
 import { loadCredential } from "./credentials";
 import { dbError } from "@/lib/internal-error";
+import { businessRpc } from "@/lib/business-rpc";
 
 /**
  * The reconciliation engine (§64, §65, §80, §98).
@@ -73,12 +74,14 @@ export async function reconcile(
       created_by: input.createdBy ?? null,
       system_actor: input.createdBy ? null : (input.systemActor ?? "scheduler"),
     })
-    .select("id")
+    .select("id, started_at")
     .single();
   if (runError || !runRow) {
     throw dbError({ ...runError, message: runError?.message ?? "Could not start a reconciliation run." });
   }
   const runId = runRow.id;
+  // The run's set of local payments is fixed here: one created later is the next run's.
+  const asOf = runRow.started_at;
 
   try {
     const { data: connRow } = await db
@@ -116,7 +119,7 @@ export async function reconcile(
     };
 
     // ── The two sides ──────────────────────────────────────────
-    const local = await loadLocalPayments(db, input);
+    const local = await loadLocalPayments(db, input, asOf);
     const external = await loadExternalTransactions(adapter, ctx, input);
     const links = await loadLinks(db, input.connectionId, local.map((p) => p.id));
 
@@ -331,32 +334,62 @@ interface LocalPayment {
 
 /** Rows per page when loading a period's payments; PostgREST caps a page at 1,000 anyway. */
 export const RECONCILE_PAGE = 1000;
+/** Payment ids per finance_external_links read: keeps the `in (...)` list well inside a URL. */
+export const LINK_CHUNK = 100;
 
-async function loadLocalPayments(db: Db, input: ReconcileInput): Promise<LocalPayment[]> {
-  // Only cleared payments are accounting events (047 §7i, §57). A pending or
-  // failed row missing from the provider is correct, not a discrepancy.
-  //
-  // EVERY payment of the period, a page at a time in a fixed order. This
-  // used to be one unranged select, which PostgREST capped at 1,000 rows:
-  // in a period with more, every payment past the cap looked "missing
-  // locally" against the provider's list — false discrepancies — and a real
-  // one could hide among them. Reconciliation compares payment by payment,
-  // so it does need each row; what it must not do is see only some of them.
+interface PaymentPageRow {
+  id: string;
+  amount: number | string;
+  created_at: string;
+  student_id: string;
+  fee_id: string;
+}
+
+/**
+ * EVERY cleared payment of the period that existed when the run started, a
+ * keyset page at a time (migration 060, finance_reconciliation_payments).
+ *
+ * Only cleared payments are accounting events (047 §7i, §57). A pending or
+ * failed row missing from the provider is correct, not a discrepancy.
+ *
+ * WHY KEYSET. This used to page with OFFSET: a payment inserted or deleted
+ * between two pages shifted every later row by one, so one could be read
+ * twice or never. Each page now continues strictly after the last
+ * (created_at, id) read — the cursor is the database's own value, never
+ * re-parsed in JavaScript, which would drop microseconds.
+ *
+ * CONSISTENCY. Pages are separate statements, not one snapshot. A payment
+ * present for the whole walk is read exactly once. One created after the run
+ * started is excluded (p_as_of). One that changes while the walk is on is
+ * read as it was when its page was read: a change behind the cursor shows
+ * in the next run, not this one. No payment is ever counted twice; a
+ * repeated id would mean the order broke, and fails the run.
+ */
+async function loadLocalPayments(db: Db, input: ReconcileInput, asOf: string): Promise<LocalPayment[]> {
   const out: LocalPayment[] = [];
-  for (let page = 0; ; page++) {
-    const from = page * RECONCILE_PAGE;
-    const { data, error } = await db
-      .from("payments")
-      .select("id, amount, created_at, student_id, fee_id")
-      .eq("college_id", input.collegeId)
-      .eq("status", "cleared")
-      .gte("created_at", `${input.periodStart}T00:00:00Z`)
-      .lte("created_at", `${input.periodEnd}T23:59:59Z`)
-      .order("created_at", { ascending: true })
-      .order("id", { ascending: true })
-      .range(from, from + RECONCILE_PAGE - 1);
-    if (error) throw dbError(error);
-    for (const p of data ?? []) {
+  const seen = new Set<string>();
+  let after: { created: string; id: string } | null = null;
+  for (let page = 1; ; page++) {
+    let rows: PaymentPageRow[];
+    try {
+      rows = await businessRpc<PaymentPageRow>(db, "finance_reconciliation_payments", {
+        p_college_id: input.collegeId,
+        p_from: input.periodStart,
+        p_to: input.periodEnd,
+        p_as_of: asOf,
+        p_after_created: after?.created ?? null,
+        p_after_id: after?.id ?? null,
+        p_limit: RECONCILE_PAGE,
+      });
+    } catch {
+      // businessRpc has logged the database error with its SQLSTATE.
+      throw new Error(
+        `Could not read page ${page} of this period's payments (after ${out.length} read). Nothing was compared; run reconciliation again.`
+      );
+    }
+    for (const p of rows) {
+      if (seen.has(p.id)) throw new Error(`Payment ${p.id} was read twice while paging; the run was stopped rather than double-count it.`);
+      seen.add(p.id);
       out.push({
         id: p.id,
         amount: Number(p.amount),
@@ -365,9 +398,14 @@ async function loadLocalPayments(db: Db, input: ReconcileInput): Promise<LocalPa
         fee_id: p.fee_id,
       });
     }
-    if ((data ?? []).length < RECONCILE_PAGE) return out;
+    if (rows.length < RECONCILE_PAGE) return out;
+    const last = rows[rows.length - 1];
+    after = { created: last.created_at, id: last.id };
   }
 }
+
+/** Provider pages read per run. A provider still handing back a cursor after this many fails the run. */
+const MAX_EXTERNAL_PAGES = 200;
 
 async function loadExternalTransactions(
   adapter: ReturnType<typeof adapterFor>,
@@ -376,28 +414,35 @@ async function loadExternalTransactions(
 ): Promise<ExternalTransaction[]> {
   const all: ExternalTransaction[] = [];
   let cursor: string | undefined;
-  // Bounded: a provider that keeps handing back a cursor must not spin this
-  // forever. 200 pages is far past any real month and still terminates.
-  for (let page = 0; page < 200; page++) {
+  for (let page = 0; page < MAX_EXTERNAL_PAGES; page++) {
     const res = await adapter.searchTransactions!(ctx, { from: input.periodStart, to: input.periodEnd, cursor });
     if (!res.ok) throw new Error(`${res.code}: ${res.message}`);
     all.push(...res.data.transactions);
-    if (!res.data.nextCursor) break;
+    if (!res.data.nextCursor) return all;
     cursor = res.data.nextCursor;
   }
-  return all;
+  // Comparing against part of the provider's list would report its unread
+  // documents' payments as unposted. Stop instead.
+  throw new Error(`The provider was still returning transactions after ${MAX_EXTERNAL_PAGES} pages; reconcile a shorter period.`);
 }
 
 async function loadLinks(db: Db, connectionId: string, paymentIds: string[]) {
   const map = new Map<string, { external_id: string }>();
-  if (paymentIds.length === 0) return map;
-  const { data } = await db
-    .from("finance_external_links")
-    .select("entity_id, external_id")
-    .eq("connection_id", connectionId)
-    .eq("entity_type", "payment")
-    .in("entity_id", paymentIds);
-  for (const row of data ?? []) map.set(row.entity_id, { external_id: row.external_id });
+  // In chunks: one `in` of every id overflowed the URL and was capped at 1,000
+  // rows, and a failed read left linked payments looking unposted.
+  for (let i = 0; i < paymentIds.length; i += LINK_CHUNK) {
+    const { data, error } = await db
+      .from("finance_external_links")
+      .select("entity_id, external_id")
+      .eq("connection_id", connectionId)
+      .eq("entity_type", "payment")
+      .in("entity_id", paymentIds.slice(i, i + LINK_CHUNK));
+    if (error) {
+      dbError(error);
+      throw new Error("Could not read which payments are already posted. Nothing was compared; run reconciliation again.");
+    }
+    for (const row of data ?? []) map.set(row.entity_id, { external_id: row.external_id });
+  }
   return map;
 }
 

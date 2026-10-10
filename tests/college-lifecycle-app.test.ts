@@ -257,6 +257,22 @@ describe("background jobs respect the lifecycle", () => {
     expect(body).toMatchObject({ created: 1, autoResolved: 0, collegesSkipped: 1 });
   });
 
+  it("detect-risk-flags: a failed page of open flags fails the run instead of auto-resolving a partial set", async () => {
+    h.adminClient = {
+      from: h.builder((table, ops) => {
+        if (table === "colleges") return { data: [] };
+        if (table === "mv_department_health_raw") return { data: [] };
+        if (table === "risk_flags" && ops.some(([m, a]) => m === "eq" && a[0] === "source")) return { data: null, error: { message: "statement timeout", code: "57014" } };
+        return { data: null };
+      }),
+    };
+    const { POST } = await import("@/app/api/cron/detect-risk-flags/route");
+    const res = await POST(cron());
+    expect(res.status).toBe(500);
+    expect(await res.json()).toMatchObject({ ok: false, error: "statement timeout" });
+    expect(h.writes.filter((w) => w.table === "risk_flags" && w.op === "update")).toEqual([]);
+  });
+
   it("snapshot-health-score writes no snapshot for a blocked college", async () => {
     h.adminClient = {
       from: h.builder((table, ops) => {

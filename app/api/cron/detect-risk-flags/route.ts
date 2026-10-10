@@ -259,7 +259,9 @@ async function handler() {
       .limit(FLAG_PAGE);
     if (after) page = page.gt("id", after);
     const { data, error } = await page;
-    if (error || !data || data.length === 0) break;
+    // A failed page is not "no more flags": report it rather than auto-resolve a partial set.
+    if (error) return NextResponse.json({ ok: false, error: error.message, created, updated }, { status: 500 });
+    if (!data || data.length === 0) break;
     openSystemFlags.push(...data);
     if (data.length < FLAG_PAGE) break;
     after = data[data.length - 1].id;

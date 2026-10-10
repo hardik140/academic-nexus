@@ -105,6 +105,11 @@ describe("inventory", () => {
       // staging-business-reads.test.ts (other users get nothing, even with
       // the announcement id).
       "notification_push_tokens",
+      // 060: one batch of a "Sync now" run. Definer so the run row (cursor,
+      // status) has no write policy a person could use to skip payments; it
+      // enforces fso_enqueue's rules itself — active finance/admin, own
+      // college, created_by = caller — tested in staging-business-reads.test.ts.
+      "finance_sync_step",
       // 054: one boolean about an id the caller already holds — keeps
       // super_admin sessions out of a College Admin's view and reach.
       "profile_is_super_admin",

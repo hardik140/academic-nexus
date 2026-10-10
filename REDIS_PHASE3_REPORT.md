@@ -21,7 +21,8 @@ application
 Redis (optional, unchanged keys and invalidation)
 ```
 
-Migration **059** holds every new function. No row limit was raised.
+Migration **059** holds the new functions; **060** makes "Sync now" a durable,
+resumable run and pages reconciliation by keyset. No row limit was raised.
 
 ## Status labels
 
@@ -30,7 +31,7 @@ Migration **059** holds every new function. No row limit was raised.
 | Implemented | yes, this branch |
 | Local verified | yes: unit, PGlite staging with RLS and roles, real PostgreSQL concurrency, builds, E2E (counts in the PR) |
 | CI verified | see the pull request checks |
-| Preview / production verified | no. Migration 059 is not applied to any hosted database; Phase 0 infrastructure is still blocked |
+| Preview / production verified | no. Migrations 059 and 060 are not applied to any hosted database; Phase 0 infrastructure is still blocked |
 
 ## Capped-read audit
 
@@ -77,8 +78,8 @@ positives, where `.range()` is applied in a later statement.
 | 18 | same, device tokens | `in(user_id, all recipients)` under owner-only RLS | 1,000, and RLS returned only the sender's own token | push delivery | P1 (push never reached anyone) | `notification_push_tokens()`, keyset pages of 1,000 |
 | 19 | `placement-cell/notifications` | every student (eligible: the first 1,000, filtered in JS) | 1,000 | who receives it | P1 | `send_placement_notification()` |
 | 20 | same, device tokens | as #18 | as #18 | push delivery | P1 | as #18 |
-| 21 | `finance/integrations` syncNow | the window's cleared payments, then one-by-one enqueue | 1,000; a failed read meant "nothing to queue" | what is queued for posting | **P0** | `queue_finance_sync_batch()`: bounded batches, keyset cursor |
-| 22 | `lib/finance/reconciliation` loadLocalPayments | the period's cleared payments | 1,000 | local-versus-provider comparison | **P0** (false or hidden discrepancies) | ordered pages of 1,000 until a short page |
+| 21 | `finance/integrations` syncNow | the window's cleared payments, then one-by-one enqueue | 1,000; a failed read meant "nothing to queue" | what is queued for posting | **P0** | `finance_sync_step()` (060): bounded batches of a durable run whose cursor commits with each batch; a later press resumes it |
+| 22 | `lib/finance/reconciliation` loadLocalPayments | the period's cleared payments | 1,000 | local-versus-provider comparison | **P0** (false or hidden discrepancies) | `finance_reconciliation_payments()` (060): keyset pages of 1,000 by `(created_at, id)`, bounded by the run's `started_at`; links read in chunks of 100 |
 | 23 | `lib/finance/mapping` validateMappings | every fee and payment | 1,000; a failed read meant "no gaps" | which fee heads and methods need a mapping | **P0** (activation with unmapped heads) | `finance_mapping_usage()`, failing closed |
 | 24 | `cron/snapshot-health-score` | students, faculty, flags, decisions, rooms, department rows, platform-wide | 1,000 across ALL colleges | every college's health score | P1 | `college_health_inputs()`, service role only |
 | 25 | `cron/detect-risk-flags` hostel signal | every room, platform-wide | 1,000 across all colleges | over-capacity flags | P1 | `hostel_block_capacity_all()`, service role only |
@@ -116,7 +117,9 @@ and due date against the TypeScript.
 | `student_risk_overview`, `faculty_activity`, `fee_department_breakdown`, `fee_status_breakdown`, `finance_exceptions`, `placement_report`, `placement_drive_funnel`, `hostel_block_capacity`, `gate_security_counts`, `attendance_summary`, `finance_mapping_usage`, `search_students` | SECURITY INVOKER: RLS decides which rows count, exactly as for the old select. Each also takes and filters by the caller's college | #1–#14, #23, #27, #28 |
 | `send_announcement`, `send_placement_notification` | SECURITY INVOKER, plus an explicit role-and-college gate | #17, #19 |
 | `notification_push_tokens` | **SECURITY DEFINER** (see below) | #18, #20 |
-| `queue_finance_sync_batch`, `finance_sync_idempotency_key` | SECURITY INVOKER | #21 |
+| `finance_sync_idempotency_key` | SECURITY INVOKER | #21 |
+| `finance_sync_step` (060; replaces 059's `queue_finance_sync_batch`, which 060 drops) | **SECURITY DEFINER**: the only writer of `finance_sync_runs`; enforces fso_enqueue's rules itself | #21 |
+| `finance_reconciliation_payments` (060) | SECURITY INVOKER | #22 |
 | `college_health_inputs`, `hostel_block_capacity_all` | SECURITY INVOKER, executable by `service_role` only | #24, #25 |
 
 **Explicit gates on the send functions.** They mirror the Server Actions'
@@ -155,11 +158,46 @@ Query plans on hosted data are unmeasured.
 
 ## Concurrency
 
-**"Sync now".** Each `queue_finance_sync_batch` call is one transaction:
-- it reads up to N payments after a keyset cursor `(created_at, id)`;
-- it inserts their operations as PENDING with `ON CONFLICT (connection_id,
-  idempotency_key) DO NOTHING`;
-- it moves this batch's PENDING operations to QUEUED.
+**"Sync now" (060).** 059 kept the keyset cursor in the Server Action's
+local variables. After its ceiling of 200 batches × 500 it answered
+"incomplete", and the next press started again at the window's first
+payment: nothing was duplicated, but payments past the first 100,000 were
+never queued. Now the window's progress is a `finance_sync_runs` row (one
+RUNNING run per connection and window, by a partial unique index), and each
+`finance_sync_step` call is one transaction that:
+- locks the run row (concurrent presses take turns on the cursor);
+- reads up to N payments after the run's cursor `(created_at, id)`, created
+  no later than the run's `cutoff_at`;
+- inserts their operations as PENDING with `ON CONFLICT (connection_id,
+  idempotency_key) DO NOTHING`, and moves this batch's PENDING ones to QUEUED;
+- advances the cursor and the run's counts, and marks it COMPLETE on a short
+  batch.
+
+A batch that raises is undone to a savepoint, operations and cursor
+together; the run records `last_error` and stays RUNNING, and the next call
+repeats that batch. A press that stops at its ceiling returns
+`complete: false` and the page says to press again; the next press, by
+anyone in the college with the role, continues the same run.
+
+**Consistency policy.** A run's set is fixed when it opens: cleared payments
+in the window created at or before `cutoff_at`. A payment in that set that is
+still cleared when the cursor reaches it is queued by this run. One created
+later, or one that becomes cleared behind the cursor, belongs to the next
+run of the window, which rescans from the start and skips everything
+already queued or posted. "Complete" means every payment eligible at
+`cutoff_at` is queued or was already posted.
+
+**Reconciliation (060).** `loadLocalPayments` paged with OFFSET, so a
+payment inserted or deleted between pages shifted later rows: one could be
+skipped or read twice. It now reads keyset pages in the same
+`(created_at, id)` order, with the cursor taken verbatim from the database
+(microseconds intact), bounded by the run's `started_at`. Pages are separate
+statements, not one snapshot: a payment present for the whole walk is read
+once; one that changes is read as it was when its page was read; a change
+behind the cursor shows in the next run. A repeated id fails the run rather
+than double-count it. A failed page, a failed link read, or a provider still
+paging after 200 pages fails the run with a message that says to run it
+again; none of them reads as an empty or partial list.
 
 The key is `idempotencyKey()` exactly, so a payment queued here or by
 `enqueue()` is one row. Two presses, or a press and a worker, resolve
@@ -175,8 +213,13 @@ operation.
 none. Concurrent sends are separate announcements.
 
 **Real PostgreSQL** (`tests/realpg-phase3-concurrency.test.ts`):
-- **ten concurrent presses over 1,200 payments:** exactly 1,170 operations,
-  each counted once across presses;
+- **100,500 payments:** the first press stops at 200 × 500 with the run
+  RUNNING; a second, separate process finishes the same run (202 batches),
+  and payments 100,001–100,500 are queued;
+- **ten concurrent presses over 1,200 payments:** they share one run; each
+  batch is processed by exactly one press; exactly 1,170 operations;
+- **a backend killed in the middle of a batch:** its operations and cursor
+  roll back together and the next press redoes exactly that batch;
 - **five presses overlapping five claiming workers:** no duplicate
   operation, no operation won twice, no second attempt;
 - **college B's finance racing college A:** refused;
@@ -200,12 +243,16 @@ The cached values are now complete and small.
 
 ## Rollback
 
-Revert the branch, then drop the 059 functions and the
+Revert the branch, then drop the 060 objects (`finance_sync_step`,
+`finance_reconciliation_payments`, `finance_sync_runs`,
+`idx_payments_cleared_keyset`), the 059 functions and the
 `notifications.announcement_id` column. Nothing else reads them.
 
-**Deploy order: apply 059 before deploying this code.** There is no fallback
-to the capped computation by design; without 059 the affected pages show
-their error state.
+**Deploy order: apply 059, then 060, before deploying this code.** There is
+no fallback to the capped computation by design; without them the affected
+pages show their error state. 060 builds `idx_payments_cleared_keyset` with a
+plain `CREATE INDEX` (migrations run in a transaction), which blocks writes to
+`payments` while it builds.
 
 ## Performance
 
@@ -223,7 +270,7 @@ fees and payments.
 | Risk overview | 3 queries, 2,000 rows, counted 1,000 of 20,006 students | 1 query, 1 row per department, counts all 20,006 |
 | Fee status breakdown | 1 query, 1,000 rows, counted 1,000 of 20,002 fees | 1 query, 1 row per status, counts all 20,002 |
 | Finance exceptions | 4 queries, 2,000 rows, saw 1,000 of 20,000 payments | 1 query, at most 5 × 200 rows, complete totals |
-| Sync Now, requests | 2 + (2 to 3) × min(payments, 1,000) | ceil(payments ÷ 500) |
+| Sync Now, requests | 2 + (2 to 3) × min(payments, 1,000) | ceil(payments ÷ 500) + 1, at most 200 per press; later presses resume |
 | Announcement fan-out | recipients read (capped) + one insert carrying them | one statement, one row back |
 
 ### Time

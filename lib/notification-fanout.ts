@@ -96,6 +96,7 @@ export async function pushAnnouncement(
   let after: string | null = null;
   let tokens = 0;
   let pages = 0;
+  let full = false;
   try {
     while (announcementId && pages < MAX_PUSH_PAGES) {
       const page: { expo_push_token: string }[] = await businessRpc<{ expo_push_token: string }>(supabase, "notification_push_tokens", {
@@ -107,9 +108,12 @@ export async function pushAnnouncement(
       pages++;
       tokens += page.length;
       await send(page.map((t) => t.expo_push_token), title, body);
-      if (page.length < PUSH_PAGE) break;
+      full = page.length === PUSH_PAGE;
+      if (!full) break;
       after = page[page.length - 1].expo_push_token;
     }
+    // The ceiling is a deliberate stop, not the end of the list: say so. The in-app notifications are all written.
+    if (full && pages >= MAX_PUSH_PAGES) console.warn({ event: "notifications.push", outcome: "truncated", announcementId, pages, tokens });
   } catch (err) {
     console.error({ event: "notifications.push", outcome: "error", announcementId, pages, message: (err as Error).message });
   }
