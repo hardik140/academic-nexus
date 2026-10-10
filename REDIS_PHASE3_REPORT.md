@@ -29,9 +29,39 @@ resumable run and pages reconciliation by keyset. No row limit was raised.
 | Item | State |
 |---|---|
 | Implemented | yes, this branch |
-| Local verified | yes: unit, PGlite staging with RLS and roles, real PostgreSQL concurrency, builds, E2E (counts in the PR) |
-| CI verified | see the pull request checks |
-| Preview / production verified | no. Migrations 059 and 060 are not applied to any hosted database; Phase 0 infrastructure is still blocked |
+| Local verified | yes, at `fe909a1` — see **Verification** below |
+| CI verified | see **Verification** below and the pull request checks |
+| Preview / production verified | no. Migrations 059 and 060 are not applied to any hosted database, nothing is deployed, and Phase 0 infrastructure is still blocked |
+
+## Verification
+
+All results are LOCAL on Windows 11, at `fe909a1` unless noted. The commit
+after it changes only this report and the PR text.
+
+| Gate | Command | Result |
+|---|---|---|
+| Full unit suite (includes PGlite staging and real-PostgreSQL suites) | `npm run test` | exit 0; **101 / 101 files, 3,064 / 3,064 tests**, 0 skipped (1,372 s) |
+| Mutations | `node scripts/redis-mutations.mjs` | **27 / 27 detected**, 0 survived, all files restored (hash-checked) |
+| TypeScript | `npx tsc --noEmit` | exit 0 |
+| ESLint | `npm run lint` | 0 errors (499 warnings, none new from this change) |
+| Production build | `npm run build` | exit 0 |
+| No-dev-routes | `npm run verify:no-dev-routes` | OK |
+| Worker build | `npm run build:worker` | exit 0, `.open-next/worker.js` written; OpenNext warns it is not fully compatible with Windows, so CI's Linux build is the authoritative one |
+| Full E2E | `npm run test:e2e` | **420 / 420** (17.4 min) |
+| Redis E2E | `npx playwright test -c playwright.redis.config.ts` | **8 / 8** |
+
+**What E2E does not cover.** Both Playwright configs point Supabase at a
+closed loopback port (owner decision D3: no non-production Supabase
+project), so no E2E test reaches migrations 059/060 or a real finance flow.
+Those are covered by the PGlite and real-PostgreSQL suites only. Running
+E2E against them needs an approved non-production Supabase project with
+059 and 060 applied.
+
+**Earlier result, superseded.** The first full run after 060 (`e045de7`'s
+working tree) had 5 failures. Three were real and fixed in `e045de7`: the
+new table lacked 053's tenant gate and the tenant-key inventory entry. Two
+(`cache-efficiency` ECONNRESET, `today-contract` timeout) were in code
+this change does not touch. All five pass in the full run above.
 
 ## Capped-read audit
 
@@ -106,7 +136,7 @@ rollup, announcement fan-out and "Sync now", named separately, are #8,
 
 **Remaining business-critical (P0/P1) capped reads: none known.**
 
-## Database changes: migration 059
+## Database changes: migrations 059 and 060
 
 **Effective fee status.** `fee_effective_status()` is
 `computeEffectiveFeeStatus` in SQL; a test checks every status, payment state
@@ -128,9 +158,12 @@ users can call any granted function over PostgREST directly, and the
 existing notification insert policy alone would let a teacher message the
 whole college through it.
 
-**Additive schema.** `notifications.announcement_id` (nullable) plus a
-partial index. Nothing else is altered and no data is rewritten. Every
-function is revoked from `PUBLIC` and `anon`.
+**Additive schema.** 059: `notifications.announcement_id` (nullable) plus a
+partial index. 060: the `finance_sync_runs` table (RLS read policy for
+finance/admin, no write policy, 053 tenant gate and write trigger), the
+`idx_payments_cleared_keyset` index (see below), and the drop of 059's
+`queue_finance_sync_batch`. No data is rewritten. Every function is revoked
+from `PUBLIC` and `anon`.
 
 **Why `notification_push_tokens` is SECURITY DEFINER.** `device_tokens_own`
 (017) lets a user read only their own tokens, so the sender cannot read
@@ -250,14 +283,86 @@ Revert the branch, then drop the 060 objects (`finance_sync_step`,
 
 **Deploy order: apply 059, then 060, before deploying this code.** There is
 no fallback to the capped computation by design; without them the affected
-pages show their error state. 060 builds `idx_payments_cleared_keyset` with a
-plain `CREATE INDEX` (migrations run in a transaction), which blocks writes to
-`payments` while it builds.
+pages show their error state. Verified locally (`tests/realpg-migration-060.test.ts`):
+the real chain 001..058, data, 059 with operations queued through 059's
+`queue_finance_sync_batch`, then 060. The old function is gone, the new run
+skips what 059 queued, and every payment ends with exactly one operation.
+
+## Migration 060: the payments index build
+
+**The one index on an existing table** is `idx_payments_cleared_keyset` on
+`payments (college_id, created_at, id) WHERE status = 'cleared'`. It
+serves `finance_sync_step` and `finance_reconciliation_payments`.
+- **Existing coverage:** `payments` has only `college_id`, `student_id`
+  and `fee_id` indexes, none of which orders by `(created_at, id)`.
+- **Purpose:** performance, not correctness. Without it each batch sorts
+  the college's payments. LOCAL, real PostgreSQL
+  (`bench/phase3-index-build.ts` → `bench/results/phase3-index-build-local.json`):
+
+| Payments | Plain build (writes wait) | One sync batch, no index | With index |
+|---:|---:|---:|---:|
+| 100,000 | ~0.19 s | 44 ms | 0.5 ms |
+| 1,000,000 | ~1.1 s | 159 ms | 0.4 ms |
+
+**Why not `CONCURRENTLY` in the migration.** Migrations here run as whole
+files (`supabase db push`, README, or the SQL editor, 047's notes). PostgreSQL
+refuses `CREATE INDEX CONCURRENTLY` inside a transaction block, and no
+migration in this repository uses it. The CLI's exact wrapping could not be
+checked here (no Supabase CLI installed), so the migration does not depend
+on it either way.
+
+**Mitigation in 060:**
+- **`lock_timeout = '5s'`** for the build. The real risk was the wait BEFORE
+  the build: queued behind a long transaction, every payment write would
+  queue behind the migration. Now the build gives up after 5 s, and the
+  file is re-runnable.
+- **A guard** drops an INVALID index of this name (a failed `CONCURRENTLY`
+  build leaves one), or one with a different definition, before
+  `CREATE INDEX IF NOT EXISTS`.
+
+Tested on real PostgreSQL: behind a 20 s uncommitted payment write, applying
+060 in one transaction fails with "lock timeout" in about 6 s and changes
+nothing; a payment write queued behind it proceeds at that point, not after
+20 s; the re-run succeeds. The invalid and wrong-definition cases are
+replaced, and a valid pre-built index is kept with the same oid.
+Mutation 27 (lock_timeout removed) is detected.
+
+**Deployment procedure for 060** (owner; not performed):
+1. Apply 059 first.
+2. Check the size: `SELECT count(*) FROM public.payments;` At up to about
+   1M rows the plain build is a ~1–5 s write pause on hosted hardware (an
+   estimate from the LOCAL figures, not measured).
+3. Optional, for a large table or no quiet window: from psql, outside any
+   transaction, run
+   `CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_payments_cleared_keyset ON public.payments (college_id, created_at, id) WHERE status = 'cleared';`
+   060 then keeps it. If that build fails, 060 drops the invalid leftover
+   and builds it plainly.
+4. Apply 060 in a low-traffic window. If it stops with `lock timeout`, a
+   long transaction held `payments`: find it in `pg_stat_activity`, wait,
+   and re-run 060.
+5. Verify: `SELECT indisvalid FROM pg_index WHERE indexrelid = 'public.idx_payments_cleared_keyset'::regclass;`
+   returns `true`, and `SELECT count(*) FROM pg_proc WHERE proname = 'queue_finance_sync_batch';` returns 0.
+
+## Known limitations
+
+- **Reconciliation's period end** stays `<= end 23:59:59Z`, as before this
+  phase. A payment in the last fraction of a second of the end day is
+  outside every period. Correcting it changes a business rule, so it needs
+  a separate, approved change.
+- **A sync run continues only when someone presses Sync Now again.** No
+  worker resumes it. The page says "NOT FINISHED — press Sync Now again
+  with the same dates".
+- **Push delivery is best-effort.** In-app notifications are always
+  complete (one statement). Push stops at 500 pages × 1,000 tokens, with a
+  `notifications.push outcome: truncated` warning logged.
+- **Failed sync batches** record the raw SQL error text on the run and in
+  the audit log (visible to finance/admin).
+- **A run's consistency is per batch, not a snapshot.** See Concurrency.
 
 ## Performance
 
 **Labels.** Everything here is **LOCAL**. Nothing is **PREVIEW** or
-**PRODUCTION**: migration 059 is applied nowhere hosted, and Phase 0's
+**PRODUCTION**: migrations 059 and 060 are applied nowhere hosted, and Phase 0's
 telemetry is blocked. Nothing is **MODELLED**.
 
 ### Rows to the application, and queries
