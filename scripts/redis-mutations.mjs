@@ -22,6 +22,7 @@ const T = {
   businessReads: "tests/staging-business-reads.test.ts",
   phase3Concurrency: "tests/realpg-phase3-concurrency.test.ts",
   phase3Unit: "tests/phase3-bounded-processing.test.ts",
+  migration060: "tests/realpg-migration-060.test.ts",
 };
 
 const M059 = "supabase/migrations/059_business_reads_in_postgres.sql";
@@ -90,6 +91,8 @@ const MUTATIONS = [
     "    AND p.created_at <= p_as_of\n", "", [T.businessReads]],
   ["26. reconciliation re-reads the first page (keyset cursor not advanced)", "lib/finance/reconciliation.ts",
     "    after = { created: last.created_at, id: last.id };", "    void last;", [T.phase3Unit]],
+  ["27. the payments index build queues behind a long transaction (lock_timeout removed)", M060,
+    "SET lock_timeout = '5s';\n", "", [T.migration060]],
 ];
 
 const sha = (s) => createHash("sha256").update(s).digest("hex");

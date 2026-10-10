@@ -42,16 +42,46 @@
 -- finance_reconciliation_payments is SECURITY INVOKER: payments RLS decides.
 --
 -- ROLLBACK: drop finance_sync_step, finance_reconciliation_payments,
--- finance_sync_runs and idx_payments_cleared_keyset, then re-run 059's
+-- finance_sync_runs and idx_payments_cleared_keyset (DROP INDEX CONCURRENTLY,
+-- outside a transaction, avoids the write lock), then re-run 059's
 -- section 13 to restore queue_finance_sync_batch. Operations already queued
 -- are ordinary finance_sync_operations rows and stay valid.
 
 -- ─────────────────────────────────────────────────────────────
 -- The keyset both walks use: one college's cleared payments by (created_at, id).
+--
+-- Performance, not correctness: without it each batch sorts the college's
+-- payments (LOCAL: 44 ms at 100k rows, 159 ms at 1M; 0.5 ms with it —
+-- bench/results/phase3-index-build-local.json).
+--
+-- A plain build, because migrations here run as whole files (supabase db push
+-- or the SQL editor), where CREATE INDEX CONCURRENTLY is refused. It holds a
+-- SHARE lock on payments — writes wait — for the build (LOCAL: ~0.2 s at 100k
+-- rows, ~1.1 s at 1M). The danger is the wait BEFORE it: queued behind a long
+-- transaction, every payment write queues behind this. lock_timeout makes it
+-- fail fast instead; every statement in this file is re-runnable.
+--
+-- Optional, for a large table: build it beforehand from psql, outside any
+-- transaction, with exactly this definition plus CONCURRENTLY. A build that
+-- failed part-way leaves an INVALID index, and an index of this name with
+-- another definition is not this one: either is dropped and rebuilt here.
 -- ─────────────────────────────────────────────────────────────
+SET lock_timeout = '5s';
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_index i
+    WHERE i.indexrelid = to_regclass('public.idx_payments_cleared_keyset')
+      AND (NOT i.indisvalid OR pg_get_indexdef(i.indexrelid) <>
+           'CREATE INDEX idx_payments_cleared_keyset ON public.payments USING btree (college_id, created_at, id) WHERE (status = ''cleared''::text)')
+  ) THEN
+    DROP INDEX public.idx_payments_cleared_keyset;
+  END IF;
+END $$;
 CREATE INDEX IF NOT EXISTS idx_payments_cleared_keyset
   ON public.payments (college_id, created_at, id)
   WHERE status = 'cleared';
+RESET lock_timeout;
 
 -- ─────────────────────────────────────────────────────────────
 -- 1. Sync runs
