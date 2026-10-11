@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/rbac";
 import { PERMISSIONS } from "@/lib/permissions";
 import type { QuestionKey } from "./questions";
+import { assertRead } from "@/lib/read-result-server";
 
 export interface AnswerResult {
   answer: string;
@@ -29,12 +30,13 @@ export async function answerQuestion(key: QuestionKey): Promise<AnswerResult> {
       // Cast to any: this hand-maintained types file doesn't declare table
       // Relationships, so the embedded departments:department_id(...) join
       // can't be inferred — same pattern used throughout the rest of the app.
-      const { data: flags } = (await supabase
+      const { data: flags, error: flagsError } = (await supabase
         .from("risk_flags")
         .select("department_id, departments:department_id(name)")
         .eq("college_id", actor.collegeId)
         .in("status", ["open", "assigned", "acknowledged", "in_progress"])
         .not("department_id", "is", null)) as any;
+      assertRead(flagsError);
       if (!flags || flags.length === 0) {
         return {
           answer: "No department currently has open risk flags.",
@@ -61,7 +63,8 @@ export async function answerQuestion(key: QuestionKey): Promise<AnswerResult> {
     }
 
     case "attendance_below_target": {
-      const { data } = await supabase.from("mv_department_health").select("department_name, attendance_pct").not("attendance_pct", "is", null);
+      const { data, error: dataError } = await supabase.from("mv_department_health").select("department_name, attendance_pct").not("attendance_pct", "is", null);
+      assertRead(dataError);
       const below = (data || []).filter((d) => (d.attendance_pct as number) < 75);
       if (!data || data.length === 0) {
         return { answer: "Insufficient data — no attendance data available yet.", supportingMetrics: [], dataSource: "mv_department_health", drillDownUrl: null, insufficientData: true };
@@ -76,7 +79,8 @@ export async function answerQuestion(key: QuestionKey): Promise<AnswerResult> {
     }
 
     case "student_risk": {
-      const { data: students } = await supabase.from("students").select("id").eq("college_id", actor.collegeId).eq("status", "active");
+      const { data: students, error: studentsError } = await supabase.from("students").select("id").eq("college_id", actor.collegeId).eq("status", "active");
+      assertRead(studentsError);
       if (!students || students.length === 0) {
         return { answer: "Insufficient data — no active student records available yet.", supportingMetrics: [], dataSource: "students", drillDownUrl: null, insufficientData: true };
       }
@@ -90,13 +94,14 @@ export async function answerQuestion(key: QuestionKey): Promise<AnswerResult> {
     }
 
     case "placement_trend": {
-      const { data: snapshots } = await supabase
+      const { data: snapshots, error: snapshotsError } = await supabase
         .from("institution_metric_snapshots")
         .select("placement_score, snapshot_at")
         .eq("college_id", actor.collegeId)
         .not("placement_score", "is", null)
         .order("snapshot_at", { ascending: false })
         .limit(2);
+      assertRead(snapshotsError);
       if (!snapshots || snapshots.length < 2) {
         return { answer: "Insufficient data — need at least two health-score snapshots with placement data to detect a trend.", supportingMetrics: [], dataSource: "institution_metric_snapshots", drillDownUrl: "/director/placements/funnel", insufficientData: true };
       }
@@ -112,11 +117,12 @@ export async function answerQuestion(key: QuestionKey): Promise<AnswerResult> {
     }
 
     case "goals_behind": {
-      const { data } = await supabase
+      const { data, error: dataError2 } = await supabase
         .from("strategic_goals")
         .select("title, status")
         .eq("college_id", actor.collegeId)
         .in("status", ["at_risk", "off_track"]);
+      assertRead(dataError2);
       if (!data || data.length === 0) {
         return { answer: "No strategic goals are currently flagged at-risk or off-track.", supportingMetrics: [], dataSource: "strategic_goals", drillDownUrl: "/director/goals", insufficientData: false };
       }

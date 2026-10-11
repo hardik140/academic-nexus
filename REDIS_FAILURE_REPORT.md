@@ -17,12 +17,18 @@ applying.
 | Redis available | live Upstash | Yes — `REDIS_RATE_LIMIT_DESIGN.md` §4 |
 | Redis unconfigured (`redis === null`) | module mock | Yes — `tests/rate-limit-policy.test.ts` |
 | Redis call throws (outage, reset, quota) | client whose `eval` throws | Yes — `tests/rate-limit-policy.test.ts` |
-| Redis returns a stale value | TTL-bounded by construction | Reasoned, not simulated |
-| Redis slow / timeout | — | **NOT TESTED** — needs a fault-injecting proxy |
+| Redis returns a stale value | TTL-bounded by construction; versioned families (2026-10-04) | Yes — `tests/redis-integration.test.ts` (family invalidation) |
+| Redis slow / timeout | local Upstash emulator answering late (2026-10-04) | Yes — `tests/redis-integration.test.ts`, `e2e-redis/redis.spec.ts` |
+| Redis malformed answer / auth failure | emulator (2026-10-04) | Yes — same |
+| Redis recovery | emulator back to healthy, circuit probe (2026-10-04) | Yes — same |
 
-The "slow" case is worth naming honestly: the Upstash client is HTTP, and a
-hung request would block the action for as long as the platform's own
-timeout allows. No timeout is configured explicitly. **Open item.**
+The "slow" case was the open item here, and testing it found a defect:
+`@upstash/ratelimit` resolves its own timeout as `success: true`, so a slow
+Redis ALLOWED every fail-closed action (a payment was allowed after 5,008 ms
+on `main`). Fixed on 2026-10-04 — a timeout, a malformed answer and an open
+circuit are now "unavailable" and the bucket's class decides; every call is
+bounded by `REDIS_TIMEOUT_MS` (default 1000 ms). Full table and evidence:
+`REDIS_RATE_LIMIT_DESIGN.md` §10.
 
 ---
 
@@ -40,13 +46,17 @@ timeout allows. No timeout is configured explicitly. **Open item.**
 | Gate scan | allowed, logged | **CONTROLLED FALLBACK** | Signature + DB state machine are the real control; refusing strands people at a barrier |
 | Gate credential issue | allowed, logged | **CONTROLLED FALLBACK** | Same |
 | Guard movement feed | allowed, logged | FAIL OPEN | Read-only |
-| Global per-IP ceiling | allowed, logged | FAIL OPEN | Otherwise a Redis blip is a total site outage |
+| Global ceilings (`ip`, `ipCredentialed`, `user`) | allowed, logged | FAIL OPEN (flood class) | Otherwise a Redis blip is a total site outage |
 | First-party data entry (attendance, marks, own applications) | allowed, logged | FAIL OPEN | RLS confines it; approval still required |
 | Cached list / dashboard reads | live database read | FAIL OPEN (degraded) | A cache outage must not be a data outage |
-| Middleware profile cache | live database read | FAIL OPEN (degraded) | Routing only; `requireRole()` re-reads uncached anyway |
+| ~~Middleware profile cache~~ | removed in Phase 2.1: session admission returns the role (migration 058) | — | Role and status are read live on every request |
 
 **Every FAIL OPEN is enumerated in `lib/rate-limit-policy.ts` with its
 reason, and `tests/rate-limit-policy.test.ts` fails if any entry lacks one.**
+
+"Redis down" here means any of: unconfigured in production, unreachable,
+timed out, malformed answer, auth failure, or circuit open (2026-10-04). Each
+costs at most one `REDIS_TIMEOUT_MS`; once the circuit is open, nothing.
 
 ---
 
@@ -65,16 +75,14 @@ The default is now DENY: a bucket nobody classified fails closed.
 
 | Change | Invalidation | Worst case |
 | --- | --- | --- |
-| Role or status change | explicit `invalidateCache(middlewareProfileCacheKey(userId))` on every write that changes either | 0 s |
-| Invitation accepted (`pending` → `active`) | explicit | 0 s |
-| Cache delete fails during a Redis fault | none — the key rides out its TTL | **20 s** of stale routing |
+| Role or status change | none needed since Phase 2.1: the middleware reads both live from session admission (058) | 0 s |
+| Invitation accepted (`pending` → `active`) | none needed, same reason | 0 s |
+| A list or queue changes (web OR mobile API write) | the family's version counter for that college is bumped (2026-10-04); before, only the editor's own view was deleted and mobile writes deleted nothing | 0 s |
 
-That 20-second worst case is bounded and does not grant access: the
-middleware profile cache decides **which page shell to serve**, never what
-data comes back. `requireRole()` re-reads role and status **uncached** on
-every mutation, and RLS is live underneath both. A stale read can at worst
-let an already-authenticated browser keep loading a shell it no longer
-belongs on, for up to 20 seconds, while every action on it is refused.
+Until Phase 2.1 a role or status change could take up to 20 s to reach
+routing if the cache delete failed. That window is gone: the middleware no
+longer caches the profile (`tests/middleware-admission-profile.test.ts`
+pins a role change and a suspension applying on the next request).
 
 **Classification: PARTIAL — accepted, bounded, documented.**
 
@@ -82,6 +90,9 @@ belongs on, for up to 20 seconds, while every action on it is refused.
 
 ## 5. Not tested
 
-- Timeout and slow-response behaviour (no fault-injecting proxy).
+- ~~Timeout and slow-response behaviour~~ — tested 2026-10-04 against a local
+  emulator (`REDIS_RATE_LIMIT_DESIGN.md` §10).
+- Hosted Upstash latency from the Worker — the 1000 ms budget rests on one
+  recorded cold call (639 ms), not on in-region measurement.
 - Sustained load against Redis (Phase 44) — see `PERFORMANCE_TEST_REPORT.md`.
 - Behaviour during a genuine Upstash incident, as opposed to a simulated one.

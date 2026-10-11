@@ -7,6 +7,7 @@ import {
   type ProviderContext,
   type ProviderResult,
   type ExternalTransaction,
+  type PaymentRequest,
   isUsable,
 } from "./providers/types";
 import { bodyHash, redact } from "./crypto";
@@ -141,23 +142,82 @@ export async function enqueue(db: Db, input: EnqueueInput): Promise<SyncOperatio
 // Execute
 // ─────────────────────────────────────────────────────────────
 
+/**
+ * Every write to an operation is FENCED: it applies only while the row still
+ * has the status and attempt number this worker last read or wrote. Returns
+ * whether it applied.
+ *
+ * WHY. This used to be `update(patch).eq("id", op.id)`. Two workers that
+ * read the same QUEUED row — a QStash redelivery overlapping a slow run, or
+ * a run outlasting its schedule interval — then BOTH moved it to PROCESSING
+ * (the status guard in 049 lets PROCESSING -> PROCESSING through as "no
+ * change") and BOTH posted the receipt to the accounting system. The second
+ * link insert hit the unique index and the second SYNCED write hit the
+ * immutable-external-id guard, so the journal looked clean while the books
+ * held two receipts. bench/audit/finance-sync-race.audit.ts reproduced it.
+ *
+ * With the predicate, PostgreSQL decides: an UPDATE re-checks its WHERE
+ * clause against the row as committed by whichever writer got the row lock
+ * first (READ COMMITTED re-evaluation), so of N concurrent claims exactly
+ * one matches and the rest match zero rows — they never reach the provider.
+ * tests/realpg-finance-claim.test.ts proves it against real PostgreSQL.
+ *
+ * The attempt number is the fence token: a worker that stalled after
+ * claiming cannot overwrite a later attempt's outcome, because its
+ * `attempt_number = N` predicate no longer matches.
+ */
 async function transition(
   db: Db,
   op: SyncOperation,
   patch: Database["public"]["Tables"]["finance_sync_operations"]["Update"]
-): Promise<void> {
-  const { error } = await db.from("finance_sync_operations").update(patch).eq("id", op.id);
+): Promise<boolean> {
+  const { data, error } = await db
+    .from("finance_sync_operations")
+    .update(patch)
+    .eq("id", op.id)
+    .eq("status", op.status)
+    .eq("attempt_number", op.attempt_number)
+    .select("id");
   if (error) throw new Error(`finance sync operation ${op.id}: ${error.message}`);
+  return (data?.length ?? 0) === 1;
+}
+
+/**
+ * A fenced write after this worker holds the claim. Losing it here means
+ * someone changed a row this worker owns — stop, write nothing more, and let
+ * the operation surface for reconciliation.
+ */
+async function mustTransition(
+  db: Db,
+  op: SyncOperation,
+  patch: Database["public"]["Tables"]["finance_sync_operations"]["Update"]
+): Promise<void> {
+  if (!(await transition(db, op, patch))) {
+    throw new Error(
+      `finance sync operation ${op.id}: no longer held by this worker (expected ${op.status}, attempt ${op.attempt_number}); nothing further was written`
+    );
+  }
+}
+
+/** The outcome for a worker that found the operation already taken. */
+function claimedElsewhere(op: SyncOperation): PipelineOutcome {
+  return {
+    operationId: op.id,
+    status: "PROCESSING",
+    errorCode: "CLAIMED_ELSEWHERE",
+    message: "Another worker changed this operation first; this worker sent nothing.",
+  };
 }
 
 async function block(db: Db, op: SyncOperation, code: string, message: string): Promise<PipelineOutcome> {
-  await transition(db, op, {
+  const applied = await transition(db, op, {
     status: "BLOCKED",
     error_code: code,
     error_message: message,
     retry_safety: "exhausted",
     completed_at: new Date().toISOString(),
   });
+  if (!applied) return claimedElsewhere(op);
   return { operationId: op.id, status: "BLOCKED", errorCode: code, message };
 }
 
@@ -207,8 +267,14 @@ export async function runOperation(
     return block(db, op, "CONNECTION_NOT_ACTIVE", `The connection is ${conn.status}; only an ACTIVE connection may post.`);
   }
 
-  await transition(db, op, { status: "PROCESSING", started_at: now().toISOString(), attempt_number: op.attempt_number + 1 });
+  // ── The claim ──────────────────────────────────────────────
+  // A compare-and-swap on (status, attempt_number). Exactly one of any number
+  // of concurrent workers gets here with the row; the others stop now,
+  // before any provider call.
   const attempt = op.attempt_number + 1;
+  const claimed = await transition(db, op, { status: "PROCESSING", started_at: now().toISOString(), attempt_number: attempt });
+  if (!claimed) return claimedElsewhere(op);
+  const processing: SyncOperation = { ...op, status: "PROCESSING", attempt_number: attempt };
 
   // ── Already posted? ────────────────────────────────────────
   // The link is the authority, not the journal: if this entity already has
@@ -233,7 +299,7 @@ export async function runOperation(
         .maybeSingle()
     : { data: null };
   if (link) {
-    await transition(db, { ...op, status: "PROCESSING" }, {
+    await mustTransition(db, processing, {
       status: "SYNCED",
       external_id: link.external_id,
       external_number: link.external_number,
@@ -243,8 +309,6 @@ export async function runOperation(
     });
     return { operationId: op.id, status: "SYNCED", externalId: link.external_id, message: "Already linked; no call made." };
   }
-
-  const processing: SyncOperation = { ...op, status: "PROCESSING", attempt_number: attempt };
 
   // ── Capability ─────────────────────────────────────────────
   const capability = CAPABILITY_FOR_OPERATION[op.operation];
@@ -290,6 +354,97 @@ export async function runOperation(
     fetchImpl: deps.fetchImpl,
   };
 
+  /**
+   * Records a document the provider holds for this entity: the link FIRST,
+   * then SYNCED. If the status update were to fail after a successful post,
+   * the link is what stops the next run from creating a second document.
+   */
+  async function recordPosted(
+    externalId: string,
+    externalNumber: string | null,
+    responseHash: string | null,
+    message?: string
+  ): Promise<PipelineOutcome> {
+    const { error: linkError } = await db.from("finance_external_links").insert({
+      college_id: op.college_id,
+      connection_id: op.connection_id,
+      entity_type: linkableType!,
+      entity_id: op.entity_id!,
+      external_id: externalId,
+      external_number: externalNumber,
+      external_type: built.externalType,
+      external_created_at: now().toISOString(),
+    });
+    if (linkError && linkError.code !== "23505") {
+      await mustTransition(db, processing, {
+        status: "RECONCILIATION_REQUIRED",
+        retry_safety: "unsafe",
+        error_code: "LINK_WRITE_FAILED",
+        error_message: `The provider holds ${externalId} but the link could not be stored: ${linkError.message}`,
+        response_hash: responseHash,
+        completed_at: now().toISOString(),
+      });
+      return { operationId: op.id, status: "RECONCILIATION_REQUIRED", errorCode: "LINK_WRITE_FAILED", externalId };
+    }
+
+    await mustTransition(db, processing, {
+      status: "SYNCED",
+      external_id: externalId,
+      external_number: externalNumber,
+      response_hash: responseHash,
+      error_code: null,
+      error_message: null,
+      retry_safety: null,
+      completed_at: now().toISOString(),
+    });
+    await db
+      .from("finance_integration_connections")
+      .update({ last_success_at: now().toISOString(), last_error_code: null, last_error_message: null })
+      .eq("id", conn!.id);
+    return { operationId: op.id, status: "SYNCED", externalId, ...(message ? { message } : {}) };
+  }
+
+  // ── Retry pre-flight (§68) ─────────────────────────────────
+  // A retry is only ever scheduled after a failure classified "safe" — but
+  // "safe" is the adapter's best judgement, and an HTTP 5xx to a POST does
+  // not prove the provider created nothing. So before ANY second attempt to
+  // post a payment, ask the provider whether it already holds a document
+  // with our reference. Found: link it and stop, nothing is posted. Lookup
+  // failed: post nothing this attempt — absence was not proven.
+  //
+  // UNVERIFIED EXTERNAL PROVIDER ASSUMPTION: that the provider's search
+  // shows a payment immediately after creating it. Not verified against real
+  // Zoho Books (no test organisation is available). If its search lags, a
+  // retry soon after a 5xx that DID create the payment can post a second one;
+  // the window is the gap between creation and searchability. Zoho has no
+  // idempotency key, so this is the strongest check the protocol allows.
+  if (attempt > 1 && built.kind === "payment" && adapter.findByReference) {
+    const req = built.request as PaymentRequest;
+    const reference = req.receiptNumber ?? req.reference;
+    if (reference) {
+      const found = await adapter.findByReference(ctx, reference);
+      if (!found.ok) {
+        await mustTransition(db, processing, {
+          status: "FAILED",
+          retry_safety: attempt >= op.max_attempts ? "exhausted" : "safe",
+          error_code: "PREFLIGHT_LOOKUP_FAILED",
+          error_message: `Before retrying, the provider could not be searched for ${reference}: ${found.message}. Nothing was posted.`,
+          next_attempt_at: nextAttemptAt(attempt, found.retryAfterSeconds, now()).toISOString(),
+          completed_at: now().toISOString(),
+        });
+        return { operationId: op.id, status: "FAILED", errorCode: "PREFLIGHT_LOOKUP_FAILED", message: found.message };
+      }
+      if (found.data) {
+        return recordPosted(
+          found.externalId ?? found.data.id,
+          found.data.number ?? null,
+          found.responseHash ?? null,
+          "Found at the provider before retrying; not posted again."
+        );
+      }
+    }
+  }
+
   // ── Period control (§60) ───────────────────────────────────
   // Only consulted when the provider actually offers it. A provider that
   // cannot report period status does NOT get treated as "open" silently —
@@ -307,7 +462,7 @@ export async function runOperation(
     }
   }
 
-  await transition(db, processing, {
+  await mustTransition(db, processing, {
     financial_year: financialYear,
     period_key: periodKey,
     request_hash: bodyHash(built.payload),
@@ -322,7 +477,7 @@ export async function runOperation(
     const externalId = result.externalId ?? (result.data as ExternalTransaction | undefined)?.id;
     if (!externalId) {
       // §40: an acknowledgement with no identity is not a synchronisation.
-      await transition(db, processing, {
+      await mustTransition(db, processing, {
         status: "RECONCILIATION_REQUIRED",
         retry_safety: "unsafe",
         error_code: "NO_EXTERNAL_ID",
@@ -333,46 +488,7 @@ export async function runOperation(
       return { operationId: op.id, status: "RECONCILIATION_REQUIRED", errorCode: "NO_EXTERNAL_ID" };
     }
 
-    // The link is written FIRST. If the status update were to fail after a
-    // successful post, the link is what stops the next run from creating a
-    // second document.
-    const { error: linkError } = await db.from("finance_external_links").insert({
-      college_id: op.college_id,
-      connection_id: op.connection_id,
-      entity_type: linkableType!,
-      entity_id: op.entity_id!,
-      external_id: externalId,
-      external_number: result.externalNumber ?? null,
-      external_type: built.externalType,
-      external_created_at: now().toISOString(),
-    });
-    if (linkError && linkError.code !== "23505") {
-      await transition(db, processing, {
-        status: "RECONCILIATION_REQUIRED",
-        retry_safety: "unsafe",
-        error_code: "LINK_WRITE_FAILED",
-        error_message: `The provider created ${externalId} but the link could not be stored: ${linkError.message}`,
-        response_hash: result.responseHash ?? null,
-        completed_at: now().toISOString(),
-      });
-      return { operationId: op.id, status: "RECONCILIATION_REQUIRED", errorCode: "LINK_WRITE_FAILED", externalId };
-    }
-
-    await transition(db, processing, {
-      status: "SYNCED",
-      external_id: externalId,
-      external_number: result.externalNumber ?? null,
-      response_hash: result.responseHash ?? null,
-      error_code: null,
-      error_message: null,
-      retry_safety: null,
-      completed_at: now().toISOString(),
-    });
-    await db
-      .from("finance_integration_connections")
-      .update({ last_success_at: now().toISOString(), last_error_code: null, last_error_message: null })
-      .eq("id", conn.id);
-    return { operationId: op.id, status: "SYNCED", externalId };
+    return recordPosted(externalId, result.externalNumber ?? null, result.responseHash ?? null);
   }
 
   // Failure.
@@ -386,7 +502,7 @@ export async function runOperation(
 
   if (safety === "unsafe") {
     // The document may exist at the provider. Never a retry — reconcile.
-    await transition(db, processing, {
+    await mustTransition(db, processing, {
       status: "RECONCILIATION_REQUIRED",
       retry_safety: "unsafe",
       error_code: result.code,
@@ -398,7 +514,7 @@ export async function runOperation(
   }
 
   if (safety === "exhausted" || exhausted) {
-    await transition(db, processing, {
+    await mustTransition(db, processing, {
       status: "FAILED",
       retry_safety: "exhausted",
       error_code: result.code,
@@ -409,7 +525,7 @@ export async function runOperation(
     return { operationId: op.id, status: "FAILED", errorCode: result.code, message: result.message };
   }
 
-  await transition(db, processing, {
+  await mustTransition(db, processing, {
     status: "FAILED",
     retry_safety: "safe",
     error_code: result.code,

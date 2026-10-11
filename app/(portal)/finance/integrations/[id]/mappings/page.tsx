@@ -1,6 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { Alert } from "@/components/ui/alert";
+import { ErrorAlert } from "@/components/ui/error-alert";
+import { ErrorState } from "@/components/ui/error-state";
+import { LoadingState } from "@/components/ui/loading-state";
+import { toFeedbackError, type FeedbackError } from "@/lib/action-failure";
+import { classifyError, feedbackMessage } from "@/lib/feedback-error";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { Button, FormField, Modal } from "@/components/ui/modal";
@@ -42,7 +48,12 @@ export default function MappingsPage() {
   const [readiness, setReadiness] = useState<Readiness | null>(null);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [accountsNote, setAccountsNote] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  // Loading and saving fail separately; a failed load is never "No mappings
+  // configured yet" (owner decision D5).
+  const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState<unknown>(null);
+  const [error, setError] = useState<FeedbackError | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
   const [editing, setEditing] = useState<{ kind: string; localKey: string; localLabel?: string } | null>(null);
@@ -53,8 +64,10 @@ export default function MappingsPage() {
       const [rows, ready] = await Promise.all([listMappings(connectionId), mappingReadiness(connectionId)]);
       setMappings(rows);
       setReadiness(ready);
+      setLoaded(true);
+      setLoadError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not load mappings.");
+      setLoadError(e);
     }
   }, [connectionId]);
 
@@ -74,16 +87,17 @@ export default function MappingsPage() {
         setAccountsNote(res.message);
       }
     } catch (e) {
-      setAccountsNote(e instanceof Error ? e.message : "Could not read the chart of accounts.");
+      setAccountsNote(feedbackMessage(e, "Could not read the chart of accounts."));
     } finally {
       setBusy(null);
     }
   };
 
   const save = async () => {
-    if (!editing) return;
+    if (!editing || busy) return;
     setBusy("save");
     setError(null);
+    setNotice(null);
     try {
       await upsertMapping({
         connectionId,
@@ -95,11 +109,13 @@ export default function MappingsPage() {
         externalCode: form.externalCode || undefined,
         taxTreatment: (form.taxTreatment || undefined) as Mapping["tax_treatment"] extends null ? never : undefined,
       });
+      setNotice(`Mapping for ${editing.localKey} saved.`);
       setEditing(null);
       setForm({ externalName: "", externalId: "", externalCode: "", taxTreatment: "" });
-      await load();
+      // Reloading reports its own failure, never as a failed save.
+      void load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not save the mapping.");
+      setError(await toFeedbackError(e, "Could not save the mapping."));
     } finally {
       setBusy(null);
     }
@@ -132,15 +148,31 @@ export default function MappingsPage() {
         </p>
       </div>
 
-      {error && <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium">{error}</div>}
+      <Alert tone="success" onDismiss={() => setNotice(null)}>
+        {notice}
+      </Alert>
+      {/* The mapping dialog shows its own failure. */}
+      <ErrorAlert error={editing === null ? error : null} />
+
+      {!loaded && !loadError && <LoadingState label="Loading mappings…" />}
+      {loadError !== null && !loaded && (
+        <ErrorState {...classifyError(loadError)} title="Mappings couldn't be loaded" onRetry={() => void load()} />
+      )}
+      <Alert tone="error" action={<Button variant="outline" size="sm" onClick={() => void load()}>Try again</Button>}>
+        {loadError !== null && loaded ? (
+          <>
+            This couldn&apos;t be refreshed. Showing what was loaded earlier.
+          </>
+        ) : null}
+      </Alert>
 
       {readiness && (
-        <div className={`rounded-2xl border p-lg ${readiness.ready ? "border-success/20 bg-success/10" : "border-error/20 bg-error/10"}`}>
+        <div className={`rounded-2xl border p-lg ${readiness.ready ? "border-success/30 bg-success-container text-on-success-container" : "border-error/30 bg-error-container text-on-error-container"}`}>
           {readiness.ready ? (
-            <p className="text-sm font-semibold text-success">Mapping is complete. This connection can be activated.</p>
+            <p className="text-sm font-semibold">Mapping is complete. This connection can be activated.</p>
           ) : (
             <>
-              <p className="text-sm font-semibold text-error">
+              <p className="text-sm font-semibold">
                 {readiness.gaps.length} mapping{readiness.gaps.length === 1 ? "" : "s"} still missing.
               </p>
               <ul className="mt-md space-y-xs">
@@ -161,13 +193,13 @@ export default function MappingsPage() {
       )}
 
       <div className="flex items-center gap-md">
-        <Button variant="outline" disabled={busy === "accounts"} onClick={pullAccounts}>
+        <Button variant="outline" disabled={busy === "accounts"} aria-busy={busy === "accounts" || undefined} onClick={pullAccounts}>
           {busy === "accounts" ? "Reading..." : "Read chart of accounts"}
         </Button>
         {accountsNote && <span className="text-xs text-on-surface-variant">{accountsNote}</span>}
       </div>
 
-      {Object.keys(grouped).length === 0 ? (
+      {!loaded ? null : Object.keys(grouped).length === 0 ? (
         <p className="text-sm text-on-surface-variant">No mappings configured yet.</p>
       ) : (
         Object.entries(grouped).map(([kind, rows]) => (
@@ -206,11 +238,12 @@ export default function MappingsPage() {
         footer={
           <>
             <Button variant="outline" onClick={() => setEditing(null)}>Cancel</Button>
-            <Button onClick={save} disabled={!form.externalName.trim() || busy === "save"}>Save</Button>
+            <Button onClick={save} disabled={!form.externalName.trim() || busy === "save"} aria-busy={busy === "save" || undefined}>Save</Button>
           </>
         }
       >
         <div className="space-y-md">
+          <ErrorAlert error={error} />
           <p className="text-xs text-on-surface-variant">{editing ? KIND_LABEL[editing.kind] ?? editing.kind : ""}</p>
           {accounts.length > 0 ? (
             <FormField

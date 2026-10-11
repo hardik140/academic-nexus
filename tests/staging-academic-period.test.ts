@@ -315,9 +315,21 @@ describe("tenant consistency across the academic structure", () => {
         VALUES ('${COLLEGE_A}','${semester}','${course}','${section}','${teacher}','planned')`);
     const OWN_SEM = SEM_5, OWN_COURSE = "00000009-0000-4000-8000-000000000003", OWN_SECTION = "00000008-0000-4000-8000-000000000004";
     expect((await base(SEM_B, OWN_COURSE, OWN_SECTION, U.teacherA)).error).toMatch(/course_offerings_semester_tenant_fkey/);
-    expect((await base(OWN_SEM, COURSE_B, OWN_SECTION, U.teacherA)).error).toMatch(/course_offerings_course_tenant_fkey/);
+    // 055's eligibility trigger may refuse first (a college A teacher is not
+    // eligible for a college B course); either way the row does not land.
+    expect((await base(OWN_SEM, COURSE_B, OWN_SECTION, U.teacherA)).error).toMatch(/course_offerings_course_tenant_fkey|not authorized to teach/);
     expect((await base(OWN_SEM, OWN_COURSE, SECTION_B, U.teacherA)).error).toMatch(/course_offerings_section_tenant_fkey/);
-    expect((await base(OWN_SEM, OWN_COURSE, OWN_SECTION, U.bTeacher)).error).toMatch(/course_offerings_instructor_tenant_fkey/);
+    // 055's instructor eligibility trigger (decision 4) now refuses a
+    // foreign teacher before the key is checked; the tenant key is still the
+    // backstop for every caller the trigger exempts (the service role), so it
+    // is proven there.
+    expect((await base(OWN_SEM, OWN_COURSE, OWN_SECTION, U.bTeacher)).error).toMatch(/course_offerings_instructor_tenant_fkey|not authorized to teach/);
+    let ownerError: string | null = null;
+    try {
+      await db.query(`INSERT INTO public.course_offerings (college_id, semester_id, course_id, section_id, instructor_id, status)
+        VALUES ('${COLLEGE_A}','${OWN_SEM}','${OWN_COURSE}','${OWN_SECTION}','${U.bTeacher}','planned')`);
+    } catch (e) { ownerError = (e as Error).message; }
+    expect(ownerError).toMatch(/course_offerings_instructor_tenant_fkey/);
     // and the all-own-college form of the same statement is accepted
     const ok = await base(OWN_SEM, OWN_COURSE, OWN_SECTION, U.teacherA);
     expect(ok.ok, ok.error ?? "").toBe(true);

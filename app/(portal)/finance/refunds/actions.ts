@@ -5,14 +5,17 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/rbac";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { getCached, invalidateCache } from "@/lib/cache";
+import { getCached, invalidateCacheFamily, versionedKey } from "@/lib/cache";
 import { logAudit } from "@/lib/audit";
 import { assertClaimed } from "@/lib/concurrent-claim";
 import { PERMISSIONS } from "@/lib/permissions";
 import { dbError } from "@/lib/internal-error";
+import { assertRead } from "@/lib/read-result-server";
+
+const REFUNDS_CACHE_FAMILY = "finance-refunds";
 
 function refundsCacheKey(collegeId: string) {
-  return `finance-refunds:${collegeId}`;
+  return versionedKey(`finance-refunds:${collegeId}`, REFUNDS_CACHE_FAMILY, collegeId);
 }
 
 const SELECT_COLS =
@@ -28,6 +31,8 @@ export async function listRefundRequests() {
       baseQuery().eq("status", "pending").order("created_at", { ascending: false }),
       baseQuery().neq("status", "pending").order("created_at", { ascending: false }).limit(20),
     ]);
+    assertRead(pendingRes.error);
+    assertRead(processedRes.error);
     return { pending: pendingRes.data || [], processed: processedRes.data || [] };
   });
 }
@@ -81,7 +86,7 @@ export async function rejectRefund(requestIdRaw: string, reviewNotesRaw: string)
     });
   }
 
-  await invalidateCache(refundsCacheKey(actor.collegeId));
+  await invalidateCacheFamily(REFUNDS_CACHE_FAMILY, actor.collegeId);
   revalidatePath("/finance/refunds");
   revalidatePath("/finance/dashboard");
 }
@@ -160,7 +165,7 @@ export async function approveRefund(requestIdRaw: string) {
       link: "/student/fees",
     });
   }
-  await invalidateCache(refundsCacheKey(actor.collegeId));
+  await invalidateCacheFamily(REFUNDS_CACHE_FAMILY, actor.collegeId);
   revalidatePath("/finance/refunds");
   revalidatePath("/finance/dashboard");
   revalidatePath("/finance/transactions");

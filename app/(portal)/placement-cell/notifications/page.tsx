@@ -1,7 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Button, FormField } from "@/components/ui/modal";
+import { Alert } from "@/components/ui/alert";
+import { ErrorAlert } from "@/components/ui/error-alert";
+import { StateView } from "@/components/ui/state-view";
+import { useAsyncResource } from "@/hooks/use-async-resource";
+import { toFeedbackError, type FeedbackError } from "@/lib/action-failure";
 import { sendPlacementNotification, listSentPlacementNotifications, type SendPlacementNotificationParams } from "./actions";
 import { listDepartmentsForSelect, listActiveDrivesForSelect } from "../drives/actions";
 
@@ -15,11 +20,8 @@ const TARGET_OPTIONS: { value: TargetType; label: string }[] = [
 ];
 
 export default function PlacementCellNotifications() {
-  const [sent, setSent] = useState<any[]>([]);
-  const [departments, setDepartments] = useState<any[]>([]);
-  const [drives, setDrives] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<FeedbackError | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [form, setForm] = useState<{
     title: string;
@@ -30,22 +32,21 @@ export default function PlacementCellNotifications() {
     driveId: string;
   }>({ title: "", message: "", targetType: "college", departmentId: "", batchYear: "", driveId: "" });
 
-  const load = async () => {
-    const [notifs, depts, activeDrives] = await Promise.all([
-      listSentPlacementNotifications(),
-      listDepartmentsForSelect(),
-      listActiveDrivesForSelect(),
-    ]);
-    setSent(notifs);
-    setDepartments(depts);
-    setDrives(activeDrives);
-  };
-
-  useEffect(() => {
-    load();
+  // What was sent, and the audiences one may target. A failed load is an
+  // error, never "No notifications sent yet." (owner decision D5).
+  const sentResource = useAsyncResource(() => listSentPlacementNotifications(), []);
+  const options = useAsyncResource(async () => {
+    const [departments, drives] = await Promise.all([listDepartmentsForSelect(), listActiveDrivesForSelect()]);
+    return { departments: departments as any[], drives: drives as any[] };
   }, []);
+  const departments = options.data?.departments ?? [];
+  const drives = options.data?.drives ?? [];
+  // A department or drive target needs its list; the others do not.
+  const needsOptions = form.targetType === "department" || form.targetType === "eligible";
 
   const handleSend = async () => {
+    // One send per click: a duplicate reaches every student twice.
+    if (loading) return;
     setLoading(true);
     setError(null);
     setSuccess(null);
@@ -60,9 +61,10 @@ export default function PlacementCellNotifications() {
       });
       setForm({ title: "", message: "", targetType: "college", departmentId: "", batchYear: "", driveId: "" });
       setSuccess(`Sent to ${result.recipientCount} student${result.recipientCount === 1 ? "" : "s"}.`);
-      await load();
+      // Refreshing the history is not part of sending: its failure shows there.
+      sentResource.reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to send notification.");
+      setError(await toFeedbackError(e, "Failed to send notification."));
     } finally {
       setLoading(false);
     }
@@ -83,12 +85,20 @@ export default function PlacementCellNotifications() {
         <div className="lg:col-span-1 bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-sm p-lg space-y-md">
           <h2 className="text-sm font-bold text-on-surface">Create Notification</h2>
 
-          {error && (
-            <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium">{error}</div>
-          )}
-          {success && (
-            <div className="bg-success/10 border border-success/20 text-success rounded-xl p-md text-sm font-medium">{success}</div>
-          )}
+          <ErrorAlert error={error} />
+          <Alert tone="success" onDismiss={() => setSuccess(null)}>
+            {success}
+          </Alert>
+          <Alert
+            tone="error"
+            action={<Button variant="outline" size="sm" onClick={options.reload}>Try again</Button>}
+          >
+            {needsOptions && options.status === "error" ? (
+              <>
+                Departments and drives couldn&apos;t be loaded, so this audience can&apos;t be chosen yet.
+              </>
+            ) : null}
+          </Alert>
 
           <FormField label="Title" id="title" value={form.title} onChange={(v) => setForm({ ...form, title: v })} placeholder="e.g. TCS is hiring" required />
           <FormField label="Message" id="message" type="textarea" value={form.message} onChange={(v) => setForm({ ...form, message: v })} rows={4} required />
@@ -115,8 +125,10 @@ export default function PlacementCellNotifications() {
           <Button
             className="w-full justify-center"
             onClick={handleSend}
+            aria-busy={loading || undefined}
             disabled={
               loading ||
+              (needsOptions && options.status !== "success") ||
               !form.title ||
               !form.message ||
               (form.targetType === "department" && !form.departmentId) ||
@@ -133,6 +145,8 @@ export default function PlacementCellNotifications() {
           <div className="px-lg py-md border-b border-outline-variant">
             <h2 className="text-sm font-bold text-on-surface">Recently Sent</h2>
           </div>
+          <StateView state={sentResource} isEmpty={() => false} loadingLabel="Loading sent notifications…" empty={{ title: "No notifications sent yet" }}>
+            {(sent: any[]) => (
           <div className="divide-y divide-outline-variant max-h-[32rem] overflow-y-auto">
             {sent.length === 0 ? (
               <div className="p-xl text-center text-sm text-outline">No notifications sent yet.</div>
@@ -146,6 +160,8 @@ export default function PlacementCellNotifications() {
               ))
             )}
           </div>
+            )}
+          </StateView>
         </div>
       </div>
     </div>

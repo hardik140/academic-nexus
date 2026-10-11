@@ -6,8 +6,8 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAudit } from "@/lib/audit";
 import { dashboardPathFor } from "@/lib/auth/role-routes";
-import { invalidateCache, middlewareProfileCacheKey } from "@/lib/cache";
 import { dbError } from "@/lib/internal-error";
+import { academicRpc } from "@/lib/academic/rpc";
 
 const AcceptInvitationSchema = z.object({
   password: z.string().min(8, { message: "Password must be at least 8 characters." }).max(200),
@@ -74,6 +74,16 @@ export async function acceptInvitation(password: string) {
     throw dbError(passwordErr);
   }
 
+  // A STUDENT invitation completes in one database transaction (migration
+  // 055, accept_student_invitation): the student record, their section,
+  // their enrolments, the profile activation and the invitation's acceptance
+  // all commit together or not at all. The placement it reads was resolved
+  // when the invitation was created; nothing the invitee sends is consulted.
+  if (profile.role === "student") {
+    await academicRpc(supabase, "accept_student_invitation", { p_invitation_id: invitation.id });
+    redirect(dashboardPathFor(profile.role));
+  }
+
   const { error: profileErr } = await supabase
     .from("profiles")
     .update({ status: "active" })
@@ -81,11 +91,6 @@ export async function acceptInvitation(password: string) {
   if (profileErr) {
     throw dbError(profileErr);
   }
-  // Belt-and-suspenders: /auth/accept-invite is a public route, so
-  // middleware never cached this user's (still-pending) profile in the
-  // first place — the redirect below will populate the cache fresh either
-  // way. Invalidating anyway costs nothing and removes any doubt.
-  await invalidateCache(middlewareProfileCacheKey(user.id));
 
   const { error: invitationErr } = await admin
     .from("invitations")

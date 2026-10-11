@@ -28,6 +28,9 @@ export type UserRole =
 
 export type UserStatus = "active" | "suspended" | "pending" | "graduated" | "alumni";
 
+/** Migration 053. MAINTENANCE and SUSPENDED block college users; neither deletes data. */
+export type CollegeLifecycleState = "ACTIVE" | "MAINTENANCE" | "SUSPENDED";
+
 /**
  * Loosens DB-enum (CHECK constraint) literal unions to plain `string` for
  * write payloads, since form state is naturally string-typed and Postgres
@@ -77,12 +80,19 @@ export interface Database {
           established_year: number | null;
           created_by: string | null;
           is_platform: boolean;
+          /** Migration 053. Changed only through set_college_lifecycle(). */
+          lifecycle_state: CollegeLifecycleState;
+          lifecycle_message: string | null;
+          lifecycle_expected_resume_at: string | null;
+          lifecycle_changed_at: string | null;
+          lifecycle_changed_by: string | null;
           created_at: string;
           updated_at: string;
         };
         Insert: OptionalKeys<
           Database["public"]["Tables"]["colleges"]["Row"],
           "id" | "created_at" | "updated_at" | "domain" | "logo_url" | "address" | "city" | "state" | "country" | "phone" | "email" | "website" | "accreditation" | "established_year" | "created_by" | "is_platform"
+          | "lifecycle_state" | "lifecycle_message" | "lifecycle_expected_resume_at" | "lifecycle_changed_at" | "lifecycle_changed_by"
         >;
         Update: Partial<Database["public"]["Tables"]["colleges"]["Insert"]>;
         Relationships: [];
@@ -288,6 +298,145 @@ export interface Database {
           "id" | "created_at" | "updated_at" | "is_current" | "academic_year_id" | "sequence_no" | "status"
         >;
         Update: Partial<Database["public"]["Tables"]["semesters"]["Insert"]>;
+        Relationships: [];
+      };
+
+      // ── Migration 055: academic foundation. Written ONLY by its SECURITY
+      //    DEFINER functions and triggers — there is no write policy on any of
+      //    these tables, so Insert/Update exist for typing completeness only.
+      department_terms: {
+        Row: {
+          id: string;
+          college_id: string;
+          department_id: string;
+          semester_id: string;
+          status: "active" | "ended";
+          start_source: "started" | "backfill";
+          started_at: string;
+          started_by: string | null;
+          pending_acknowledged: Json | null;
+          ended_at: string | null;
+          ended_by: string | null;
+          end_reason: string | null;
+        };
+        Insert: OptionalKeys<Database["public"]["Tables"]["department_terms"]["Row"], "id" | "status" | "start_source" | "started_at" | "started_by" | "pending_acknowledged" | "ended_at" | "ended_by" | "end_reason">;
+        Update: Partial<Database["public"]["Tables"]["department_terms"]["Insert"]>;
+        Relationships: [];
+      };
+
+      section_class_incharges: {
+        Row: {
+          id: string;
+          college_id: string;
+          semester_id: string;
+          section_id: string;
+          teacher_id: string;
+          assigned_at: string;
+          assigned_by: string | null;
+          assign_reason: string | null;
+          ended_at: string | null;
+          ended_by: string | null;
+          end_reason: string | null;
+        };
+        Insert: OptionalKeys<Database["public"]["Tables"]["section_class_incharges"]["Row"], "id" | "assigned_at" | "assigned_by" | "assign_reason" | "ended_at" | "ended_by" | "end_reason">;
+        Update: Partial<Database["public"]["Tables"]["section_class_incharges"]["Insert"]>;
+        Relationships: [];
+      };
+
+      student_section_assignments: {
+        Row: {
+          id: string;
+          college_id: string;
+          student_id: string;
+          section_id: string;
+          started_at: string;
+          started_semester_id: string | null;
+          start_source: "invitation" | "reconciliation" | "backfill" | "transfer" | "progression";
+          start_reason: string | null;
+          assigned_by: string | null;
+          ended_at: string | null;
+          ended_semester_id: string | null;
+          end_source: "transfer" | "progression" | "withdrawal" | null;
+          end_reason: string | null;
+          ended_by: string | null;
+        };
+        Insert: OptionalKeys<Database["public"]["Tables"]["student_section_assignments"]["Row"], "id" | "started_at" | "started_semester_id" | "start_reason" | "assigned_by" | "ended_at" | "ended_semester_id" | "end_source" | "end_reason" | "ended_by">;
+        Update: Partial<Database["public"]["Tables"]["student_section_assignments"]["Insert"]>;
+        Relationships: [];
+      };
+
+      department_hod_assignments: {
+        Row: {
+          id: string;
+          college_id: string;
+          department_id: string;
+          hod_id: string;
+          source: "assignment" | "backfill";
+          started_at: string;
+          assigned_by: string | null;
+          ended_at: string | null;
+          ended_by: string | null;
+        };
+        Insert: OptionalKeys<Database["public"]["Tables"]["department_hod_assignments"]["Row"], "id" | "source" | "started_at" | "assigned_by" | "ended_at" | "ended_by">;
+        Update: Partial<Database["public"]["Tables"]["department_hod_assignments"]["Insert"]>;
+        Relationships: [];
+      };
+
+      offering_instructor_history: {
+        Row: {
+          id: string;
+          college_id: string;
+          offering_id: string;
+          instructor_id: string;
+          source: "assignment" | "backfill";
+          started_at: string;
+          started_by: string | null;
+          ended_at: string | null;
+          ended_by: string | null;
+        };
+        Insert: OptionalKeys<Database["public"]["Tables"]["offering_instructor_history"]["Row"], "id" | "source" | "started_at" | "started_by" | "ended_at" | "ended_by">;
+        Update: Partial<Database["public"]["Tables"]["offering_instructor_history"]["Insert"]>;
+        Relationships: [];
+      };
+
+      external_teaching_authorizations: {
+        Row: {
+          id: string;
+          college_id: string;
+          department_id: string;
+          teacher_id: string;
+          reason: string;
+          granted_at: string;
+          granted_by: string | null;
+          revoked_at: string | null;
+          revoked_by: string | null;
+          revoke_reason: string | null;
+        };
+        Insert: OptionalKeys<Database["public"]["Tables"]["external_teaching_authorizations"]["Row"], "id" | "granted_at" | "granted_by" | "revoked_at" | "revoked_by" | "revoke_reason">;
+        Update: Partial<Database["public"]["Tables"]["external_teaching_authorizations"]["Insert"]>;
+        Relationships: [];
+      };
+
+      student_invitation_placements: {
+        Row: {
+          invitation_id: string;
+          college_id: string;
+          department_id: string;
+          programme_id: string;
+          section_id: string;
+          semester_id: string;
+          programme_semester: number;
+          enrollment_number: string;
+          parent_name: string | null;
+          parent_email: string | null;
+          parent_phone: string | null;
+          invited_by: string;
+          created_at: string;
+          consumed_at: string | null;
+          consumed_student_id: string | null;
+        };
+        Insert: OptionalKeys<Database["public"]["Tables"]["student_invitation_placements"]["Row"], "created_at" | "parent_name" | "parent_email" | "parent_phone" | "consumed_at" | "consumed_student_id">;
+        Update: Partial<Database["public"]["Tables"]["student_invitation_placements"]["Insert"]>;
         Relationships: [];
       };
 
@@ -1739,6 +1888,58 @@ export interface Database {
           | "withdrawn_by" | "withdrawn_at"
         >;
         Update: Partial<Database["public"]["Tables"]["security_instructions"]["Insert"]>;
+        Relationships: [];
+      };
+      // ── Migration 053: college lifecycle history (immutable, super_admin-readable) ──
+      college_lifecycle_events: {
+        Row: {
+          id: string;
+          college_id: string;
+          previous_state: CollegeLifecycleState;
+          new_state: CollegeLifecycleState;
+          reason: string;
+          message: string | null;
+          expected_resume_at: string | null;
+          sessions_revoked: number;
+          changed_by: string;
+          changed_at: string;
+        };
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
+      // ── Migration 054: application session registry (written only by its functions) ──
+      user_sessions: {
+        Row: {
+          session_id: string;
+          user_id: string;
+          college_id: string;
+          status: "active" | "rejected" | "revoked";
+          client: "web" | "mobile" | "mobile-legacy";
+          device_id: string | null;
+          device_label: string | null;
+          user_agent: string | null;
+          created_at: string;
+          last_seen_at: string;
+          expires_at: string | null;
+          revoked_at: string | null;
+          revoked_by: string | null;
+          revoked_reason: string | null;
+        };
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
+      role_session_limits: {
+        Row: { role: string; max_sessions: number | null };
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
+      platform_settings: {
+        Row: { key: "session_enforcement"; value: string; updated_at: string; updated_by: string | null };
+        Insert: never;
+        Update: never;
         Relationships: [];
       };
     };

@@ -1,7 +1,11 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { Alert } from "@/components/ui/alert";
+import { ErrorState } from "@/components/ui/error-state";
+import { Button } from "@/components/ui/modal";
+import { classifyError } from "@/lib/feedback-error";
 
 // ─── DataTable ───────────────────────────────────────────────────────
 
@@ -48,6 +52,17 @@ interface DataTableProps<T> {
   totalCount?: number;
   loading?: boolean;
   onQueryChange?: (query: DataTableQuery) => void;
+
+  /**
+   * The load failed (M6.6, owner decision D5). With no rows, the table body
+   * is an error with Try again instead of `emptyMessage` — a failed load is
+   * never shown as "No records found". With rows from an earlier load, they
+   * stay, under an error Alert. Anything truthy counts; only its code and
+   * digest are used (see lib/feedback-error.ts), never its message.
+   */
+  error?: unknown;
+  /** Try again after a failed load. */
+  onRetry?: () => void;
 }
 
 export function DataTable<T extends Record<string, any>>({
@@ -66,12 +81,31 @@ export function DataTable<T extends Record<string, any>>({
   totalCount,
   loading = false,
   onQueryChange,
+  error,
+  onRetry,
 }: DataTableProps<T>) {
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [hasOverflow, setHasOverflow] = useState(false);
+
+  useEffect(() => {
+    const region = scrollRef.current;
+    const table = region?.querySelector("table");
+    if (!region || !table) return;
+    // Observe viewport and content, including changes after data/font loads.
+    // The observer also delivers the initial measurement without a layout shift.
+    const observer = new ResizeObserver(() => {
+      setHasOverflow(region.scrollWidth > region.clientWidth);
+    });
+    observer.observe(region);
+    observer.observe(table);
+    return () => observer.disconnect();
+  }, []);
 
   // Debounced separately from `searchInput` so the input itself stays
   // responsive to every keystroke while the (re-)filter/query + page reset
@@ -164,33 +198,57 @@ export function DataTable<T extends Record<string, any>>({
         </div>
       )}
 
+      {/* Always rendered: the live region exists before its message. */}
+      <Alert
+        tone="error"
+        className="mx-lg my-md"
+        action={onRetry && <Button variant="outline" size="sm" onClick={onRetry}>Try again</Button>}
+      >
+        {Boolean(error) && data.length > 0 ? "This couldn't be refreshed. Showing what was loaded earlier." : null}
+      </Alert>
+
       {/* Table */}
-      <div className="overflow-x-auto">
+      <div
+        ref={scrollRef}
+        className="overflow-x-auto focus-visible:outline-offset-[calc(-1*var(--focus-ring-width))]"
+        tabIndex={hasOverflow ? 0 : -1}
+        role={hasOverflow ? "region" : undefined}
+        aria-label={hasOverflow ? (title || "Data") + " — scrollable table" : undefined}
+        aria-busy={loading || undefined}
+      >
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-surface-container-low text-on-surface-variant">
               {columns.map((col) => (
                 <th
                   key={col.key}
+                  scope="col"
+                  aria-sort={col.sortable ? (sortKey === col.key ? (sortDir === "asc" ? "ascending" : "descending") : "none") : undefined}
                   className={cn(
                     "text-left px-lg py-sm font-semibold text-xs uppercase tracking-wider",
-                    col.sortable && "cursor-pointer select-none hover:text-on-surface motion-feedback",
+                    col.sortable && "relative cursor-pointer select-none hover:text-on-surface motion-feedback",
                     col.className
                   )}
-                  onClick={() => col.sortable && handleSort(col.key)}
                 >
-                  <span className="flex items-center gap-xs">
-                    {col.header}
-                    {col.sortable && sortKey === col.key && (
-                      <span className="text-secondary">
-                        {sortDir === "asc" ? "↑" : "↓"}
-                      </span>
-                    )}
-                  </span>
+                  {col.sortable ? (
+                    <button
+                      type="button"
+                      onClick={() => handleSort(col.key)}
+                      className="flex items-center gap-xs w-full text-left uppercase tracking-[inherit] cursor-pointer before:absolute before:inset-0"
+                      aria-label={"Sort by " + col.header}
+                    >
+                      {col.header}
+                      {sortKey === col.key && (
+                        <span aria-hidden="true" className="text-secondary">
+                          {sortDir === "asc" ? "↑" : "↓"}
+                        </span>
+                      )}
+                    </button>
+                  ) : col.header}
                 </th>
               ))}
               {actions && (
-                <th className="text-right px-lg py-sm font-semibold text-xs uppercase tracking-wider">
+                <th scope="col" className="text-right px-lg py-sm font-semibold text-xs uppercase tracking-wider">
                   Actions
                 </th>
               )}
@@ -204,6 +262,12 @@ export function DataTable<T extends Record<string, any>>({
                   className="px-lg py-xl text-center text-outline"
                 >
                   Loading…
+                </td>
+              </tr>
+            ) : Boolean(error) && data.length === 0 ? (
+              <tr>
+                <td colSpan={columns.length + (actions ? 1 : 0)}>
+                  <ErrorState {...classifyError(error)} onRetry={onRetry} />
                 </td>
               </tr>
             ) : paged.length > 0 ? (

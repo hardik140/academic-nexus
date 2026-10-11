@@ -1,10 +1,15 @@
 "use client";
 
-import { Suspense, useState, useEffect } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { DataTable, type DataTableQuery } from "@/components/ui/data-table";
 import { Modal, Button, FormField, StatusBadge } from "@/components/ui/modal";
+import { Alert } from "@/components/ui/alert";
+import { ErrorAlert } from "@/components/ui/error-alert";
+import { useAsyncResource } from "@/hooks/use-async-resource";
+import { toFeedbackError, type FeedbackError } from "@/lib/action-failure";
+import { requireRows } from "@/lib/read-result";
 import { createCourse, listCourses } from "./actions";
 import type { Database } from "@/types/database";
 
@@ -16,19 +21,20 @@ function AdminCoursesInner() {
   const searchParams = useSearchParams();
   const [courses, setCourses] = useState<any[]>([]);
   const [coursesLoading, setCoursesLoading] = useState(false);
+  const [coursesError, setCoursesError] = useState<unknown>(null);
   const [totalCourses, setTotalCourses] = useState(0);
   const [query, setQuery] = useState<DataTableQuery>({ search: "", sortKey: null, sortDir: "asc", page: 0 });
-  const [departments, setDepartments] = useState<any[]>([]);
   const [showCreate, setShowCreate] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<FeedbackError | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const latestLoad = useRef(0);
   const [form, setForm] = useState<{
     name: string; code: string; credits: string; semester: string; type: CourseType; department_id: string; description: string;
   }>({
     name: "", code: "", credits: "3", semester: "1", type: "core", department_id: "", description: "",
   });
 
-  useEffect(() => { loadDepartments(); }, []);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { loadCourses(query); }, [query]);
 
@@ -36,29 +42,41 @@ function AdminCoursesInner() {
     if (searchParams.get("action") === "create") setShowCreate(true);
   }, [searchParams]);
 
-  const loadDepartments = async () => {
-    const { data } = await supabase.from("departments").select("id, name, code");
-    setDepartments(data || []);
-  };
+  const departmentsResource = useAsyncResource(
+    async () => requireRows(await supabase.from("departments").select("id, name, code")),
+    []
+  );
+  const departments: any[] = departmentsResource.data ?? [];
 
+  // The latest query's page; a failed load is an error in the table, never
+  // "No courses found." (owner decision D5).
   const loadCourses = async (q: DataTableQuery) => {
+    const run = ++latestLoad.current;
     setCoursesLoading(true);
-    const { data, count } = await listCourses(q);
-    setCourses(data);
-    setTotalCourses(count);
-    setCoursesLoading(false);
+    setCoursesError(null);
+    try {
+      const { data, count } = await listCourses(q);
+      if (run !== latestLoad.current) return;
+      setCourses(data);
+      setTotalCourses(count);
+    } catch (e) {
+      if (run === latestLoad.current) setCoursesError(e);
+    } finally {
+      if (run === latestLoad.current) setCoursesLoading(false);
+    }
   };
 
   const handleCreate = async () => {
     setLoading(true);
     setError(null);
     try {
-      await createCourse(form.name, form.code, form.department_id, parseInt(form.credits), parseInt(form.semester), form.type, form.description || undefined, query);
+      await createCourse(form.name, form.code, form.department_id, parseInt(form.credits), parseInt(form.semester), form.type, form.description || undefined);
       setForm({ name: "", code: "", credits: "3", semester: "1", type: "core", department_id: "", description: "" });
       setShowCreate(false);
-      await loadCourses(query);
+      setNotice(`Course ${form.code} created.`);
+      void loadCourses(query);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to create course.");
+      setError(await toFeedbackError(e, "Failed to create course."));
     } finally {
       setLoading(false);
     }
@@ -74,9 +92,11 @@ function AdminCoursesInner() {
         <Button onClick={() => setShowCreate(true)}>+ Add Course</Button>
       </div>
 
-      {error && !showCreate && (
-        <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium">{error}</div>
-      )}
+      <Alert tone="success" onDismiss={() => setNotice(null)}>
+        {notice}
+      </Alert>
+      {/* The create dialog shows its own failure. */}
+      <ErrorAlert error={!showCreate ? error : null} />
 
       <DataTable
         columns={[
@@ -100,6 +120,8 @@ function AdminCoursesInner() {
         serverMode
         totalCount={totalCourses}
         loading={coursesLoading}
+        error={coursesError}
+        onRetry={() => loadCourses(query)}
         onQueryChange={setQuery}
         pageSize={COURSES_PAGE_SIZE}
       />
@@ -112,13 +134,22 @@ function AdminCoursesInner() {
         footer={
           <>
             <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
-            <Button onClick={handleCreate} disabled={loading}>{loading ? "Creating..." : "Create Course"}</Button>
+            <Button onClick={handleCreate} disabled={loading} aria-busy={loading || undefined}>{loading ? "Creating..." : "Create Course"}</Button>
           </>
         }
       >
-        {error && (
-          <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium mb-md">{error}</div>
-        )}
+        <ErrorAlert error={error} className="mb-md" />
+        <Alert
+          tone="error"
+          className="mb-md"
+          action={<Button variant="outline" size="sm" onClick={departmentsResource.reload}>Try again</Button>}
+        >
+          {departmentsResource.status === "error" ? (
+            <>
+              Departments couldn&apos;t be loaded, so none can be chosen yet.
+            </>
+          ) : null}
+        </Alert>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-md">
           <FormField label="Course Name" id="course_name" value={form.name} onChange={(v) => setForm({ ...form, name: v })} placeholder="e.g. Data Structures" required />
           <FormField label="Course Code" id="course_code" value={form.code} onChange={(v) => setForm({ ...form, code: v })} placeholder="e.g. CS201" required />

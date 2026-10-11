@@ -1,34 +1,44 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { assertRead } from "@/lib/read-result-server";
+import { NO_MATCH_ID } from "@/lib/read-result";
+import { todayDayOfWeek } from "@/lib/format";
+import { currentTermTaughtOfferingIds } from "@/lib/academic/timetable";
 
 export default async function TeacherTimetable() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase.from("profiles").select("college_id").eq("id", user.id).single();
+  const { data: profile, error: profileError } = await supabase.from("profiles").select("college_id").eq("id", user.id).single();
+  assertRead(profileError);
 
   // timetable_slots has no instructor_id after 047 — a slot belongs to an
   // offering, and the offering names the instructor. Read-only page: this
   // phase deliberately adds no timetable WRITE policy.
-  const { data: myOfferings } = await supabase
+  // The ACTIVE term only (055): a teacher's past offerings keep their own
+  // slots as history and are not this week's classes.
+  const { data: myOfferings, error: myOfferingsError } = await supabase
     .from("course_offerings")
-    .select("id")
+    .select("id, status, semesters:semester_id(status)")
     .eq("instructor_id", user.id);
-  const myOfferingIds = ((myOfferings as any[]) || []).map((o) => o.id);
+  assertRead(myOfferingsError);
+  const myOfferingIds = currentTermTaughtOfferingIds(myOfferings as never);
 
-  const { data: slots } = myOfferingIds.length
+  const slotsRes = myOfferingIds.length
     ? await supabase
         .from("timetable_slots")
         .select("*, course_offerings:offering_id(courses:course_id(name, code), sections:section_id(name))")
-        .eq("college_id", profile?.college_id || "")
+        .eq("college_id", profile?.college_id || NO_MATCH_ID)
         .in("offering_id", myOfferingIds)
         .order("day_of_week")
         .order("start_time")
-    : { data: [] };
+    : { data: [], error: null };
+  assertRead(slotsRes.error);
+  const slots = slotsRes.data;
 
   const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-  const todayIndex = new Date().getDay();
+  const todayIndex = todayDayOfWeek();
   const grouped: Record<number, any[]> = {};
   (slots || []).forEach((s: any) => {
     if (!grouped[s.day_of_week]) grouped[s.day_of_week] = [];

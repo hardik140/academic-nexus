@@ -1,8 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Modal, Button, FormField, StatusBadge } from "@/components/ui/modal";
+import { Alert } from "@/components/ui/alert";
+import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
+import { ErrorAlert } from "@/components/ui/error-alert";
+import { StateView } from "@/components/ui/state-view";
+import { useAsyncResource } from "@/hooks/use-async-resource";
+import { toFeedbackError, type FeedbackError } from "@/lib/action-failure";
+import { requireRows } from "@/lib/read-result";
 import {
   createAcademicYear,
   createSemester,
@@ -42,9 +49,18 @@ const EMPTY_SEMESTER = { name: "", sequenceNo: "1", startDate: "", endDate: "" }
  */
 export default function AdminAcademicPeriods() {
   const supabase = createClient();
-  const [years, setYears] = useState<AcademicYear[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<FeedbackError | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  // An irreversible move (close, delete), asked first.
+  const [confirming, setConfirming] = useState<{
+    key: string;
+    title: string;
+    description: string;
+    confirmLabel: string;
+    done: string;
+    action: () => Promise<unknown>;
+  } | null>(null);
 
   const [showYear, setShowYear] = useState(false);
   const [yearForm, setYearForm] = useState(EMPTY_YEAR);
@@ -55,41 +71,45 @@ export default function AdminAcademicPeriods() {
   const [editing, setEditing] = useState<Semester | null>(null);
   const [editForm, setEditForm] = useState({ name: "", startDate: "", endDate: "" });
 
-  const load = useCallback(async () => {
-    const { data } = await supabase
-      .from("academic_years")
-      .select("id, name, start_date, end_date, status, semesters(id, name, sequence_no, start_date, end_date, status)")
-      .order("start_date", { ascending: false });
-    setYears(
-      ((data as unknown as AcademicYear[]) || []).map((y) => ({
-        ...y,
-        semesters: [...(y.semesters || [])].sort((a, b) => (a.sequence_no ?? 0) - (b.sequence_no ?? 0)),
-      }))
+  // A failed load is an error — never "No semester is active", which would
+  // misstate the college's calendar (owner decision D5).
+  const yearsResource = useAsyncResource(async () => {
+    const data = requireRows(
+      await supabase
+        .from("academic_years")
+        .select("id, name, start_date, end_date, status, semesters(id, name, sequence_no, start_date, end_date, status)")
+        .order("start_date", { ascending: false })
     );
-  }, [supabase]);
+    return (data as unknown as AcademicYear[]).map((y) => ({
+      ...y,
+      semesters: [...(y.semesters || [])].sort((a, b) => (a.sequence_no ?? 0) - (b.sequence_no ?? 0)),
+    }));
+  }, []);
+  const years = yearsResource.data ?? [];
 
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  /** Runs one mutation, reloads, and turns a thrown message into the banner. */
-  const run = async (key: string, fn: () => Promise<unknown>) => {
+  /** Runs one mutation; reloading afterwards reports its own failure, never as a failed change. */
+  const run = async (key: string, fn: () => Promise<unknown>, done?: string) => {
+    if (busy) return false;
     setBusy(key);
     setError(null);
+    setNotice(null);
     try {
       await fn();
-      await load();
+      if (done) setNotice(done);
+      yearsResource.reload();
       return true;
     } catch (e) {
-      setError(e instanceof Error ? e.message : "The change was not saved.");
+      setError(await toFeedbackError(e, "The change was not saved."));
       return false;
     } finally {
       setBusy(null);
     }
   };
 
+  const dialogOpen = showYear || semesterYear !== null || editing !== null || confirming !== null;
+
   const handleCreateYear = async () => {
-    if (await run("year", () => createAcademicYear(yearForm))) {
+    if (await run("year", () => createAcademicYear(yearForm), `Academic year ${yearForm.name} created.`)) {
       setYearForm(EMPTY_YEAR);
       setShowYear(false);
     }
@@ -97,14 +117,17 @@ export default function AdminAcademicPeriods() {
 
   const handleCreateSemester = async () => {
     if (!semesterYear) return;
-    const ok = await run("semester", () =>
-      createSemester({
-        academicYearId: semesterYear.id,
-        name: semesterForm.name,
-        sequenceNo: Number(semesterForm.sequenceNo),
-        startDate: semesterForm.startDate,
-        endDate: semesterForm.endDate,
-      })
+    const ok = await run(
+      "semester",
+      () =>
+        createSemester({
+          academicYearId: semesterYear.id,
+          name: semesterForm.name,
+          sequenceNo: Number(semesterForm.sequenceNo),
+          startDate: semesterForm.startDate,
+          endDate: semesterForm.endDate,
+        }),
+      `Semester ${semesterForm.name} created.`
     );
     if (ok) {
       setSemesterForm(EMPTY_SEMESTER);
@@ -114,7 +137,7 @@ export default function AdminAcademicPeriods() {
 
   const handleUpdateSemester = async () => {
     if (!editing) return;
-    if (await run(editing.id, () => updateSemester({ semesterId: editing.id, ...editForm }))) {
+    if (await run(editing.id, () => updateSemester({ semesterId: editing.id, ...editForm }), `${editForm.name} saved.`)) {
       setEditing(null);
     }
   };
@@ -134,12 +157,17 @@ export default function AdminAcademicPeriods() {
         <Button onClick={() => setShowYear(true)}>+ Academic Year</Button>
       </div>
 
-      {error && (
-        <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium">{error}</div>
-      )}
+      <Alert tone="success" onDismiss={() => setNotice(null)}>
+        {notice}
+      </Alert>
+      {/* An open dialog shows its own failure. */}
+      <ErrorAlert error={!dialogOpen ? error : null} />
 
+      <StateView state={yearsResource} isEmpty={() => false} loadingLabel="Loading academic periods…" empty={{ title: "No academic years yet" }}>
+        {() => (
+          <>
       {activeSemester ? (
-        <div className="bg-success/10 border border-success/20 rounded-xl p-md text-sm">
+        <div className="bg-success-container border border-success/30 rounded-xl p-md text-sm">
           <span className="font-semibold text-on-surface">Current semester:</span>{" "}
           <span className="text-on-surface-variant">
             {activeSemester.name} · {activeSemester.start_date} → {activeSemester.end_date}
@@ -180,12 +208,27 @@ export default function AdminAcademicPeriods() {
                   </Button>
                 )}
                 {year.status === "planned" && (
-                  <Button size="sm" disabled={busy === year.id} onClick={() => run(year.id, () => transitionAcademicYear(year.id, "activate"))}>
+                  <Button size="sm" disabled={busy === year.id} aria-busy={busy === year.id || undefined} onClick={() => run(year.id, () => transitionAcademicYear(year.id, "activate"), `${year.name} activated.`)}>
                     Activate year
                   </Button>
                 )}
                 {year.status === "active" && (
-                  <Button size="sm" variant="secondary" disabled={busy === year.id} onClick={() => run(year.id, () => transitionAcademicYear(year.id, "close"))}>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={busy === year.id}
+                    onClick={() => {
+                      setError(null);
+                      setConfirming({
+                        key: year.id,
+                        title: `Close ${year.name}?`,
+                        description: "Closing is final: a closed academic year cannot be reopened or changed.",
+                        confirmLabel: "Close year",
+                        done: `${year.name} closed.`,
+                        action: () => transitionAcademicYear(year.id, "close"),
+                      });
+                    }}
+                  >
                     Close year
                   </Button>
                 )}
@@ -232,16 +275,46 @@ export default function AdminAcademicPeriods() {
                           )}
                           {s.status === "planned" && (
                             <>
-                              <Button size="sm" disabled={busy === s.id} onClick={() => run(s.id, () => transitionSemester(s.id, "activate"))}>
+                              <Button size="sm" disabled={busy === s.id} aria-busy={busy === s.id || undefined} onClick={() => run(s.id, () => transitionSemester(s.id, "activate"), `${s.name} activated.`)}>
                                 Activate
                               </Button>
-                              <Button size="sm" variant="destructive" disabled={busy === s.id} onClick={() => run(s.id, () => deleteSemester(s.id))}>
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                disabled={busy === s.id}
+                                onClick={() => {
+                                  setError(null);
+                                  setConfirming({
+                                    key: s.id,
+                                    title: `Delete ${s.name}?`,
+                                    description: "The semester is removed. This cannot be undone.",
+                                    confirmLabel: "Delete semester",
+                                    done: `${s.name} deleted.`,
+                                    action: () => deleteSemester(s.id),
+                                  });
+                                }}
+                              >
                                 Delete
                               </Button>
                             </>
                           )}
                           {s.status === "active" && (
-                            <Button size="sm" variant="secondary" disabled={busy === s.id} onClick={() => run(s.id, () => transitionSemester(s.id, "close"))}>
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              disabled={busy === s.id}
+                              onClick={() => {
+                                setError(null);
+                                setConfirming({
+                                  key: s.id,
+                                  title: `Close ${s.name}?`,
+                                  description: "Closing is final: attendance and marks for a closed semester can no longer be recorded.",
+                                  confirmLabel: "Close semester",
+                                  done: `${s.name} closed.`,
+                                  action: () => transitionSemester(s.id, "close"),
+                                });
+                              }}
+                            >
                               Close
                             </Button>
                           )}
@@ -255,6 +328,9 @@ export default function AdminAcademicPeriods() {
           </section>
         ))}
       </div>
+          </>
+        )}
+      </StateView>
 
       <Modal
         open={showYear}
@@ -263,11 +339,12 @@ export default function AdminAcademicPeriods() {
         footer={
           <>
             <Button variant="outline" onClick={() => setShowYear(false)}>Cancel</Button>
-            <Button onClick={handleCreateYear} disabled={busy === "year"}>{busy === "year" ? "Creating..." : "Create"}</Button>
+            <Button onClick={handleCreateYear} disabled={busy === "year"} aria-busy={busy === "year" || undefined}>{busy === "year" ? "Creating..." : "Create"}</Button>
           </>
         }
       >
         <div className="space-y-md">
+          <ErrorAlert error={error} />
           <FormField label="Name" id="ay_name" value={yearForm.name} onChange={(v) => setYearForm({ ...yearForm, name: v })} placeholder="e.g. 2027-28" required />
           <FormField label="Start date" id="ay_start" type="date" value={yearForm.startDate} onChange={(v) => setYearForm({ ...yearForm, startDate: v })} required />
           <FormField label="End date" id="ay_end" type="date" value={yearForm.endDate} onChange={(v) => setYearForm({ ...yearForm, endDate: v })} required />
@@ -281,11 +358,12 @@ export default function AdminAcademicPeriods() {
         footer={
           <>
             <Button variant="outline" onClick={() => setSemesterYear(null)}>Cancel</Button>
-            <Button onClick={handleCreateSemester} disabled={busy === "semester"}>{busy === "semester" ? "Creating..." : "Create"}</Button>
+            <Button onClick={handleCreateSemester} disabled={busy === "semester"} aria-busy={busy === "semester" || undefined}>{busy === "semester" ? "Creating..." : "Create"}</Button>
           </>
         }
       >
         <div className="space-y-md">
+          <ErrorAlert error={error} />
           <FormField label="Name" id="sem_name" value={semesterForm.name} onChange={(v) => setSemesterForm({ ...semesterForm, name: v })} placeholder="e.g. Odd Term 2027" required />
           <FormField label="Order within the year" id="sem_seq" type="number" value={semesterForm.sequenceNo} onChange={(v) => setSemesterForm({ ...semesterForm, sequenceNo: v })} required />
           <FormField label="Start date" id="sem_start" type="date" value={semesterForm.startDate} onChange={(v) => setSemesterForm({ ...semesterForm, startDate: v })} required />
@@ -300,16 +378,31 @@ export default function AdminAcademicPeriods() {
         footer={
           <>
             <Button variant="outline" onClick={() => setEditing(null)}>Cancel</Button>
-            <Button onClick={handleUpdateSemester} disabled={busy === editing?.id}>Save</Button>
+            <Button onClick={handleUpdateSemester} disabled={busy === editing?.id} aria-busy={busy === editing?.id || undefined}>Save</Button>
           </>
         }
       >
         <div className="space-y-md">
+          <ErrorAlert error={error} />
           <FormField label="Name" id="edit_name" value={editForm.name} onChange={(v) => setEditForm({ ...editForm, name: v })} required />
           <FormField label="Start date" id="edit_start" type="date" value={editForm.startDate} onChange={(v) => setEditForm({ ...editForm, startDate: v })} required />
           <FormField label="End date" id="edit_end" type="date" value={editForm.endDate} onChange={(v) => setEditForm({ ...editForm, endDate: v })} required />
         </div>
       </Modal>
+
+      <ConfirmationDialog
+        open={confirming !== null}
+        title={confirming?.title ?? ""}
+        description={confirming?.description}
+        confirmLabel={confirming?.confirmLabel ?? "Confirm"}
+        pending={confirming !== null && busy === confirming.key}
+        error={confirming !== null ? error : null}
+        onConfirm={async () => {
+          if (!confirming) return;
+          if (await run(confirming.key, confirming.action, confirming.done)) setConfirming(null);
+        }}
+        onCancel={() => setConfirming(null)}
+      />
     </div>
   );
 }

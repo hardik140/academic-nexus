@@ -4,8 +4,7 @@ import { expect, test } from "@playwright/test";
 /**
  * Automated WCAG 2.2 AA scan (axe-core) of the pages reachable without data.
  *
- * The current UI does NOT pass. Rather than hide that, the known failures are
- * listed here by rule, with the most elements each may affect on each page
+ * Known failures are tracked here by rule, with the most elements each may affect on each page
  * (the worst case across the configured viewports, measured when this test
  * was written). The test fails on any NEW rule, and on any known rule
  * spreading to more elements. When a foundation stage fixes one, lower its
@@ -20,12 +19,7 @@ type KnownDebt = { maxNodes: number; reason: string };
 // /login, 22 on /dev/gallery): any contrast failure is now a new violation.
 const KNOWN_DEBT: Record<string, Record<string, KnownDebt>> = {
   "/login": {},
-  "/dev/gallery": {
-    "scrollable-region-focusable": {
-      maxNodes: 3,
-      reason: "DataTable's overflow-x container cannot receive keyboard focus when it scrolls (375px). Fixed by the DataTable refactor.",
-    },
-  },
+  "/dev/gallery": {}, // Gate 4: overflowing DataTables are keyboard reachable.
 };
 
 for (const [path, debt] of Object.entries(KNOWN_DEBT)) {

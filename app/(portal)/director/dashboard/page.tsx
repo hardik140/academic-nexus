@@ -1,6 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import { Alert } from "@/components/ui/alert";
+import { ErrorAlert } from "@/components/ui/error-alert";
+import { StateView } from "@/components/ui/state-view";
+import { useAsyncResource } from "@/hooks/use-async-resource";
+import { toFeedbackError, type FeedbackError } from "@/lib/action-failure";
+import { SessionExpiredError } from "@/lib/feedback-error";
+import { requireData, requireRows } from "@/lib/read-result";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { Modal, Button, FormField, StatusBadge } from "@/components/ui/modal";
@@ -40,13 +47,9 @@ function trendFor(latest: number | null, baseline: number | null) {
 
 export default function DirectorDashboard() {
   const supabase = createClient();
-  const [profile, setProfile] = useState<any>(null);
-  const [stats, setStats] = useState({ totalStudents: 0, totalFaculty: 0, totalDepartments: 0 });
-  const [departments, setDepartments] = useState<any[]>([]);
-  const [command, setCommand] = useState<any>(null);
   const [showAnnounce, setShowAnnounce] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<FeedbackError | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [form, setForm] = useState<{ title: string; message: string; audience: "all" | "staff" | "students" }>({
     title: "",
@@ -54,28 +57,32 @@ export default function DirectorDashboard() {
     audience: "all",
   });
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
+  // Everything the Command Center shows. A failed load is an error, never
+  // zero students and "No departments configured." (owner decision D5).
+  const dashboard = useAsyncResource(async () => {
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    if (!user) return;
+    if (!user) throw new SessionExpiredError();
 
-    const [profileRes, statsResult, deptListRes, commandData] = await Promise.all([
+    const [profileRes, stats, deptListRes, command] = await Promise.all([
       supabase.from("profiles").select("*").eq("id", user.id).single(),
       getDashboardStats(),
       supabase.from("departments").select("*, profiles:hod_id(full_name)").order("name"),
       getCommandCenterData(),
     ]);
 
-    setProfile(profileRes.data);
-    setStats(statsResult);
-    setDepartments(deptListRes.data || []);
-    setCommand(commandData);
-  };
+    return {
+      profile: requireData(profileRes) as any,
+      stats,
+      departments: requireRows(deptListRes) as any[],
+      command: command as any,
+    };
+  }, []);
+  const profile = dashboard.data?.profile ?? null;
+  const stats = dashboard.data?.stats ?? { totalStudents: 0, totalFaculty: 0, totalDepartments: 0 };
+  const departments = dashboard.data?.departments ?? [];
+  const command = dashboard.data?.command ?? null;
 
   const openAnnounce = () => {
     setShowAnnounce(true);
@@ -84,6 +91,7 @@ export default function DirectorDashboard() {
   };
 
   const handleSend = async () => {
+    if (loading) return;
     setLoading(true);
     setError(null);
     try {
@@ -92,7 +100,7 @@ export default function DirectorDashboard() {
       setShowAnnounce(false);
       setSuccess(`Announcement sent to ${result.recipientCount} recipient${result.recipientCount === 1 ? "" : "s"}.`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to send announcement.");
+      setError(await toFeedbackError(e, "Failed to send announcement."));
     } finally {
       setLoading(false);
     }
@@ -112,10 +120,13 @@ export default function DirectorDashboard() {
         <Button onClick={openAnnounce}>📢 Send Announcement</Button>
       </div>
 
-      {success && (
-        <div className="bg-success/10 border border-success/20 text-success rounded-xl p-md text-sm font-medium">{success}</div>
-      )}
+      <Alert tone="success" onDismiss={() => setSuccess(null)}>
+        {success}
+      </Alert>
 
+      <StateView state={dashboard} isEmpty={() => false} loadingLabel="Loading the Command Center…" empty={{ title: "Nothing to show yet" }}>
+        {() => (
+          <>
       {/* What changed since last login */}
       {command && (
         <div className="bg-secondary/5 border border-secondary/20 rounded-2xl p-lg">
@@ -275,6 +286,9 @@ export default function DirectorDashboard() {
           </table>
         </div>
       </div>
+          </>
+        )}
+      </StateView>
 
       <Modal
         open={showAnnounce}
@@ -286,15 +300,13 @@ export default function DirectorDashboard() {
             <Button variant="outline" onClick={() => setShowAnnounce(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSend} disabled={loading || !form.title || !form.message}>
+            <Button onClick={handleSend} disabled={loading || !form.title || !form.message} aria-busy={loading || undefined}>
               {loading ? "Sending..." : "Send"}
             </Button>
           </>
         }
       >
-        {error && (
-          <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium mb-md">{error}</div>
-        )}
+        <ErrorAlert error={error} className="mb-md" />
         <div className="space-y-md">
           <FormField
             label="Audience"

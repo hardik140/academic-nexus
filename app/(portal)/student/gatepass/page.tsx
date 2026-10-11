@@ -1,17 +1,24 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Button, FormField, Modal, StatusBadge } from "@/components/ui/modal";
+import { Alert } from "@/components/ui/alert";
+import { ErrorAlert } from "@/components/ui/error-alert";
+import { LoadingState } from "@/components/ui/loading-state";
+import { StateView } from "@/components/ui/state-view";
+import { useAsyncResource } from "@/hooks/use-async-resource";
+import { toFeedbackError, type FeedbackError } from "@/lib/action-failure";
+import { feedbackMessage, SessionExpiredError } from "@/lib/feedback-error";
+import { requireData, requireRows } from "@/lib/read-result";
 import { applyForGatePass, getGatePassCredential, type CredentialView } from "./actions";
 
 export default function StudentGatePass() {
   const supabase = createClient();
-  const [passes, setPasses] = useState<any[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [error, setError] = useState<FeedbackError | null>(null);
   const [form, setForm] = useState({
     destination: "",
     reason: "",
@@ -19,26 +26,27 @@ export default function StudentGatePass() {
     return_time: "",
   });
 
-  // Load gate passes
-  const loadPasses = async () => {
+  // The student's gate passes. A failed load is an error, never "no
+  // requests" (owner decision D5).
+  const passesResource = useAsyncResource(async () => {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    const { data: student } = await supabase.from("students").select("id").eq("user_id", user.id).single();
-    if (!student) return;
-    const { data } = await supabase
-      .from("gate_passes")
-      .select("*")
-      .eq("student_id", student.id)
-      .order("created_at", { ascending: false });
-    setPasses(data || []);
-  };
-
-  useEffect(() => { loadPasses(); }, []);
+    if (!user) throw new SessionExpiredError();
+    const student = requireData(await supabase.from("students").select("id").eq("user_id", user.id).single());
+    if (!student) return [];
+    return requireRows(
+      await supabase
+        .from("gate_passes")
+        .select("*")
+        .eq("student_id", student.id)
+        .order("created_at", { ascending: false })
+    );
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setSuccess(null);
     try {
       await applyForGatePass({
         destination: form.destination,
@@ -48,11 +56,12 @@ export default function StudentGatePass() {
       });
       setForm({ destination: "", reason: "", exit_time: "", return_time: "" });
       setShowForm(false);
-      setSubmitted(true);
-      await loadPasses();
-      setTimeout(() => setSubmitted(false), 3000);
+      // Stays until dismissed: the record of a request the student just made.
+      setSuccess("Gate pass request submitted. It is awaiting warden approval.");
+      // A failure to refresh the list shows on the list, not as a failed request.
+      passesResource.reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to submit gate pass request.");
+      setError(await toFeedbackError(e, "Failed to submit gate pass request."));
     } finally {
       setLoading(false);
     }
@@ -73,7 +82,7 @@ export default function StudentGatePass() {
     try {
       setCredential(await getGatePassCredential(pass.id));
     } catch (e) {
-      setCredential({ state: "none", reason: e instanceof Error ? e.message : "The pass could not be loaded." });
+      setCredential({ state: "none", reason: feedbackMessage(e, "The pass could not be loaded.") });
     } finally {
       setQrLoading(false);
     }
@@ -97,15 +106,11 @@ export default function StudentGatePass() {
         </Button>
       </div>
 
-      {submitted && (
-        <div className="bg-success/10 border border-success/20 text-success rounded-xl p-md text-sm font-medium">
-          ✅ Gate pass request submitted! Awaiting warden approval.
-        </div>
-      )}
+      <Alert tone="success" focusOnShow onDismiss={() => setSuccess(null)}>
+        {success}
+      </Alert>
 
-      {error && (
-        <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium">{error}</div>
-      )}
+      <ErrorAlert error={error} />
 
       {/* Application Form */}
       {showForm && (
@@ -119,7 +124,7 @@ export default function StudentGatePass() {
           </div>
           <div className="flex justify-end gap-sm">
             <Button variant="outline" type="button" onClick={() => setShowForm(false)}>Cancel</Button>
-            <Button type="submit" disabled={loading}>{loading ? "Submitting..." : "Submit Application"}</Button>
+            <Button type="submit" disabled={loading} aria-busy={loading || undefined}>{loading ? "Submitting..." : "Submit Application"}</Button>
           </div>
         </form>
       )}
@@ -129,6 +134,13 @@ export default function StudentGatePass() {
         <div className="px-lg py-md border-b border-outline-variant">
           <h2 className="text-sm font-bold text-on-surface flex items-center gap-sm">🚪 My Gate Passes</h2>
         </div>
+        <StateView
+          state={passesResource}
+          isEmpty={() => false}
+          loadingLabel="Loading your gate passes…"
+          empty={{ title: "No gate pass requests found" }}
+        >
+          {(passes) => (
         <div className="divide-y divide-outline-variant">
           {passes.length > 0 ? passes.map((pass: any) => (
             <div key={pass.id} className="flex items-center justify-between px-lg py-md hover:bg-surface-container-low transition-colors">
@@ -155,6 +167,8 @@ export default function StudentGatePass() {
             <div className="p-xl text-center text-sm text-outline">No gate pass requests found.</div>
           )}
         </div>
+          )}
+        </StateView>
       </div>
 
       <Modal
@@ -163,11 +177,16 @@ export default function StudentGatePass() {
         title="Gate Pass"
         description={qrFor ? `${qrFor.destination} · ${new Date(qrFor.exit_time).toLocaleString()}` : undefined}
       >
-        {qrLoading && <div className="py-xl text-center text-sm text-outline">Loading...</div>}
+        {qrLoading && <LoadingState label="Loading the pass…" />}
+
+        {/* Always rendered: why no pass can be shown arrives in a region that was already there. */}
+        <Alert tone="warning">
+          {!qrLoading && credential && !(credential.state === "issued" && credential.svg) ? credential.reason : null}
+        </Alert>
 
         {!qrLoading && credential && (
           <div className="space-y-md">
-            {credential.state === "issued" && credential.svg ? (
+            {credential.state === "issued" && credential.svg && (
               <div className="flex justify-center">
                 <div
                   className="bg-white p-md rounded-xl border border-outline-variant [&>svg]:w-full [&>svg]:h-auto w-[16rem]"
@@ -175,10 +194,6 @@ export default function StudentGatePass() {
                   // payload this server built. Not user content.
                   dangerouslySetInnerHTML={{ __html: credential.svg }}
                 />
-              </div>
-            ) : (
-              <div className="bg-warning/10 border border-warning/20 text-warning rounded-xl p-md text-sm font-medium text-center">
-                {credential.reason}
               </div>
             )}
 

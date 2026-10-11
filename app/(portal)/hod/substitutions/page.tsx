@@ -1,39 +1,43 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Button, StatusBadge } from "@/components/ui/modal";
+import { Alert } from "@/components/ui/alert";
+import { ErrorAlert } from "@/components/ui/error-alert";
+import { StateView } from "@/components/ui/state-view";
+import { useAsyncResource } from "@/hooks/use-async-resource";
+import { toFeedbackError, type FeedbackError } from "@/lib/action-failure";
 import { listSubstitutionNeeds, listDepartmentTeachers, assignSubstitute } from "./actions";
 
 export default function HodSubstitutions() {
-  const [needed, setNeeded] = useState<any[]>([]);
-  const [assigned, setAssigned] = useState<any[]>([]);
-  const [teachers, setTeachers] = useState<any[]>([]);
   const [picked, setPicked] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<FeedbackError | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
-  useEffect(() => { load(); }, []);
-
-  const load = async () => {
-    const [{ needed, assigned }, teacherList] = await Promise.all([
-      listSubstitutionNeeds(),
-      listDepartmentTeachers(),
-    ]);
-    setNeeded(needed);
-    setAssigned(assigned);
-    setTeachers(teacherList);
-  };
+  // A failed load is an error, never "No unassigned substitution
+  // requirements" — classes would look covered when they are not (D5).
+  const substitutions = useAsyncResource(async () => {
+    const [needs, teachers] = await Promise.all([listSubstitutionNeeds(), listDepartmentTeachers()]);
+    return { ...needs, teachers };
+  }, []);
+  const needed: any[] = substitutions.data?.needed ?? [];
+  const assigned: any[] = substitutions.data?.assigned ?? [];
+  const teachers: any[] = substitutions.data?.teachers ?? [];
 
   const handleAssign = async (id: string) => {
     const substituteTeacherId = picked[id];
-    if (!substituteTeacherId) return;
+    if (!substituteTeacherId || loading) return;
     setLoading(id);
     setError(null);
+    setNotice(null);
     try {
       await assignSubstitute(id, substituteTeacherId);
-      await load();
+      const teacher = teachers.find((t) => t.id === substituteTeacherId);
+      setNotice(`Substitute assigned${teacher ? `: ${teacher.full_name}` : ""}.`);
+      substitutions.reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to assign substitute.");
+      setError(await toFeedbackError(e, "Failed to assign substitute."));
     } finally {
       setLoading(null);
     }
@@ -48,10 +52,14 @@ export default function HodSubstitutions() {
         </p>
       </div>
 
-      {error && (
-        <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium">{error}</div>
-      )}
+      <Alert tone="success" onDismiss={() => setNotice(null)}>
+        {notice}
+      </Alert>
+      <ErrorAlert error={error} />
 
+      <StateView state={substitutions} isEmpty={() => false} loadingLabel="Loading substitution needs…" empty={{ title: "No substitutions" }}>
+        {() => (
+          <>
       {/* Needed — awaiting assignment */}
       <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-sm">
         <div className="px-lg py-md border-b border-outline-variant">
@@ -82,7 +90,7 @@ export default function HodSubstitutions() {
                         <option key={t.id} value={t.id}>{t.full_name}</option>
                       ))}
                     </select>
-                    <Button size="sm" onClick={() => handleAssign(row.id)} disabled={!picked[row.id] || loading === row.id}>
+                    <Button size="sm" onClick={() => handleAssign(row.id)} disabled={!picked[row.id] || loading === row.id} aria-busy={loading === row.id || undefined}>
                       {loading === row.id ? "..." : "Assign"}
                     </Button>
                   </div>
@@ -119,6 +127,9 @@ export default function HodSubstitutions() {
           )}
         </div>
       </div>
+          </>
+        )}
+      </StateView>
     </div>
   );
 }

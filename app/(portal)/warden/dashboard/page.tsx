@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { getCached } from "@/lib/cache";
+import { getCachedWriteBehind } from "@/lib/cache";
 import { RequestDecisionButton } from "@/components/portal/request-decision-modal";
 import { DirectorEscalationsPanel } from "@/components/portal/director-escalations-panel";
 import { listPendingGatePasses, getGateOperationsSnapshot } from "../gatepasses/actions";
 import { listRoomTransferRequests } from "../transfers/actions";
+import { assertRead } from "@/lib/read-result-server";
 
 interface AttentionItem {
   label: string;
@@ -19,17 +20,19 @@ export default async function WardenDashboard() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { blocks, rooms, openComplaints } = await getCached(
+  const { blocks, rooms, openComplaints } = await getCachedWriteBehind(
     `dashboard:warden:${user.id}:overview`,
     60,
     async () => {
-      const { data: blocks } = await supabase.from("hostel_blocks").select("*").eq("warden_id", user.id);
+      const { data: blocks, error: blocksError } = await supabase.from("hostel_blocks").select("*").eq("warden_id", user.id);
+      assertRead(blocksError);
       const blockIds = (blocks || []).map((b) => b.id);
 
       const [roomsRes, complaintsRes] = await Promise.all([
         blockIds.length ? supabase.from("hostel_rooms").select("*").in("block_id", blockIds) : Promise.resolve({ data: [] }),
         supabase.from("complaints").select("*").eq("status", "open").in("category", ["hostel", "mess", "plumbing", "electrical", "cleaning"]).order("created_at", { ascending: false }).limit(5),
       ]);
+      for (const res of [roomsRes, complaintsRes]) assertRead("error" in res ? res.error : null);
 
       return {
         blocks: blocks || [],

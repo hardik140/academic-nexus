@@ -5,7 +5,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole, type AuthorizedActor } from "@/lib/rbac";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { getCached, invalidateCache } from "@/lib/cache";
+import { getCachedWriteBehind, invalidateCacheFamily, versionedKey } from "@/lib/cache";
 import { logAudit } from "@/lib/audit";
 import { assertClaimed } from "@/lib/concurrent-claim";
 import { resolveListSort, listCacheKey } from "@/lib/cached-list";
@@ -14,6 +14,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import type { DataTableQuery } from "@/components/ui/data-table";
 import { dbError } from "@/lib/internal-error";
+import { assertRead } from "@/lib/read-result-server";
 
 // See app/(portal)/student/placements/actions.ts's comment on why embedded
 // selects need a local cast — the hand-maintained Database type has no
@@ -43,9 +44,9 @@ export async function listDrives(q: DataTableQuery) {
   const supabase = await createClient();
 
   const { column, ascending } = resolveListSort(DRIVES_SORT_COLUMNS, "application_deadline", true, q);
-  const cacheKey = listCacheKey(DRIVES_CACHE_PREFIX, actor.collegeId, q, column);
+  const cacheKey = versionedKey(listCacheKey(DRIVES_CACHE_PREFIX, actor.collegeId, q, column), DRIVES_CACHE_PREFIX, actor.collegeId);
 
-  return getCached(cacheKey, 30, async () => {
+  return getCachedWriteBehind(cacheKey, 30, async () => {
     let dbQuery = supabase
       .from("placement_drives")
       .select("*, companies:company_id(name), placement_applications(count)", { count: "exact" });
@@ -54,7 +55,8 @@ export async function listDrives(q: DataTableQuery) {
     dbQuery = dbQuery.order(column, { ascending });
 
     const from = q.page * DRIVES_PAGE_SIZE;
-    const { data, count } = await dbQuery.range(from, from + DRIVES_PAGE_SIZE - 1);
+    const { data, count, error: dataError } = await dbQuery.range(from, from + DRIVES_PAGE_SIZE - 1);
+    assertRead(dataError);
     return { data: data || [], count: count ?? 0 };
   });
 }
@@ -62,12 +64,13 @@ export async function listDrives(q: DataTableQuery) {
 export async function listCompaniesForSelect() {
   const actor = await requireRole(STAFF_ROLES);
   const supabase = await createClient();
-  const { data } = await supabase
+  const { data, error: dataError } = await supabase
     .from("companies")
     .select("id, name")
     .eq("college_id", actor.collegeId)
     .eq("status", "active")
     .order("name");
+  assertRead(dataError);
   return data || [];
 }
 
@@ -75,23 +78,25 @@ export async function listCompaniesForSelect() {
 export async function listActiveDrivesForSelect() {
   const actor = await requireRole(STAFF_ROLES);
   const supabase = await createClient();
-  const { data } = await supabase
+  const { data, error: dataError } = await supabase
     .from("placement_drives")
     .select("id, job_role, companies:company_id(name)")
     .eq("college_id", actor.collegeId)
     .eq("status", "published")
     .order("created_at", { ascending: false });
+  assertRead(dataError);
   return data || [];
 }
 
 export async function listDepartmentsForSelect() {
   const actor = await requireRole(STAFF_ROLES);
   const supabase = await createClient();
-  const { data } = await supabase
+  const { data, error: dataError } = await supabase
     .from("departments")
     .select("id, name, code")
     .eq("college_id", actor.collegeId)
     .order("name");
+  assertRead(dataError);
   return data || [];
 }
 
@@ -184,21 +189,18 @@ async function createDriveCore(supabase: SupabaseClient<Database>, actor: Author
   return data;
 }
 
-export async function createDrive(params: DriveParams, viewQuery?: DataTableQuery) {
+export async function createDrive(params: DriveParams) {
   const actor = await requireRole(OPERATOR_ROLES);
   const supabase = await createClient();
   const result = await createDriveCore(supabase, actor, params);
   revalidatePath("/placement-cell/drives");
-  if (viewQuery) {
-    const { column } = resolveListSort(DRIVES_SORT_COLUMNS, "application_deadline", true, viewQuery);
-    await invalidateCache(listCacheKey(DRIVES_CACHE_PREFIX, actor.collegeId, viewQuery, column));
-  }
+  await invalidateCacheFamily(DRIVES_CACHE_PREFIX, actor.collegeId);
   return result;
 }
 
 const UpdateDriveSchema = DriveSchema.extend({ driveId: z.string().guid() });
 
-export async function updateDrive(driveId: string, params: DriveParams, viewQuery?: DataTableQuery) {
+export async function updateDrive(driveId: string, params: DriveParams) {
   const actor = await requireRole(OPERATOR_ROLES);
   const supabase = await createClient();
   const parsed = UpdateDriveSchema.parse({ driveId, ...params });
@@ -233,10 +235,7 @@ export async function updateDrive(driveId: string, params: DriveParams, viewQuer
   await syncDriveDepartments(supabase, actor, driveId, parsed.eligibleDepartmentIds || []);
   await logAudit(supabase, actor, `Updated placement drive for ${parsed.jobRole}`, "placement_drives", driveId);
   revalidatePath("/placement-cell/drives");
-  if (viewQuery) {
-    const { column } = resolveListSort(DRIVES_SORT_COLUMNS, "application_deadline", true, viewQuery);
-    await invalidateCache(listCacheKey(DRIVES_CACHE_PREFIX, actor.collegeId, viewQuery, column));
-  }
+  await invalidateCacheFamily(DRIVES_CACHE_PREFIX, actor.collegeId);
 }
 
 const DriveStatusSchema = z.object({
@@ -244,7 +243,7 @@ const DriveStatusSchema = z.object({
   status: z.enum(["draft", "published", "closed", "cancelled"]),
 });
 
-export async function setDriveStatus(driveId: string, status: "draft" | "published" | "closed" | "cancelled", viewQuery?: DataTableQuery) {
+export async function setDriveStatus(driveId: string, status: "draft" | "published" | "closed" | "cancelled") {
   const actor = await requireRole(OPERATOR_ROLES);
   const supabase = await createClient();
   const parsed = DriveStatusSchema.parse({ driveId, status });
@@ -262,10 +261,7 @@ export async function setDriveStatus(driveId: string, status: "draft" | "publish
 
   await logAudit(supabase, actor, `Set placement drive status to ${parsed.status}`, "placement_drives", parsed.driveId);
   revalidatePath("/placement-cell/drives");
-  if (viewQuery) {
-    const { column } = resolveListSort(DRIVES_SORT_COLUMNS, "application_deadline", true, viewQuery);
-    await invalidateCache(listCacheKey(DRIVES_CACHE_PREFIX, actor.collegeId, viewQuery, column));
-  }
+  await invalidateCacheFamily(DRIVES_CACHE_PREFIX, actor.collegeId);
 }
 
 /** Applicants for one drive, joined with student/department detail. */
@@ -274,18 +270,20 @@ export async function listApplicants(driveIdRaw: string) {
   const supabase = await createClient();
   const { driveId } = z.object({ driveId: z.string().guid() }).parse({ driveId: driveIdRaw });
 
-  const { data: drive } = await supabase.from("placement_drives").select("id, college_id").eq("id", driveId).single();
+  const { data: drive, error: driveError } = await supabase.from("placement_drives").select("id, college_id").eq("id", driveId).single();
+  assertRead(driveError);
   if (!drive || drive.college_id !== actor.collegeId) {
     throw new Error("Placement drive not found in your college.");
   }
 
-  const { data } = await supabase
+  const { data, error: dataError } = await supabase
     .from("placement_applications")
     .select(
       "*, students:student_id(enrollment_number, cgpa, batch_year, profiles:user_id(full_name), departments(name))"
     )
     .eq("drive_id", driveId)
     .order("applied_at", { ascending: false });
+  assertRead(dataError);
 
   return data || [];
 }

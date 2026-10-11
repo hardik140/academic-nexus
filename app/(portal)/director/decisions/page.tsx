@@ -1,34 +1,38 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { Button, StatusBadge } from "@/components/ui/modal";
+import { Alert } from "@/components/ui/alert";
+import { ErrorAlert } from "@/components/ui/error-alert";
+import { StateView } from "@/components/ui/state-view";
+import { useAsyncResource } from "@/hooks/use-async-resource";
+import { toFeedbackError, type FeedbackError } from "@/lib/action-failure";
 import { decideOnDecision, listDecisions } from "./actions";
+import { formatMoney } from "@/lib/format";
 
 export default function DirectorDecisions() {
-  const [pending, setPending] = useState<any[]>([]);
-  const [processed, setProcessed] = useState<any[]>([]);
   const [loading, setLoading] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<FeedbackError | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
-  useEffect(() => {
-    load();
-  }, []);
-
-  const load = async () => {
-    const { pending, processed } = await listDecisions();
-    setPending(pending);
-    setProcessed(processed);
-  };
+  // The Decision Inbox. A failed load is an error, never "No decisions
+  // awaiting approval" — the inbox would look cleared (owner decision D5).
+  const decisions = useAsyncResource(() => listDecisions(), []);
+  const pending: any[] = decisions.data?.pending ?? [];
+  const processed: any[] = decisions.data?.processed ?? [];
 
   const handleQuickDecide = async (id: string, action: "approved" | "rejected") => {
+    if (loading) return;
     setLoading(id);
     setError(null);
+    setNotice(null);
     try {
       await decideOnDecision({ decisionId: id, action });
-      await load();
+      setNotice(`Decision ${action}.`);
+      decisions.reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to update decision.");
+      setError(await toFeedbackError(e, "Failed to update decision."));
     } finally {
       setLoading(null);
     }
@@ -41,10 +45,14 @@ export default function DirectorDecisions() {
         <p className="text-sm text-on-surface-variant mt-xs">Requests escalated to you from HOD, Warden, and Placement Cell</p>
       </div>
 
-      {error && (
-        <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium">{error}</div>
-      )}
+      <Alert tone="success" onDismiss={() => setNotice(null)}>
+        {notice}
+      </Alert>
+      <ErrorAlert error={error} />
 
+      <StateView state={decisions} isEmpty={() => false} loadingLabel="Loading the Decision Inbox…" empty={{ title: "No decisions" }}>
+        {() => (
+          <>
       <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-sm">
         <div className="px-lg py-md border-b border-outline-variant">
           <h2 className="text-sm font-bold text-on-surface flex items-center gap-sm">🔔 Pending Decisions ({pending.length})</h2>
@@ -67,7 +75,7 @@ export default function DirectorDecisions() {
                     </div>
                     {(d.financial_impact != null || d.student_impact_count != null) && (
                       <div className="text-xs text-on-surface-variant mt-xs flex gap-md">
-                        {d.financial_impact != null && <span>₹{Number(d.financial_impact).toLocaleString()}</span>}
+                        {d.financial_impact != null && <span>{formatMoney(d.financial_impact)}</span>}
                         {d.student_impact_count != null && <span>{d.student_impact_count} students affected</span>}
                       </div>
                     )}
@@ -76,7 +84,7 @@ export default function DirectorDecisions() {
                     <Button size="sm" variant="destructive" onClick={() => handleQuickDecide(d.id, "rejected")} disabled={loading === d.id}>
                       Reject
                     </Button>
-                    <Button size="sm" onClick={() => handleQuickDecide(d.id, "approved")} disabled={loading === d.id}>
+                    <Button size="sm" onClick={() => handleQuickDecide(d.id, "approved")} disabled={loading === d.id} aria-busy={loading === d.id || undefined}>
                       {loading === d.id ? "..." : "Approve"}
                     </Button>
                     <Link href={`/director/decisions/${d.id}`}>
@@ -117,6 +125,9 @@ export default function DirectorDecisions() {
           {processed.length === 0 && <div className="p-xl text-center text-sm text-outline">No decisions processed yet.</div>}
         </div>
       </div>
+          </>
+        )}
+      </StateView>
     </div>
   );
 }

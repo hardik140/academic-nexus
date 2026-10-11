@@ -5,22 +5,26 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole, type AuthorizedActor } from "@/lib/rbac";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { getCached, invalidateCache } from "@/lib/cache";
+import { getCached, invalidateCacheFamily, versionedKey } from "@/lib/cache";
 import { logAudit } from "@/lib/audit";
 import { assertClaimed } from "@/lib/concurrent-claim";
 import { PERMISSIONS } from "@/lib/permissions";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import { dbError } from "@/lib/internal-error";
+import { assertRead } from "@/lib/read-result-server";
 
-function transfersCacheKey(scopeKey: string) {
-  return `warden-transfers:${scopeKey}`;
+const TRANSFERS_FAMILY = "warden-transfers";
+
+function transfersCacheKey(scopeKey: string, collegeId: string) {
+  return versionedKey(`warden-transfers:${scopeKey}`, TRANSFERS_FAMILY, collegeId);
 }
 
 /** Resolves the hostel blocks this warden owns, same pattern as warden/rooms/actions.ts. */
 async function resolveWardenBlockIds(supabase: SupabaseClient<Database>, actor: AuthorizedActor): Promise<string[] | null> {
   if (actor.role === "admin") return null;
-  const { data: blocks } = await supabase.from("hostel_blocks").select("id").eq("warden_id", actor.userId);
+  const { data: blocks, error: blocksError } = await supabase.from("hostel_blocks").select("id").eq("warden_id", actor.userId);
+  assertRead(blocksError);
   return (blocks || []).map((b) => b.id);
 }
 
@@ -52,7 +56,7 @@ export async function listRoomTransferRequests() {
   const actor = await requireRole(PERMISSIONS.room_transfer_review);
   const supabase = await createClient();
 
-  return getCached(transfersCacheKey(actor.role === "admin" ? actor.collegeId : actor.userId), 30, async () => {
+  return getCached(transfersCacheKey(actor.role === "admin" ? actor.collegeId : actor.userId, actor.collegeId), 30, async () => {
     const blockIds = await resolveWardenBlockIds(supabase, actor);
 
     const baseQuery = () => supabase.from("room_transfer_requests").select(SELECT_COLS).eq("college_id", actor.collegeId);
@@ -60,6 +64,8 @@ export async function listRoomTransferRequests() {
       baseQuery().eq("status", "pending").order("created_at", { ascending: false }),
       baseQuery().neq("status", "pending").order("created_at", { ascending: false }).limit(20),
     ]);
+    assertRead(pendingRes.error);
+    assertRead(processedRes.error);
 
     if (blockIds === null) {
       return { pending: pendingRes.data || [], processed: processedRes.data || [] };
@@ -85,7 +91,8 @@ export async function listAvailableRoomsForTransfer() {
 
   let query = supabase.from("hostel_rooms").select("*").neq("status", "maintenance");
   query = blockIds === null ? query.eq("college_id", actor.collegeId) : query.in("block_id", blockIds);
-  const { data } = await query.order("block_name").order("room_number");
+  const { data, error: dataError } = await query.order("block_name").order("room_number");
+  assertRead(dataError);
   return (data || []).filter((r) => r.occupancy < r.capacity);
 }
 
@@ -148,7 +155,7 @@ export async function rejectRoomTransfer(requestIdRaw: string, reviewNotesRaw: s
     });
   }
 
-  await invalidateCache(transfersCacheKey(actor.role === "admin" ? actor.collegeId : actor.userId));
+  await invalidateCacheFamily(TRANSFERS_FAMILY, actor.collegeId);
   revalidatePath("/warden/transfers");
   revalidatePath("/warden/dashboard");
 }
@@ -282,7 +289,7 @@ export async function approveRoomTransfer(requestIdRaw: string, newRoomIdRaw: st
     });
   }
 
-  await invalidateCache(transfersCacheKey(actor.role === "admin" ? actor.collegeId : actor.userId));
+  await invalidateCacheFamily(TRANSFERS_FAMILY, actor.collegeId);
   revalidatePath("/warden/transfers");
   revalidatePath("/warden/dashboard");
   revalidatePath("/warden/rooms");

@@ -50,11 +50,12 @@ describe("canInvite — INVITE_PERMISSIONS cascade", () => {
     }
   });
 
-  it("only hod can invite teacher or student", () => {
-    for (const target of ["teacher", "student"] as UserRole[]) {
-      for (const role of ALL_ROLES) {
-        expect(canInvite(role, target)).toBe(role === "hod");
-      }
+  it("only hod can invite a teacher; hod and teacher (a Class In-Charge, 055) can invite a student", () => {
+    for (const role of ALL_ROLES) {
+      expect(canInvite(role, "teacher")).toBe(role === "hod");
+      // The teacher grant is relationship-scoped in the database: only a
+      // CURRENT Class In-Charge, and only into their own section.
+      expect(canInvite(role, "student")).toBe(role === "hod" || role === "teacher");
     }
   });
 
@@ -70,9 +71,10 @@ describe("canInvite — INVITE_PERMISSIONS cascade", () => {
     }
   });
 
-  it("teacher, finance, warden, student, and placement_cell invite no one", () => {
-    for (const role of ["teacher", "finance", "warden", "student", "placement_cell"] as UserRole[]) {
+  it("finance, warden, student, and placement_cell invite no one; a teacher invites only students", () => {
+    for (const role of ["finance", "warden", "student", "placement_cell"] as UserRole[]) {
       expect(INVITE_PERMISSIONS[role]).toEqual([]);
     }
+    expect(INVITE_PERMISSIONS.teacher).toEqual(["student"]);
   });
 });

@@ -5,16 +5,17 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib/rbac";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { getCached, invalidateCache } from "@/lib/cache";
+import { getCached, invalidateCacheFamilies, versionedKey } from "@/lib/cache";
 import { resolveListSort, listCacheKey } from "@/lib/cached-list";
 import { logAudit } from "@/lib/audit";
 import { PERMISSIONS } from "@/lib/permissions";
-import { computeEffectiveFeeStatus } from "@/lib/finance-status";
+import { feeTotals } from "@/lib/finance/fee-totals";
 import { listInvoices } from "../invoices/actions";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import type { DataTableQuery } from "@/components/ui/data-table";
 import { dbError } from "@/lib/internal-error";
+import { assertRead } from "@/lib/read-result-server";
 
 const PAYMENTS_PAGE_SIZE = 10;
 const PAYMENTS_SORT_COLUMNS = ["amount", "created_at"] as const;
@@ -22,6 +23,7 @@ const PAYMENTS_CACHE_PREFIX = "list:payments";
 // invoices tab reuses finance/invoices' listInvoices — same table, same
 // select, same search field; not worth a second near-identical query.
 const FEES_CACHE_PREFIX = "list:fees";
+const FEE_STATS_FAMILY = "stats:fees";
 const FEES_SORT_COLUMNS = ["type", "amount", "due_date"] as const;
 
 export { listInvoices };
@@ -31,7 +33,7 @@ export async function listPayments(q: DataTableQuery) {
   const supabase = await createClient();
 
   const { column, ascending } = resolveListSort(PAYMENTS_SORT_COLUMNS, "created_at", false, q);
-  const cacheKey = listCacheKey(PAYMENTS_CACHE_PREFIX, actor.collegeId, q, column);
+  const cacheKey = versionedKey(listCacheKey(PAYMENTS_CACHE_PREFIX, actor.collegeId, q, column), PAYMENTS_CACHE_PREFIX, actor.collegeId);
 
   return getCached(cacheKey, 30, async () => {
     let dbQuery = supabase
@@ -43,39 +45,29 @@ export async function listPayments(q: DataTableQuery) {
     dbQuery = dbQuery.order(column, { ascending });
 
     const from = q.page * PAYMENTS_PAGE_SIZE;
-    const { data, count } = await dbQuery.range(from, from + PAYMENTS_PAGE_SIZE - 1);
+    const { data, count, error: dataError } = await dbQuery.range(from, from + PAYMENTS_PAGE_SIZE - 1);
+    assertRead(dataError);
     return { data: data || [], count: count ?? 0 };
   });
 }
 
 /**
- * KPI-card stats — still unbounded (sums over the *entire* fees table, not
- * one page of it, so .range() doesn't apply the way it does above), but now
- * at least cached rather than re-summed on every load. Short TTL (30s):
- * this is money the finance team is actively reconciling, unlike the
- * dashboards' 60s stat counts. The real fix — extending mv_fee_summary
- * (migration 007) with a "pending" aggregate so this becomes an indexed
- * materialized-view read instead of a live SUM — is a schema change, a
- * different and larger scope than caching the existing query.
+ * KPI-card stats over EVERY fee of the college, summed in PostgreSQL
+ * (migration 057, lib/finance/fee-totals.ts). This used to select every fee
+ * row and sum in JavaScript, which PostgREST's row cap (1,000 by default)
+ * silently truncated on a large college. "Pending" and "overdue" follow
+ * lib/finance-status.ts computeEffectiveFeeStatus exactly; a parity test
+ * (tests/staging-fee-totals.test.ts) holds the two together. Short TTL
+ * (30s), invalidated on every payment write: this is money the finance team
+ * is actively reconciling.
  */
 export async function getFeeStats() {
   const actor = await requireRole(PERMISSIONS.payment_read);
   const supabase = await createClient();
 
-  return getCached(`stats:fees:${actor.collegeId}`, 30, async () => {
-    const { data } = await supabase.from("fees").select("amount, paid_amount, status, due_date").eq("college_id", actor.collegeId);
-    const f = data || [];
-    // "overdue" is computed live (computeEffectiveFeeStatus), not the stored
-    // status column — nothing anywhere ever sets fees.status = 'overdue'
-    // (no cron, no trigger), so a raw status === "overdue" filter here
-    // always read zero. See lib/finance-status.ts.
-    const withEffectiveStatus = f.map((i) => ({ ...i, effectiveStatus: computeEffectiveFeeStatus(i) }));
-    return {
-      total: f.reduce((s, i) => s + (i.amount || 0), 0),
-      collected: f.reduce((s, i) => s + (i.paid_amount || 0), 0),
-      pending: withEffectiveStatus.filter((i) => i.effectiveStatus === "pending").reduce((s, i) => s + (i.amount - i.paid_amount), 0),
-      overdue: withEffectiveStatus.filter((i) => i.effectiveStatus === "overdue").reduce((s, i) => s + (i.amount - i.paid_amount), 0),
-    };
+  return getCached(versionedKey(`stats:fees:${actor.collegeId}`, FEE_STATS_FAMILY, actor.collegeId), 30, async () => {
+    const t = await feeTotals(supabase, actor.collegeId);
+    return { total: t.billed, collected: t.collected, pending: t.pending, overdue: t.overdue };
   });
 }
 
@@ -161,10 +153,7 @@ export async function recordPayment(
   amount: number,
   method: PaymentMethod,
   transactionRef?: string,
-  notes?: string,
-  feesViewQuery?: DataTableQuery,
-  paymentsViewQuery?: DataTableQuery
-) {
+  notes?: string) {
   const actor = await requireRole(PERMISSIONS.payment_record);
   const supabase = await createClient();
   await recordPaymentCore(supabase, actor, { feeId, amount, method, transactionRef, notes });
@@ -174,15 +163,7 @@ export async function recordPayment(
 
   // A payment touches all three cached reads on this page: the fee's own
   // row (status/paid_amount), a new payments row, and the KPI sums.
-  await invalidateCache(`stats:fees:${actor.collegeId}`);
-  if (feesViewQuery) {
-    const { column } = resolveListSort(FEES_SORT_COLUMNS, "due_date", false, feesViewQuery);
-    await invalidateCache(listCacheKey(FEES_CACHE_PREFIX, actor.collegeId, feesViewQuery, column));
-  }
-  if (paymentsViewQuery) {
-    const { column } = resolveListSort(PAYMENTS_SORT_COLUMNS, "created_at", false, paymentsViewQuery);
-    await invalidateCache(listCacheKey(PAYMENTS_CACHE_PREFIX, actor.collegeId, paymentsViewQuery, column));
-  }
+  await invalidateCacheFamilies([FEE_STATS_FAMILY, FEES_CACHE_PREFIX, PAYMENTS_CACHE_PREFIX], actor.collegeId);
 }
 
 /** Called by app/api/mobile/finance/payment/route.ts. */

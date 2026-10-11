@@ -3,8 +3,26 @@ import { NextResponse, type NextRequest } from "next/server";
 import { routePrefixFor, dashboardPathFor } from "@/lib/auth/role-routes";
 import { checkRateLimit, RateLimitError, RateLimiterUnavailableError } from "@/lib/rate-limit";
 import { clientIp } from "@/lib/client-ip";
-import { getCached, middlewareProfileCacheKey } from "@/lib/cache";
-import type { UserRole, UserStatus } from "@/types/database";
+import { keyDigest } from "@/lib/redis-config";
+import { sessionIdentity } from "@/lib/auth/session-identity";
+import type { Database, UserRole, UserStatus } from "@/types/database";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  AccessFeatureUnavailable,
+  admissionAllows,
+  deviceLabelFromUserAgent,
+  registerSession,
+  unavailableReason,
+  type Admission,
+  type UnavailableReason,
+} from "@/lib/college-access";
+
+/**
+ * A random per-browser id, used ONLY to label a session in the device list.
+ * It is never counted and never authorizes anything (migration 054 counts
+ * GoTrue's session ids), so a forged or cleared value cannot make room.
+ */
+export const DEVICE_COOKIE = "nx_device";
 
 /**
  * Routes that don't require authentication. `/api` covers machine-to-machine
@@ -25,6 +43,10 @@ const PUBLIC_ROUTES = [
   "/auth/accept-invite",
   "/auth/reset-password",
   "/api",
+  // The college-unavailable / device-limit page. It is where a refused
+  // session is sent, so it cannot itself require admission; it re-reads the
+  // session and the access state on its own.
+  "/unavailable",
 ];
 
 export async function updateSession(request: NextRequest) {
@@ -39,32 +61,37 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.next({ request });
   }
 
-  // Coarse, global first line of defense — checked before any Supabase call
-  // so a flood doesn't even cost an auth lookup. Fails open (see
-  // lib/rate-limit.ts) if Redis isn't configured or unreachable.
-  // Keyed on the one header the edge sets and the client cannot choose —
-  // see lib/client-ip.ts for why the previous `x-forwarded-for` key was not
-  // a limit at all.
-  const { ip } = clientIp(request.headers);
-  try {
-    await checkRateLimit(`ip:${ip}`, 100, 60);
-  } catch (err) {
-    if (err instanceof RateLimitError) {
-      return new NextResponse("Too many requests. Please try again shortly.", {
-        status: 429,
-        headers: { "Retry-After": String(err.retryAfterSeconds) },
-      });
-    }
-    // `ip` is classified fail-open (lib/rate-limit-policy.ts) so this should
-    // be unreachable; if the policy ever changes, a limiter outage must not
-    // become an unhandled exception on every request in the application.
-    if (err instanceof RateLimiterUnavailableError) {
-      return new NextResponse("Service temporarily unavailable.", {
-        status: 503,
-        headers: { "Retry-After": "30" },
-      });
-    }
-  }
+  // First line of defense — checked before any Supabase Auth call, so a flood
+  // doesn't even cost an auth lookup. The bucket follows a PROVEN identity
+  // (lib/auth/session-identity.ts verifies the access token's signature
+  // locally, no network):
+  //
+  //   verified token (expired or not)  -> user:<id>              that person only
+  //   no credentials                   -> ip:<campus ip>         strict, shared
+  //   forged / garbled credentials     -> ip:<campus ip>         strict, shared
+  //   unverifiable token (HS256 project
+  //     or the key set unreachable)    -> ipCredentialed:<ip>    generous, shared
+  //
+  // WHY. A whole college can sit behind ONE public IP. This used to charge
+  // every request that merely CARRIED a session cookie to one per-IP bucket
+  // (2000/min) before the cookie was checked, so one device sending random
+  // strings as its cookie locked every signed-in user on the campus out
+  // (Redis audit E1; bench/audit/middleware-flood.audit.ts). A signed-in
+  // user's requests no longer touch any shared bucket, so another person —
+  // forging cookies, or signed in and hammering — cannot spend them.
+  //
+  // Anonymous traffic on one NAT still shares the strict IP bucket: without
+  // an identity there is nothing else to count by. That is the documented
+  // trade-off (REDIS_RATE_LIMIT_DESIGN.md §11).
+  const ipId = keyDigest(clientIp(request.headers).ip);
+  const identity = await sessionIdentity(request);
+  const preAuth =
+    identity.kind === "verified"
+      ? await limitedResponse(`user:${identity.userId}`, USER_LIMIT)
+      : identity.kind === "unverifiable"
+        ? await limitedResponse(`ipCredentialed:${ipId}`, CREDENTIALED_IP_LIMIT)
+        : await limitedResponse(`ip:${ipId}`, ANONYMOUS_IP_LIMIT);
+  if (preAuth) return preAuth;
 
   let supabaseResponse = NextResponse.next({ request });
   const pathname = request.nextUrl.pathname;
@@ -103,6 +130,26 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
+  // Post-auth, only for what the pre-auth step could not settle:
+  // - a session that checked out but was not already charged to its own
+  //   bucket (the token was unverifiable locally, or a refresh changed whose
+  //   it is) now spends that user's bucket;
+  // - a session cookie that did NOT check out is anonymous after all. A
+  //   verified-but-dead session (signed, then revoked or past its refresh)
+  //   spends the strict IP bucket too, so replaying an old token costs the
+  //   same as having none. A forged one already did, above.
+  // A bearer token is not exchanged here (the mobile /api routes verify it
+  // themselves and apply per-user, per-action buckets).
+  if (user) {
+    if (identity.kind !== "verified" || identity.userId !== user.id) {
+      const perUser = await limitedResponse(`user:${user.id}`, USER_LIMIT);
+      if (perUser) return perUser;
+    }
+  } else if (hasSessionCookie(request) && identity.kind !== "invalid" && identity.kind !== "none") {
+    const anonymous = await limitedResponse(`ip:${ipId}`, ANONYMOUS_IP_LIMIT);
+    if (anonymous) return anonymous;
+  }
+
   // Allow public routes
   if (PUBLIC_ROUTES.some((route) => pathname.startsWith(route))) {
     return supabaseResponse;
@@ -115,30 +162,34 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Fetch user profile for role-based routing — cached briefly. This is
-  // purely a routing decision (which page shell to serve), never the
-  // security boundary: every mutating action independently re-checks
-  // role/status fresh via requireRole() (lib/rbac.ts), uncached, and RLS is
-  // a third, always-live layer under that. A stale read here can, at worst,
-  // let an already-authenticated browser keep loading page shells for up to
-  // this TTL after a role/status change — it can never grant access to data
-  // those other layers wouldn't already allow. This is exactly the "short
-  // and documented" propagation window this repo's own AGENTS.md
-  // anticipates for role/permission changes (Section 3) — invalidated
-  // on every write that changes role/status: admin/users' updateUserProfile
-  // /updateUserStatus and accept-invite's pending->active transition.
-  const profile = await getCached(
-    middlewareProfileCacheKey(user.id),
-    20,
-    async (): Promise<{ role: UserRole; college_id: string; status: UserStatus } | null> => {
-      const { data } = await supabase
-        .from("profiles")
-        .select("role, college_id, status")
-        .eq("id", user.id)
-        .single();
-      return data;
-    }
-  );
+  // College lifecycle and session admission (migrations 053/054), uncached:
+  // a suspension or a revocation takes effect on the very next request. The
+  // database refuses the same sessions on its own; this is what turns the
+  // refusal into the right page.
+  //
+  // Since 058 the same call also returns the caller's role, college and
+  // profile status, read from the profile row admission loads anyway. That
+  // replaced a second read of that row through a 20 s Redis cache (Redis
+  // transformation Phase 2.1), so a role or status change now takes effect
+  // on the next request instead of within 20 s.
+  const userAgent = request.headers.get("user-agent");
+  const deviceId = request.cookies.get(DEVICE_COOKIE)?.value ?? crypto.randomUUID();
+  let admission: Admission | null = null;
+  try {
+    admission = await registerSession(supabase as unknown as SupabaseClient<Database>, {
+      client: "web",
+      deviceId,
+      deviceLabel: deviceLabelFromUserAgent(userAgent),
+      userAgent,
+    });
+  } catch (err) {
+    // Fail closed — unless the database predates the feature entirely.
+    if (!(err instanceof AccessFeatureUnavailable)) return unavailable(request, "error");
+  }
+
+  // Before 058 (or 054) is applied the answer has no role: read the row
+  // directly, uncached, exactly as admission would have.
+  const profile = profileFromAdmission(admission) ?? (await readProfile(supabase, user.id));
 
   // No profile row for an authenticated user. This used to `return
   // supabaseResponse` — "for now, allow access" — which meant that every
@@ -165,6 +216,21 @@ export async function updateSession(request: NextRequest) {
     url.pathname = "/login";
     url.searchParams.set("error", "account_suspended");
     return NextResponse.redirect(url);
+  }
+
+  // Checked after the profile, as before: a suspended account is sent to
+  // the login page with its own message, not to /unavailable.
+  if (admission && !admissionAllows(admission)) {
+    return unavailable(request, unavailableReason(admission));
+  }
+  if (!request.cookies.get(DEVICE_COOKIE)) {
+    supabaseResponse.cookies.set(DEVICE_COOKIE, deviceId, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: request.nextUrl.protocol === "https:",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 400,
+    });
   }
 
   // Root path → redirect to role dashboard
@@ -204,4 +270,89 @@ export async function updateSession(request: NextRequest) {
   }
 
   return supabaseResponse;
+}
+
+type RoutingProfile = { role: UserRole; college_id: string; status: UserStatus };
+
+/**
+ * The routing facts admission returned (058), or null when it returned none:
+ * no admission (pre-054 database), an answer from before 058, or a bare
+ * { state: "inactive" } for a caller with no profile row.
+ */
+export function profileFromAdmission(admission: Admission | null): RoutingProfile | null {
+  if (!admission || typeof admission.role !== "string" || typeof admission.profile_status !== "string") return null;
+  return {
+    role: admission.role as UserRole,
+    college_id: String(admission.college_id ?? ""),
+    status: admission.profile_status as UserStatus,
+  };
+}
+
+async function readProfile(supabase: { from: SupabaseClient<Database>["from"] }, userId: string): Promise<RoutingProfile | null> {
+  const { data } = await supabase.from("profiles").select("role, college_id, status").eq("id", userId).single();
+  return (data as RoutingProfile | null) ?? null;
+}
+
+function unavailable(request: NextRequest, reason: UnavailableReason): NextResponse {
+  const url = request.nextUrl.clone();
+  url.pathname = "/unavailable";
+  url.search = "";
+  url.searchParams.set("reason", reason);
+  return NextResponse.redirect(url);
+}
+
+/**
+ * Middleware rate-limit ceilings, per 60 s. None of these is an
+ * authorization boundary (every action has its own per-user bucket below
+ * them); they cap floods. All three are fail-open (lib/rate-limit-policy.ts).
+ *
+ * The values are NOT derived from production traffic — there is none yet —
+ * and are recorded as an open item in REDIS_RATE_LIMIT_DESIGN.md.
+ * - ANONYMOUS_IP_LIMIT: unchanged from before (100).
+ * - CREDENTIALED_IP_LIMIT: sized for a campus behind one NAT address.
+ * - USER_LIMIT: one person, including Next.js prefetches and Server Actions.
+ */
+export const ANONYMOUS_IP_LIMIT = 100;
+export const CREDENTIALED_IP_LIMIT = 2000;
+export const USER_LIMIT = 300;
+const WINDOW_SECONDS = 60;
+
+/** A Supabase session cookie (`sb-<ref>-auth-token`, possibly chunked `.0`, `.1`). */
+const SESSION_COOKIE = /^sb-[A-Za-z0-9-]+-auth-token(\.\d+)?$/;
+
+export function hasSessionCookie(request: NextRequest): boolean {
+  return request.cookies.getAll().some((c) => SESSION_COOKIE.test(c.name) && c.value !== "");
+}
+
+export function carriesCredentials(request: NextRequest): boolean {
+  if (hasSessionCookie(request)) return true;
+  const auth = request.headers.get("authorization") ?? "";
+  return /^Bearer\s+\S+/i.test(auth);
+}
+
+/** Null when the request may proceed; otherwise the 429/503 to return. */
+async function limitedResponse(key: string, limit: number): Promise<NextResponse | null> {
+  try {
+    await checkRateLimit(key, limit, WINDOW_SECONDS);
+    return null;
+  } catch (err) {
+    if (err instanceof RateLimitError) {
+      return new NextResponse("Too many requests. Please try again shortly.", {
+        status: 429,
+        headers: { "Retry-After": String(err.retryAfterSeconds) },
+      });
+    }
+    // These buckets are classified fail-open (lib/rate-limit-policy.ts) so
+    // this should be unreachable; if the policy ever changes, a limiter
+    // outage must not become an unhandled exception on every request.
+    if (err instanceof RateLimiterUnavailableError) {
+      return new NextResponse("Service temporarily unavailable.", {
+        status: 503,
+        headers: { "Retry-After": "30" },
+      });
+    }
+    // Anything else is a limiter bug, not a verdict; these are flood
+    // ceilings, so the request proceeds (as before this change).
+    return null;
+  }
 }

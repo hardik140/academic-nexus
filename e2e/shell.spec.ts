@@ -76,23 +76,41 @@ async function focusPosition(page: Page) {
   });
 }
 
-/** Clicks `button` and, when a dialog's `open` attribute next changes, lists the CSS transitions that started on it and its ::backdrop. */
+/**
+ * Clicks `button` and, when a dialog's `open` attribute next changes, lists the CSS transitions that started on it and its ::backdrop.
+ *
+ * Everything is read in the browser, in the callback that sees the change: on close the dialog is unmounted once its
+ * exit has played, so a later Playwright call can arrive after it is gone and wait for it forever. On close it also
+ * waits for those exit transitions to finish and reports whether the dialog was still in the page when they had.
+ */
 async function clickAndReadTransitions(button: Locator) {
   return button.evaluate(
     (el: HTMLElement) =>
-      new Promise<{ open: boolean; transitions: { property: string; pseudo: string; ms: number }[] }>((resolve) => {
+      new Promise<{
+        open: boolean;
+        connected: boolean;
+        easing: string;
+        connectedWhenExitFinished: boolean | null;
+        transitions: { property: string; pseudo: string; ms: number }[];
+      }>((resolve) => {
         const observer = new MutationObserver((records) => {
           const dialog = records.map((r) => r.target).find((t): t is HTMLDialogElement => t instanceof HTMLDialogElement);
           if (!dialog) return;
           observer.disconnect();
-          const transitions = document
+          const started = document
             .getAnimations()
-            .filter((a) => a instanceof CSSTransition && (a.effect as KeyframeEffect | null)?.target === dialog)
-            .map((a) => {
-              const effect = a.effect as KeyframeEffect;
-              return { property: (a as CSSTransition).transitionProperty, pseudo: effect.pseudoElement ?? "", ms: Number(effect.getTiming().duration) };
-            });
-          resolve({ open: dialog.open, transitions });
+            .filter((a) => a instanceof CSSTransition && (a.effect as KeyframeEffect | null)?.target === dialog);
+          const transitions = started.map((a) => {
+            const effect = a.effect as KeyframeEffect;
+            return { property: (a as CSSTransition).transitionProperty, pseudo: effect.pseudoElement ?? "", ms: Number(effect.getTiming().duration) };
+          });
+          const observed = { open: dialog.open, connected: dialog.isConnected, easing: getComputedStyle(dialog).transitionTimingFunction, transitions };
+          if (dialog.open) {
+            resolve({ ...observed, connectedWhenExitFinished: null });
+            return;
+          }
+          // Settled whether a transition finishes or is cancelled (as removing the dialog would cancel it).
+          Promise.allSettled(started.map((a) => a.finished)).then(() => resolve({ ...observed, connectedWhenExitFinished: dialog.isConnected }));
         });
         observer.observe(document.body, { subtree: true, attributes: true, attributeFilter: ["open"] });
         el.click();
@@ -365,7 +383,12 @@ test.describe("mobile drawer", () => {
     expect(props(exiting.transitions, "").sort()).toEqual(["display", "overlay", "transform"]);
     expect(props(exiting.transitions, "::backdrop")).toEqual(["opacity"]);
     for (const t of exiting.transitions) expect(t.ms).toBe(200);
-    expect(await page.locator("dialog").evaluate((el) => getComputedStyle(el).transitionTimingFunction)).toBe(EASE_IN_OUT);
+    // Read at close, while the dialog is certainly connected (see clickAndReadTransitions).
+    expect(exiting.connected).toBe(true);
+    expect(exiting.easing).toBe(EASE_IN_OUT);
+    // It stays in the page for its whole exit, and is removed after it.
+    expect(exiting.connectedWhenExitFinished).toBe(true);
+    await expect(page.locator("dialog")).toHaveCount(0);
   });
 
   test("axe: no violations with the drawer open", async ({ page }) => {

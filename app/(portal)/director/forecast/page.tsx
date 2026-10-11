@@ -1,55 +1,65 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
+import { useState } from "react";
+import { Alert } from "@/components/ui/alert";
+import { ErrorAlert } from "@/components/ui/error-alert";
+import { ErrorState } from "@/components/ui/error-state";
+import { LoadingState } from "@/components/ui/loading-state";
+import { useAsyncResource } from "@/hooks/use-async-resource";
+import { toFeedbackError, type FeedbackError } from "@/lib/action-failure";
+import { classifyError } from "@/lib/feedback-error";
+import { FacultyRatioChart } from "@/components/charts/faculty-ratio-chart";
 import { Button, FormField } from "@/components/ui/modal";
 import { computeScenario, getForecastBaseline, listSavedScenarios, saveForecastScenario, type ScenarioParams } from "./actions";
 
 export default function ForecastSimulatorPage() {
-  const [baseline, setBaseline] = useState<any>(null);
   const [assumptions, setAssumptions] = useState<ScenarioParams>({ enrollmentDelta: 0, facultyDelta: 0, feeCollectionDeltaPct: 0, placementTargetPct: null });
   const [result, setResult] = useState<any>(null);
   const [scenarioName, setScenarioName] = useState("");
-  const [saved, setSaved] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<FeedbackError | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [running, setRunning] = useState(false);
+  const [runError, setRunError] = useState<FeedbackError | null>(null);
 
-  const load = async () => {
-    const [b, s] = await Promise.all([getForecastBaseline(), listSavedScenarios()]);
-    setBaseline(b);
-    setSaved(s);
-  };
-
-  useEffect(() => {
-    load();
+  // Today's baseline and the saved scenarios. A failed load is an error,
+  // never a missing baseline (owner decision D5).
+  const forecast = useAsyncResource(async () => {
+    const [baseline, saved] = await Promise.all([getForecastBaseline(), listSavedScenarios()]);
+    return { baseline: baseline as any, saved: saved as any[] };
   }, []);
+  const baseline = forecast.data?.baseline ?? null;
+  const saved = forecast.data?.saved ?? [];
 
   const runScenario = async () => {
-    const r = await computeScenario(assumptions);
-    setResult(r);
+    if (running) return;
+    setRunning(true);
+    setRunError(null);
+    try {
+      setResult(await computeScenario(assumptions));
+    } catch (e) {
+      setRunError(await toFeedbackError(e, "The scenario couldn't be computed."));
+    } finally {
+      setRunning(false);
+    }
   };
 
   const handleSave = async () => {
-    if (!scenarioName.trim()) return;
+    if (!scenarioName.trim() || saving) return;
     setSaving(true);
     setError(null);
+    setNotice(null);
     try {
       await saveForecastScenario({ name: scenarioName.trim(), assumptions });
+      setNotice(`Scenario "${scenarioName.trim()}" saved.`);
       setScenarioName("");
-      await load();
+      forecast.reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to save scenario.");
+      setError(await toFeedbackError(e, "Failed to save scenario."));
     } finally {
       setSaving(false);
     }
   };
-
-  const ratioChartData = result
-    ? [
-        { label: "Current", ratio: result.projected.baselineFacultyStudentRatio },
-        { label: "Projected", ratio: result.projected.facultyStudentRatio },
-      ]
-    : [];
 
   return (
     <div className="space-y-lg">
@@ -60,9 +70,22 @@ export default function ForecastSimulatorPage() {
         </p>
       </div>
 
-      <div className="bg-warning/10 border border-warning/20 rounded-xl p-md text-xs text-warning font-medium">
-        ⚠️ These are proportional projections from today&apos;s data, not predictions or AI-generated forecasts. Assumptions are shown alongside every result.
-      </div>
+      <Alert tone="warning">
+        These are proportional projections from today&apos;s data, not predictions or AI-generated forecasts. Assumptions are shown alongside every result.
+      </Alert>
+
+      {!baseline && (
+        forecast.status === "error" ? (
+          <ErrorState
+            {...classifyError(forecast.error)}
+            title="The current baseline couldn't be loaded"
+            onRetry={forecast.reload}
+            className="rounded-2xl border border-outline-variant bg-surface-container-lowest"
+          />
+        ) : (
+          <LoadingState label="Loading the current baseline…" />
+        )
+      )}
 
       {baseline && (
         <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-sm p-lg">
@@ -120,7 +143,10 @@ export default function ForecastSimulatorPage() {
             onChange={(v) => setAssumptions({ ...assumptions, placementTargetPct: v ? Number(v) : null })}
           />
         </div>
-        <Button onClick={runScenario}>Run Scenario</Button>
+        <ErrorAlert error={runError} />
+        <Button onClick={runScenario} disabled={running} aria-busy={running || undefined}>
+          {running ? "Running…" : "Run Scenario"}
+        </Button>
       </div>
 
       {result && (
@@ -158,25 +184,18 @@ export default function ForecastSimulatorPage() {
 
           {result.projected.hostelUptakeRateNote && <p className="text-xs text-outline italic">{result.projected.hostelUptakeRateNote}</p>}
 
-          {ratioChartData.some((d) => d.ratio != null) && (
-            <ResponsiveContainer width="100%" height={180}>
-              <LineChart data={ratioChartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-outline-variant)" />
-                <XAxis dataKey="label" stroke="var(--color-outline)" fontSize={12} />
-                <YAxis stroke="var(--color-outline)" fontSize={12} />
-                <Tooltip />
-                <Line type="monotone" dataKey="ratio" stroke="var(--color-secondary)" strokeWidth={2} dot={{ r: 4 }} />
-              </LineChart>
-            </ResponsiveContainer>
-          )}
+          <FacultyRatioChart current={result.projected.baselineFacultyStudentRatio} projected={result.projected.facultyStudentRatio} />
 
           <div className="flex items-end gap-sm pt-md border-t border-outline-variant">
-            {error && <div className="text-xs text-error">{error}</div>}
+            <ErrorAlert error={error} />
+            <Alert tone="success" onDismiss={() => setNotice(null)}>
+              {notice}
+            </Alert>
             <div className="flex-1">
               <FormField label="Save this scenario as" id="scenario-name" value={scenarioName} onChange={setScenarioName} placeholder="e.g. +500 enrollment plan" />
             </div>
-            <Button onClick={handleSave} disabled={saving || !scenarioName.trim()}>
-              {saving ? "..." : "Save Scenario"}
+            <Button onClick={handleSave} disabled={saving || !scenarioName.trim()} aria-busy={saving || undefined}>
+              {saving ? "Saving…" : "Save Scenario"}
             </Button>
           </div>
         </div>

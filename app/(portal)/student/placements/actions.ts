@@ -7,6 +7,7 @@ import { requireRole } from "@/lib/rbac";
 import { checkRateLimit } from "@/lib/rate-limit";
 import type { Database } from "@/types/database";
 import { dbError } from "@/lib/internal-error";
+import { assertRead } from "@/lib/read-result-server";
 
 // The hand-maintained Database type's Relationships arrays are empty (see
 // types/database.ts's own header comment), so supabase-js can't infer
@@ -21,11 +22,12 @@ type DriveWithCompany = DriveRow & {
 };
 
 async function getOwnStudentRow(supabase: Awaited<ReturnType<typeof createClient>>, userId: string, collegeId: string) {
-  const { data: student } = await supabase
+  const { data: student, error: studentError } = await supabase
     .from("students")
     .select("id, college_id, cgpa, batch_year, department_id")
     .eq("user_id", userId)
     .single();
+  assertRead(studentError);
   if (!student || student.college_id !== collegeId) {
     throw new Error("Student profile not found.");
   }
@@ -38,22 +40,25 @@ export async function listOpportunities() {
   const supabase = await createClient();
   const student = await getOwnStudentRow(supabase, actor.userId, actor.collegeId);
 
-  const { data: drivesData } = await supabase
+  const { data: drivesData, error: drivesDataError } = await supabase
     .from("placement_drives")
     .select("*, companies:company_id(name, industry, location)")
     .eq("college_id", actor.collegeId)
     .eq("status", "published")
     .order("application_deadline", { ascending: true });
+  assertRead(drivesDataError);
   const drives = (drivesData || []) as DriveWithCompany[];
 
   const driveIds = drives.map((d) => d.id);
-  const { data: eligibleDeptRows } = driveIds.length
+  const { data: eligibleDeptRows, error: eligibleDeptRowsError } = driveIds.length
     ? await supabase.from("placement_drive_departments").select("drive_id, department_id").in("drive_id", driveIds)
-    : { data: [] };
-  const { data: myApplications } = await supabase
+    : { data: [], error: null };
+  assertRead(eligibleDeptRowsError);
+  const { data: myApplications, error: myApplicationsError } = await supabase
     .from("placement_applications")
     .select("drive_id, status")
     .eq("student_id", student.id);
+  assertRead(myApplicationsError);
 
   const appliedMap = Object.fromEntries((myApplications || []).map((a) => [a.drive_id, a.status]));
   const deptsByDrive: Record<string, string[]> = {};
@@ -140,11 +145,12 @@ export async function listMyApplications() {
   const supabase = await createClient();
   const student = await getOwnStudentRow(supabase, actor.userId, actor.collegeId);
 
-  const { data } = await supabase
+  const { data, error: dataError } = await supabase
     .from("placement_applications")
     .select("*, placement_drives:drive_id(job_role, package_lpa, companies:company_id(name))")
     .eq("student_id", student.id)
     .order("applied_at", { ascending: false });
+  assertRead(dataError);
 
   return data || [];
 }
@@ -153,12 +159,13 @@ export async function getMyPlacementProfile() {
   const actor = await requireRole(["student"]);
   const supabase = await createClient();
 
-  const { data } = await supabase
+  const { data, error: dataError } = await supabase
     .from("students")
     .select("id, enrollment_number, cgpa, batch_year, departments(name), student_placement_profiles(placement_status, notes)")
     .eq("user_id", actor.userId)
     .eq("college_id", actor.collegeId)
     .single();
+  assertRead(dataError);
 
   return data;
 }
@@ -167,12 +174,13 @@ export async function getMyPlacementProfile() {
 export async function listMyPlacementNotifications() {
   const actor = await requireRole(["student"]);
   const supabase = await createClient();
-  const { data } = await supabase
+  const { data, error: dataError } = await supabase
     .from("notifications")
     .select("id, title, message, link, read, created_at")
     .eq("receiver_id", actor.userId)
     .like("link", "/student/placements%")
     .order("created_at", { ascending: false })
     .limit(20);
+  assertRead(dataError);
   return data || [];
 }

@@ -1,49 +1,48 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { getCached } from "@/lib/cache";
-import { computeEffectiveFeeStatus } from "@/lib/finance-status";
+import { feeTotals } from "@/lib/finance/fee-totals";
 import { getFinanceExceptions } from "../exceptions/actions";
+import { assertRead } from "@/lib/read-result-server";
+import { formatMoney } from "@/lib/format";
 
 export default async function FinanceDashboard() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: viewerProfile } = await supabase
+  const { data: viewerProfile, error: viewerProfileError } = await supabase
     .from("profiles")
     .select("college_id")
     .eq("id", user.id)
     .single();
+  assertRead(viewerProfileError);
 
-  // Fee stats — pulls every fee row to aggregate client-side (a known,
-  // already-flagged cost; see Implementation Status.md), so caching this
-  // college-scoped result matters more here than almost anywhere else.
+  // Fee stats — summed in PostgreSQL (migration 057, lib/finance/fee-totals.ts).
+  // This used to select every fee row and sum in JavaScript, which PostgREST's
+  // row cap (1,000 by default) silently truncated on a large college. The
+  // result is a handful of numbers, so the cache now holds a small, complete
+  // answer instead of one computed from the first page of rows.
+  const collegeId = viewerProfile?.college_id;
   const { totalBilled, totalCollected, totalOverdue, collectionRate } = await getCached(
-    `dashboard:finance:${viewerProfile?.college_id}:fee-stats`,
+    `dashboard:finance:${collegeId}:fee-stats`,
     60,
     async () => {
-      const { data: allFees } = await supabase.from("fees").select("amount, paid_amount, status, due_date");
-      const totalBilled = allFees?.reduce((s, f) => s + f.amount, 0) || 0;
-      const totalCollected = allFees?.reduce((s, f) => s + f.paid_amount, 0) || 0;
-      // Computed live — nothing ever sets fees.status = 'overdue' (see
-      // lib/finance-status.ts), so a raw status === "overdue" filter here
-      // always read zero.
-      const totalOverdue = allFees?.filter(f => computeEffectiveFeeStatus(f) === "overdue").reduce((s, f) => s + (f.amount - f.paid_amount), 0) || 0;
-      const collectionRate = totalBilled > 0 ? (totalCollected / totalBilled) * 100 : 0;
-      return { totalBilled, totalCollected, totalOverdue, collectionRate };
+      const t = collegeId ? await feeTotals(supabase, collegeId) : { billed: 0, collected: 0, overdue: 0 };
+      const collectionRate = t.billed > 0 ? (t.collected / t.billed) * 100 : 0;
+      return { totalBilled: t.billed, totalCollected: t.collected, totalOverdue: t.overdue, collectionRate };
     }
   );
 
   const exceptions = await getFinanceExceptions();
 
   // Recent payments
-  const { data: recentPayments } = await supabase
+  const { data: recentPayments, error: recentPaymentsError } = await supabase
     .from("payments")
     .select("*, profiles:student_id(full_name)")
     .order("created_at", { ascending: false })
     .limit(10);
-
-  const formatCurr = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
+  assertRead(recentPaymentsError);
 
   const actionItems = [
     { label: "refund request", count: exceptions.refundsAwaitingApproval.length, href: "/finance/refunds", severity: "high" as const },
@@ -117,15 +116,15 @@ export default async function FinanceDashboard() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-md">
         <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-lg shadow-sm">
           <div className="text-xs font-semibold text-outline uppercase tracking-wider mb-sm">Total Billed</div>
-          <div className="text-2xl font-extrabold text-on-surface">{formatCurr(totalBilled)}</div>
+          <div className="text-2xl font-extrabold text-on-surface">{formatMoney(totalBilled)}</div>
         </div>
         <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-lg shadow-sm">
           <div className="text-xs font-semibold text-outline uppercase tracking-wider mb-sm">Collected</div>
-          <div className="text-2xl font-extrabold text-success">{formatCurr(totalCollected)}</div>
+          <div className="text-2xl font-extrabold text-success">{formatMoney(totalCollected)}</div>
         </div>
         <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-lg shadow-sm">
           <div className="text-xs font-semibold text-outline uppercase tracking-wider mb-sm">Overdue</div>
-          <div className="text-2xl font-extrabold text-error">{formatCurr(totalOverdue)}</div>
+          <div className="text-2xl font-extrabold text-error">{formatMoney(totalOverdue)}</div>
         </div>
         <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-lg shadow-sm">
           <div className="text-xs font-semibold text-outline uppercase tracking-wider mb-sm">Collection Rate</div>
@@ -158,12 +157,12 @@ export default async function FinanceDashboard() {
                 <tr key={p.id} className="hover:bg-surface-container-low transition-colors">
                   <td className="px-lg py-md font-mono text-xs text-on-surface-variant">{p.transaction_ref?.slice(0, 12)}...</td>
                   <td className="px-lg py-md font-medium text-on-surface">{(p.profiles as any)?.full_name || "—"}</td>
-                  <td className="px-lg py-md text-on-surface">{formatCurr(p.amount)}</td>
+                  <td className="px-lg py-md text-on-surface">{formatMoney(p.amount)}</td>
                   <td className="px-lg py-md text-on-surface-variant capitalize">{p.method}</td>
                   <td className="px-lg py-md">
                     <span className={`text-xs font-semibold px-sm py-xs rounded-full ${
                       p.status === "cleared" ? "bg-success/10 text-success" :
-                      p.status === "pending" ? "bg-warning/10 text-warning" :
+                      p.status === "pending" ? "bg-warning-container text-on-warning-container" :
                       "bg-error/10 text-error"
                     }`}>{p.status}</span>
                   </td>

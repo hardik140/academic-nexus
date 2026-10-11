@@ -30,7 +30,7 @@ export const NAMED_EASE = ["emphasized"] as const;
  * and transition-behaviour class. Kept in step with globals.css by
  * tests/cn.test.ts.
  */
-export const MOTION_UTILITIES = ["feedback", "state", "dialog", "drawer"] as const;
+export const MOTION_UTILITIES = ["feedback", "state", "appear", "dialog", "drawer"] as const;
 
 const twMerge = extendTailwindMerge<"motion">({
   extend: {
@@ -85,14 +85,6 @@ function keepSemanticMotion(merged: string): string {
 /** Merge Tailwind classes safely (handles conflicts, including named spacing and motion) */
 export function cn(...inputs: ClassValue[]) {
   return keepSemanticMotion(twMerge(clsx(inputs)));
-}
-
-/** Format currency */
-export function formatCurrency(amount: number, currency = "USD"): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency,
-  }).format(amount);
 }
 
 /** Format date */

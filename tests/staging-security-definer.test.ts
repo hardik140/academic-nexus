@@ -25,7 +25,36 @@ describe("inventory", () => {
     const names = rows.map((r) => r.proname);
     // Adding a definer function means adding it to this list AND deciding
     // its grant below — the test fails until both happen.
-    expect(names).toEqual([
+    //
+    // 055 (academic foundation, ACADEMIC_LIFECYCLE_CONTRACT.md). Every one
+    // re-derives the actor from auth.uid() through my_operational_role(), so
+    // a blocked college or refused session cannot act; none takes an
+    // identity argument it trusts. Grants are pinned in staging-academic-
+    // foundation's shape test and the REVOKE block at the end of 055.
+    const ACADEMIC_055 = [
+      // internal helpers, no EXECUTE for sessions
+      "academic_audit", "academic_notify", "enroll_section_into_offering", "student_placement_check",
+      "timetable_teacher_clash",
+      // trigger-only guards and history writers
+      "audit_academic_structure", "end_department_terms_with_semester", "guard_academic_structure",
+      "guard_academic_tenant", "guard_enrollment_unique_course", "guard_offering_assignment",
+      "guard_offering_open_for_records", "guard_student_section_assignment", "guard_timetable_slot",
+      "offering_auto_enroll", "record_department_hod", "record_offering_instructor",
+      // caller-scoped predicates and projections
+      "academic_actor_role", "active_semester_id", "can_manage_department", "can_schedule_offering",
+      "current_class_incharge", "instructor_eligible", "is_department_staff", "my_academic_context",
+      "my_timetable_offering_ids", "section_department_id",
+      // the actions — each checks department authority itself, then audits
+      "accept_student_invitation", "assign_class_incharge", "assign_student_section",
+      "create_student_invitation_placement", "create_timetable_slot", "delete_timetable_slot",
+      "department_term_readiness", "end_class_incharge", "end_department_term", "grant_external_teaching",
+      "revoke_external_teaching", "start_department_term", "student_invitation_preflight",
+      "students_without_section", "update_timetable_slot",
+    ];
+    expect(names).toEqual([...ACADEMIC_055, ...[
+      // 053/054: the access gate every RLS table's restrictive tenant_access_gate
+      // and the helpers call. Answers about the caller only; no arguments.
+      "app_access_allowed",
       // 052: AFTER-trigger audit writers. Definer because audit_logs'
       // INSERT policy pins user_id to auth.uid() and college_id to the
       // actor's own college, which an admin acting on another row cannot
@@ -34,7 +63,12 @@ describe("inventory", () => {
       // elsewhere; they are also trigger-only (no EXECUTE grant below).
       "audit_academic_period_status", "audit_marks_change", "audit_profile_privilege",
       "can_invite_role", // 051: invitation-tier check, mirrors lib/auth/invite-tiers.ts
-      "can_record_attendance", "can_write_offering_records", "enforce_profile_privileged_columns",
+      "can_record_attendance", "can_write_offering_records",
+      // 054: is the caller's own session (the signed session_id claim) admitted.
+      "current_session_permitted",
+      // 054: sign-out — revokes the caller's OWN registry sessions only.
+      "end_my_sessions",
+      "enforce_profile_privileged_columns",
       // 050: service_role only — housekeeping that moves other people's rows.
       "expire_stale_gate_credentials",
       "get_my_college_id", "get_my_email", "get_my_role",
@@ -44,27 +78,54 @@ describe("inventory", () => {
       "guard_allocation_tenant", "guard_attendance_date", "guard_closed_semester",
       "guard_enrolled_student", "guard_fee_delete", "guard_fee_ledger_columns",
       "guard_row_student_tenant",
+      // 053: statement-level write gate; trigger-only (no EXECUTE for sessions).
+      "guard_tenant_write_access",
       "handle_new_user", "heads_course_department", "heads_offering_department", "heads_programme_department",
       "heads_user_department",
       // 050: trigger-only — the credential issuer.
       "issue_gate_pass_credential",
+      // 054: the caller's own sessions, for the device list and the limit page.
+      "list_my_sessions",
       // 050: service_role only — the audit writer, called from inside the
       // movement recorder so a REFUSED scan is still recorded.
       "log_gate_security_event",
       // 050: caller-scoped projections and the two movement recorders. Each
       // re-derives the actor from auth.uid(); see the gate security block below.
-      "my_gate_pass_credential", "my_security_personnel_id",
+      // 053/054: the caller's own access state (profile, college, session).
+      "my_access_state",
+      "my_gate_pass_credential",
+      // 053: the caller's role/college ONLY while it may operate — for the
+      // privileged decisions in 053/054, never for per-row policies.
+      "my_operational_college_id", "my_operational_role",
+      "my_security_personnel_id",
+      // 054: one boolean about an id the caller already holds — keeps
+      // super_admin sessions out of a College Admin's view and reach.
+      "profile_is_super_admin",
+      // 053: AFTER-trigger lifecycle history + audit writer, filed under the
+      // affected college; trigger-only.
+      "record_college_lifecycle_change",
       "record_gate_movement", "record_manual_gate_movement",
       "refresh_analytics",
+      // 054: session admission, keyed on the caller's own signed session_id.
+      "register_current_session",
       // 052: the ONE sanctioned path to a closed semester. Definer because
       // semesters_update_manage excludes a closed row from any ordinary
       // UPDATE, so it cannot inherit authorization and does its own — see
       // the §6 block at the end of this file.
       "reopen_semester",
       "revoke_gate_pass_credential",
+      // 054: self, own-college Admin, or super_admin for Admin accounts.
+      "revoke_session",
       "security_has_permission", "security_operates_gate", "security_outside_now", "security_scan_feed",
+      // 054: the cut-over mode and its evidence; readiness is super_admin only.
+      "session_enforcement_mode", "session_enforcement_readiness",
+      // 054: may the caller manage its own sessions (a REJECTED session may).
+      "session_self_service_allowed",
+      // 053/054: the only path to a lifecycle change, and to the cut-over
+      // switch. Both super_admin only, reason required, audited.
+      "set_college_lifecycle", "set_session_enforcement",
       "wardens_block", "wardens_room", "wardens_student", "wardens_student_profile",
-    ]);
+    ]].sort());
     for (const r of rows) expect(r.cfg, `${r.proname} search_path`).toMatch(/search_path=/);
   });
 });

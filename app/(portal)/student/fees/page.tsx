@@ -1,28 +1,34 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatDate } from "@/lib/utils";
+import { formatMoney } from "@/lib/format";
 import { StatusBadge } from "@/components/ui/modal";
 import { computeEffectiveFeeStatus } from "@/lib/finance-status";
 import { FinanceRequestsPanel } from "./finance-requests-panel";
+import { assertRead } from "@/lib/read-result-server";
+import { NO_MATCH_ID } from "@/lib/read-result";
 
 export default async function StudentFees() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: student } = await supabase.from("students").select("id").eq("user_id", user.id).single();
+  const { data: student, error: studentError } = await supabase.from("students").select("id").eq("user_id", user.id).single();
+  assertRead(studentError);
 
-  const { data: fees } = await supabase
+  const { data: fees, error: feesError } = await supabase
     .from("fees")
     .select("*")
-    .eq("student_id", student?.id || "")
+    .eq("student_id", student?.id || NO_MATCH_ID)
     .order("due_date", { ascending: false });
+  assertRead(feesError);
 
-  const { data: payments } = await supabase
+  const { data: payments, error: paymentsError } = await supabase
     .from("payments")
     .select("*")
-    .eq("student_id", student?.id || "")
+    .eq("student_id", student?.id || NO_MATCH_ID)
     .order("created_at", { ascending: false });
+  assertRead(paymentsError);
 
   const totalBilled = (fees || []).reduce((s, f) => s + f.amount, 0);
   const totalPaid = (fees || []).reduce((s, f) => s + f.paid_amount, 0);
@@ -45,16 +51,16 @@ export default async function StudentFees() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-md">
         <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-lg shadow-sm">
           <div className="text-xs font-semibold text-outline uppercase tracking-wider mb-sm">Total Billed</div>
-          <div className="text-2xl font-extrabold text-on-surface">{formatCurrency(totalBilled)}</div>
+          <div className="text-2xl font-extrabold text-on-surface">{formatMoney(totalBilled)}</div>
         </div>
         <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-lg shadow-sm">
           <div className="text-xs font-semibold text-outline uppercase tracking-wider mb-sm">Total Paid</div>
-          <div className="text-2xl font-extrabold text-success">{formatCurrency(totalPaid)}</div>
+          <div className="text-2xl font-extrabold text-success">{formatMoney(totalPaid)}</div>
         </div>
         <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-lg shadow-sm">
           <div className="text-xs font-semibold text-outline uppercase tracking-wider mb-sm">Outstanding</div>
           <div className={`text-2xl font-extrabold ${totalDue > 0 ? "text-warning" : "text-success"}`}>
-            {formatCurrency(totalDue)}
+            {formatMoney(totalDue)}
           </div>
         </div>
         <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-lg shadow-sm">
@@ -68,7 +74,7 @@ export default async function StudentFees() {
         <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-lg shadow-sm flex items-center justify-between gap-md flex-wrap">
           <div>
             <div className="text-xs font-semibold text-outline uppercase tracking-wider mb-xs">Outstanding Balance</div>
-            <div className="text-3xl font-extrabold text-error font-mono">{formatCurrency(totalDue)}</div>
+            <div className="text-3xl font-extrabold text-error font-mono">{formatMoney(totalDue)}</div>
           </div>
           <div className="text-right">
             <button
@@ -104,9 +110,9 @@ export default async function StudentFees() {
               {(fees || []).map((f: any) => (
                 <tr key={f.id} className="hover:bg-surface-container-low transition-colors">
                   <td className="px-lg py-md font-medium text-on-surface">{f.type}</td>
-                  <td className="px-lg py-md text-on-surface-variant">{formatCurrency(f.amount)}</td>
-                  <td className="px-lg py-md text-success">{formatCurrency(f.paid_amount)}</td>
-                  <td className="px-lg py-md font-semibold text-on-surface">{formatCurrency(f.amount - f.paid_amount)}</td>
+                  <td className="px-lg py-md text-on-surface-variant">{formatMoney(f.amount)}</td>
+                  <td className="px-lg py-md text-success">{formatMoney(f.paid_amount)}</td>
+                  <td className="px-lg py-md font-semibold text-on-surface">{formatMoney(f.amount - f.paid_amount)}</td>
                   <td className="px-lg py-md text-on-surface-variant">{formatDate(f.due_date)}</td>
                   <td className="px-lg py-md"><StatusBadge status={computeEffectiveFeeStatus(f)} /></td>
                 </tr>
@@ -128,7 +134,7 @@ export default async function StudentFees() {
           {(payments || []).map((p: any) => (
             <div key={p.id} className="flex items-center justify-between px-lg py-md hover:bg-surface-container-low transition-colors">
               <div>
-                <div className="text-sm font-medium text-on-surface">{formatCurrency(p.amount)}</div>
+                <div className="text-sm font-medium text-on-surface">{formatMoney(p.amount)}</div>
                 <div className="text-xs text-outline">{p.method} • Ref: {p.transaction_ref || "—"}</div>
               </div>
               <div className="text-right">

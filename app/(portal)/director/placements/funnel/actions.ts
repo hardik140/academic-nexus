@@ -2,8 +2,9 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/rbac";
-import { getCached } from "@/lib/cache";
+import { getCachedWriteBehind } from "@/lib/cache";
 import { PERMISSIONS } from "@/lib/permissions";
+import { assertRead } from "@/lib/read-result-server";
 
 /**
  * Institution + department-level funnel from mv_placement_funnel (the real
@@ -15,8 +16,9 @@ export async function getInstitutionPlacementFunnel() {
   const actor = await requireRole(PERMISSIONS.institution_placement_funnel_read);
   const supabase = await createClient();
 
-  return getCached(`placement-funnel:${actor.collegeId}`, 60, async () => {
-    const { data } = await supabase.from("mv_placement_funnel").select("*").order("department_name");
+  return getCachedWriteBehind(`placement-funnel:${actor.collegeId}`, 60, async () => {
+    const { data, error: dataError } = await supabase.from("mv_placement_funnel").select("*").order("department_name");
+    assertRead(dataError);
     const departments = data || [];
 
     const totals = departments.reduce(
@@ -56,17 +58,19 @@ export async function listDriveFunnels() {
   // Cast to any: this hand-maintained types file doesn't declare table
   // Relationships, so the embedded companies:company_id(...) join can't be
   // inferred — same pattern used throughout the rest of the app.
-  const { data: drives } = (await supabase
+  const { data: drives, error: drivesError } = (await supabase
     .from("placement_drives")
     .select("id, job_role, status, companies:company_id(name)")
     .eq("college_id", actor.collegeId)
     .order("created_at", { ascending: false })
     .limit(20)) as any;
+  assertRead(drivesError);
 
   if (!drives || drives.length === 0) return [];
 
   const driveIds = drives.map((d: any) => d.id);
-  const { data: applications } = await supabase.from("placement_applications").select("drive_id, status").in("drive_id", driveIds);
+  const { data: applications, error: applicationsError } = await supabase.from("placement_applications").select("drive_id, status").in("drive_id", driveIds);
+  assertRead(applicationsError);
 
   return drives.map((drive: any) => {
     const apps = (applications || []).filter((a) => a.drive_id === drive.id);

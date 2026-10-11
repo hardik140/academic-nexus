@@ -1,8 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button, FormField, Modal, StatusBadge } from "@/components/ui/modal";
 import { DataTable, type DataTableQuery } from "@/components/ui/data-table";
+import { Alert } from "@/components/ui/alert";
+import { ErrorAlert } from "@/components/ui/error-alert";
+import { StateView } from "@/components/ui/state-view";
+import { useAsyncResource } from "@/hooks/use-async-resource";
+import { toFeedbackError, type FeedbackError } from "@/lib/action-failure";
 import {
   actOnGatePass,
   listGatesForOverride,
@@ -15,15 +20,16 @@ import {
 const PROCESSED_PAGE_SIZE = 10;
 
 export default function WardenGatePasses() {
-  const [pending, setPending] = useState<any[]>([]);
   const [processed, setProcessed] = useState<any[]>([]);
   const [processedLoading, setProcessedLoading] = useState(false);
+  const [processedError, setProcessedError] = useState<unknown>(null);
   const [totalProcessed, setTotalProcessed] = useState(0);
   const [processedQuery, setProcessedQuery] = useState<DataTableQuery>({ search: "", sortKey: null, sortDir: "asc", page: 0 });
   const [loading, setLoading] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<FeedbackError | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const latestProcessed = useRef(0);
 
-  useEffect(() => { loadPending(); }, []);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { loadProcessed(processedQuery); }, [processedQuery]);
 
@@ -32,26 +38,41 @@ export default function WardenGatePasses() {
   // derived by filtering an already-fetched 500-row array; now scoped
   // server-side instead of over-fetching approved/rejected/etc. rows just
   // to discard them.
-  const loadPending = async () => {
-    setPending(await listPendingGatePasses());
-  };
+  //
+  // A failed load is an error, never "No pending gate passes" — an empty
+  // queue would read as every student's request handled (owner decision D5).
+  const pendingResource = useAsyncResource(() => listPendingGatePasses(), []);
+  const pending: any[] = pendingResource.data ?? [];
 
   const loadProcessed = async (q: DataTableQuery) => {
+    const run = ++latestProcessed.current;
     setProcessedLoading(true);
-    const { data, count } = await listProcessedGatePasses(q);
-    setProcessed(data);
-    setTotalProcessed(count);
-    setProcessedLoading(false);
+    setProcessedError(null);
+    try {
+      const { data, count } = await listProcessedGatePasses(q);
+      if (run !== latestProcessed.current) return;
+      setProcessed(data);
+      setTotalProcessed(count);
+    } catch (e) {
+      if (run === latestProcessed.current) setProcessedError(e);
+    } finally {
+      if (run === latestProcessed.current) setProcessedLoading(false);
+    }
   };
 
   const handleAction = async (id: string, action: "approved" | "rejected") => {
+    if (loading) return;
     setLoading(id);
     setError(null);
+    setNotice(null);
     try {
-      await actOnGatePass(id, action, processedQuery);
-      await Promise.all([loadPending(), loadProcessed(processedQuery)]);
+      await actOnGatePass(id, action);
+      setNotice(`Gate pass ${action}.`);
+      // Reloading reports its own failure, never as a failed decision.
+      pendingResource.reload();
+      void loadProcessed(processedQuery);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to update gate pass.");
+      setError(await toFeedbackError(e, "Failed to update gate pass."));
     } finally {
       setLoading(null);
     }
@@ -66,13 +87,13 @@ export default function WardenGatePasses() {
   const [override, setOverride] = useState<{ id: string; action: "exit" | "return"; student: string } | null>(null);
   const [overrideReason, setOverrideReason] = useState("");
   const [overrideGate, setOverrideGate] = useState("");
-  const [gates, setGates] = useState<{ id: string; code: string; name: string }[]>([]);
   const [revoke, setRevoke] = useState<{ id: string; student: string } | null>(null);
   const [revokeReason, setRevokeReason] = useState("");
 
-  useEffect(() => {
-    listGatesForOverride().then(setGates).catch(() => setGates([]));
-  }, []);
+  // The gate is optional on a manual record, so a failure here does not
+  // block one — but it is said, not hidden behind an empty list.
+  const gatesResource = useAsyncResource(() => listGatesForOverride(), []);
+  const gates: { id: string; code: string; name: string }[] = gatesResource.data ?? [];
 
   const openOverride = (id: string, action: "exit" | "return", student: string) => {
     setOverrideReason("");
@@ -82,9 +103,10 @@ export default function WardenGatePasses() {
   };
 
   const submitOverride = async () => {
-    if (!override) return;
+    if (!override || loading) return;
     setLoading(override.id);
     setError(null);
+    setNotice(null);
     try {
       await recordManualGateMovement({
         passId: override.id,
@@ -92,25 +114,28 @@ export default function WardenGatePasses() {
         gateId: overrideGate || null,
         reason: overrideReason,
       });
+      setNotice(`${override.action === "exit" ? "Exit" : "Return"} recorded for ${override.student}.`);
       setOverride(null);
-      await loadProcessed(processedQuery);
+      void loadProcessed(processedQuery);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to record the movement.");
+      setError(await toFeedbackError(e, "Failed to record the movement."));
     } finally {
       setLoading(null);
     }
   };
 
   const submitRevoke = async () => {
-    if (!revoke) return;
+    if (!revoke || loading) return;
     setLoading(revoke.id);
     setError(null);
+    setNotice(null);
     try {
       await revokeGatePassCredential(revoke.id, revokeReason);
+      setNotice(`QR revoked for ${revoke.student}.`);
       setRevoke(null);
-      await loadProcessed(processedQuery);
+      void loadProcessed(processedQuery);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to revoke the QR.");
+      setError(await toFeedbackError(e, "Failed to revoke the QR."));
     } finally {
       setLoading(null);
     }
@@ -124,20 +149,24 @@ export default function WardenGatePasses() {
           <p className="text-sm text-on-surface-variant mt-xs">Review and approve student out-of-campus requests</p>
         </div>
         {pending.length > 0 && (
-          <span className="text-xs font-semibold px-md py-xs rounded-full bg-warning/10 text-warning shrink-0">
+          <span className="text-xs font-semibold px-md py-xs rounded-full bg-warning-container text-on-warning-container shrink-0">
             {pending.length} Require Action
           </span>
         )}
       </div>
 
-      {error && (
-        <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium">{error}</div>
-      )}
+      <Alert tone="success" onDismiss={() => setNotice(null)}>
+        {notice}
+      </Alert>
+      {/* An open dialog shows its own failure. */}
+      <ErrorAlert error={!override && !revoke ? error : null} />
 
       <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-sm">
         <div className="px-lg py-md border-b border-outline-variant">
           <h2 className="text-sm font-bold text-on-surface">Pending Requests ({pending.length})</h2>
         </div>
+        <StateView state={pendingResource} isEmpty={() => false} loadingLabel="Loading pending gate passes…" empty={{ title: "No pending gate passes" }}>
+          {() => (
         <div className="divide-y divide-outline-variant">
           {pending.length > 0 ? pending.map((pass: any) => (
             <div key={pass.id} className="px-lg py-md hover:bg-surface-container-low transition-colors">
@@ -156,7 +185,7 @@ export default function WardenGatePasses() {
                   <Button size="sm" variant="destructive" onClick={() => handleAction(pass.id, "rejected")} disabled={loading === pass.id}>
                     Reject
                   </Button>
-                  <Button size="sm" onClick={() => handleAction(pass.id, "approved")} disabled={loading === pass.id}>
+                  <Button size="sm" onClick={() => handleAction(pass.id, "approved")} disabled={loading === pass.id} aria-busy={loading === pass.id || undefined}>
                     {loading === pass.id ? "..." : "Approve"}
                   </Button>
                 </div>
@@ -166,6 +195,8 @@ export default function WardenGatePasses() {
             <div className="p-xl text-center text-sm text-outline">🎉 No pending gate passes.</div>
           )}
         </div>
+          )}
+        </StateView>
       </div>
 
       <DataTable
@@ -214,6 +245,8 @@ export default function WardenGatePasses() {
         serverMode
         totalCount={totalProcessed}
         loading={processedLoading}
+        error={processedError}
+        onRetry={() => loadProcessed(processedQuery)}
         onQueryChange={setProcessedQuery}
         pageSize={PROCESSED_PAGE_SIZE}
         emptyMessage="No processed requests yet."
@@ -227,13 +260,24 @@ export default function WardenGatePasses() {
         footer={
           <div className="flex justify-end gap-sm">
             <Button variant="ghost" onClick={() => setOverride(null)}>Cancel</Button>
-            <Button onClick={submitOverride} disabled={overrideReason.trim().length < 10 || loading === override?.id}>
+            <Button onClick={submitOverride} disabled={overrideReason.trim().length < 10 || loading === override?.id} aria-busy={loading === override?.id || undefined}>
               {loading === override?.id ? "Recording..." : "Record movement"}
             </Button>
           </div>
         }
       >
         <div className="space-y-md">
+          <ErrorAlert error={error} />
+          <Alert
+            tone="warning"
+            action={<Button variant="outline" size="sm" onClick={gatesResource.reload}>Try again</Button>}
+          >
+            {gatesResource.status === "error" ? (
+              <>
+                The list of gates couldn&apos;t be loaded. You can still record the movement without a gate.
+              </>
+            ) : null}
+          </Alert>
           <FormField
             label="Gate"
             id="override-gate"
@@ -266,12 +310,13 @@ export default function WardenGatePasses() {
         footer={
           <div className="flex justify-end gap-sm">
             <Button variant="ghost" onClick={() => setRevoke(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={submitRevoke} disabled={revokeReason.trim().length < 5 || loading === revoke?.id}>
+            <Button variant="destructive" onClick={submitRevoke} disabled={revokeReason.trim().length < 5 || loading === revoke?.id} aria-busy={loading === revoke?.id || undefined}>
               {loading === revoke?.id ? "Revoking..." : "Revoke"}
             </Button>
           </div>
         }
       >
+        <ErrorAlert error={error} className="mb-md" />
         <FormField
           label="Reason"
           id="revoke-reason"

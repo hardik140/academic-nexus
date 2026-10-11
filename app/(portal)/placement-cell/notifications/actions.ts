@@ -10,6 +10,7 @@ import { sendExpoPushNotifications } from "@/lib/push";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import { dbError } from "@/lib/internal-error";
+import { assertRead } from "@/lib/read-result-server";
 
 const OPERATOR_ROLES = ["placement_cell", "admin"] as const;
 
@@ -46,59 +47,66 @@ async function resolveRecipientUserIds(
   params: z.infer<typeof SendPlacementNotificationSchema>
 ): Promise<string[]> {
   if (params.targetType === "college") {
-    const { data } = await supabase.from("students").select("user_id").eq("college_id", actor.collegeId);
+    const { data, error: dataError } = await supabase.from("students").select("user_id").eq("college_id", actor.collegeId);
+    assertRead(dataError);
     return (data || []).map((s) => s.user_id);
   }
 
   if (params.targetType === "department") {
     if (!params.departmentId) throw new Error("Select a department.");
-    const { data: dept } = await supabase
+    const { data: dept, error: deptError } = await supabase
       .from("departments")
       .select("id, college_id")
       .eq("id", params.departmentId)
       .single();
+    assertRead(deptError);
     if (!dept || dept.college_id !== actor.collegeId) {
       throw new Error("Department not found in your college.");
     }
-    const { data } = await supabase
+    const { data, error: dataError2 } = await supabase
       .from("students")
       .select("user_id")
       .eq("college_id", actor.collegeId)
       .eq("department_id", params.departmentId);
+    assertRead(dataError2);
     return (data || []).map((s) => s.user_id);
   }
 
   if (params.targetType === "batch_year") {
     if (!params.batchYear) throw new Error("Select a batch year.");
-    const { data } = await supabase
+    const { data, error: dataError3 } = await supabase
       .from("students")
       .select("user_id")
       .eq("college_id", actor.collegeId)
       .eq("batch_year", params.batchYear);
+    assertRead(dataError3);
     return (data || []).map((s) => s.user_id);
   }
 
   if (params.targetType === "eligible") {
     if (!params.driveId) throw new Error("Select a placement drive.");
-    const { data: drive } = await supabase
+    const { data: drive, error: driveError } = await supabase
       .from("placement_drives")
       .select("id, college_id, min_cgpa, eligible_batch_years")
       .eq("id", params.driveId)
       .single();
+    assertRead(driveError);
     if (!drive || drive.college_id !== actor.collegeId) {
       throw new Error("Placement drive not found in your college.");
     }
 
-    const { data: eligibleDepartments } = await supabase
+    const { data: eligibleDepartments, error: eligibleDepartmentsError } = await supabase
       .from("placement_drive_departments")
       .select("department_id")
       .eq("drive_id", params.driveId);
+    assertRead(eligibleDepartmentsError);
     const deptIds = (eligibleDepartments || []).map((d) => d.department_id);
 
-    const { data: students } = await supabase
+    const { data: students, error: studentsError } = await supabase
       .from("students")
       .select("user_id, cgpa, batch_year, department_id")
       .eq("college_id", actor.collegeId);
+    assertRead(studentsError);
 
     return (students || [])
       .filter((s) => {
@@ -117,11 +125,12 @@ async function resolveRecipientUserIds(
   if (!params.studentUserIds || params.studentUserIds.length === 0) {
     throw new Error("Select at least one student.");
   }
-  const { data } = await supabase
+  const { data, error: dataError4 } = await supabase
     .from("students")
     .select("user_id")
     .eq("college_id", actor.collegeId)
     .in("user_id", params.studentUserIds);
+  assertRead(dataError4);
   return (data || []).map((s) => s.user_id);
 }
 
@@ -179,12 +188,13 @@ export async function sendPlacementNotification(params: SendPlacementNotificatio
 export async function listSentPlacementNotifications() {
   const actor = await requireRole(OPERATOR_ROLES);
   const supabase = await createClient();
-  const { data } = await supabase
+  const { data, error: dataError } = await supabase
     .from("notifications")
     .select("id, title, message, link, created_at, read")
     .eq("college_id", actor.collegeId)
     .eq("sender_id", actor.userId)
     .order("created_at", { ascending: false })
     .limit(50);
+  assertRead(dataError);
   return data || [];
 }

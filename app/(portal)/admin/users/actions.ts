@@ -7,7 +7,12 @@ import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib
 import { logAudit } from "@/lib/audit";
 import { assertClaimed } from "@/lib/concurrent-claim";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { getCached, invalidateCache, middlewareProfileCacheKey } from "@/lib/cache";
+import {
+  getCached,
+  invalidateCacheFamily,
+  versionedKey,
+} from "@/lib/cache";
+import { listCacheKey } from "@/lib/cached-list";
 import { inviteUserCore, resendInvitationCore, revokeInvitationCore, type InviteUserParams } from "@/lib/invitations";
 import { computeEffectiveFeeStatus } from "@/lib/finance-status";
 import { resolveProfileStatusForAcademicTransition, type StudentAcademicStatus } from "@/lib/student-lifecycle";
@@ -15,6 +20,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, UserRole, UserStatus } from "@/types/database";
 import type { DataTableQuery } from "@/components/ui/data-table";
 import { dbError } from "@/lib/internal-error";
+import { assertRead } from "@/lib/read-result-server";
+import { callAccessRpc } from "@/lib/college-access";
+import type { DeviceSession } from "@/components/portal/device-list";
 
 const USERS_PAGE_SIZE = 10;
 // Server actions are callable directly (not just through the UI that only
@@ -26,8 +34,10 @@ const USERS_PAGE_SIZE = 10;
 // polluted by arbitrary attacker-supplied sort strings.
 const USERS_SORT_COLUMNS = new Set(["full_name", "email", "role"]);
 
+const USERS_CACHE_FAMILY = "list:users";
+
 function usersCacheKey(collegeId: string, q: DataTableQuery, sortColumn: string) {
-  return `list:users:${collegeId}:${q.page}:${sortColumn}:${q.sortDir}:${q.search}`;
+  return versionedKey(listCacheKey(USERS_CACHE_FAMILY, collegeId, q, sortColumn), USERS_CACHE_FAMILY, collegeId);
 }
 
 /**
@@ -57,7 +67,8 @@ export async function listUsers(q: DataTableQuery) {
     dbQuery = dbQuery.order(sortColumn, { ascending: q.sortKey ? q.sortDir === "asc" : false });
 
     const from = q.page * USERS_PAGE_SIZE;
-    const { data, count } = await dbQuery.range(from, from + USERS_PAGE_SIZE - 1);
+    const { data, count, error: dataError } = await dbQuery.range(from, from + USERS_PAGE_SIZE - 1);
+    assertRead(dataError);
     return { data: data || [], count: count ?? 0 };
   });
 }
@@ -158,10 +169,8 @@ export async function updateUserProfileCore(
   if (error) throw dbError(error);
   assertClaimed(updated, "user profile");
 
-  // Changes `role`, which middleware's route-access check reads (cached,
-  // see lib/supabase/middleware.ts) — bust it so the propagation window is
-  // the documented TTL, not TTL-plus-whatever-this-request's-latency-was.
-  await invalidateCache(middlewareProfileCacheKey(targetUserId));
+  // The middleware reads `role` fresh on every request (session admission,
+  // migration 058), so the change applies to that user's next request.
 
   await logAudit(supabase, actor, `Updated profile (role: ${role})`, "profiles", targetUserId);
 }
@@ -170,9 +179,7 @@ export async function updateUserProfile(
   targetUserId: string,
   fullName: string,
   role: UserRole,
-  phone?: string,
-  viewQuery?: DataTableQuery
-) {
+  phone?: string) {
   const actor = await requireRole(["admin"]);
   const supabase = await createClient();
   await updateUserProfileCore(supabase, actor, { targetUserId, fullName, role, phone });
@@ -180,10 +187,7 @@ export async function updateUserProfile(
   // Bust the exact cached view the caller is looking at — see listUsers'
   // comment above on why TTL-only (the dashboards' pattern) isn't enough
   // for a CRUD list where the actor expects to see their own write land.
-  if (viewQuery) {
-    const sortColumn = viewQuery.sortKey && USERS_SORT_COLUMNS.has(viewQuery.sortKey) ? viewQuery.sortKey : "created_at";
-    await invalidateCache(usersCacheKey(actor.collegeId, viewQuery, sortColumn));
-  }
+  await invalidateCacheFamily(USERS_CACHE_FAMILY, actor.collegeId);
 }
 
 /** Called by app/api/mobile/admin/update-user/route.ts. */
@@ -225,23 +229,18 @@ export async function updateUserStatusCore(
   if (error) throw dbError(error);
   assertClaimed(updated, "user profile");
 
-  // Changes `status`, which middleware's active-account check reads
-  // (cached) — a suspended user's browser should stop being routed to
-  // portal pages within the documented TTL, not TTL-plus-request-latency.
-  await invalidateCache(middlewareProfileCacheKey(targetUserId));
+  // The middleware reads `status` fresh on every request (session
+  // admission, migration 058): a suspended user's next request is refused.
 
   await logAudit(supabase, actor, `Changed status to ${status}`, "profiles", targetUserId);
 }
 
-export async function updateUserStatus(targetUserId: string, status: UserStatus, viewQuery?: DataTableQuery) {
+export async function updateUserStatus(targetUserId: string, status: UserStatus) {
   const actor = await requireRole(["admin"]);
   const supabase = await createClient();
   await updateUserStatusCore(supabase, actor, targetUserId, status);
   revalidatePath("/admin/users");
-  if (viewQuery) {
-    const sortColumn = viewQuery.sortKey && USERS_SORT_COLUMNS.has(viewQuery.sortKey) ? viewQuery.sortKey : "created_at";
-    await invalidateCache(usersCacheKey(actor.collegeId, viewQuery, sortColumn));
-  }
+  await invalidateCacheFamily(USERS_CACHE_FAMILY, actor.collegeId);
 }
 
 /** Called by app/api/mobile/admin/user-status/route.ts. */
@@ -276,12 +275,13 @@ export async function getStudentAcademicSummary(targetUserId: string): Promise<S
   const actor = await requireRole(["admin"]);
   const supabase = await createClient();
 
-  const { data: student } = await supabase
+  const { data: student, error: studentError } = await supabase
     .from("students")
     .select("id, status, enrollment_number, batch_year, semester")
     .eq("user_id", targetUserId)
     .eq("college_id", actor.collegeId)
     .maybeSingle();
+  assertRead(studentError);
   if (!student) return null;
 
   const [feesRes, allocationRes, gatePassRes] = await Promise.all([
@@ -289,6 +289,9 @@ export async function getStudentAcademicSummary(targetUserId: string): Promise<S
     supabase.from("hostel_allocations").select("id").eq("student_id", student.id).eq("status", "active").maybeSingle(),
     supabase.from("gate_passes").select("id").eq("student_id", student.id).in("status", ["pending", "approved", "active"]).maybeSingle(),
   ]);
+  assertRead(feesRes.error);
+  assertRead(allocationRes.error);
+  assertRead(gatePassRes.error);
 
   const outstandingFees = (feesRes.data || [])
     .filter((f) => !["paid", "waived", "refunded"].includes(computeEffectiveFeeStatus(f)))
@@ -344,10 +347,8 @@ export async function updateStudentAcademicStatusCore(
 
   const mappedProfileStatus = resolveProfileStatusForAcademicTransition(status);
   if (mappedProfileStatus) {
+    // Read fresh by the middleware on the next request (migration 058).
     await supabase.from("profiles").update({ status: mappedProfileStatus }).eq("id", targetUserId).eq("college_id", actor.collegeId);
-    // Changes profiles.status, which middleware's active-account check
-    // reads (cached) — same cache-bust updateUserStatusCore does above.
-    await invalidateCache(middlewareProfileCacheKey(targetUserId));
   }
 
   await logAudit(supabase, actor, "student_academic_status_changed", "students", student.id, {
@@ -358,15 +359,41 @@ export async function updateStudentAcademicStatusCore(
 
 export async function updateStudentAcademicStatus(
   targetUserId: string,
-  status: StudentAcademicStatus,
-  viewQuery?: DataTableQuery
-) {
+  status: StudentAcademicStatus) {
   const actor = await requireRole(["admin"]);
   const supabase = await createClient();
   await updateStudentAcademicStatusCore(supabase, actor, targetUserId, status);
   revalidatePath("/admin/users");
-  if (viewQuery) {
-    const sortColumn = viewQuery.sortKey && USERS_SORT_COLUMNS.has(viewQuery.sortKey) ? viewQuery.sortKey : "created_at";
-    await invalidateCache(usersCacheKey(actor.collegeId, viewQuery, sortColumn));
-  }
+  await invalidateCacheFamily(USERS_CACHE_FAMILY, actor.collegeId);
+}
+
+// ─── A user's sessions (migration 054) ────────────────────────────────────
+
+const SessionUserId = z.string().regex(/^[0-9a-f-]{36}$/i, { message: "Invalid user." });
+
+/**
+ * One user's active sessions, for the College Admin. RLS limits the rows to
+ * the Admin's own college and never shows a super_admin's sessions.
+ */
+export async function listUserSessions(targetUserId: string): Promise<DeviceSession[]> {
+  await requireRole(["admin"]);
+  const userId = SessionUserId.parse(targetUserId);
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("user_sessions")
+    .select("session_id, client, device_label, status, created_at, last_seen_at")
+    .eq("user_id", userId)
+    .eq("status", "active")
+    .order("last_seen_at", { ascending: false });
+  assertRead(error);
+  return (data ?? []) as DeviceSession[];
+}
+
+/** revoke_session() decides: own college only, never a super_admin. Audited there. */
+export async function revokeUserSession(sessionId: string): Promise<void> {
+  const actor = await requireRole(["admin"]);
+  const id = SessionUserId.parse(sessionId);
+  await checkRateLimit(`revokeSession:${actor.userId}`, 30, 60);
+  const supabase = await createClient();
+  await callAccessRpc(supabase, "revoke_session", { p_session_id: id }, "That session couldn't be signed out.");
 }

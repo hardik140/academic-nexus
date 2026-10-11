@@ -19,6 +19,7 @@ import { reconcile } from "@/lib/finance/reconciliation";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Json } from "@/types/database";
 import { dbError } from "@/lib/internal-error";
+import { assertRead } from "@/lib/read-result-server";
 
 /**
  * Finance Integration Hub — the operator-facing actions.
@@ -94,11 +95,12 @@ export async function listProviders() {
 export async function listConnections() {
   const actor = await requireRole(PERMISSIONS.finance_integration_read);
   const supabase = await createClient();
-  const { data } = await supabase
+  const { data, error: dataError } = await supabase
     .from("finance_integration_connections")
     .select("*")
     .eq("college_id", actor.collegeId)
     .order("created_at", { ascending: false });
+  assertRead(dataError);
   return data ?? [];
 }
 
@@ -130,6 +132,10 @@ export async function integrationHealth() {
       .eq("college_id", actor.collegeId)
       .eq("status", "open"),
   ]);
+  assertRead(connections.error);
+  assertRead(pending.error);
+  assertRead(failed.error);
+  assertRead(issues.error);
 
   const rows = (connections.data ?? []).map((c) => {
     const capabilities = (c.capabilities ?? {}) as CapabilityMap;
@@ -183,7 +189,8 @@ export async function listSyncOperations(filters: {
   if (filters.connectionId) query = query.eq("connection_id", filters.connectionId);
   if (filters.status) query = query.eq("status", filters.status);
   if (filters.entityType) query = query.eq("entity_type", filters.entityType);
-  const { data } = await query;
+  const { data, error: dataError } = await query;
+  assertRead(dataError);
   return data ?? [];
 }
 
@@ -191,12 +198,13 @@ export async function listMappings(connectionId: string) {
   const actor = await requireRole(PERMISSIONS.finance_mapping_read);
   const supabase = await createClient();
   await ownedConnection(supabase, actor, connectionId);
-  const { data } = await supabase
+  const { data, error: dataError } = await supabase
     .from("finance_account_mappings")
     .select("*")
     .eq("connection_id", connectionId)
     .order("kind")
     .order("local_key");
+  assertRead(dataError);
   return data ?? [];
 }
 
@@ -217,15 +225,17 @@ export async function listReconciliation(connectionId?: string) {
     .order("started_at", { ascending: false })
     .limit(25);
   if (connectionId) runs = runs.eq("connection_id", connectionId);
-  const { data: runRows } = await runs;
+  const { data: runRows, error: runRowsError } = await runs;
+  assertRead(runRowsError);
 
-  const { data: openItems } = await supabase
+  const { data: openItems, error: openItemsError } = await supabase
     .from("finance_reconciliation_items")
     .select("*")
     .eq("college_id", actor.collegeId)
     .eq("status", "open")
     .order("created_at", { ascending: false })
     .limit(200);
+  assertRead(openItemsError);
 
   return { runs: runRows ?? [], openItems: openItems ?? [] };
 }
@@ -785,7 +795,7 @@ export async function resolveReconciliationItem(itemId: string, resolution: stri
 export async function integrationAuditTrail(limit = 100) {
   const actor = await requireRole(PERMISSIONS.finance_integration_audit_read);
   const supabase = await createClient();
-  const { data } = await supabase
+  const { data, error: dataError } = await supabase
     .from("audit_logs")
     .select("*, actor:user_id(full_name, role)")
     .eq("college_id", actor.collegeId)
@@ -798,5 +808,6 @@ export async function integrationAuditTrail(limit = 100) {
     ])
     .order("created_at", { ascending: false })
     .limit(Math.min(limit, 250));
+  assertRead(dataError);
   return data ?? [];
 }

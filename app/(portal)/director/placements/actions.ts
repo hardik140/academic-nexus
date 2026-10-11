@@ -5,12 +5,13 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib/rbac";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { getCached, invalidateCache } from "@/lib/cache";
+import { getCachedWriteBehind, invalidateCacheFamily, versionedKey } from "@/lib/cache";
 import { resolveListSort, listCacheKey } from "@/lib/cached-list";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import type { DataTableQuery } from "@/components/ui/data-table";
 import { dbError } from "@/lib/internal-error";
+import { assertRead } from "@/lib/read-result-server";
 
 type OfferType = Database["public"]["Tables"]["placements"]["Row"]["offer_type"];
 type PlacementStatus = Database["public"]["Tables"]["placements"]["Row"]["status"];
@@ -26,9 +27,9 @@ export async function listPlacements(q: DataTableQuery) {
   const supabase = await createClient();
 
   const { column, ascending } = resolveListSort(PLACEMENTS_SORT_COLUMNS, "placement_date", false, q);
-  const cacheKey = listCacheKey(PLACEMENTS_CACHE_PREFIX, actor.collegeId, q, column);
+  const cacheKey = versionedKey(listCacheKey(PLACEMENTS_CACHE_PREFIX, actor.collegeId, q, column), PLACEMENTS_CACHE_PREFIX, actor.collegeId);
 
-  return getCached(cacheKey, 30, async () => {
+  return getCachedWriteBehind(cacheKey, 30, async () => {
     let dbQuery = supabase
       .from("placements")
       .select("*, students:student_id(enrollment_number, profiles:user_id(full_name), departments(name))", { count: "exact" });
@@ -37,7 +38,8 @@ export async function listPlacements(q: DataTableQuery) {
     dbQuery = dbQuery.order(column, { ascending });
 
     const from = q.page * PLACEMENTS_PAGE_SIZE;
-    const { data, count } = await dbQuery.range(from, from + PLACEMENTS_PAGE_SIZE - 1);
+    const { data, count, error: dataError } = await dbQuery.range(from, from + PLACEMENTS_PAGE_SIZE - 1);
+    assertRead(dataError);
     return { data: data || [], count: count ?? 0 };
   });
 }
@@ -109,18 +111,13 @@ export async function createPlacement(
   packageLpa: number | null,
   placementDate: string,
   offerType?: OfferType,
-  status?: PlacementStatus,
-  viewQuery?: DataTableQuery
-) {
+  status?: PlacementStatus) {
   const actor = await requireRole(["director", "admin"]);
   const supabase = await createClient();
   await createPlacementCore(supabase, actor, { studentId, companyName, roleTitle, packageLpa, placementDate, offerType, status });
   revalidatePath("/director/placements");
   revalidatePath("/director/analytics");
-  if (viewQuery) {
-    const { column } = resolveListSort(PLACEMENTS_SORT_COLUMNS, "placement_date", false, viewQuery);
-    await invalidateCache(listCacheKey(PLACEMENTS_CACHE_PREFIX, actor.collegeId, viewQuery, column));
-  }
+  await invalidateCacheFamily(PLACEMENTS_CACHE_PREFIX, actor.collegeId);
 }
 
 /** Called by app/api/mobile/director/placement/route.ts. */

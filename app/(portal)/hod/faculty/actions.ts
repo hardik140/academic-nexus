@@ -2,8 +2,9 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/rbac";
-import { getCached } from "@/lib/cache";
+import { getCachedWriteBehind } from "@/lib/cache";
 import { PERMISSIONS } from "@/lib/permissions";
+import { assertRead } from "@/lib/read-result-server";
 
 // Full teaching load a single instructor is expected to carry per week —
 // there is no per-college/per-department config for this anywhere in the
@@ -25,17 +26,19 @@ export async function listDepartmentFacultyWorkload() {
 
   const cacheKey = `hod-workload:${actor.role === "hod" ? actor.userId : actor.collegeId}`;
 
-  return getCached(cacheKey, 60, async () => {
+  return getCachedWriteBehind(cacheKey, 60, async () => {
     let departmentId: string | null = null;
     if (actor.role === "hod") {
-      const { data: department } = await supabase.from("departments").select("id").eq("hod_id", actor.userId).single();
+      const { data: department, error: departmentError } = await supabase.from("departments").select("id").eq("hod_id", actor.userId).single();
+      assertRead(departmentError);
       departmentId = department?.id ?? null;
       if (!departmentId) return [];
     }
 
     let facultyQuery = supabase.from("profiles").select("id, full_name, email").in("role", ["teacher", "hod"]);
     facultyQuery = departmentId ? facultyQuery.eq("department_id", departmentId) : facultyQuery.eq("college_id", actor.collegeId);
-    const { data: faculty } = await facultyQuery.order("full_name");
+    const { data: faculty, error: facultyError } = await facultyQuery.order("full_name");
+    assertRead(facultyError);
     if (!faculty || faculty.length === 0) return [];
 
     // Workload is measured in OFFERINGS delivered, not catalog rows owned.
@@ -46,10 +49,11 @@ export async function listDepartmentFacultyWorkload() {
     // carries its own instructor_id (047) — it belongs to the offering.
     // Cancelled offerings are excluded: nobody is teaching them.
     const facultyIds = faculty.map((f) => f.id);
-    const { data: offerings } = await supabase
+    const { data: offerings, error: offeringsError } = await supabase
       .from("course_offerings")
       .select("id, instructor_id, status")
       .in("instructor_id", facultyIds);
+    assertRead(offeringsError);
 
     const live = (offerings || []).filter((o) => o.status !== "cancelled");
 
@@ -60,9 +64,10 @@ export async function listDepartmentFacultyWorkload() {
     });
 
     const instructorByOffering = new Map(live.map((o) => [o.id, o.instructor_id]));
-    const { data: slots } = live.length
+    const { data: slots, error: slotsError } = live.length
       ? await supabase.from("timetable_slots").select("offering_id").in("offering_id", live.map((o) => o.id))
-      : { data: [] };
+      : { data: [], error: null };
+    assertRead(slotsError);
 
     const weeklyPeriods: Record<string, number> = {};
     (slots || []).forEach((s) => {

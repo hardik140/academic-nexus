@@ -99,7 +99,7 @@ rather than by the database, so it gets its own treatment.
 | Key | Scope | Status |
 | --- | --- | --- |
 | `listCacheKey(prefix, collegeId, …)` | college | **Scoped** |
-| `middlewareProfileCacheKey(userId)` | user | **Scoped** |
+| ~~`middlewareProfileCacheKey(userId)`~~ | user | removed in Phase 2.1 |
 | `dashboard:finance:{collegeId}:fee-stats` | college | **Scoped** |
 | `dashboard:warden:{userId}:overview` | user | **Scoped** |
 | `reports:hod:{departmentId}:mv` | department (globally unique UUID) | **Scoped** |

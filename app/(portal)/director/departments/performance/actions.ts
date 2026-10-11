@@ -2,11 +2,13 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/rbac";
-import { getCached } from "@/lib/cache";
+import { getCachedWriteBehind } from "@/lib/cache";
 import { PERMISSIONS } from "@/lib/permissions";
+import { assertRead } from "@/lib/read-result-server";
 
 async function resolveHodDepartmentId(supabase: Awaited<ReturnType<typeof createClient>>, userId: string) {
-  const { data } = await supabase.from("departments").select("id").eq("hod_id", userId).single();
+  const { data, error: dataError } = await supabase.from("departments").select("id").eq("hod_id", userId).single();
+  assertRead(dataError);
   return data?.id ?? null;
 }
 
@@ -20,7 +22,7 @@ export async function listDepartmentHealth() {
     departmentId = await resolveHodDepartmentId(supabase, actor.userId);
   }
 
-  return getCached(`dept-performance:${actor.role === "hod" ? `hod:${actor.userId}` : `director:${actor.collegeId}`}`, 60, async () => {
+  return getCachedWriteBehind(`dept-performance:${actor.role === "hod" ? `hod:${actor.userId}` : `director:${actor.collegeId}`}`, 60, async () => {
     let healthQuery = supabase.from("mv_department_health").select("*").order("department_name");
     if (departmentId) healthQuery = healthQuery.eq("department_id", departmentId);
 
@@ -33,6 +35,8 @@ export async function listDepartmentHealth() {
     if (departmentId) riskQuery = riskQuery.eq("department_id", departmentId);
 
     const [healthRes, riskRes] = await Promise.all([healthQuery, riskQuery]);
+    assertRead(healthRes.error);
+    assertRead(riskRes.error);
     const health = healthRes.data || [];
     const risks = riskRes.data || [];
 
@@ -78,6 +82,10 @@ export async function getDepartmentDetail(departmentId: string) {
       .order("severity", { ascending: false }),
     supabase.from("departments").select("id, name, code, hod_id, profiles:hod_id(full_name)").eq("id", departmentId).single(),
   ])) as any[];
+  assertRead(healthRes.error);
+  assertRead(funnelRes.error);
+  assertRead(riskRes.error);
+  assertRead(deptRes.error);
 
   if (!deptRes.data) {
     throw new Error("Department not found.");

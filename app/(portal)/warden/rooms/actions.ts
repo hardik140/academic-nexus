@@ -2,10 +2,11 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/rbac";
-import { getCached } from "@/lib/cache";
+import { getCachedWriteBehind } from "@/lib/cache";
 import { resolveListSort, listCacheKey } from "@/lib/cached-list";
 import { PERMISSIONS } from "@/lib/permissions";
 import type { DataTableQuery } from "@/components/ui/data-table";
+import { assertRead } from "@/lib/read-result-server";
 
 const ROOMS_PAGE_SIZE = 10;
 const ROOMS_SORT_COLUMNS = ["block_name", "room_number", "type", "occupancy"] as const;
@@ -20,9 +21,12 @@ export async function listWardenRooms(q: DataTableQuery) {
   const supabase = await createClient();
 
   const { column, ascending } = resolveListSort(ROOMS_SORT_COLUMNS, "block_name", true, q);
-  const cacheKey = listCacheKey(ROOMS_CACHE_PREFIX, actor.collegeId, q, column);
+  // Scope = what the query returns: an admin sees every room in the college,
+  // a warden only the blocks they run. Keying on the college alone let one
+  // warden's page be served to another warden (or to an admin) for 30 s.
+  const cacheKey = listCacheKey(ROOMS_CACHE_PREFIX, actor.role === "admin" ? actor.collegeId : actor.userId, q, column);
 
-  return getCached(cacheKey, 30, async () => {
+  return getCachedWriteBehind(cacheKey, 30, async () => {
     // Resolved server-side from the authenticated actor, never trusted from
     // the client — matches the "never trust client-picked ids" precedent
     // used throughout this codebase's assignHodCore/assignWardenCore.
@@ -32,7 +36,8 @@ export async function listWardenRooms(q: DataTableQuery) {
     // matches any block and silently produced an empty room list.
     let blockIds: string[] | null = null;
     if (actor.role !== "admin") {
-      const { data: blocks } = await supabase.from("hostel_blocks").select("id").eq("warden_id", actor.userId);
+      const { data: blocks, error: blocksError } = await supabase.from("hostel_blocks").select("id").eq("warden_id", actor.userId);
+      assertRead(blocksError);
       blockIds = (blocks || []).map((b) => b.id);
       if (blockIds.length === 0) {
         return { data: [], count: 0 };
@@ -50,7 +55,8 @@ export async function listWardenRooms(q: DataTableQuery) {
     if (!q.sortKey) dbQuery = dbQuery.order("room_number", { ascending: true });
 
     const from = q.page * ROOMS_PAGE_SIZE;
-    const { data, count } = await dbQuery.range(from, from + ROOMS_PAGE_SIZE - 1);
+    const { data, count, error: dataError } = await dbQuery.range(from, from + ROOMS_PAGE_SIZE - 1);
+    assertRead(dataError);
     return { data: data || [], count: count ?? 0 };
   });
 }

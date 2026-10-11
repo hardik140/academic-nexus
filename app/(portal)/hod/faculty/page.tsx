@@ -1,40 +1,42 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { ErrorState } from "@/components/ui/error-state";
+import { LoadingState } from "@/components/ui/loading-state";
+import { useAsyncResource } from "@/hooks/use-async-resource";
+import { classifyError, SessionExpiredError } from "@/lib/feedback-error";
+import { NO_MATCH_ID, requireData, requireRows } from "@/lib/read-result";
 
 export default function HodFaculty() {
   const supabase = createClient();
-  const [faculty, setFaculty] = useState<any[]>([]);
   const [search, setSearch] = useState("");
 
-  useEffect(() => { loadFaculty(); }, []);
-
-  const loadFaculty = async () => {
+  // A failed load is an error, never "No faculty members found" (owner decision D5).
+  const facultyResource = useAsyncResource(async () => {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    if (!user) throw new SessionExpiredError();
     // Resolve department via departments.hod_id — same lookup hod/dashboard
     // and hod/reports use. profiles.department_id is a different field
     // (which department this person's own record belongs to) that assigning
     // someone as HOD doesn't set, so relying on it here left this page
     // broken for any real HOD account.
-    const { data: department } = await supabase.from("departments").select("id").eq("hod_id", user.id).single();
-    const { data: profile } = await supabase.from("profiles").select("college_id").eq("id", user.id).single();
+    const department = requireData(await supabase.from("departments").select("id").eq("hod_id", user.id).single());
+    const profile = requireData(await supabase.from("profiles").select("college_id").eq("id", user.id).single());
 
-    if (!department) {
-      setFaculty([]);
-      return;
-    }
+    if (!department) return [];
 
-    const { data } = await supabase
-      .from("profiles")
-      .select("*, departments:department_id(name)")
-      .eq("college_id", profile?.college_id || "")
-      .eq("department_id", department.id)
-      .in("role", ["teacher", "hod"])
-      .order("full_name");
-    setFaculty(data || []);
-  };
+    return requireRows(
+      await supabase
+        .from("profiles")
+        .select("*, departments:department_id(name)")
+        .eq("college_id", profile?.college_id || NO_MATCH_ID)
+        .eq("department_id", department.id)
+        .in("role", ["teacher", "hod"])
+        .order("full_name")
+    ) as any[];
+  }, []);
+  const faculty = facultyResource.data ?? [];
 
   const filtered = faculty.filter((f: any) =>
     !search || f.full_name?.toLowerCase().includes(search.toLowerCase()) || f.email?.toLowerCase().includes(search.toLowerCase())
@@ -58,6 +60,20 @@ export default function HodFaculty() {
         />
       </div>
 
+      {!facultyResource.data && (
+        facultyResource.status === "error" ? (
+          <ErrorState
+            {...classifyError(facultyResource.error)}
+            title="Your department's faculty couldn't be loaded"
+            onRetry={facultyResource.reload}
+            className="rounded-2xl border border-outline-variant bg-surface-container-lowest"
+          />
+        ) : (
+          <LoadingState label="Loading faculty…" />
+        )
+      )}
+
+      {facultyResource.data && (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-md">
         {filtered.map((f: any) => (
           <div key={f.id} className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-lg shadow-sm">
@@ -75,7 +91,7 @@ export default function HodFaculty() {
               <div>📱 {f.phone || "—"}</div>
               <div className="flex items-center gap-sm pt-xs">
                 <span className={`font-semibold px-sm py-xs rounded-full capitalize ${
-                  f.status === "active" ? "bg-success/10 text-success" : "bg-warning/10 text-warning"
+                  f.status === "active" ? "bg-success-container text-on-success-container" : "bg-warning-container text-on-warning-container"
                 }`}>{f.status}</span>
                 <span className="font-semibold px-sm py-xs rounded-full bg-secondary/10 text-secondary capitalize">{f.role}</span>
               </div>
@@ -88,6 +104,7 @@ export default function HodFaculty() {
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }

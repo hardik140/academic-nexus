@@ -5,7 +5,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib/rbac";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { getCached, invalidateCache } from "@/lib/cache";
+import { getCached, invalidateCacheFamily, versionedKey } from "@/lib/cache";
 import { resolveListSort, listCacheKey } from "@/lib/cached-list";
 import { logAudit } from "@/lib/audit";
 import { assertClaimed } from "@/lib/concurrent-claim";
@@ -15,13 +15,17 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import type { DataTableQuery } from "@/components/ui/data-table";
 import { dbError } from "@/lib/internal-error";
+import { assertRead } from "@/lib/read-result-server";
 
 const PROCESSED_PAGE_SIZE = 10;
 const PROCESSED_SORT_COLUMNS = ["exit_time", "destination"] as const;
 const PROCESSED_CACHE_PREFIX = "list:gatepasses";
 
-function pendingCacheKey(scopeKey: string) {
-  return `pending:gatepasses:${scopeKey}`;
+/** Pending and processed gate passes: one family per college, read per warden scope. */
+const GATEPASS_FAMILY = "gatepasses";
+
+function pendingCacheKey(scopeKey: string, collegeId: string) {
+  return versionedKey(`pending:gatepasses:${scopeKey}`, GATEPASS_FAMILY, collegeId);
 }
 
 /**
@@ -37,19 +41,22 @@ export async function resolveWardenScopedStudentIds(
 ): Promise<string[] | null> {
   if (actor.role === "admin") return null;
 
-  const { data: blocks } = await supabase.from("hostel_blocks").select("id").eq("warden_id", actor.userId);
+  const { data: blocks, error: blocksError } = await supabase.from("hostel_blocks").select("id").eq("warden_id", actor.userId);
+  assertRead(blocksError);
   const blockIds = (blocks || []).map((b) => b.id);
   if (blockIds.length === 0) return [];
 
-  const { data: rooms } = await supabase.from("hostel_rooms").select("id").in("block_id", blockIds);
+  const { data: rooms, error: roomsError } = await supabase.from("hostel_rooms").select("id").in("block_id", blockIds);
+  assertRead(roomsError);
   const roomIds = (rooms || []).map((r) => r.id);
   if (roomIds.length === 0) return [];
 
-  const { data: allocations } = await supabase
+  const { data: allocations, error: allocationsError } = await supabase
     .from("hostel_allocations")
     .select("student_id")
     .in("room_id", roomIds)
     .eq("status", "active");
+  assertRead(allocationsError);
   return (allocations || []).map((a) => a.student_id);
 }
 
@@ -97,7 +104,7 @@ export async function listPendingGatePasses() {
   const supabase = await createClient();
   const studentIds = await resolveWardenScopedStudentIds(supabase, actor);
 
-  return getCached(pendingCacheKey(actor.role === "admin" ? actor.collegeId : actor.userId), 15, async () => {
+  return getCached(pendingCacheKey(actor.role === "admin" ? actor.collegeId : actor.userId, actor.collegeId), 15, async () => {
     if (studentIds !== null && studentIds.length === 0) return [];
     let dbQuery = supabase
       .from("gate_passes")
@@ -105,7 +112,8 @@ export async function listPendingGatePasses() {
       .eq("status", "pending")
       .eq("college_id", actor.collegeId);
     if (studentIds !== null) dbQuery = dbQuery.in("student_id", studentIds);
-    const { data } = await dbQuery.order("created_at", { ascending: false });
+    const { data, error: dataError } = await dbQuery.order("created_at", { ascending: false });
+    assertRead(dataError);
     return data || [];
   });
 }
@@ -116,7 +124,11 @@ export async function listProcessedGatePasses(q: DataTableQuery) {
   const studentIds = await resolveWardenScopedStudentIds(supabase, actor);
 
   const { column, ascending } = resolveListSort(PROCESSED_SORT_COLUMNS, "created_at", false, q);
-  const cacheKey = listCacheKey(PROCESSED_CACHE_PREFIX, actor.role === "admin" ? actor.collegeId : actor.userId, q, column);
+  const cacheKey = versionedKey(
+    listCacheKey(PROCESSED_CACHE_PREFIX, actor.role === "admin" ? actor.collegeId : actor.userId, q, column),
+    GATEPASS_FAMILY,
+    actor.collegeId
+  );
 
   return getCached(cacheKey, 30, async () => {
     if (studentIds !== null && studentIds.length === 0) return { data: [], count: 0 };
@@ -126,9 +138,10 @@ export async function listProcessedGatePasses(q: DataTableQuery) {
       .neq("status", "pending")
       .eq("college_id", actor.collegeId);
     if (studentIds !== null) dbQuery = dbQuery.in("student_id", studentIds);
-    const { data, count } = await dbQuery
+    const { data, count, error: dataError } = await dbQuery
       .order(column, { ascending })
       .range(q.page * PROCESSED_PAGE_SIZE, q.page * PROCESSED_PAGE_SIZE + PROCESSED_PAGE_SIZE - 1);
+    assertRead(dataError);
     return { data: data || [], count: count ?? 0 };
   });
 }
@@ -218,22 +231,14 @@ export async function actOnGatePassCore(
 
 export async function actOnGatePass(
   passId: string,
-  action: "approved" | "rejected",
-  processedViewQuery?: DataTableQuery
-) {
+  action: "approved" | "rejected") {
   const actor = await requireRole(PERMISSIONS.gatepass_review);
   const supabase = await createClient();
   await actOnGatePassCore(supabase, actor, passId, action);
   revalidatePath("/warden/gatepasses");
   revalidatePath("/warden/dashboard");
 
-  await invalidateCache(pendingCacheKey(actor.role === "admin" ? actor.collegeId : actor.userId));
-  if (processedViewQuery) {
-    const { column } = resolveListSort(PROCESSED_SORT_COLUMNS, "created_at", false, processedViewQuery);
-    await invalidateCache(
-      listCacheKey(PROCESSED_CACHE_PREFIX, actor.role === "admin" ? actor.collegeId : actor.userId, processedViewQuery, column)
-    );
-  }
+  await invalidateCacheFamily(GATEPASS_FAMILY, actor.collegeId);
 }
 
 /** Called by app/api/mobile/gatepass/act/route.ts. */
@@ -348,7 +353,7 @@ export async function recordManualGateMovement(params: {
   const result = await recordManualGateMovementCore(supabase, actor, params);
   revalidatePath("/warden/gatepasses");
   revalidatePath("/warden/dashboard");
-  await invalidateCache(pendingCacheKey(actor.role === "admin" ? actor.collegeId : actor.userId));
+  await invalidateCacheFamily(GATEPASS_FAMILY, actor.collegeId);
   return result;
 }
 
@@ -395,12 +400,13 @@ export async function revokeGatePassCredential(passIdRaw: string, reasonRaw: str
 export async function listGatesForOverride() {
   const actor = await requireRole(PERMISSIONS.gate_movement_override);
   const supabase = await createClient();
-  const { data } = await supabase
+  const { data, error: dataError } = await supabase
     .from("gates")
     .select("id, code, name")
     .eq("college_id", actor.collegeId)
     .eq("is_active", true)
     .order("code");
+  assertRead(dataError);
   return data ?? [];
 }
 
@@ -409,12 +415,13 @@ export async function listGatePassMovements(passIdRaw: string) {
   const actor = await requireRole(PERMISSIONS.gate_movement_read);
   const passId = z.string().guid().parse(passIdRaw);
   const supabase = await createClient();
-  const { data } = await supabase
+  const { data, error: dataError } = await supabase
     .from("gate_movements")
     .select("id, movement_type, occurred_at, is_override, override_reason, recorded_role, gate_id")
     .eq("gate_pass_id", passId)
     .eq("college_id", actor.collegeId)
     .order("occurred_at", { ascending: true });
+  assertRead(dataError);
   return data ?? [];
 }
 
@@ -450,7 +457,7 @@ export async function getGateOperationsSnapshot(): Promise<GateOperationsSnapsho
     const totalResidentsQuery =
       studentIds === null
         ? supabase.from("hostel_allocations").select("student_id", { count: "exact", head: true }).eq("college_id", actor.collegeId).eq("status", "active")
-        : Promise.resolve({ count: studentIds.length });
+        : Promise.resolve({ count: studentIds.length, error: null });
 
     let gatePassesQuery = supabase
       .from("gate_passes")
@@ -460,6 +467,8 @@ export async function getGateOperationsSnapshot(): Promise<GateOperationsSnapsho
     if (studentIds !== null) gatePassesQuery = gatePassesQuery.in("student_id", studentIds);
 
     const [totalResidentsRes, gatePassesRes] = await Promise.all([totalResidentsQuery, gatePassesQuery]);
+    assertRead(totalResidentsRes.error);
+    assertRead(gatePassesRes.error);
     const totalResidents = (totalResidentsRes as { count: number | null }).count ?? 0;
 
     const now = Date.now();

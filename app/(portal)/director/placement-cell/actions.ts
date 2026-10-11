@@ -5,7 +5,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole, type AuthorizedActor } from "@/lib/rbac";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { getCached, invalidateCache, middlewareProfileCacheKey } from "@/lib/cache";
+import { getCachedWriteBehind } from "@/lib/cache";
 import { logAudit } from "@/lib/audit";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { assertClaimed } from "@/lib/concurrent-claim";
@@ -14,6 +14,7 @@ import { inviteUserCore, type InviteUserParams } from "@/lib/invitations";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import { dbError } from "@/lib/internal-error";
+import { assertRead } from "@/lib/read-result-server";
 
 // Roles eligible to be promoted directly into Placement Cell — mirrors
 // assignHodCore's "must already hold an eligible role" guard
@@ -25,12 +26,13 @@ const PROMOTABLE_ROLES = ["teacher", "admin"] as const;
 export async function listPlacementCellUsers() {
   const actor = await requireRole(["director"]);
   const supabase = await createClient();
-  const { data } = await supabase
+  const { data, error: dataError } = await supabase
     .from("profiles")
     .select("id, full_name, email, status, created_at")
     .eq("college_id", actor.collegeId)
     .eq("role", "placement_cell")
     .order("created_at", { ascending: false });
+  assertRead(dataError);
   return data || [];
 }
 
@@ -38,12 +40,13 @@ export async function listPlacementCellUsers() {
 export async function listPlacementCellCandidates() {
   const actor = await requireRole(["director"]);
   const supabase = await createClient();
-  const { data } = await supabase
+  const { data, error: dataError } = await supabase
     .from("profiles")
     .select("id, full_name, email, role")
     .eq("college_id", actor.collegeId)
     .in("role", PROMOTABLE_ROLES)
     .order("full_name");
+  assertRead(dataError);
   return data || [];
 }
 
@@ -106,7 +109,6 @@ export async function promoteToPlacementCellCore(
   }
   assertClaimed(promoted, "staff member");
 
-  await invalidateCache(middlewareProfileCacheKey(userId));
   await logAudit(supabase, actor, "Promoted to Placement Cell", "profiles", userId);
 }
 
@@ -180,7 +182,6 @@ export async function revokePlacementCellCore(
   }
   assertClaimed(revoked, "Placement Cell user");
 
-  await invalidateCache(middlewareProfileCacheKey(userId));
   await logAudit(supabase, actor, "Revoked Placement Cell access", "profiles", userId);
 }
 
@@ -213,7 +214,6 @@ export async function reactivatePlacementCell(userId: string) {
   }
   assertClaimed(reactivated, "Placement Cell user");
 
-  await invalidateCache(middlewareProfileCacheKey(validatedId));
   await logAudit(supabase, actor, "Re-activated Placement Cell access", "profiles", validatedId);
   revalidatePath("/director/placement-cell");
 }
@@ -228,7 +228,7 @@ export async function getPlacementOverview() {
   const actor = await requireRole(["director", "admin"]);
   const supabase = await createClient();
 
-  return getCached(`placement:overview:${actor.collegeId}`, 60, async () => {
+  return getCachedWriteBehind(`placement:overview:${actor.collegeId}`, 60, async () => {
     const [summaryRes, companiesRes, activeDrivesRes, applicationsRes, cellRes] = await Promise.all([
       supabase.from("mv_placement_summary").select("*").maybeSingle(),
       supabase.from("companies").select("*", { count: "exact", head: true }).eq("college_id", actor.collegeId),
@@ -245,6 +245,11 @@ export async function getPlacementOverview() {
         .eq("role", "placement_cell")
         .eq("status", "active"),
     ]);
+    assertRead(summaryRes.error);
+    assertRead(companiesRes.error);
+    assertRead(activeDrivesRes.error);
+    assertRead(applicationsRes.error);
+    assertRead(cellRes.error);
 
     return {
       totalPlaced: summaryRes.data?.total_placed || 0,

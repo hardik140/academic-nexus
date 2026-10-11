@@ -1211,9 +1211,13 @@ describe("model observations", () => {
   it("has no write policy of any kind on timetable_slots", async () => {
     const policies = await verify<{ cmd: string }>(
       db,
-      `SELECT cmd FROM pg_policies WHERE schemaname='public' AND tablename='timetable_slots'`
+      // PERMISSIVE only: a restrictive policy (053's tenant_access_gate) can only
+      // narrow access, never grant a write.
+      `SELECT cmd FROM pg_policies WHERE schemaname='public' AND tablename='timetable_slots' AND permissive='PERMISSIVE'`
     );
-    expect(policies.map((p) => p.cmd)).toEqual(["SELECT"]);
+    // 055 split 006's single read into staff (college-wide) and student/parent
+    // (own enrolments) — both still SELECT only.
+    expect(policies.map((p) => p.cmd)).toEqual(["SELECT", "SELECT"]);
 
     // So nobody can create a timetable through PostgREST — unchanged since
     // migration 006, and deliberately left alone in Phase 8.

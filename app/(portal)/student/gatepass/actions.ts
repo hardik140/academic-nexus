@@ -11,6 +11,7 @@ import { qrSvg } from "@/lib/gate-security/qr";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import { dbError } from "@/lib/internal-error";
+import { assertRead } from "@/lib/read-result-server";
 
 const ApplyForGatePassSchema = z.object({
   destination: z.string().trim().min(1).max(200),
@@ -188,10 +189,11 @@ export async function getMyGatePassMovements(passIdRaw: string) {
   await requireRole(["student"]);
   const passId = z.string().guid().parse(passIdRaw);
   const supabase = await createClient();
-  const { data } = await supabase
+  const { data, error: dataError } = await supabase
     .from("gate_movements")
     .select("id, movement_type, occurred_at, is_override")
     .eq("gate_pass_id", passId)
     .order("occurred_at", { ascending: true });
+  assertRead(dataError);
   return data ?? [];
 }

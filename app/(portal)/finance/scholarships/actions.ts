@@ -5,7 +5,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib/rbac";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { getCached, invalidateCache } from "@/lib/cache";
+import { getCached, invalidateCacheFamily, versionedKey } from "@/lib/cache";
 import { resolveListSort, listCacheKey } from "@/lib/cached-list";
 import { logAudit } from "@/lib/audit";
 import { PERMISSIONS } from "@/lib/permissions";
@@ -13,6 +13,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import type { DataTableQuery } from "@/components/ui/data-table";
 import { dbError } from "@/lib/internal-error";
+import { assertRead } from "@/lib/read-result-server";
 
 type ScholarshipType = Database["public"]["Tables"]["scholarships"]["Row"]["type"];
 
@@ -26,7 +27,7 @@ export async function listScholarships(q: DataTableQuery) {
   const supabase = await createClient();
 
   const { column, ascending } = resolveListSort(SCHOLARSHIPS_SORT_COLUMNS, "awarded_date", false, q);
-  const cacheKey = listCacheKey(SCHOLARSHIPS_CACHE_PREFIX, actor.collegeId, q, column);
+  const cacheKey = versionedKey(listCacheKey(SCHOLARSHIPS_CACHE_PREFIX, actor.collegeId, q, column), SCHOLARSHIPS_CACHE_PREFIX, actor.collegeId);
 
   return getCached(cacheKey, 30, async () => {
     let dbQuery = supabase
@@ -38,7 +39,8 @@ export async function listScholarships(q: DataTableQuery) {
     dbQuery = dbQuery.order(column, { ascending });
 
     const from = q.page * SCHOLARSHIPS_PAGE_SIZE;
-    const { data, count } = await dbQuery.range(from, from + SCHOLARSHIPS_PAGE_SIZE - 1);
+    const { data, count, error: dataError } = await dbQuery.range(from, from + SCHOLARSHIPS_PAGE_SIZE - 1);
+    assertRead(dataError);
     return { data: data || [], count: count ?? 0 };
   });
 }
@@ -110,18 +112,13 @@ export async function createScholarship(
   name: string,
   type: ScholarshipType,
   amount: number,
-  academicYear?: string,
-  viewQuery?: DataTableQuery
-) {
+  academicYear?: string) {
   const actor = await requireRole(PERMISSIONS.scholarship_manage);
   const supabase = await createClient();
   await createScholarshipCore(supabase, actor, { studentId, name, type, amount, academicYear });
   revalidatePath("/finance/scholarships");
   revalidatePath("/finance/dashboard");
-  if (viewQuery) {
-    const { column } = resolveListSort(SCHOLARSHIPS_SORT_COLUMNS, "awarded_date", false, viewQuery);
-    await invalidateCache(listCacheKey(SCHOLARSHIPS_CACHE_PREFIX, actor.collegeId, viewQuery, column));
-  }
+  await invalidateCacheFamily(SCHOLARSHIPS_CACHE_PREFIX, actor.collegeId);
 }
 
 /** Called by app/api/mobile/finance/scholarship/route.ts. */

@@ -5,7 +5,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib/rbac";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { getCached, invalidateCache } from "@/lib/cache";
+import { getCached, invalidateCacheFamily, versionedKey } from "@/lib/cache";
 import { logAudit } from "@/lib/audit";
 import { assertClaimed, assertPersisted } from "@/lib/concurrent-claim";
 import { assertNotSelfApproval } from "@/lib/segregation-of-duties";
@@ -14,6 +14,7 @@ import { computeAffectedClasses, type AffectedClass } from "@/lib/leave-impact";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import { dbError } from "@/lib/internal-error";
+import { assertRead } from "@/lib/read-result-server";
 
 const ActOnLeaveRequestSchema = z.object({
   requestId: z.string().guid(),
@@ -22,8 +23,11 @@ const ActOnLeaveRequestSchema = z.object({
 
 const PROCESSED_LIMIT = 20;
 
-function hodApprovalsCacheKey(hodUserId: string) {
-  return `hod-approvals:${hodUserId}`;
+const HOD_APPROVALS_FAMILY = "hod-approvals";
+const HOD_CORRECTIONS_FAMILY = "hod-corrections";
+
+function hodApprovalsCacheKey(hodUserId: string, collegeId: string) {
+  return versionedKey(`hod-approvals:${hodUserId}`, HOD_APPROVALS_FAMILY, collegeId);
 }
 
 /**
@@ -37,16 +41,18 @@ export async function listHodApprovals() {
   const actor = await requireRole(["hod"]);
   const supabase = await createClient();
 
-  return getCached(hodApprovalsCacheKey(actor.userId), 30, async () => {
-    const { data: department } = await supabase.from("departments").select("id").eq("hod_id", actor.userId).single();
+  return getCached(hodApprovalsCacheKey(actor.userId, actor.collegeId), 30, async () => {
+    const { data: department, error: departmentError } = await supabase.from("departments").select("id").eq("hod_id", actor.userId).single();
+    assertRead(departmentError);
     if (!department) {
       return { pending: [], processed: [] };
     }
 
-    const { data: deptStaff } = await supabase
+    const { data: deptStaff, error: deptStaffError } = await supabase
       .from("profiles")
       .select("id")
       .eq("department_id", department.id);
+    assertRead(deptStaffError);
     const staffIds = (deptStaff || []).map((s) => s.id);
     if (staffIds.length === 0) {
       return { pending: [], processed: [] };
@@ -62,6 +68,8 @@ export async function listHodApprovals() {
       baseQuery().eq("status", "pending").order("created_at", { ascending: false }),
       baseQuery().neq("status", "pending").order("created_at", { ascending: false }).limit(PROCESSED_LIMIT),
     ]);
+    assertRead(pendingRes.error);
+    assertRead(processedRes.error);
     return { pending: pendingRes.data || [], processed: processedRes.data || [] };
   });
 }
@@ -101,7 +109,8 @@ async function resolveAffectedSessions(
   supabase: SupabaseClient<Database>,
   instructorId: string,
   startDate: string,
-  endDate: string
+  endDate: string,
+  requireSuccessfulRead = false
 ): Promise<DeliveredSession[]> {
   type OfferingWithContext = {
     id: string;
@@ -112,12 +121,13 @@ async function resolveAffectedSessions(
     semesters: { start_date: string; end_date: string } | null;
   };
 
-  const { data: offeringsRaw } = await supabase
+  const { data: offeringsRaw, error: offeringsError } = await supabase
     .from("course_offerings")
     .select(
       "id, status, semester_id, courses:course_id(name, code), sections:section_id(name), semesters:semester_id(start_date, end_date)"
     )
     .eq("instructor_id", instructorId);
+  if (requireSuccessfulRead) assertRead(offeringsError);
 
   // Cast: the hand-maintained Database type declares no Relationships, so
   // embedded selects can't be inferred — the workaround used throughout.
@@ -125,10 +135,11 @@ async function resolveAffectedSessions(
   const live = offerings.filter((o) => o.status !== "cancelled");
   if (live.length === 0) return [];
 
-  const { data: slotsRaw } = await supabase
+  const { data: slotsRaw, error: slotsError } = await supabase
     .from("timetable_slots")
     .select("id, offering_id, day_of_week, start_time, end_time")
     .in("offering_id", live.map((o) => o.id));
+  if (requireSuccessfulRead) assertRead(slotsError);
 
   const slots = (slotsRaw as SlotWithOffering[] | null) || [];
   if (slots.length === 0) return [];
@@ -176,18 +187,20 @@ export async function previewLeaveImpact(requestId: string) {
   const actor = await requireRole(["hod", "admin"]);
   const supabase = await createClient();
 
-  const { data: requestData } = await supabase
+  const { data: requestData, error: requestDataError } = await supabase
     .from("leave_requests")
     .select("requested_by, start_date, end_date, profiles:requested_by(full_name, department_id)")
     .eq("id", requestId)
     .single();
+  assertRead(requestDataError);
   const request = requestData as any;
   if (!request) {
     throw new Error("Leave request not found.");
   }
 
   if (actor.role === "hod") {
-    const { data: department } = await supabase.from("departments").select("id").eq("hod_id", actor.userId).single();
+    const { data: department, error: departmentError } = await supabase.from("departments").select("id").eq("hod_id", actor.userId).single();
+    assertRead(departmentError);
     if (!department?.id || request.profiles?.department_id !== department.id) {
       throw new Error("You can only preview leave requests from your own department.");
     }
@@ -197,7 +210,9 @@ export async function previewLeaveImpact(requestId: string) {
     supabase,
     request.requested_by,
     request.start_date,
-    request.end_date
+    request.end_date,
+    // Preview failures must surface; post-approval substitution behavior is unchanged.
+    true
   );
 
   return {
@@ -345,14 +360,9 @@ export async function actOnLeaveRequest(
   const supabase = await createClient();
   await actOnLeaveRequestCore(supabase, actor, requestId, action);
   revalidatePath("/hod/approvals");
-  if (actor.role === "hod") {
-    await invalidateCache(hodApprovalsCacheKey(actor.userId));
-  }
-  // else: admin acting on a HOD-owned request (the unrestricted branch in
-  // actOnLeaveRequestCore above) — that HOD's cache isn't invalidated here,
-  // it just rides out the 30s TTL. Rare path (admin bypassing the normal
-  // per-department UI), not worth an extra query to resolve whose cache
-  // to bust.
+  // The family is per college, so an admin acting on an HOD's request
+  // clears that HOD's list too (it used to wait out the TTL).
+  await invalidateCacheFamily(HOD_APPROVALS_FAMILY, actor.collegeId);
 }
 
 /** Called by app/api/mobile/leave/act/route.ts. */
@@ -365,8 +375,8 @@ export async function actOnLeaveRequestViaRequest(
   await actOnLeaveRequestCore(supabase, actor, requestId, action);
 }
 
-function correctionsCacheKey(hodUserId: string) {
-  return `hod-corrections:${hodUserId}`;
+function correctionsCacheKey(hodUserId: string, collegeId: string) {
+  return versionedKey(`hod-corrections:${hodUserId}`, HOD_CORRECTIONS_FAMILY, collegeId);
 }
 
 /**
@@ -383,7 +393,7 @@ export async function listCorrectionApprovals() {
   const actor = await requireRole(PERMISSIONS.attendance_correction_review);
   const supabase = await createClient();
 
-  return getCached(correctionsCacheKey(actor.userId), 30, async () => {
+  return getCached(correctionsCacheKey(actor.userId, actor.collegeId), 30, async () => {
     const selectCols = "*, courses:course_id(name, code), profiles:submitted_by(full_name), students:student_id(enrollment_number)";
 
     if (actor.role === "admin") {
@@ -392,18 +402,22 @@ export async function listCorrectionApprovals() {
         baseQuery().eq("status", "pending").order("created_at", { ascending: false }),
         baseQuery().neq("status", "pending").order("created_at", { ascending: false }).limit(CORRECTIONS_PROCESSED_LIMIT),
       ]);
+      assertRead(pendingRes.error);
+      assertRead(processedRes.error);
       return { pending: pendingRes.data || [], processed: processedRes.data || [] };
     }
 
-    const { data: department } = await supabase.from("departments").select("id").eq("hod_id", actor.userId).single();
+    const { data: department, error: departmentError } = await supabase.from("departments").select("id").eq("hod_id", actor.userId).single();
+    assertRead(departmentError);
     if (!department) return { pending: [], processed: [] };
 
     // 047 dropped attendance_correction_requests.course_id; the request names
     // the OFFERING, so department scope resolves through the offering's course.
-    const { data: deptOfferings } = await supabase
+    const { data: deptOfferings, error: deptOfferingsError } = await supabase
       .from("course_offerings")
       .select("id, courses:course_id!inner(department_id)")
       .eq("courses.department_id", department.id);
+    assertRead(deptOfferingsError);
     const offeringIds = ((deptOfferings as unknown as { id: string }[]) || []).map((o) => o.id);
     if (offeringIds.length === 0) return { pending: [], processed: [] };
 
@@ -413,6 +427,8 @@ export async function listCorrectionApprovals() {
       baseQuery().eq("status", "pending").order("created_at", { ascending: false }),
       baseQuery().neq("status", "pending").order("created_at", { ascending: false }).limit(CORRECTIONS_PROCESSED_LIMIT),
     ]);
+    assertRead(pendingRes.error);
+    assertRead(processedRes.error);
     return { pending: pendingRes.data || [], processed: processedRes.data || [] };
   });
 }
@@ -503,7 +519,5 @@ export async function actOnAttendanceCorrection(requestId: string, action: "appr
   await actOnAttendanceCorrectionCore(supabase, actor, requestId, action);
   revalidatePath("/hod/approvals");
   revalidatePath("/teacher/attendance");
-  if (actor.role === "hod") {
-    await invalidateCache(correctionsCacheKey(actor.userId));
-  }
+  await invalidateCacheFamily(HOD_CORRECTIONS_FAMILY, actor.collegeId);
 }

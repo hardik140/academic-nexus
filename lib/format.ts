@@ -6,10 +6,11 @@
  * currency or time zone — the colleges table has no such columns, and adding
  * them is out of scope.
  *
- * This module is the foundation only. lib/utils.ts's formatCurrency (USD,
- * en-US) and formatDate (en-US) are still used by existing screens and are
- * deliberately left unchanged here; screens move to these functions as they
- * are redesigned, so that no screen changes appearance before its own stage.
+ * formatMoney is the only money formatter: every production money display
+ * uses it (S1 Gate 2 removed lib/utils.ts's USD/en-US formatCurrency, and
+ * tests/currency-contract.test.ts keeps a USD formatter from returning).
+ * lib/utils.ts's formatDate (en-US) is still used by existing screens;
+ * screens move to formatDate here in their own stage.
  * Likewise the UTC "today" calculations that D7 identified are fixed in their
  * own track, not by this file's existence.
  */
@@ -98,4 +99,14 @@ export function todayInTimeZone(timeZone: string = APP_TIME_ZONE, now: Date = ne
   }).formatToParts(now);
   const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value ?? "";
   return `${part("year")}-${part("month")}-${part("day")}`;
+}
+
+/**
+ * The day of the week (0 = Sunday … 6 = Saturday) that it currently is in
+ * `timeZone` — the Asia/Kolkata counterpart of `new Date().getDay()`, which
+ * on a UTC server is still yesterday in India until 05:30. Derived from
+ * todayInTimeZone so the two can never disagree about which day it is.
+ */
+export function todayDayOfWeek(timeZone: string = APP_TIME_ZONE, now: Date = new Date()): number {
+  return new Date(`${todayInTimeZone(timeZone, now)}T00:00:00Z`).getUTCDay();
 }

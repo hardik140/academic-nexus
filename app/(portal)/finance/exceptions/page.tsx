@@ -1,4 +1,4 @@
-import { formatCurrency } from "@/lib/utils";
+import { formatMoney } from "@/lib/format";
 import { getFinanceExceptions, type ExceptionEntry } from "./actions";
 
 function ExceptionSection({
@@ -22,7 +22,7 @@ function ExceptionSection({
         <h2 className="text-sm font-bold text-on-surface flex items-center gap-sm">
           {icon} {title}
         </h2>
-        <span className={`text-xs font-semibold px-sm py-xs rounded-full ${severity === "high" ? "bg-error/10 text-error" : "bg-warning/10 text-warning"}`}>
+        <span className={`text-xs font-semibold px-sm py-xs rounded-full ${severity === "high" ? "bg-error/10 text-error" : "bg-warning-container text-on-warning-container"}`}>
           {items.length}
         </span>
       </div>
@@ -33,7 +33,7 @@ function ExceptionSection({
               <div className="text-sm font-medium text-on-surface">{item.studentName} <span className="text-xs text-outline">— {item.enrollmentNumber}</span></div>
               <div className="text-xs text-outline mt-xs">{item.detail}</div>
             </div>
-            {showAmount && <div className="text-sm font-bold text-on-surface font-mono">{formatCurrency(item.amount)}</div>}
+            {showAmount && <div className="text-sm font-bold text-on-surface font-mono">{formatMoney(item.amount)}</div>}
           </div>
         )) : (
           <div className="p-xl text-center text-sm text-outline">{emptyMessage}</div>

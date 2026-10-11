@@ -5,9 +5,10 @@ import { describe, expect, it } from "vitest";
 /**
  * Motion contract guard (Checkpoint 4, M1).
  *
- * Motion is CSS-first and goes through four semantic utilities in
- * app/globals.css (motion-feedback, motion-state, motion-dialog,
- * motion-drawer). This static scan stops the contract from eroding:
+ * Motion is CSS-first and goes through five semantic utilities in
+ * app/globals.css (motion-feedback, motion-state, motion-appear,
+ * motion-dialog, motion-drawer). This static scan stops the contract from
+ * eroding:
  *
  *   • transition-all — animates whatever changes, layout included; also its
  *     arbitrary spellings (transition-[all], transition-[width], …).
@@ -16,12 +17,16 @@ import { describe, expect, it } from "vitest";
  *   • durations over 300ms (--duration-slow), as classes or inline styles.
  *   • animate-* other than animate-spin — decorative keyframe motion.
  *   • an animation library in package.json.
- *   • a Recharts series with animation switched on — charts never animate,
- *     and Recharts animates in JavaScript, beyond the CSS reduced-motion rule.
+ *   • a Recharts series or Tooltip without isAnimationActive={false} — charts
+ *     never animate, and Recharts animates in JavaScript, beyond the CSS
+ *     reduced-motion rule. Since M7 the flag must be written out: absent
+ *     means Recharts' default, a 1.5 s grow-in for anyone who hasn't asked
+ *     for reduced motion.
  *
  * The class rules cover every page (app/, since M3) and the shared UI
  * (components/ui, components/portal, components/charts). The Recharts rule
- * covers every file in app/ and components/.
+ * covers every file in app/ and components/. M7 adds the chart contract:
+ * Recharts only inside components/charts, every chart through ChartFigure.
  *
  * Existing violations are listed in KNOWN_DEBT with their exact count and
  * the stage that removes them. A count must match exactly: one more fails
@@ -115,13 +120,57 @@ export function findViolations(source: string): Array<{ rule: Rule; match: strin
     found.push({ rule: "keyframe-animation", match: m[0] });
   }
 
-  // Recharts: isAnimationActive must be absent (Recharts' reduced-motion-aware
-  // default) or explicitly false. A bare prop, {true}, "auto" or a variable fails.
+  // Recharts: isAnimationActive must be explicitly false. A bare prop, {true},
+  // "auto" or a variable fails…
   for (const m of source.matchAll(/\bisAnimationActive\b(?!\s*=\s*\{\s*false\s*\}|\s*:\s*false\b)/g)) {
     found.push({ rule: "chart-animation", match: m[0] });
   }
+  // …and so does leaving it out (M7), on an element imported from recharts
+  // that animates by default.
+  for (const [local, imported] of rechartsImports(source)) {
+    if (!ANIMATED_RECHARTS.includes(imported)) continue;
+    for (const tag of jsxOpeningTags(source, local)) {
+      if (!/\bisAnimationActive\b/.test(tag)) found.push({ rule: "chart-animation", match: `<${local}> without isAnimationActive={false}` });
+    }
+  }
 
   return found;
+}
+
+// Recharts elements whose isAnimationActive defaults to "auto" (recharts 3.10.1).
+const ANIMATED_RECHARTS = ["Area", "Bar", "Funnel", "Line", "Pie", "Radar", "RadialBar", "Scatter", "Treemap", "Tooltip"];
+
+/** Local name → imported name, for every named import from "recharts". */
+export function rechartsImports(source: string): Map<string, string> {
+  const names = new Map<string, string>();
+  for (const m of source.matchAll(/import\s*(?:type\s*)?\{([^}]*)\}\s*from\s*["']recharts["']/g)) {
+    for (const spec of m[1].split(",")) {
+      const [imported, local] = spec.trim().replace(/^type\s+/, "").split(/\s+as\s+/);
+      if (imported) names.set(local ?? imported, imported);
+    }
+  }
+  return names;
+}
+
+/** Every JSX opening tag of `name`, props included. Braces and quoted strings are skipped, so `dot={{ r: 4 }}` or `=>` don't end it. */
+export function jsxOpeningTags(source: string, name: string): string[] {
+  const tags: string[] = [];
+  for (const m of source.matchAll(new RegExp(`<${name}(?=[\\s/>])`, "g"))) {
+    let depth = 0;
+    let quote: string | null = null;
+    let i = m.index + m[0].length;
+    for (; i < source.length; i++) {
+      const c = source[i];
+      if (quote) {
+        if (c === quote) quote = null;
+      } else if (depth === 0 && (c === '"' || c === "'")) quote = c;
+      else if (c === "{") depth++;
+      else if (c === "}") depth--;
+      else if (c === ">" && depth === 0) break;
+    }
+    tags.push(source.slice(m.index, i + 1));
+  }
+  return tags;
 }
 
 function sourceFiles(dir: string): string[] {
@@ -183,6 +232,10 @@ describe("motion guard: rule detection", () => {
     ['<Line isAnimationActive="auto" />', "chart-animation"],
     ["<Bar isAnimationActive={animate} />", "chart-animation"],
     ["const props = { isAnimationActive: true }", "chart-animation"],
+    ['import { Pie } from "recharts";\n<Pie dataKey="value" />', "chart-animation"],
+    ['import { Tooltip as ChartTooltip } from "recharts";\n<ChartTooltip />', "chart-animation"],
+    ['import { Line } from "recharts";\n<Line dot={{ r: 4 }} onClick={() => a > b} />', "chart-animation"],
+    ['import { RadialBar } from "recharts";\n<RadialBar\n  background\n  dataKey="value"\n/>', "chart-animation"],
   ])("flags %s as %s", (source, rule) => {
     expect(findViolations(source).map((v) => v.rule)).toContain(rule);
   });
@@ -206,6 +259,9 @@ describe("motion guard: rule detection", () => {
     "style={{ transitionDuration: '200ms' }}",
     "<Funnel dataKey=\"value\" isAnimationActive={false}>",
     "const props = { isAnimationActive: false }",
+    'import { Tooltip } from "@/components/ui/tooltip";\n<Tooltip />',
+    'import { Line, LineChart, XAxis } from "recharts";\n<LineChart><XAxis dataKey="x" /><Line dataKey="v" dot={{ r: 4 }} isAnimationActive={false} /></LineChart>',
+    'import { Pie } from "recharts";\n<Pie\n  dataKey="value"\n  isAnimationActive={false}\n/>',
     "// the transition-allowance and reanimate-state helpers are unrelated",
     'const label = "Duration: 700 minutes"; const x = "animated-list";',
     "const timeoutMs = 3000; setTimeout(close, 1200);",
@@ -396,5 +452,139 @@ describe("motion guard: M5 sidebar and drawer", () => {
 
   it("no simulated drawer: no fixed layer, z-index, translate, manual inert, focus trap or global Escape listener", () => {
     expect(shell).not.toMatch(/\bfixed\b|inset-0|\bz-(?:\d|\[)|translate-x|\binert\b|aria-modal|role="dialog"|addEventListener\(\s*["']keydown|\.focus\(/);
+  });
+});
+
+// ─── M6.1: feedback entrance ─────────────────────────────────────────────
+
+describe("motion guard: M6.1 feedback", () => {
+  const css = readFileSync("app/globals.css", "utf8");
+  // The utility's body: from its opening brace to the brace that closes it.
+  const start = css.indexOf("@utility motion-appear {");
+  let end = start + "@utility motion-appear {".length;
+  for (let depth = 1; depth > 0 && end < css.length; end++) {
+    if (css[end] === "{") depth++;
+    else if (css[end] === "}") depth--;
+  }
+  const appear = start < 0 ? "" : css.slice(start, end);
+
+  const FEEDBACK = {
+    alert: readFileSync("components/ui/alert.tsx", "utf8"),
+    loading: readFileSync("components/ui/loading-state.tsx", "utf8"),
+    empty: readFileSync("components/ui/empty-state.tsx", "utf8"),
+    error: readFileSync("components/ui/error-state.tsx", "utf8"),
+    stateView: readFileSync("components/ui/state-view.tsx", "utf8"),
+  };
+
+  it("motion-appear fades opacity only, on the fast token, from @starting-style", () => {
+    expect(appear).not.toBe("");
+    expect(appear).toMatch(/transition-property:\s*opacity;/);
+    expect(appear).toMatch(/transition-duration:\s*var\(--duration-fast\);/);
+    expect(appear).toMatch(/transition-timing-function:\s*var\(--ease-out\);/);
+    expect(appear).toMatch(/@starting-style\s*\{\s*opacity:\s*0;\s*\}/);
+    expect(appear).not.toMatch(/transform|translate|scale|height|width|margin|padding|top|left|allow-discrete|animation|@keyframes|\ball\b/);
+  });
+
+  it("with reduced motion requested, its duration is 0", () => {
+    const reduce = /@media \(prefers-reduced-motion: reduce\)\s*\{\s*:root\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
+    expect(reduce).toMatch(/--duration-fast:\s*0ms;/);
+  });
+
+  it("the feedback components carry no local timing and no JavaScript animation: only motion-appear and motion-feedback", () => {
+    for (const [name, source] of Object.entries(FEEDBACK)) {
+      // .animate() would run outside the stylesheet's reduced-motion rule.
+      expect(source, name).not.toMatch(/transition-|duration-|animate-|\.animate\(|delay-|ease-(?:in|out|linear|\[)|\btransition\b(?=[\s"'`])/);
+      const utilities = [...source.matchAll(/(?<![\w-])motion-(\w+)/g)].map((m) => m[1]);
+      expect(utilities.filter((u) => u !== "appear" && u !== "feedback"), name).toEqual([]);
+    }
+  });
+
+  it("only the Alert enters with motion-appear, and never for an error", () => {
+    const uses = FEEDBACK.alert.split(/\r?\n/).filter((line) => line.includes("motion-appear") && !line.trim().startsWith("*"));
+    expect(uses).toEqual(['            tone !== "error" && "motion-appear"']);
+    for (const name of ["loading", "empty", "error", "stateView"] as const) {
+      expect(FEEDBACK[name], name).not.toContain("motion-");
+    }
+  });
+});
+
+// ─── M7: charts ───────────────────────────────────────────────────────────
+
+describe("motion guard: M7 charts", () => {
+  const charts = sourceFiles("components/charts").filter((f) => f !== "components/charts/chart-figure.tsx");
+  const read = (file: string) => readFileSync(file, "utf8");
+
+  it("scans every chart, including the forecast's ratio chart", () => {
+    for (const f of ["donut-chart", "health-gauge", "placement-funnel-chart", "department-heatmap-grid", "faculty-ratio-chart"]) {
+      expect(charts).toContain(`components/charts/${f}.tsx`);
+    }
+  });
+
+  it("Recharts is imported only inside components/charts", () => {
+    const outside = CHART_RULE_SCOPE.flatMap(sourceFiles).filter((f) => !f.startsWith("components/charts/") && /from\s*["']recharts["']/.test(read(f)));
+    expect(outside).toEqual([]);
+  });
+
+  it("every chart renders through ChartFigure", () => {
+    for (const file of charts) {
+      expect(read(file), file).toMatch(/import \{ ChartFigure \} from "\.\/chart-figure";/);
+      expect(jsxOpeningTags(read(file), "ChartFigure").length, file).toBeGreaterThan(0);
+    }
+  });
+
+  it("every Recharts series and Tooltip in a chart has animation explicitly off", () => {
+    let checked = 0;
+    for (const file of charts) {
+      const source = read(file);
+      for (const [local, imported] of rechartsImports(source)) {
+        if (!ANIMATED_RECHARTS.includes(imported)) continue;
+        for (const tag of jsxOpeningTags(source, local)) {
+          expect(tag, file).toMatch(/\bisAnimationActive=\{false\}/);
+          checked++;
+        }
+      }
+    }
+    // Pie; RadialBar; Funnel and its Tooltip; Line and its Tooltip.
+    expect(checked).toBe(6);
+  });
+
+  it("every Recharts chart turns its accessibility layer off: the drawing is hidden behind the figure's caption and table", () => {
+    let checked = 0;
+    for (const file of charts) {
+      const source = read(file);
+      for (const [local, imported] of rechartsImports(source)) {
+        if (!/Chart$/.test(imported)) continue;
+        for (const tag of jsxOpeningTags(source, local)) {
+          expect(tag, file).toMatch(/\baccessibilityLayer=\{false\}/);
+          checked++;
+        }
+      }
+    }
+    expect(checked).toBe(4);
+  });
+
+  it("a Pie takes no tab stop of its own inside the hidden drawing", () => {
+    let checked = 0;
+    for (const file of charts) {
+      const source = read(file);
+      for (const [local, imported] of rechartsImports(source)) {
+        if (imported !== "Pie") continue;
+        for (const tag of jsxOpeningTags(source, local)) {
+          expect(tag, file).toMatch(/\brootTabIndex=\{-1\}/);
+          checked++;
+        }
+      }
+    }
+    expect(checked).toBe(1);
+  });
+
+  it("only the heatmap, a real table of text values, leaves its visual exposed", () => {
+    const exposed = charts.filter((f) => jsxOpeningTags(read(f), "ChartFigure").some((tag) => /\baccessibleVisual\b/.test(tag)));
+    expect(exposed).toEqual(["components/charts/department-heatmap-grid.tsx"]);
+  });
+
+  it("ChartFigure itself carries no motion", () => {
+    const code = read("components/charts/chart-figure.tsx").replace(/\/\*[\s\S]*?\*\//g, "");
+    expect(code).not.toMatch(/transition|duration-|animate-|motion-|\.animate\(/);
   });
 });

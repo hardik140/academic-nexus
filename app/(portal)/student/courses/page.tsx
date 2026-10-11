@@ -2,6 +2,8 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import type { Database } from "@/types/database";
+import { assertRead } from "@/lib/read-result-server";
+import { NO_MATCH_ID } from "@/lib/read-result";
 
 type EnrollmentStatus = Database["public"]["Tables"]["course_enrollments"]["Row"]["status"];
 
@@ -21,11 +23,12 @@ export default async function StudentCourses({
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: student } = await supabase
+  const { data: student, error: studentError } = await supabase
     .from("students")
     .select("id")
     .eq("user_id", user.id)
     .maybeSingle();
+  assertRead(studentError);
 
   const { status } = await searchParams;
   const activeFilter: "all" | EnrollmentStatus = FILTERS.find((f) => f.value === status)?.value ?? "all";
@@ -37,7 +40,7 @@ export default async function StudentCourses({
     .select("*, course_offerings:offering_id(id, courses:course_id(id, name, code, credits, type, department_id, departments:department_id(name)), sections:section_id(name), semesters:semester_id(name), profiles:instructor_id(full_name))")
     // students(id): 047 repointed course_enrollments.student_id, and
     // comparing it to the profile id silently matched nothing.
-    .eq("student_id", student?.id || "")
+    .eq("student_id", student?.id || NO_MATCH_ID)
     .order("status");
 
   if (activeFilter !== "all") {
@@ -81,7 +84,7 @@ export default async function StudentCourses({
                 <span className={`text-xs font-semibold px-sm py-xs rounded-full capitalize ${
                   e.status === "enrolled" ? "bg-success/10 text-success" :
                   e.status === "completed" ? "bg-info/10 text-info" :
-                  e.status === "dropped" ? "bg-error/10 text-error" : "bg-warning/10 text-warning"
+                  e.status === "dropped" ? "bg-error/10 text-error" : "bg-warning-container text-on-warning-container"
                 }`}>{e.status}</span>
               </div>
               <h3 className="text-sm font-bold text-on-surface mb-xs">{course?.name}</h3>

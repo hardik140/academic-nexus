@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { PLATFORM_COLLEGE_ID } from "@/lib/constants";
+import { SessionEnforcement } from "./session-enforcement";
 
 export default async function SuperAdminDashboardPage() {
   const supabase = await createClient();
@@ -34,6 +35,8 @@ export default async function SuperAdminDashboardPage() {
           </div>
         ))}
       </div>
+
+      <SessionEnforcement />
     </div>
   );
 }

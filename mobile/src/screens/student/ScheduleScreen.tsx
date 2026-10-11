@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import { useStudent } from "@/hooks/useStudent";
 import { Screen, Card, StatusBadge, colors } from "@/components/ui";
+import { currentTermEnrolledOfferingIds } from "@/lib/academic";
 
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -19,20 +20,23 @@ export default function ScheduleScreen() {
 
   const load = async () => {
     if (!session?.user.id || !student?.id) return;
-    const { data: profile } = await supabase.from("profiles").select("college_id").eq("id", session.user.id).single();
-    const [enrollRes, slotsRes] = await Promise.all([
-      supabase
-        .from("course_enrollments")
-        .select("*, course_offerings:offering_id(id, courses:course_id(id, name, code, credits, type), sections:section_id(name), semesters:semester_id(name), profiles:instructor_id(full_name))")
-        .eq("student_id", student?.id || "")
-        .eq("status", "enrolled"),
-      supabase
-        .from("timetable_slots")
-        .select("*, course_offerings:offering_id(id, courses:course_id(name, code), sections:section_id(name))")
-        .eq("college_id", profile?.college_id || "")
-        .order("day_of_week")
-        .order("start_time"),
-    ]);
+    // The student's OWN enrolled offerings in the ACTIVE term — the same rule
+    // as the web schedule and the database (055, defect 2). This screen used
+    // to list every slot in the college.
+    const enrollRes = await supabase
+      .from("course_enrollments")
+      .select("*, course_offerings:offering_id(id, courses:course_id(id, name, code, credits, type), sections:section_id(name), semesters:semester_id(name, status), profiles:instructor_id(full_name))")
+      .eq("student_id", student?.id || "")
+      .eq("status", "enrolled");
+    const offeringIds = currentTermEnrolledOfferingIds(enrollRes.data as never);
+    const slotsRes = offeringIds.length
+      ? await supabase
+          .from("timetable_slots")
+          .select("*, course_offerings:offering_id(id, courses:course_id(name, code), sections:section_id(name))")
+          .in("offering_id", offeringIds)
+          .order("day_of_week")
+          .order("start_time")
+      : { data: [] };
     setEnrollments(enrollRes.data || []);
     setSlots(slotsRes.data || []);
     setLoading(false);

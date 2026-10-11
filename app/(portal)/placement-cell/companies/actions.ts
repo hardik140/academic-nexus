@@ -5,13 +5,14 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole, type AuthorizedActor } from "@/lib/rbac";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { getCached, invalidateCache } from "@/lib/cache";
+import { getCachedWriteBehind, invalidateCacheFamily, versionedKey } from "@/lib/cache";
 import { logAudit } from "@/lib/audit";
 import { resolveListSort, listCacheKey } from "@/lib/cached-list";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import type { DataTableQuery } from "@/components/ui/data-table";
 import { dbError } from "@/lib/internal-error";
+import { assertRead } from "@/lib/read-result-server";
 
 const COMPANIES_PAGE_SIZE = 10;
 const COMPANIES_SORT_COLUMNS = ["name", "industry"] as const;
@@ -22,15 +23,16 @@ export async function listCompanies(q: DataTableQuery) {
   const supabase = await createClient();
 
   const { column, ascending } = resolveListSort(COMPANIES_SORT_COLUMNS, "name", true, q);
-  const cacheKey = listCacheKey(COMPANIES_CACHE_PREFIX, actor.collegeId, q, column);
+  const cacheKey = versionedKey(listCacheKey(COMPANIES_CACHE_PREFIX, actor.collegeId, q, column), COMPANIES_CACHE_PREFIX, actor.collegeId);
 
-  return getCached(cacheKey, 30, async () => {
+  return getCachedWriteBehind(cacheKey, 30, async () => {
     let dbQuery = supabase.from("companies").select("*", { count: "exact" });
     if (q.search) dbQuery = dbQuery.ilike("name", `%${q.search}%`);
     dbQuery = dbQuery.order(column, { ascending });
 
     const from = q.page * COMPANIES_PAGE_SIZE;
-    const { data, count } = await dbQuery.range(from, from + COMPANIES_PAGE_SIZE - 1);
+    const { data, count, error: dataError } = await dbQuery.range(from, from + COMPANIES_PAGE_SIZE - 1);
+    assertRead(dataError);
     return { data: data || [], count: count ?? 0 };
   });
 }
@@ -89,15 +91,12 @@ async function createCompanyCore(supabase: SupabaseClient<Database>, actor: Auth
   return data;
 }
 
-export async function createCompany(params: CompanyParams, viewQuery?: DataTableQuery) {
+export async function createCompany(params: CompanyParams) {
   const actor = await requireRole(["placement_cell", "admin"]);
   const supabase = await createClient();
   const result = await createCompanyCore(supabase, actor, params);
   revalidatePath("/placement-cell/companies");
-  if (viewQuery) {
-    const { column } = resolveListSort(COMPANIES_SORT_COLUMNS, "name", true, viewQuery);
-    await invalidateCache(listCacheKey(COMPANIES_CACHE_PREFIX, actor.collegeId, viewQuery, column));
-  }
+  await invalidateCacheFamily(COMPANIES_CACHE_PREFIX, actor.collegeId);
   return result;
 }
 
@@ -105,9 +104,7 @@ const UpdateCompanySchema = CompanySchema.extend({ companyId: z.string().guid() 
 
 export async function updateCompany(
   companyId: string,
-  params: CompanyParams,
-  viewQuery?: DataTableQuery
-) {
+  params: CompanyParams) {
   const actor = await requireRole(["placement_cell", "admin"]);
   const supabase = await createClient();
   const parsed = UpdateCompanySchema.parse({ companyId, ...params });
@@ -144,8 +141,5 @@ export async function updateCompany(
 
   await logAudit(supabase, actor, `Updated company ${parsed.name}`, "companies", companyId);
   revalidatePath("/placement-cell/companies");
-  if (viewQuery) {
-    const { column } = resolveListSort(COMPANIES_SORT_COLUMNS, "name", true, viewQuery);
-    await invalidateCache(listCacheKey(COMPANIES_CACHE_PREFIX, actor.collegeId, viewQuery, column));
-  }
+  await invalidateCacheFamily(COMPANIES_CACHE_PREFIX, actor.collegeId);
 }

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import type { PGlite } from "@electric-sql/pglite";
-import { mutatedFile } from "./staging/mutate";
+import { mutatedFile, mutatedFiles } from "./staging/mutate";
 import { as, scalar, U, S, OFF, COLLEGE_A, COLLEGE_B, FEE_A, ROOM_A102 } from "./staging/harness";
 
 /**
@@ -54,10 +54,20 @@ describe("mutation: the tenant predicate on security instructions (P1-1)", () =>
 });
 
 describe("mutation: the active-status gate on the tenant helpers (P2-4)", () => {
+  // Since 053 the status gate is enforced twice: in 051's helpers and in
+  // app_access_allowed(), which every table's restrictive tenant_access_gate
+  // calls (054's definition is the one that survives). Removed from both, the
+  // original attack reproduces.
   it("removed, a pending account resolves a tenant and reads college data", async () => {
-    const db = await mutatedFile(P3, "pending gate", (sql) =>
-      sql.replaceAll("WHERE id = auth.uid() AND status = 'active';", "WHERE id = auth.uid();")
-    );
+    const db = await mutatedFiles("pending gate", {
+      "051_phase3_hardening.sql": (sql) =>
+        sql.replaceAll("WHERE id = auth.uid() AND status = 'active';", "WHERE id = auth.uid();"),
+      "054_session_registry.sql": (sql) =>
+        sql.replace(
+          "    WHERE p.id = auth.uid()\n      AND p.status = 'active'\n      AND (p.role = 'super_admin' OR c.lifecycle_state = 'ACTIVE')\n  ) AND public.current_session_permitted();",
+          "    WHERE p.id = auth.uid()\n      AND (p.role = 'super_admin' OR c.lifecycle_state = 'ACTIVE')\n  ) AND public.current_session_permitted();"
+        ),
+    });
     try {
       await addPendingUser(db);
       const r = await as(db, PEND, `SELECT id FROM public.course_offerings WHERE college_id='${COLLEGE_A}'`);
@@ -129,6 +139,10 @@ describe("mutation: the closed-semester freeze (P2-3)", () => {
       )
     );
     try {
+      // The historical offering is also 'completed', which 055's completed-
+      // offering freeze refuses on its own. Isolate the control under test:
+      // as the owner, mark it active, so only the closed-semester freeze stands.
+      await db.query(`UPDATE public.course_offerings SET status = 'active' WHERE id = '${OFF.historical}'`);
       const r = await as(db, U.teacherA,
         `INSERT INTO public.marks (college_id, offering_id, student_id, exam_type, max_marks, obtained_marks)
            VALUES ('${COLLEGE_A}','${OFF.historical}','${S.f}','midterm',100,50) RETURNING id`);

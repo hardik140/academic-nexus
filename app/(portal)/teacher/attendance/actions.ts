@@ -12,6 +12,7 @@ import { assertPersisted } from "@/lib/concurrent-claim";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import { dbError } from "@/lib/internal-error";
+import { assertRead } from "@/lib/read-result-server";
 
 type AttendanceStatus = Database["public"]["Tables"]["attendance"]["Row"]["status"];
 
@@ -196,10 +197,11 @@ export async function requestAttendanceCorrection(paramsRaw: RequestCorrectionPa
 export async function listMyCorrectionRequests() {
   const actor = await requireRole(PERMISSIONS.attendance_correction_create);
   const supabase = await createClient();
-  const { data } = await supabase
+  const { data, error: dataError } = await supabase
     .from("attendance_correction_requests")
     .select("*, course_offerings:offering_id(courses:course_id(name, code), sections:section_id(name))")
     .eq("submitted_by", actor.userId)
     .order("created_at", { ascending: false });
+  assertRead(dataError);
   return data || [];
 }

@@ -3,8 +3,35 @@ import { notFound } from "next/navigation";
 import { Button, StatusBadge } from "@/components/ui/modal";
 import { StatsCard } from "@/components/ui/stats-card";
 import { PlacementFunnelChart } from "@/components/charts/placement-funnel-chart";
+import { DepartmentHeatmapGrid } from "@/components/charts/department-heatmap-grid";
+import { DonutChart } from "@/components/charts/donut-chart";
+import { FacultyRatioChart } from "@/components/charts/faculty-ratio-chart";
+import { HealthGauge } from "@/components/charts/health-gauge";
 import Loading from "@/app/loading";
-import { AsyncResourceDemo, ButtonFormDemo, DataTableDemos, FormFieldDemos, ModalBehaviourDemos, ModalDemo, MotionUtilityDemos, StatusChangeDemo } from "./demos";
+import {
+  AlertDemos,
+  AlertToneExamples,
+  AsyncResourceDemo,
+  ButtonFormDemo,
+  DataTableDemos,
+  FormFieldDemos,
+  ModalBehaviourDemos,
+  ModalDemo,
+  MotionUtilityDemos,
+  StateExamples,
+  StateViewDemo,
+  StatusChangeDemo,
+} from "./demos";
+import {
+  ConfirmationDemos,
+  DataTableErrorDemo,
+  FieldValidationDemo,
+  RequestDecisionDemo,
+  SessionDemos,
+  ToastDemos,
+} from "./m6-demos";
+import { DeviceSessionDemos, EnforcementDemos, LifecycleDemos, UnavailableDemos } from "./lifecycle-demos";
+import { AcademicContextDemos, ClassInchargeDemos, DepartmentTermDemos, StudentInviteDemos, TimetableWeekDemos } from "./academics-demos";
 
 /**
  * Development-only component gallery — the browser-verification surface for
@@ -61,6 +88,17 @@ const SAMPLE_FUNNEL = [
   { name: "Interviewed", value: 96 },
   { name: "Placed", value: 58 },
 ];
+
+// Fictional sample data for the other charts (M7).
+const SAMPLE_DONUT = [
+  { name: "Occupied", value: 300, color: "var(--color-secondary)" },
+  { name: "Vacant", value: 100, color: "var(--color-outline-variant)" },
+];
+const SAMPLE_HEATMAP = [
+  { departmentId: "sample-cse", departmentName: "Computer Science", departmentCode: "CSE", attendancePct: 82, backlogRate: 12, feeCollectionPct: 64, placementRate: null, openRiskCount: 2 },
+  { departmentId: "sample-me", departmentName: "Mechanical", departmentCode: "ME", attendancePct: 41, backlogRate: 55, feeCollectionPct: 90, placementRate: 71, openRiskCount: 0 },
+];
+const CHART_PANEL = "min-w-0 rounded-panel border border-outline-variant bg-surface-container-lowest p-md";
 
 const MOTION_TOKENS = [
   "--duration-instant", "--duration-fast", "--duration-normal", "--duration-slow",
@@ -191,6 +229,23 @@ export default function ComponentGalleryPage() {
           </div>
         </Section>
 
+        <Section id="chart-figures" title="Charts in ChartFigure (never animated)">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-md">
+            <div data-testid="chart-donut" className={CHART_PANEL}>
+              <DonutChart title="Hostel occupancy" slices={SAMPLE_DONUT} centerLabel="75%" />
+            </div>
+            <div data-testid="chart-gauge" className={CHART_PANEL}>
+              <HealthGauge score={68} contributingCount={3} possibleCount={4} />
+            </div>
+            <div data-testid="chart-ratio" className={CHART_PANEL}>
+              <FacultyRatioChart current={18.5} projected={22} />
+            </div>
+            <div data-testid="chart-heatmap" className={`${CHART_PANEL} lg:col-span-2`}>
+              <DepartmentHeatmapGrid rows={SAMPLE_HEATMAP} />
+            </div>
+          </div>
+        </Section>
+
         <Section id="buttons" title="Buttons">
           <div className="flex flex-wrap items-center gap-sm">
             {(["primary", "secondary", "outline", "ghost", "destructive"] as const).map((variant) => (
@@ -245,6 +300,73 @@ export default function ComponentGalleryPage() {
 
         <Section id="async-resource" title="useAsyncResource">
           <AsyncResourceDemo />
+        </Section>
+
+        <Section id="feedback" title="Feedback: alerts and loading, empty and error states">
+          <AlertDemos />
+          <AlertToneExamples />
+          <StateViewDemo />
+          <StateExamples />
+        </Section>
+
+        <Section id="toast" title="Toast">
+          <ToastDemos />
+        </Section>
+
+        <Section id="confirmation" title="Confirmation dialog">
+          <ConfirmationDemos />
+        </Section>
+
+        <Section id="request-decision" title="Request a Director decision">
+          <RequestDecisionDemo />
+        </Section>
+
+        <Section id="field-validation" title="Field validation">
+          <FieldValidationDemo />
+        </Section>
+
+        <Section id="table-error" title="Data table: failed loads">
+          <DataTableErrorDemo />
+        </Section>
+
+        <Section id="college-unavailable" title="College unavailable and device limit (/unavailable)">
+          <UnavailableDemos />
+        </Section>
+
+        <Section id="college-lifecycle" title="College lifecycle (Super Admin)">
+          <LifecycleDemos />
+        </Section>
+
+        <Section id="sessions" title="Sessions and devices">
+          <DeviceSessionDemos />
+        </Section>
+
+        <Section id="session-enforcement" title="Session enforcement cut-over (Super Admin)">
+          <EnforcementDemos />
+        </Section>
+
+        <Section id="department-term" title="Department term and readiness (HOD)">
+          <DepartmentTermDemos />
+        </Section>
+
+        <Section id="class-incharge" title="Class In-Charge assignment (HOD)">
+          <ClassInchargeDemos />
+        </Section>
+
+        <Section id="academic-context" title="Student academic context">
+          <AcademicContextDemos />
+        </Section>
+
+        <Section id="student-invite" title="Student invitation into a section">
+          <StudentInviteDemos />
+        </Section>
+
+        <Section id="timetable-week" title="Department timetable (HOD)">
+          <TimetableWeekDemos />
+        </Section>
+
+        <Section id="session" title="Session expiry">
+          <SessionDemos />
         </Section>
       </div>
     </main>

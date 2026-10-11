@@ -1,26 +1,26 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { DonutChart } from "@/components/charts/donut-chart";
+import { StateView } from "@/components/ui/state-view";
+import { useAsyncResource } from "@/hooks/use-async-resource";
 import { getHostelRollup } from "./actions";
 
 export default function DirectorHostelRollup() {
-  const [data, setData] = useState<any>(null);
+  // A failed load is an error with Try again — never a page stuck on
+  // "Loading..." (owner decision D5).
+  const rollup = useAsyncResource(() => getHostelRollup(), []);
+  const data: any = rollup.data;
 
-  useEffect(() => {
-    getHostelRollup().then(setData);
-  }, []);
-
-  if (!data) {
-    return <div className="p-xl text-center text-sm text-outline">Loading...</div>;
-  }
-
-  const slices = [
-    { name: "Occupied", value: data.totalOccupancy, color: "var(--color-secondary)" },
-    { name: "Vacant", value: Math.max(0, data.totalCapacity - data.totalOccupancy), color: "var(--color-outline-variant)" },
-  ];
+  const slices = data
+    ? [
+        { name: "Occupied", value: data.totalOccupancy, color: "var(--color-secondary)" },
+        { name: "Vacant", value: Math.max(0, data.totalCapacity - data.totalOccupancy), color: "var(--color-outline-variant)" },
+      ]
+    : [];
 
   return (
+    <StateView state={rollup} isEmpty={(value) => value.blocks.length === 0 && value.pendingGatePasses === 0 && value.openComplaints === 0} loadingLabel="Loading the hostel overview…" empty={{ title: "No hostel data yet" }}>
+      {() => (
     <div className="space-y-lg">
       <div>
         <h1 className="text-2xl font-extrabold text-on-surface tracking-tight">Hostel Overview</h1>
@@ -31,7 +31,7 @@ export default function DirectorHostelRollup() {
         <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-sm p-lg">
           <h2 className="text-sm font-bold text-on-surface mb-md">Occupancy</h2>
           {data.totalCapacity > 0 ? (
-            <DonutChart slices={slices} centerLabel={`${data.occupancyPct}%`} />
+            <DonutChart title="Hostel occupancy" slices={slices} centerLabel={`${data.occupancyPct}%`} />
           ) : (
             <div className="p-xl text-center text-sm text-outline">No hostel capacity data available yet.</div>
           )}
@@ -102,5 +102,7 @@ export default function DirectorHostelRollup() {
         </div>
       </div>
     </div>
+      )}
+    </StateView>
   );
 }

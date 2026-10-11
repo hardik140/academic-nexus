@@ -195,9 +195,11 @@ describe("tenant-consistency mutations", () => {
       )
     );
     try {
-      const r = await as(d, U.admin,
-        `UPDATE public.course_offerings SET instructor_id='${U.bTeacher}' WHERE id='${OFF.dsA3}' RETURNING id`);
-      expect(r.rows, "mutation not detected").toBe(1);
+      // As the owner: 055's eligibility trigger (decision 4) refuses an
+      // authenticated caller first, so the key is isolated where it is the
+      // only guard.
+      const r = await d.query(`UPDATE public.course_offerings SET instructor_id='${U.bTeacher}' WHERE id='${OFF.dsA3}' RETURNING id`);
+      expect(r.rows.length, "mutation not detected").toBe(1);
       // and even then the foreign teacher gains nothing — the authority
       // function pins the offering's college. Two layers, both real.
       const w = await as(d, U.bTeacher,

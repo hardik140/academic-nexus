@@ -1,6 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Alert } from "@/components/ui/alert";
+import { ErrorAlert } from "@/components/ui/error-alert";
+import { ErrorState } from "@/components/ui/error-state";
+import { LoadingState } from "@/components/ui/loading-state";
+import { toFeedbackError, type FeedbackError } from "@/lib/action-failure";
+import { classifyError } from "@/lib/feedback-error";
 import Link from "next/link";
 import { Button, StatusBadge } from "@/components/ui/modal";
 import { cancelOperation, listConnections, listSyncOperations, retryOperation } from "../actions";
@@ -30,10 +36,21 @@ export default function SyncOperationsPage() {
   const [operations, setOperations] = useState<Operation[]>([]);
   const [connections, setConnections] = useState<Connection[]>([]);
   const [filters, setFilters] = useState<{ connectionId: string; status: string }>({ connectionId: "", status: "" });
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<FeedbackError | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  // Which filters the operations shown were loaded for: rows loaded for one
+  // filter are never shown as the answer for another, and a failed load is
+  // never "No operations match." (owner decision D5).
+  const filterKey = `${filters.connectionId}|${filters.status}`;
+  const [loadedFor, setLoadedFor] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<unknown>(null);
+  const latestLoad = useRef(0);
+  const loaded = loadedFor === filterKey;
 
   const load = useCallback(async () => {
+    const run = ++latestLoad.current;
+    const key = `${filters.connectionId}|${filters.status}`;
+    setLoadError(null);
     try {
       const [ops, conns] = await Promise.all([
         listSyncOperations({
@@ -42,10 +59,12 @@ export default function SyncOperationsPage() {
         }),
         listConnections(),
       ]);
+      if (run !== latestLoad.current) return;
       setOperations(ops);
       setConnections(conns);
+      setLoadedFor(key);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not load sync operations.");
+      if (run === latestLoad.current) setLoadError(e);
     }
   }, [filters]);
 
@@ -54,13 +73,15 @@ export default function SyncOperationsPage() {
   }, [load]);
 
   const act = async (id: string, fn: () => Promise<unknown>) => {
+    if (busy) return;
     setBusy(id);
     setError(null);
     try {
       await fn();
-      await load();
+      // Reloading reports its own failure, never as a failed action.
+      void load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "The action did not complete.");
+      setError(await toFeedbackError(e, "The action did not complete."));
     } finally {
       setBusy(null);
     }
@@ -78,7 +99,14 @@ export default function SyncOperationsPage() {
         </p>
       </div>
 
-      {error && <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium">{error}</div>}
+      <ErrorAlert error={error} />
+      <Alert tone="error" action={<Button variant="outline" size="sm" onClick={() => void load()}>Try again</Button>}>
+        {loadError !== null && loaded ? (
+          <>
+            This couldn&apos;t be refreshed. Showing what was loaded earlier.
+          </>
+        ) : null}
+      </Alert>
 
       <div className="flex flex-wrap gap-md items-end">
         <label className="text-sm">
@@ -105,7 +133,13 @@ export default function SyncOperationsPage() {
         </label>
       </div>
 
-      {operations.length === 0 ? (
+      {!loaded ? (
+        loadError !== null ? (
+          <ErrorState {...classifyError(loadError)} title="Sync operations couldn't be loaded" onRetry={() => void load()} />
+        ) : (
+          <LoadingState label="Loading sync operations…" />
+        )
+      ) : operations.length === 0 ? (
         <p className="text-sm text-on-surface-variant">No operations match.</p>
       ) : (
         <div className="overflow-x-auto rounded-2xl border border-outline-variant">
@@ -160,10 +194,10 @@ export default function SyncOperationsPage() {
                   <td className="px-md py-sm">
                     <div className="flex justify-end gap-xs">
                       {op.status === "FAILED" && op.retry_safety === "safe" && op.attempt_number < op.max_attempts && (
-                        <Button size="sm" disabled={busy === op.id} onClick={() => act(op.id, () => retryOperation(op.id))}>Retry</Button>
+                        <Button size="sm" disabled={busy === op.id} aria-busy={busy === op.id || undefined} onClick={() => act(op.id, () => retryOperation(op.id))}>Retry</Button>
                       )}
                       {["PENDING", "BLOCKED", "FAILED"].includes(op.status) && (
-                        <Button size="sm" variant="outline" disabled={busy === op.id} onClick={() => act(op.id, () => cancelOperation(op.id))}>Cancel</Button>
+                        <Button size="sm" variant="outline" disabled={busy === op.id} aria-busy={busy === op.id || undefined} onClick={() => act(op.id, () => cancelOperation(op.id))}>Cancel</Button>
                       )}
                     </div>
                   </td>

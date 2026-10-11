@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { DataTable, type DataTableQuery } from "@/components/ui/data-table";
 import { listAuditLogs } from "./actions";
 
@@ -9,18 +9,30 @@ const LOGS_PAGE_SIZE = 10;
 export default function AdminAuditLog() {
   const [logs, setLogs] = useState<any[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
+  const [logsError, setLogsError] = useState<unknown>(null);
   const [totalLogs, setTotalLogs] = useState(0);
+  const latestLoad = useRef(0);
   const [query, setQuery] = useState<DataTableQuery>({ search: "", sortKey: null, sortDir: "asc", page: 0 });
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { loadLogs(query); }, [query]);
 
+  // The latest query's page; a failed load is an error in the table, never
+  // an empty audit trail (owner decision D5).
   const loadLogs = async (q: DataTableQuery) => {
+    const run = ++latestLoad.current;
     setLogsLoading(true);
-    const { data, count } = await listAuditLogs(q);
-    setLogs(data);
-    setTotalLogs(count);
-    setLogsLoading(false);
+    setLogsError(null);
+    try {
+      const { data, count } = await listAuditLogs(q);
+      if (run !== latestLoad.current) return;
+      setLogs(data);
+      setTotalLogs(count);
+    } catch (e) {
+      if (run === latestLoad.current) setLogsError(e);
+    } finally {
+      if (run === latestLoad.current) setLogsLoading(false);
+    }
   };
 
   return (
@@ -68,6 +80,8 @@ export default function AdminAuditLog() {
         serverMode
         totalCount={totalLogs}
         loading={logsLoading}
+        error={logsError}
+        onRetry={() => loadLogs(query)}
         onQueryChange={setQuery}
         pageSize={LOGS_PAGE_SIZE}
       />

@@ -1,7 +1,10 @@
 "use client";
 
+import { AcademicContextCard } from "@/components/academics/academic-context-card";
+import type { AcademicContext } from "@/lib/academic/types";
 import Link from "next/link";
-import { formatCurrency, formatDate, formatPct } from "@/lib/utils";
+import { formatDate, formatPct } from "@/lib/utils";
+import { formatMoney } from "@/lib/format";
 import { HealthGauge } from "@/components/charts/health-gauge";
 import { StatusBadge } from "@/components/ui/modal";
 import { computeEffectiveFeeStatus } from "@/lib/finance-status";
@@ -21,6 +24,8 @@ interface StudentDashboardClientProps {
   academicHealth: AcademicHealthResult;
   subjectRisks: SubjectRiskEntry[];
   upcomingPlacementDeadlines: any[];
+  /** my_academic_context() (055); null where the database predates it. */
+  academicContext?: AcademicContext | null;
 }
 
 const PROFILE_FIELDS = [
@@ -61,6 +66,7 @@ export function StudentDashboardClient({
   academicHealth,
   subjectRisks,
   upcomingPlacementDeadlines,
+  academicContext,
 }: StudentDashboardClientProps) {
   const totalFeesDue = fees.reduce((sum: number, f: any) => sum + (f.amount - f.paid_amount), 0);
   const cgpa = student?.cgpa || 0;
@@ -121,6 +127,8 @@ export function StudentDashboardClient({
           </span>
         )}
       </div>
+
+      {academicContext?.student && <AcademicContextCard context={academicContext} />}
 
       {/* ─── Academic Health + Today's Actions ─── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-md">
@@ -275,7 +283,7 @@ export function StudentDashboardClient({
             <h2 className="text-sm font-bold text-on-surface">
               Pending Fee Payments
             </h2>
-            <span className="text-xs font-semibold text-warning bg-warning/10 px-sm py-xs rounded-full">
+            <span className="text-xs font-semibold text-on-warning-container bg-warning-container px-sm py-xs rounded-full">
               {fees.length} pending
             </span>
           </div>
@@ -313,13 +321,13 @@ export function StudentDashboardClient({
                       {fee.type}
                     </td>
                     <td className="px-lg py-md text-on-surface-variant">
-                      {formatCurrency(fee.amount)}
+                      {formatMoney(fee.amount)}
                     </td>
                     <td className="px-lg py-md text-success">
-                      {formatCurrency(fee.paid_amount)}
+                      {formatMoney(fee.paid_amount)}
                     </td>
                     <td className="px-lg py-md font-semibold text-on-surface">
-                      {formatCurrency(fee.amount - fee.paid_amount)}
+                      {formatMoney(fee.amount - fee.paid_amount)}
                     </td>
                     <td className="px-lg py-md text-on-surface-variant">
                       {formatDate(fee.due_date)}

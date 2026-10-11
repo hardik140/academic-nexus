@@ -1,7 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Button, StatusBadge } from "@/components/ui/modal";
+import { Alert } from "@/components/ui/alert";
+import { ErrorAlert } from "@/components/ui/error-alert";
+import { StateView } from "@/components/ui/state-view";
+import { useAsyncResource } from "@/hooks/use-async-resource";
+import { toFeedbackError, type FeedbackError } from "@/lib/action-failure";
 import {
   listOpportunities,
   applyToDrive,
@@ -21,41 +26,45 @@ const TABS: { value: Tab; label: string }[] = [
 
 export default function StudentPlacements() {
   const [tab, setTab] = useState<Tab>("opportunities");
-  const [opportunities, setOpportunities] = useState<any[]>([]);
-  const [applications, setApplications] = useState<any[]>([]);
-  const [notifications, setNotifications] = useState<any[]>([]);
-  const [profile, setProfile] = useState<any>(null);
   const [applyingId, setApplyingId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<FeedbackError | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  const loadAll = async () => {
-    const [opps, apps, notifs, prof] = await Promise.all([
+  // Everything on the four tabs. A failed load is an error, never "No
+  // eligible placement opportunities right now." (owner decision D5).
+  const placements = useAsyncResource(async () => {
+    const [opportunities, applications, notifications, profile] = await Promise.all([
       listOpportunities(),
       listMyApplications(),
       listMyPlacementNotifications(),
       getMyPlacementProfile(),
     ]);
-    setOpportunities(opps);
-    setApplications(apps);
-    setNotifications(notifs);
-    setProfile(prof);
-  };
-
-  useEffect(() => {
-    loadAll();
+    return {
+      opportunities: opportunities as any[],
+      applications: applications as any[],
+      notifications: notifications as any[],
+      profile: profile as any,
+    };
   }, []);
+  const opportunities = placements.data?.opportunities ?? [];
+  const applications = placements.data?.applications ?? [];
+  const notifications = placements.data?.notifications ?? [];
+  const profile = placements.data?.profile ?? null;
 
   const handleApply = async (driveId: string) => {
+    // One application per click.
+    if (applyingId) return;
     setApplyingId(driveId);
     setError(null);
     setSuccess(null);
     try {
       await applyToDrive(driveId);
-      setSuccess("Application submitted.");
-      await loadAll();
+      const drive = opportunities.find((d) => d.id === driveId);
+      setSuccess(drive ? `Application to ${drive.companies?.name ?? "the company"} for ${drive.job_role} submitted.` : "Application submitted.");
+      // Refreshing is not part of applying: its failure shows on the tabs.
+      placements.reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to apply.");
+      setError(await toFeedbackError(e, "Failed to apply."));
     } finally {
       setApplyingId(null);
     }
@@ -84,13 +93,14 @@ export default function StudentPlacements() {
         ))}
       </div>
 
-      {error && (
-        <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium">{error}</div>
-      )}
-      {success && (
-        <div className="bg-success/10 border border-success/20 text-success rounded-xl p-md text-sm font-medium">{success}</div>
-      )}
+      <ErrorAlert error={error} />
+      <Alert tone="success" onDismiss={() => setSuccess(null)}>
+        {success}
+      </Alert>
 
+      <StateView state={placements} isEmpty={() => false} loadingLabel="Loading placements…" empty={{ title: "Nothing here yet" }}>
+        {() => (
+          <>
       {tab === "opportunities" && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-md">
           {opportunities.length === 0 ? (
@@ -113,7 +123,7 @@ export default function StudentPlacements() {
                 {d.applicationStatus ? (
                   <StatusBadge status={d.applicationStatus} />
                 ) : (
-                  <Button size="sm" onClick={() => handleApply(d.id)} disabled={applyingId === d.id}>
+                  <Button size="sm" onClick={() => handleApply(d.id)} disabled={applyingId !== null} aria-busy={applyingId === d.id || undefined}>
                     {applyingId === d.id ? "Applying..." : "Apply"}
                   </Button>
                 )}
@@ -189,6 +199,9 @@ export default function StudentPlacements() {
           </div>
         </div>
       )}
+          </>
+        )}
+      </StateView>
     </div>
   );
 }

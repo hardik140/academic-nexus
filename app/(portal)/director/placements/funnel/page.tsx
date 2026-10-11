@@ -1,24 +1,21 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { PlacementFunnelChart } from "@/components/charts/placement-funnel-chart";
 import { StatusBadge } from "@/components/ui/modal";
+import { StateView } from "@/components/ui/state-view";
+import { useAsyncResource } from "@/hooks/use-async-resource";
 import { getInstitutionPlacementFunnel, listDriveFunnels } from "./actions";
 
 export default function PlacementCommandCenter() {
-  const [totals, setTotals] = useState<any>(null);
-  const [departments, setDepartments] = useState<any[]>([]);
-  const [drives, setDrives] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    Promise.all([getInstitutionPlacementFunnel(), listDriveFunnels()]).then(([funnel, driveData]) => {
-      setTotals(funnel.totals);
-      setDepartments(funnel.departments);
-      setDrives(driveData);
-      setLoading(false);
-    });
+  // Both reads together. A failed load is an error with Try again — never a
+  // page stuck on "Loading..." (owner decision D5).
+  const funnel = useAsyncResource(async () => {
+    const [institution, driveData] = await Promise.all([getInstitutionPlacementFunnel(), listDriveFunnels()]);
+    return { totals: institution.totals as any, departments: institution.departments as any[], drives: driveData as any[] };
   }, []);
+  const totals = funnel.data?.totals ?? null;
+  const departments = funnel.data?.departments ?? [];
+  const drives = funnel.data?.drives ?? [];
 
   const stages = totals
     ? [
@@ -37,9 +34,8 @@ export default function PlacementCommandCenter() {
         <p className="text-sm text-on-surface-variant mt-xs">Institution-wide placement funnel, from eligible to placed</p>
       </div>
 
-      {loading ? (
-        <div className="p-xl text-center text-sm text-outline">Loading...</div>
-      ) : (
+      <StateView state={funnel} isEmpty={(value) => value.departments.length === 0 && value.drives.length === 0} loadingLabel="Loading the placement funnel…" empty={{ title: "No placement data yet" }}>
+        {() => (
         <>
           <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-sm p-lg">
             <PlacementFunnelChart stages={stages} />
@@ -130,7 +126,8 @@ export default function PlacementCommandCenter() {
             </div>
           </div>
         </>
-      )}
+        )}
+      </StateView>
     </div>
   );
 }

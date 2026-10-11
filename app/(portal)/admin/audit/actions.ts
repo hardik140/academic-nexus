@@ -5,6 +5,7 @@ import { requireRole } from "@/lib/rbac";
 import { getCached } from "@/lib/cache";
 import { resolveListSort, listCacheKey } from "@/lib/cached-list";
 import type { DataTableQuery } from "@/components/ui/data-table";
+import { assertRead } from "@/lib/read-result-server";
 
 const LOGS_PAGE_SIZE = 10;
 const LOGS_SORT_COLUMNS = ["created_at"] as const;
@@ -32,7 +33,8 @@ export async function listAuditLogs(q: DataTableQuery) {
     dbQuery = dbQuery.order(column, { ascending });
 
     const from = q.page * LOGS_PAGE_SIZE;
-    const { data, count } = await dbQuery.range(from, from + LOGS_PAGE_SIZE - 1);
+    const { data, count, error: dataError } = await dbQuery.range(from, from + LOGS_PAGE_SIZE - 1);
+    assertRead(dataError);
     return { data: data || [], count: count ?? 0 };
   });
 }

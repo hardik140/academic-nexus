@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { securityContext, securityOutsideNow, securityScanFeed, securityTodayCounts } from "../actions";
+import { Alert } from "@/components/ui/alert";
 
 /**
  * The guard's shift view.
@@ -23,11 +24,11 @@ export default async function SecurityDashboard() {
     return (
       <div className="space-y-lg">
         <h1 className="text-2xl font-extrabold text-on-surface tracking-tight">Gate Security</h1>
-        <div className="bg-error/10 border border-error/20 text-error rounded-2xl p-lg text-sm font-medium">
+        <Alert tone="error">
           {context.status === null
             ? "This account has not been authorized for gate duty yet. The Director authorizes gate security accounts."
             : `Your gate security account is ${context.status.toLowerCase()}. You cannot operate a gate until it is reactivated.`}
-        </div>
+        </Alert>
       </div>
     );
   }
@@ -61,11 +62,9 @@ export default async function SecurityDashboard() {
         </Link>
       </div>
 
-      {context.gates.length === 0 && (
-        <div className="bg-warning/10 border border-warning/20 text-warning rounded-2xl p-lg text-sm font-medium">
-          You are active but not assigned to any gate. Ask the Director to assign one.
-        </div>
-      )}
+      <Alert tone="warning">
+        {context.gates.length === 0 ? "You are active but not assigned to any gate. Ask the Director to assign one." : null}
+      </Alert>
 
       {context.instructions.length > 0 && (
         <section className="bg-surface-container-lowest border border-outline-variant rounded-2xl">

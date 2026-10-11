@@ -16,6 +16,7 @@ import { inviteUserCore, type InviteUserParams } from "@/lib/invitations";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import { dbError } from "@/lib/internal-error";
+import { assertRead } from "@/lib/read-result-server";
 
 /**
  * Director-side security administration.
@@ -51,16 +52,17 @@ export async function listSecurityPersonnel(): Promise<SecurityPersonnelRow[]> {
   const actor = await requireRole(PERMISSIONS.security_admin_read);
   const supabase = await createClient();
 
-  const { data: people } = await supabase
+  const { data: people, error: peopleError } = await supabase
     .from("security_personnel")
     .select("id, profile_id, employee_code, status, permissions, authorized_at, deactivation_reason")
     .eq("college_id", actor.collegeId)
     .order("created_at", { ascending: false });
+  assertRead(peopleError);
 
   const rows = people ?? [];
   if (rows.length === 0) return [];
 
-  const [{ data: profiles }, { data: assignments }, { data: gates }] = await Promise.all([
+  const [{ data: profiles, error: profilesError }, { data: assignments, error: assignmentsError }, { data: gates, error: gatesError }] = await Promise.all([
     supabase.from("profiles").select("id, full_name, email").in("id", rows.map((r) => r.profile_id)),
     supabase
       .from("security_gate_assignments")
@@ -69,6 +71,9 @@ export async function listSecurityPersonnel(): Promise<SecurityPersonnelRow[]> {
       .is("revoked_at", null),
     supabase.from("gates").select("id, code, name").eq("college_id", actor.collegeId),
   ]);
+  assertRead(profilesError);
+  assertRead(assignmentsError);
+  assertRead(gatesError);
 
   const byProfile = new Map((profiles ?? []).map((p) => [p.id, p]));
   const byGate = new Map((gates ?? []).map((g) => [g.id, g]));
@@ -101,16 +106,18 @@ export async function listUnauthorizedSecurityAccounts() {
   const actor = await requireRole(PERMISSIONS.security_admin_read);
   const supabase = await createClient();
 
-  const { data: profiles } = await supabase
+  const { data: profiles, error: profilesError } = await supabase
     .from("profiles")
     .select("id, full_name, email, status")
     .eq("college_id", actor.collegeId)
     .eq("role", "gate_security");
+  assertRead(profilesError);
 
-  const { data: existing } = await supabase
+  const { data: existing, error: existingError } = await supabase
     .from("security_personnel")
     .select("profile_id")
     .eq("college_id", actor.collegeId);
+  assertRead(existingError);
 
   const taken = new Set((existing ?? []).map((e) => e.profile_id));
   return (profiles ?? []).filter((p) => !taken.has(p.id));
@@ -293,11 +300,12 @@ export async function setSecurityPermissions(personnelIdRaw: string, permissions
 export async function listGates() {
   const actor = await requireRole(PERMISSIONS.security_admin_read);
   const supabase = await createClient();
-  const { data } = await supabase
+  const { data, error: dataError } = await supabase
     .from("gates")
     .select("id, code, name, description, is_active")
     .eq("college_id", actor.collegeId)
     .order("code");
+  assertRead(dataError);
   return data ?? [];
 }
 
@@ -530,12 +538,13 @@ async function notifyRecipients(
 export async function listSecurityInstructions() {
   const actor = await requireRole(PERMISSIONS.security_admin_read);
   const supabase = await createClient();
-  const { data } = await supabase
+  const { data, error: dataError } = await supabase
     .from("security_instructions")
     .select("id, title, message, priority, audience, gate_id, security_personnel_id, status, created_at")
     .eq("college_id", actor.collegeId)
     .order("created_at", { ascending: false })
     .limit(50);
+  assertRead(dataError);
   return data ?? [];
 }
 
@@ -623,6 +632,11 @@ export async function securityOverview(): Promise<SecurityOverview> {
       .eq("table_name", "gate_movements")
       .gte("created_at", since),
   ]);
+  assertRead(movements.error);
+  assertRead(passes.error);
+  assertRead(guards.error);
+  assertRead(gates.error);
+  assertRead(refusals.error);
 
   const moves = movements.data ?? [];
   const open = passes.data ?? [];
@@ -681,22 +695,27 @@ export async function listGateMovements(limit = 100): Promise<MovementLogRow[]> 
   const supabase = await createClient();
   const bounded = Math.min(Math.max(limit, 1), 300);
 
-  const { data: movements } = await supabase
+  const { data: movements, error: movementsError } = await supabase
     .from("gate_movements")
     .select("id, movement_type, occurred_at, is_override, override_reason, recorded_role, student_id, gate_id, recorded_by, gate_pass_id")
     .eq("college_id", actor.collegeId)
     .order("occurred_at", { ascending: false })
     .limit(bounded);
+  assertRead(movementsError);
 
   const rows = movements ?? [];
   if (rows.length === 0) return [];
 
-  const [{ data: students }, { data: gates }, { data: actors }, { data: passes }] = await Promise.all([
+  const [{ data: students, error: studentsError }, { data: gates, error: gatesError }, { data: actors, error: actorsError }, { data: passes, error: passesError }] = await Promise.all([
     supabase.from("students").select("id, user_id, enrollment_number").in("id", rows.map((r) => r.student_id)),
     supabase.from("gates").select("id, name").in("id", rows.map((r) => r.gate_id).filter((g): g is string => !!g)),
     supabase.from("profiles").select("id, full_name").in("id", rows.map((r) => r.recorded_by)),
     supabase.from("gate_passes").select("id, destination").in("id", rows.map((r) => r.gate_pass_id)),
   ]);
+  assertRead(studentsError);
+  assertRead(gatesError);
+  assertRead(actorsError);
+  assertRead(passesError);
 
   const studentById = new Map((students ?? []).map((s) => [s.id, s]));
   const nameByProfile = new Map((actors ?? []).map((p) => [p.id, p.full_name]));
@@ -706,9 +725,10 @@ export async function listGateMovements(limit = 100): Promise<MovementLogRow[]> 
   // Student names come from profiles too; one more lookup rather than an
   // embedded join, which the hand-maintained Database type cannot infer.
   const studentUserIds = (students ?? []).map((s) => s.user_id);
-  const { data: studentProfiles } = studentUserIds.length
+  const { data: studentProfiles, error: studentProfilesError } = studentUserIds.length
     ? await supabase.from("profiles").select("id, full_name").in("id", studentUserIds)
-    : { data: [] };
+    : { data: [], error: null };
+  assertRead(studentProfilesError);
   const nameByStudentUser = new Map((studentProfiles ?? []).map((p) => [p.id, p.full_name]));
 
   return rows.map((r) => {
@@ -736,21 +756,23 @@ export async function listSecurityAuditEvents(limit = 100) {
   const supabase = await createClient();
   const bounded = Math.min(Math.max(limit, 1), 300);
 
-  const { data } = await supabase
+  const { data, error: dataError } = await supabase
     .from("audit_logs")
     .select("id, action, record_id, new_value, created_at, user_id")
     .eq("college_id", actor.collegeId)
     .in("table_name", ["gate_movements", "gate_pass_credentials", "security_personnel", "gates", "security_instructions"])
     .order("created_at", { ascending: false })
     .limit(bounded);
+  assertRead(dataError);
 
   const rows = data ?? [];
   if (rows.length === 0) return [];
 
-  const { data: actors } = await supabase
+  const { data: actors, error: actorsError } = await supabase
     .from("profiles")
     .select("id, full_name")
     .in("id", rows.map((r) => r.user_id));
+  assertRead(actorsError);
   const nameById = new Map((actors ?? []).map((p) => [p.id, p.full_name]));
 
   return rows.map((r) => ({ ...r, actor_name: nameById.get(r.user_id) ?? "—" }));

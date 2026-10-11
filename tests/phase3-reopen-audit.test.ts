@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { PGlite } from "@electric-sql/pglite";
 import {
@@ -503,12 +503,20 @@ describe("the reopen sanction cannot be forged across the boundary it defends", 
 // ───────────────────────────────────────────────────────────────────────
 
 describe("§14 — the invitation tier in TypeScript and in SQL are the same map", () => {
-  /** Parse can_invite_role()'s CASE arms out of migration 051. */
+  /** The LATEST definition of can_invite_role() in the chain (051, redefined by 055). */
+  function latestInviteFunction(): string {
+    const dir = join(process.cwd(), "supabase/migrations");
+    const files = readdirSync(dir).filter((f) => f.endsWith(".sql")).sort().reverse();
+    for (const f of files) {
+      const body = /CREATE OR REPLACE FUNCTION public\.can_invite_role[\s\S]*?\$\$ LANGUAGE sql/.exec(readFileSync(join(dir, f), "utf8"));
+      if (body) return body[0];
+    }
+    throw new Error("can_invite_role is defined in no migration");
+  }
+
+  /** Parse can_invite_role()'s CASE arms. */
   function sqlInviteMap(): Record<string, string[]> {
-    const sql = readFileSync(
-      join(process.cwd(), "supabase/migrations/051_phase3_hardening.sql"), "utf8");
-    const body = /CREATE OR REPLACE FUNCTION public\.can_invite_role[\s\S]*?\$\$ LANGUAGE sql/.exec(sql);
-    expect(body, "can_invite_role is no longer in 051 — this test is looking at the wrong place").toBeTruthy();
+    const body = [latestInviteFunction()];
 
     const map: Record<string, string[]> = {};
     for (const m of body![0].matchAll(/WHEN '([a-z_]+)'\s*THEN p_target (?:= '([a-z_]+)'|IN \(([^)]+)\))/g)) {
@@ -522,7 +530,13 @@ describe("§14 — the invitation tier in TypeScript and in SQL are the same map
 
   it("finds the SQL map at all (guards the parser, not just the comparison)", () => {
     const sqlMap = sqlInviteMap();
-    expect(Object.keys(sqlMap).sort()).toEqual(["admin", "director", "hod", "super_admin"]);
+    expect(Object.keys(sqlMap).sort()).toEqual(["admin", "director", "hod", "super_admin", "teacher"]);
+  });
+
+  it("the teacher arm (055) is relationship-scoped, not a role grant", () => {
+    // A teacher may invite a student only while a current Class In-Charge;
+    // which section is decided per invitation by student_placement_check().
+    expect(latestInviteFunction()).toMatch(/WHEN 'teacher'\s+THEN p_target = 'student' AND EXISTS \(\s*SELECT 1 FROM public\.section_class_incharges/);
   });
 
   it("grants exactly the same roles on both sides", () => {

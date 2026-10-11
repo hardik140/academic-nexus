@@ -3,13 +3,14 @@
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib/rbac";
-import { getCached } from "@/lib/cache";
+import { getCachedWriteBehind } from "@/lib/cache";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { sendExpoPushNotifications } from "@/lib/push";
 import { PERMISSIONS } from "@/lib/permissions";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import { dbError } from "@/lib/internal-error";
+import { assertRead } from "@/lib/read-result-server";
 
 const STAFF_ROLES = ["teacher", "hod", "warden", "finance", "admin"] as const;
 
@@ -17,12 +18,15 @@ export async function getDashboardStats() {
   const actor = await requireRole(["director", "admin"]);
   const supabase = await createClient();
 
-  return getCached(`dashboard:director:${actor.collegeId}:counts`, 60, async () => {
+  return getCachedWriteBehind(`dashboard:director:${actor.collegeId}:counts`, 60, async () => {
     const [studentsRes, facultyRes, deptsRes] = await Promise.all([
       supabase.from("profiles").select("*", { count: "exact", head: true }).eq("role", "student"),
       supabase.from("profiles").select("*", { count: "exact", head: true }).eq("role", "teacher"),
       supabase.from("departments").select("*", { count: "exact", head: true }),
     ]);
+    assertRead(studentsRes.error);
+    assertRead(facultyRes.error);
+    assertRead(deptsRes.error);
     return {
       totalStudents: studentsRes.count || 0,
       totalFaculty: facultyRes.count || 0,
@@ -138,11 +142,12 @@ export async function getCommandCenterData() {
   const actor = await requireRole(PERMISSIONS.institution_health_read);
   const supabase = await createClient();
 
-  const { data: viewState } = await supabase
+  const { data: viewState, error: viewStateError } = await supabase
     .from("command_center_view_state")
     .select("last_viewed_at")
     .eq("user_id", actor.userId)
     .maybeSingle();
+  assertRead(viewStateError);
   const priorViewedAt = viewState?.last_viewed_at ?? null;
 
   const [latestRes, baselineRes, riskFlagsRes, decisionsRes] = await Promise.all([
@@ -162,7 +167,7 @@ export async function getCommandCenterData() {
           .order("snapshot_at", { ascending: false })
           .limit(1)
           .maybeSingle()
-      : Promise.resolve({ data: null }),
+      : Promise.resolve({ data: null, error: null }),
     supabase
       .from("risk_flags")
       .select("id, title, severity, flag_type")
@@ -178,6 +183,10 @@ export async function getCommandCenterData() {
       .order("urgency", { ascending: false })
       .limit(5),
   ]);
+  assertRead(latestRes.error);
+  assertRead(baselineRes.error);
+  assertRead(riskFlagsRes.error);
+  assertRead(decisionsRes.error);
 
   await supabase.from("command_center_view_state").upsert({
     user_id: actor.userId,

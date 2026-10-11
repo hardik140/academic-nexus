@@ -1,8 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useRef, useState } from "react";
 import { DataTable, type DataTableQuery } from "@/components/ui/data-table";
 import { Modal, Button, FormField, StatusBadge } from "@/components/ui/modal";
+import { Alert } from "@/components/ui/alert";
+import { ErrorAlert } from "@/components/ui/error-alert";
+import { useAsyncResource } from "@/hooks/use-async-resource";
+import { toFeedbackError, type FeedbackError } from "@/lib/action-failure";
 import {
   listDrives,
   listCompaniesForSelect,
@@ -34,31 +38,49 @@ export default function PlacementCellDrives() {
   const [view, setView] = useState<"list" | "applicants">("list");
   const [drives, setDrives] = useState<any[]>([]);
   const [loadingList, setLoadingList] = useState(false);
+  const [listError, setListError] = useState<unknown>(null);
   const [totalDrives, setTotalDrives] = useState(0);
   const [query, setQuery] = useState<DataTableQuery>({ search: "", sortKey: null, sortDir: "asc", page: 0 });
-  const [companies, setCompanies] = useState<any[]>([]);
-  const [departments, setDepartments] = useState<any[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<DriveParams>(emptyForm);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<FeedbackError | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const latestLoad = useRef(0);
 
   const [selectedDrive, setSelectedDrive] = useState<any>(null);
   const [applicants, setApplicants] = useState<any[]>([]);
   const [applicantsLoading, setApplicantsLoading] = useState(false);
+  const [applicantsError, setApplicantsError] = useState<unknown>(null);
+  const latestApplicants = useRef(0);
 
-  useEffect(() => {
-    listCompaniesForSelect().then(setCompanies);
-    listDepartmentsForSelect().then(setDepartments);
+  // The choices for the drive form. A failed load must not look like "no
+  // departments": with none selected a drive is open to every department.
+  const options = useAsyncResource(async () => {
+    const [companies, departments] = await Promise.all([listCompaniesForSelect(), listDepartmentsForSelect()]);
+    return { companies: companies as any[], departments: departments as any[] };
   }, []);
+  const companies = options.data?.companies ?? [];
+  const departments = options.data?.departments ?? [];
 
+  // The latest query's page; a failed load is an error in the table, never
+  // "No placement drives yet." (owner decision D5).
   const loadDrives = async (q: DataTableQuery) => {
+    const run = ++latestLoad.current;
     setLoadingList(true);
-    const { data, count } = await listDrives(q);
-    setDrives(data);
-    setTotalDrives(count);
-    setLoadingList(false);
+    setListError(null);
+    try {
+      const { data, count } = await listDrives(q);
+      if (run !== latestLoad.current) return;
+      setDrives(data);
+      setTotalDrives(count);
+    } catch (e) {
+      if (run === latestLoad.current) setListError(e);
+    } finally {
+      if (run === latestLoad.current) setLoadingList(false);
+    }
   };
 
   const openCreate = () => {
@@ -87,57 +109,80 @@ export default function PlacementCellDrives() {
   };
 
   const handleSave = async () => {
+    if (loading) return;
     setLoading(true);
     setError(null);
+    setNotice(null);
     try {
       if (editingId) {
-        await updateDrive(editingId, form, query);
+        await updateDrive(editingId, form);
       } else {
-        await createDrive(form, query);
+        await createDrive(form);
       }
       setShowForm(false);
-      await loadDrives(query);
+      setNotice(editingId ? `Drive for ${form.jobRole} saved.` : `Drive for ${form.jobRole} created.`);
+      void loadDrives(query);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to save placement drive.");
+      setError(await toFeedbackError(e, "Failed to save placement drive."));
     } finally {
       setLoading(false);
     }
   };
 
   const handleTogglePublish = async (drive: any) => {
+    if (busy) return;
+    setBusy(drive.id);
     setError(null);
+    setNotice(null);
     try {
-      await setDriveStatus(drive.id, drive.status === "published" ? "closed" : "published", query);
-      await loadDrives(query);
+      const next = drive.status === "published" ? "closed" : "published";
+      await setDriveStatus(drive.id, next);
+      setNotice(`Drive for ${drive.job_role} ${next === "published" ? "published" : "unpublished"}.`);
+      void loadDrives(query);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to update drive status.");
+      setError(await toFeedbackError(e, "Failed to update drive status."));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  // A drive's applicants; a failed load is an error, never "No applicants yet."
+  const loadApplicants = async (driveId: string) => {
+    const run = ++latestApplicants.current;
+    setApplicantsLoading(true);
+    setApplicantsError(null);
+    try {
+      const data = await listApplicants(driveId);
+      if (run === latestApplicants.current) setApplicants(data);
+    } catch (e) {
+      if (run === latestApplicants.current) setApplicantsError(e);
+    } finally {
+      if (run === latestApplicants.current) setApplicantsLoading(false);
     }
   };
 
   const openApplicants = async (drive: any) => {
     setSelectedDrive(drive);
     setView("applicants");
-    setApplicantsLoading(true);
-    const data = await listApplicants(drive.id);
-    setApplicants(data);
-    setApplicantsLoading(false);
-  };
-
-  const refreshApplicants = async () => {
-    if (!selectedDrive) return;
-    setApplicantsLoading(true);
-    const data = await listApplicants(selectedDrive.id);
-    setApplicants(data);
-    setApplicantsLoading(false);
+    setApplicants([]);
+    setError(null);
+    setNotice(null);
+    await loadApplicants(drive.id);
   };
 
   const handleApplicantStatus = async (applicationId: string, status: "shortlisted" | "interview" | "selected" | "rejected") => {
+    if (busy) return;
+    setBusy(applicationId);
     setError(null);
+    setNotice(null);
     try {
       await updateApplicationStatus(applicationId, status);
-      await refreshApplicants();
+      setNotice(`Applicant ${status === "interview" ? "moved to interview" : status}.`);
+      if (selectedDrive) void loadApplicants(selectedDrive.id);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to update applicant status.");
+      setError(await toFeedbackError(e, "Failed to update applicant status."));
+    } finally {
+      setBusy(null);
     }
   };
 
@@ -156,7 +201,7 @@ export default function PlacementCellDrives() {
       <div className="space-y-lg">
         <div className="flex items-center justify-between">
           <div>
-            <button onClick={() => setView("list")} className="text-xs text-secondary hover:underline font-medium mb-xs">
+            <button type="button" onClick={() => setView("list")} className="text-xs text-secondary hover:underline font-medium mb-xs">
               ← Back to Drives
             </button>
             <h1 className="text-2xl font-extrabold text-on-surface tracking-tight">
@@ -166,9 +211,10 @@ export default function PlacementCellDrives() {
           </div>
         </div>
 
-        {error && (
-          <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium">{error}</div>
-        )}
+        <Alert tone="success" onDismiss={() => setNotice(null)}>
+          {notice}
+        </Alert>
+        <ErrorAlert error={error} />
 
         <DataTable
           title="Applicants"
@@ -183,25 +229,27 @@ export default function PlacementCellDrives() {
           keyExtractor={(row) => row.id}
           emptyMessage="No applicants yet."
           loading={applicantsLoading}
+          error={applicantsError}
+          onRetry={() => loadApplicants(selectedDrive.id)}
           actions={(row: any) => (
             <div className="flex gap-sm justify-end">
               {row.status !== "shortlisted" && row.status !== "selected" && (
-                <button onClick={() => handleApplicantStatus(row.id, "shortlisted")} className="text-xs text-secondary hover:underline font-medium">
+                <button type="button" disabled={busy !== null} aria-busy={busy === row.id || undefined} onClick={() => handleApplicantStatus(row.id, "shortlisted")} className="text-xs text-secondary hover:underline font-medium disabled:opacity-50">
                   Shortlist
                 </button>
               )}
               {row.status === "shortlisted" && (
-                <button onClick={() => handleApplicantStatus(row.id, "interview")} className="text-xs text-info hover:underline font-medium">
+                <button type="button" disabled={busy !== null} aria-busy={busy === row.id || undefined} onClick={() => handleApplicantStatus(row.id, "interview")} className="text-xs text-info hover:underline font-medium disabled:opacity-50">
                   Interview
                 </button>
               )}
               {row.status !== "selected" && row.status !== "rejected" && (
-                <button onClick={() => handleApplicantStatus(row.id, "selected")} className="text-xs text-success hover:underline font-medium">
+                <button type="button" disabled={busy !== null} aria-busy={busy === row.id || undefined} onClick={() => handleApplicantStatus(row.id, "selected")} className="text-xs text-success hover:underline font-medium disabled:opacity-50">
                   Select
                 </button>
               )}
               {row.status !== "rejected" && row.status !== "selected" && (
-                <button onClick={() => handleApplicantStatus(row.id, "rejected")} className="text-xs text-error hover:underline font-medium">
+                <button type="button" disabled={busy !== null} aria-busy={busy === row.id || undefined} onClick={() => handleApplicantStatus(row.id, "rejected")} className="text-xs text-error hover:underline font-medium disabled:opacity-50">
                   Reject
                 </button>
               )}
@@ -222,9 +270,11 @@ export default function PlacementCellDrives() {
         <Button onClick={openCreate}>+ Create Drive</Button>
       </div>
 
-      {error && !showForm && (
-        <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium">{error}</div>
-      )}
+      <Alert tone="success" onDismiss={() => setNotice(null)}>
+        {notice}
+      </Alert>
+      {/* The drive dialog shows its own failure. */}
+      <ErrorAlert error={!showForm ? error : null} />
 
       <DataTable
         title="All Drives"
@@ -245,14 +295,16 @@ export default function PlacementCellDrives() {
         serverMode
         totalCount={totalDrives}
         loading={loadingList}
+        error={listError}
+        onRetry={() => loadDrives(query)}
         onQueryChange={(q) => { setQuery(q); loadDrives(q); }}
         pageSize={DRIVES_PAGE_SIZE}
         actions={(row: any) => (
           <div className="flex gap-sm justify-end">
-            <button onClick={(e) => { e.stopPropagation(); openEdit(row); }} className="text-xs text-secondary hover:underline font-medium">
+            <button type="button" onClick={(e) => { e.stopPropagation(); openEdit(row); }} className="text-xs text-secondary hover:underline font-medium">
               Edit
             </button>
-            <button onClick={(e) => { e.stopPropagation(); handleTogglePublish(row); }} className="text-xs text-on-surface-variant hover:underline font-medium">
+            <button type="button" disabled={busy !== null} aria-busy={busy === row.id || undefined} onClick={(e) => { e.stopPropagation(); handleTogglePublish(row); }} className="text-xs text-on-surface-variant hover:underline font-medium disabled:opacity-50">
               {row.status === "published" ? "Unpublish" : "Publish"}
             </button>
           </div>
@@ -267,15 +319,28 @@ export default function PlacementCellDrives() {
         footer={
           <>
             <Button variant="outline" onClick={() => setShowForm(false)}>Cancel</Button>
-            <Button onClick={handleSave} disabled={loading || !form.companyId || !form.jobRole || !form.applicationDeadline}>
+            <Button
+              onClick={handleSave}
+              disabled={loading || options.status !== "success" || !form.companyId || !form.jobRole || !form.applicationDeadline}
+              aria-busy={loading || undefined}
+            >
               {loading ? "Saving..." : editingId ? "Save Changes" : "Create Drive"}
             </Button>
           </>
         }
       >
-        {error && (
-          <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium mb-md">{error}</div>
-        )}
+        <ErrorAlert error={error} className="mb-md" />
+        <Alert
+          tone="error"
+          className="mb-md"
+          action={<Button variant="outline" size="sm" onClick={options.reload}>Try again</Button>}
+        >
+          {options.status === "error" ? (
+            <>
+              Companies and departments couldn&apos;t be loaded, so the drive can&apos;t be saved yet.
+            </>
+          ) : null}
+        </Alert>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-md">
           <FormField label="Company" id="company" type="select" value={form.companyId} onChange={(v) => setForm({ ...form, companyId: v })} options={companyOptions} required />
           <FormField label="Job Role" id="job_role" value={form.jobRole} onChange={(v) => setForm({ ...form, jobRole: v })} placeholder="e.g. Software Engineer" required />

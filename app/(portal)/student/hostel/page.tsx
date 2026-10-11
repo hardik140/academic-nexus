@@ -2,34 +2,41 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { RoomTransferPanel } from "./room-transfer-panel";
+import { assertRead } from "@/lib/read-result-server";
+import { NO_MATCH_ID } from "@/lib/read-result";
+import { todayDayOfWeek } from "@/lib/format";
 
 export default async function StudentHostel() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: student } = await supabase.from("students").select("id").eq("user_id", user.id).single();
-  const { data: profile } = await supabase.from("profiles").select("college_id").eq("id", user.id).single();
+  const { data: student, error: studentError } = await supabase.from("students").select("id").eq("user_id", user.id).single();
+  assertRead(studentError);
+  const { data: profile, error: profileError } = await supabase.from("profiles").select("college_id").eq("id", user.id).single();
+  assertRead(profileError);
 
   // Current allocation (cast to any: this hand-maintained types file doesn't
   // declare table Relationships, so embedded joins like hostel_rooms(...)
   // can't be inferred — same pattern used throughout the rest of the app)
-  const { data: allocationData } = await supabase
+  const { data: allocationData, error: allocationDataError } = await supabase
     .from("hostel_allocations")
     .select("*, hostel_rooms(block_name, room_number, type, ac, capacity, occupancy)")
-    .eq("student_id", student?.id || "")
+    .eq("student_id", student?.id || NO_MATCH_ID)
     .eq("status", "active")
     .single();
+  assertRead(allocationDataError);
   const allocation = allocationData as any;
 
   // Mess menu for today
-  const todayDay = new Date().getDay();
-  const { data: messMenu } = await supabase
+  const todayDay = todayDayOfWeek();
+  const { data: messMenu, error: messMenuError } = await supabase
     .from("mess_menu")
     .select("*")
-    .eq("college_id", profile?.college_id || "")
+    .eq("college_id", profile?.college_id || NO_MATCH_ID)
     .eq("day_of_week", todayDay)
     .order("meal_type");
+  assertRead(messMenuError);
 
   const mealOrder = ["breakfast", "lunch", "snacks", "dinner"];
   const sortedMenu = (messMenu || []).sort(

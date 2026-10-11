@@ -1,8 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { DataTable, type DataTableQuery } from "@/components/ui/data-table";
 import { Modal, Button, FormField, StatusBadge } from "@/components/ui/modal";
+import { Alert } from "@/components/ui/alert";
+import { ErrorAlert } from "@/components/ui/error-alert";
+import { toFeedbackError, type FeedbackError } from "@/lib/action-failure";
 import { createCompany, updateCompany, listCompanies, type CompanyParams } from "./actions";
 
 const COMPANIES_PAGE_SIZE = 10;
@@ -22,20 +25,33 @@ const emptyForm: CompanyParams = {
 export default function PlacementCellCompanies() {
   const [companies, setCompanies] = useState<any[]>([]);
   const [loadingList, setLoadingList] = useState(false);
+  const [listError, setListError] = useState<unknown>(null);
   const [totalCompanies, setTotalCompanies] = useState(0);
   const [query, setQuery] = useState<DataTableQuery>({ search: "", sortKey: null, sortDir: "asc", page: 0 });
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<CompanyParams>(emptyForm);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<FeedbackError | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const latestLoad = useRef(0);
 
+  // The latest query's page; a failed load is an error in the table, never
+  // "No companies added yet." (owner decision D5).
   const loadCompanies = async (q: DataTableQuery) => {
+    const run = ++latestLoad.current;
     setLoadingList(true);
-    const { data, count } = await listCompanies(q);
-    setCompanies(data);
-    setTotalCompanies(count);
-    setLoadingList(false);
+    setListError(null);
+    try {
+      const { data, count } = await listCompanies(q);
+      if (run !== latestLoad.current) return;
+      setCompanies(data);
+      setTotalCompanies(count);
+    } catch (e) {
+      if (run === latestLoad.current) setListError(e);
+    } finally {
+      if (run === latestLoad.current) setLoadingList(false);
+    }
   };
 
   const openCreate = () => {
@@ -63,18 +79,21 @@ export default function PlacementCellCompanies() {
   };
 
   const handleSave = async () => {
+    if (loading) return;
     setLoading(true);
     setError(null);
+    setNotice(null);
     try {
       if (editingId) {
-        await updateCompany(editingId, form, query);
+        await updateCompany(editingId, form);
       } else {
-        await createCompany(form, query);
+        await createCompany(form);
       }
       setShowForm(false);
-      await loadCompanies(query);
+      setNotice(editingId ? `${form.name} saved.` : `${form.name} added.`);
+      void loadCompanies(query);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to save company.");
+      setError(await toFeedbackError(e, "Failed to save company."));
     } finally {
       setLoading(false);
     }
@@ -90,9 +109,11 @@ export default function PlacementCellCompanies() {
         <Button onClick={openCreate}>+ Add Company</Button>
       </div>
 
-      {error && !showForm && (
-        <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium">{error}</div>
-      )}
+      <Alert tone="success" onDismiss={() => setNotice(null)}>
+        {notice}
+      </Alert>
+      {/* The company dialog shows its own failure. */}
+      <ErrorAlert error={!showForm ? error : null} />
 
       <DataTable
         title="All Companies"
@@ -112,6 +133,8 @@ export default function PlacementCellCompanies() {
         serverMode
         totalCount={totalCompanies}
         loading={loadingList}
+        error={listError}
+        onRetry={() => loadCompanies(query)}
         onQueryChange={(q) => { setQuery(q); loadCompanies(q); }}
         pageSize={COMPANIES_PAGE_SIZE}
       />
@@ -124,15 +147,13 @@ export default function PlacementCellCompanies() {
         footer={
           <>
             <Button variant="outline" onClick={() => setShowForm(false)}>Cancel</Button>
-            <Button onClick={handleSave} disabled={loading || !form.name}>
+            <Button onClick={handleSave} disabled={loading || !form.name} aria-busy={loading || undefined}>
               {loading ? "Saving..." : editingId ? "Save Changes" : "Add Company"}
             </Button>
           </>
         }
       >
-        {error && (
-          <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium mb-md">{error}</div>
-        )}
+        <ErrorAlert error={error} className="mb-md" />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-md">
           <FormField label="Company Name" id="name" value={form.name || ""} onChange={(v) => setForm({ ...form, name: v })} placeholder="e.g. TCS" required />
           <FormField label="Industry" id="industry" value={form.industry || ""} onChange={(v) => setForm({ ...form, industry: v })} placeholder="e.g. IT Services" />

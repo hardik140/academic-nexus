@@ -1,19 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { DepartmentHeatmapGrid, type HeatmapRow } from "@/components/charts/department-heatmap-grid";
+import { StateView } from "@/components/ui/state-view";
+import { useAsyncResource } from "@/hooks/use-async-resource";
 import { listDepartmentHealth } from "./actions";
 
 export default function DepartmentPerformancePage() {
-  const [rows, setRows] = useState<HeatmapRow[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    listDepartmentHealth().then((data) => {
-      setRows(data);
-      setLoading(false);
-    });
-  }, []);
+  // A failed load is an error with Try again — never a page stuck on
+  // "Loading..." (owner decision D5).
+  const health = useAsyncResource<HeatmapRow[]>(() => listDepartmentHealth(), []);
 
   return (
     <div className="space-y-lg">
@@ -25,11 +20,9 @@ export default function DepartmentPerformancePage() {
       </div>
 
       <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-sm">
-        {loading ? (
-          <div className="p-xl text-center text-sm text-outline">Loading...</div>
-        ) : (
-          <DepartmentHeatmapGrid rows={rows} />
-        )}
+        <StateView state={health} loadingLabel="Loading department performance…" empty={{ title: "No departments yet" }}>
+          {(rows) => <DepartmentHeatmapGrid rows={rows} />}
+        </StateView>
       </div>
     </div>
   );

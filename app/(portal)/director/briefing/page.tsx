@@ -1,22 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/modal";
+import { StateView } from "@/components/ui/state-view";
+import { useAsyncResource } from "@/hooks/use-async-resource";
 import { getExecutiveBriefing } from "./actions";
 
 export default function ExecutiveBriefingPage() {
-  const [data, setData] = useState<any>(null);
-
-  useEffect(() => {
-    getExecutiveBriefing().then(setData);
-  }, []);
-
-  if (!data) {
-    return <div className="p-xl text-center text-sm text-outline">Loading...</div>;
-  }
+  // A failed load is an error with Try again — never a page stuck on
+  // "Loading..." (owner decision D5).
+  const briefing = useAsyncResource(() => getExecutiveBriefing(), []);
+  const data: any = briefing.data;
 
   return (
+    <StateView state={briefing} isEmpty={(value) => !value.latestSnapshot && value.risks.length === 0 && value.decisionsWaiting.length === 0 && value.upcomingDeadlines.length === 0} loadingLabel="Loading the briefing…" empty={{ title: "No briefing yet" }}>
+      {() => (
     <div className="space-y-lg max-w-[52rem] print:max-w-none">
       <div className="flex items-start justify-between gap-md print:hidden">
         <div>
@@ -141,5 +139,7 @@ export default function ExecutiveBriefingPage() {
         </section>
       </div>
     </div>
+      )}
+    </StateView>
   );
 }

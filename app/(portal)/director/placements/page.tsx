@@ -1,9 +1,16 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { DataTable, type DataTableQuery } from "@/components/ui/data-table";
 import { Modal, Button, FormField, StatusBadge } from "@/components/ui/modal";
+import { Alert } from "@/components/ui/alert";
+import { ErrorAlert } from "@/components/ui/error-alert";
+import { ErrorState } from "@/components/ui/error-state";
+import { useAsyncResource } from "@/hooks/use-async-resource";
+import { toFeedbackError, type FeedbackError } from "@/lib/action-failure";
+import { classifyError } from "@/lib/feedback-error";
+import { requireData, requireRows } from "@/lib/read-result";
 import { createPlacement, listPlacements } from "./actions";
 import type { Database } from "@/types/database";
 
@@ -27,15 +34,16 @@ const PLACEMENTS_PAGE_SIZE = 10;
 
 export default function DirectorPlacements() {
   const supabase = createClient();
-  const [summary, setSummary] = useState<any>(null);
   const [placements, setPlacements] = useState<any[]>([]);
   const [placementsLoading, setPlacementsLoading] = useState(false);
+  const [placementsError, setPlacementsError] = useState<unknown>(null);
   const [totalPlacements, setTotalPlacements] = useState(0);
   const [query, setQuery] = useState<DataTableQuery>({ search: "", sortKey: null, sortDir: "asc", page: 0 });
-  const [students, setStudents] = useState<any[]>([]);
   const [showCreate, setShowCreate] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<FeedbackError | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const latestLoad = useRef(0);
   const [form, setForm] = useState<{
     student_id: string;
     company_name: string;
@@ -54,34 +62,47 @@ export default function DirectorPlacements() {
     status: "placed",
   });
 
-  useEffect(() => { loadSummary(); loadStudents(); }, []);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { loadPlacements(query); }, [query]);
 
-  const loadSummary = async () => {
-    const { data } = await supabase.from("mv_placement_summary").select("*").maybeSingle();
-    setSummary(data);
-  };
+  // Summary figures: a failed load is an error, never "0 placed" (D5).
+  const summaryResource = useAsyncResource(
+    async () => requireData(await supabase.from("mv_placement_summary").select("*").maybeSingle()) as any,
+    []
+  );
+  const summary = summaryResource.data ?? null;
 
+  // The latest query's page; a failed load is an error in the table.
   const loadPlacements = async (q: DataTableQuery) => {
+    const run = ++latestLoad.current;
     setPlacementsLoading(true);
-    const { data, count } = await listPlacements(q);
-    setPlacements(data);
-    setTotalPlacements(count);
-    setPlacementsLoading(false);
+    setPlacementsError(null);
+    try {
+      const { data, count } = await listPlacements(q);
+      if (run !== latestLoad.current) return;
+      setPlacements(data);
+      setTotalPlacements(count);
+    } catch (e) {
+      if (run === latestLoad.current) setPlacementsError(e);
+    } finally {
+      if (run === latestLoad.current) setPlacementsLoading(false);
+    }
   };
 
-  const loadStudents = async () => {
-    const { data } = await supabase
-      .from("students")
-      .select("id, enrollment_number, profiles:user_id(full_name)")
-      .order("enrollment_number");
-    setStudents(data || []);
-  };
+  const studentsResource = useAsyncResource(
+    async () =>
+      requireRows(
+        await supabase.from("students").select("id, enrollment_number, profiles:user_id(full_name)").order("enrollment_number")
+      ),
+    []
+  );
+  const students: any[] = studentsResource.data ?? [];
 
   const handleCreate = async () => {
+    if (loading) return;
     setLoading(true);
     setError(null);
+    setNotice(null);
     try {
       await createPlacement(
         form.student_id,
@@ -90,14 +111,16 @@ export default function DirectorPlacements() {
         form.package_lpa ? Number(form.package_lpa) : null,
         form.placement_date,
         form.offer_type,
-        form.status,
-        query
+        form.status
       );
       setForm({ student_id: "", company_name: "", role_title: "", package_lpa: "", placement_date: "", offer_type: "full_time", status: "placed" });
       setShowCreate(false);
-      await Promise.all([loadSummary(), loadPlacements(query)]);
+      setNotice(`Placement at ${form.company_name} recorded.`);
+      // Refreshing reports its own failure, never as a failed record.
+      summaryResource.reload();
+      void loadPlacements(query);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to add placement record.");
+      setError(await toFeedbackError(e, "Failed to add placement record."));
     } finally {
       setLoading(false);
     }
@@ -118,28 +141,39 @@ export default function DirectorPlacements() {
         <Button onClick={() => setShowCreate(true)}>+ Add Placement Record</Button>
       </div>
 
-      {error && !showCreate && (
-        <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium">{error}</div>
-      )}
+      <Alert tone="success" onDismiss={() => setNotice(null)}>
+        {notice}
+      </Alert>
+      {/* The add dialog shows its own failure. */}
+      <ErrorAlert error={!showCreate ? error : null} />
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-md">
+      {summaryResource.status === "error" && !summary ? (
+        <ErrorState
+          {...classifyError(summaryResource.error)}
+          title="Placement figures couldn't be loaded"
+          onRetry={summaryResource.reload}
+          className="rounded-2xl border border-outline-variant bg-surface-container-lowest"
+        />
+      ) : (
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-md" aria-busy={summaryResource.status === "loading" || undefined}>
         <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-lg shadow-sm">
           <div className="text-xs font-semibold text-outline uppercase tracking-wider mb-sm">Students Placed</div>
-          <div className="text-2xl font-extrabold text-secondary">{summary?.total_placed || 0}</div>
+          <div className="text-2xl font-extrabold text-secondary">{summaryResource.data === undefined ? "—" : summary?.total_placed || 0}</div>
         </div>
         <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-lg shadow-sm">
           <div className="text-xs font-semibold text-outline uppercase tracking-wider mb-sm">Companies</div>
-          <div className="text-2xl font-extrabold text-on-surface">{summary?.total_companies || 0}</div>
+          <div className="text-2xl font-extrabold text-on-surface">{summaryResource.data === undefined ? "—" : summary?.total_companies || 0}</div>
         </div>
         <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-lg shadow-sm">
           <div className="text-xs font-semibold text-outline uppercase tracking-wider mb-sm">Avg Package</div>
-          <div className="text-2xl font-extrabold text-success">₹{summary?.avg_package || 0}L</div>
+          <div className="text-2xl font-extrabold text-success">{summaryResource.data === undefined ? "—" : `₹${summary?.avg_package || 0}L`}</div>
         </div>
         <div className="bg-surface-container-lowest border border-outline-variant rounded-2xl p-lg shadow-sm">
           <div className="text-xs font-semibold text-outline uppercase tracking-wider mb-sm">Max Package</div>
-          <div className="text-2xl font-extrabold text-success">₹{summary?.max_package || 0}L</div>
+          <div className="text-2xl font-extrabold text-success">{summaryResource.data === undefined ? "—" : `₹${summary?.max_package || 0}L`}</div>
         </div>
       </div>
+      )}
 
       <DataTable
         title="Placement Records"
@@ -159,6 +193,8 @@ export default function DirectorPlacements() {
         serverMode
         totalCount={totalPlacements}
         loading={placementsLoading}
+        error={placementsError}
+        onRetry={() => loadPlacements(query)}
         onQueryChange={setQuery}
         pageSize={PLACEMENTS_PAGE_SIZE}
       />
@@ -170,13 +206,22 @@ export default function DirectorPlacements() {
         footer={
           <>
             <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
-            <Button onClick={handleCreate} disabled={loading || !form.student_id || !form.company_name || !form.role_title}>{loading ? "Saving..." : "Add Record"}</Button>
+            <Button onClick={handleCreate} disabled={loading || !form.student_id || !form.company_name || !form.role_title} aria-busy={loading || undefined}>{loading ? "Saving..." : "Add Record"}</Button>
           </>
         }
       >
-        {error && (
-          <div className="bg-error/10 border border-error/20 text-error rounded-xl p-md text-sm font-medium mb-md">{error}</div>
-        )}
+        <ErrorAlert error={error} className="mb-md" />
+        <Alert
+          tone="error"
+          className="mb-md"
+          action={<Button variant="outline" size="sm" onClick={studentsResource.reload}>Try again</Button>}
+        >
+          {studentsResource.status === "error" ? (
+            <>
+              Students couldn&apos;t be loaded, so none can be chosen yet.
+            </>
+          ) : null}
+        </Alert>
         <div className="space-y-md">
           <FormField label="Student" id="student" type="select" value={form.student_id} onChange={(v) => setForm({ ...form, student_id: v })} options={studentOptions} required />
           <FormField label="Company" id="company_name" value={form.company_name} onChange={(v) => setForm({ ...form, company_name: v })} placeholder="e.g. Acme Corp" required />

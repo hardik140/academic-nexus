@@ -5,16 +5,19 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole, type AuthorizedActor } from "@/lib/rbac";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { getCached, invalidateCache } from "@/lib/cache";
+import { getCached, invalidateCacheFamily, versionedKey } from "@/lib/cache";
 import { logAudit } from "@/lib/audit";
 import { assertClaimed } from "@/lib/concurrent-claim";
 import { PERMISSIONS } from "@/lib/permissions";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import { dbError } from "@/lib/internal-error";
+import { assertRead } from "@/lib/read-result-server";
+
+const DISPUTES_CACHE_FAMILY = "finance-disputes";
 
 function disputesCacheKey(collegeId: string) {
-  return `finance-disputes:${collegeId}`;
+  return versionedKey(`finance-disputes:${collegeId}`, DISPUTES_CACHE_FAMILY, collegeId);
 }
 
 const SELECT_COLS =
@@ -25,11 +28,12 @@ export async function listFinancialDisputes() {
   const supabase = await createClient();
 
   return getCached(disputesCacheKey(actor.collegeId), 30, async () => {
-    const { data } = await supabase
+    const { data, error: dataError } = await supabase
       .from("financial_disputes")
       .select(SELECT_COLS)
       .eq("college_id", actor.collegeId)
       .order("created_at", { ascending: false });
+    assertRead(dataError);
     return data || [];
   });
 }
@@ -71,7 +75,7 @@ export async function claimDispute(disputeIdRaw: string) {
     newValue: { status: "under_investigation", assigned_to: actor.userId },
   });
 
-  await invalidateCache(disputesCacheKey(actor.collegeId));
+  await invalidateCacheFamily(DISPUTES_CACHE_FAMILY, actor.collegeId);
   revalidatePath("/finance/disputes");
 }
 
@@ -118,7 +122,7 @@ async function finalizeDispute(status: "resolved" | "rejected", disputeIdRaw: st
     });
   }
 
-  await invalidateCache(disputesCacheKey(actor.collegeId));
+  await invalidateCacheFamily(DISPUTES_CACHE_FAMILY, actor.collegeId);
   revalidatePath("/finance/disputes");
   revalidatePath("/finance/dashboard");
 }

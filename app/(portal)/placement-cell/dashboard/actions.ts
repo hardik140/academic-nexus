@@ -2,13 +2,18 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/rbac";
-import { getCached } from "@/lib/cache";
+import { getCachedWriteBehind } from "@/lib/cache";
+import { assertRead } from "@/lib/read-result-server";
 
 export async function getPlacementCellDashboard() {
   const actor = await requireRole(["placement_cell", "director", "admin"]);
   const supabase = await createClient();
 
-  return getCached(`placement:cell-dashboard:${actor.collegeId}`, 60, async () => {
+  // Role-scoped: placement_cell, director and admin see DIFFERENT rows here
+  // (students_read_staff excludes placement_cell; student_placement_profiles
+  // excludes director), so one college-wide entry served one role's data to
+  // another. See tests/cache-scope-registry.test.ts.
+  return getCachedWriteBehind(`placement:cell-dashboard:${actor.collegeId}:${actor.role}`, 60, async () => {
     const [
       totalStudentsRes,
       eligibleRes,
@@ -48,6 +53,14 @@ export async function getPlacementCellDashboard() {
         .order("applied_at", { ascending: false })
         .limit(5),
     ]);
+    assertRead(totalStudentsRes.error);
+    assertRead(eligibleRes.error);
+    assertRead(summaryRes.error);
+    assertRead(companiesRes.error);
+    assertRead(activeDrivesRes.error);
+    assertRead(applicationsRes.error);
+    assertRead(recentDrivesRes.error);
+    assertRead(recentApplicationsRes.error);
 
     const totalStudents = totalStudentsRes.count || 0;
     const placed = summaryRes.data?.total_placed || 0;

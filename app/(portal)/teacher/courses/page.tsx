@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { assertRead } from "@/lib/read-result-server";
 
 export default async function TeacherCourses() {
   const supabase = await createClient();
@@ -9,21 +10,24 @@ export default async function TeacherCourses() {
   // One card per DELIVERY. A teacher holding two sections of one course
   // sees two cards with two rosters, which the catalog-keyed version could
   // not represent at all.
-  const { data: offerings } = await supabase
+  const { data: offerings, error: offeringsError } = await supabase
     .from("course_offerings")
     .select(
       "id, status, courses:course_id(id, name, code, credits, type, departments:department_id(name, code)), sections:section_id(name, batch_year), semesters:semester_id(name)"
     )
     .eq("instructor_id", user.id);
+  assertRead(offeringsError);
 
   const offeringList = ((offerings as any[]) || []).sort((a, b) =>
     `${a.courses?.code}${a.sections?.name}`.localeCompare(`${b.courses?.code}${b.sections?.name}`)
   );
 
   const offeringIds = offeringList.map((o) => o.id);
-  const { data: enrollments } = offeringIds.length > 0
+  const enrollmentsRes = offeringIds.length > 0
     ? await supabase.from("course_enrollments").select("offering_id").in("offering_id", offeringIds).eq("status", "enrolled")
-    : { data: [] };
+    : { data: [], error: null };
+  assertRead(enrollmentsRes.error);
+  const enrollments = enrollmentsRes.data;
 
   const enrollCounts: Record<string, number> = {};
   ((enrollments as any[]) || []).forEach((e) => {
@@ -43,7 +47,7 @@ export default async function TeacherCourses() {
             <div className="flex items-center justify-between mb-sm">
               <span className="text-xs font-bold text-secondary uppercase tracking-wider">{o.courses?.code}</span>
               <span className={`text-xs font-semibold px-sm py-xs rounded-full capitalize ${
-                o.status === "active" ? "bg-success/10 text-success" : "bg-warning/10 text-warning"
+                o.status === "active" ? "bg-success/10 text-success" : "bg-warning-container text-on-warning-container"
               }`}>{o.status}</span>
             </div>
             <h3 className="text-sm font-bold text-on-surface mb-xs group-hover:text-secondary transition-colors">{o.courses?.name}</h3>
