@@ -5,6 +5,7 @@ import { requireRole } from "@/lib/rbac";
 import { getCachedWriteBehind } from "@/lib/cache";
 import { PERMISSIONS } from "@/lib/permissions";
 import { assertRead } from "@/lib/read-result-server";
+import { businessRpc, num } from "@/lib/business-rpc";
 
 // Full teaching load a single instructor is expected to carry per week —
 // there is no per-college/per-department config for this anywhere in the
@@ -41,49 +42,27 @@ export async function listDepartmentFacultyWorkload() {
     assertRead(facultyError);
     if (!faculty || faculty.length === 0) return [];
 
-    // Workload is measured in OFFERINGS delivered, not catalog rows owned.
-    // Under courses.instructor_id a teacher taking three sections of one
-    // course counted as teaching "1 course", and two teachers splitting a
-    // course could not both be counted at all. Weekly periods likewise come
-    // from the slots of those offerings, since timetable_slots no longer
-    // carries its own instructor_id (047) — it belongs to the offering.
-    // Cancelled offerings are excluded: nobody is teaching them.
+    // Workload is measured in OFFERINGS delivered (not cancelled) and the
+    // weekly periods of their slots, counted in PostgreSQL (migration 059,
+    // faculty_activity). This used to read the offerings and then their
+    // slots — a college's slots run past PostgREST's 1,000-row cap — and
+    // tally them here.
     const facultyIds = faculty.map((f) => f.id);
-    const { data: offerings, error: offeringsError } = await supabase
-      .from("course_offerings")
-      .select("id, instructor_id, status")
-      .in("instructor_id", facultyIds);
-    assertRead(offeringsError);
-
-    const live = (offerings || []).filter((o) => o.status !== "cancelled");
-
-    const courseCounts: Record<string, number> = {};
-    live.forEach((o) => {
-      if (!o.instructor_id) return;
-      courseCounts[o.instructor_id] = (courseCounts[o.instructor_id] || 0) + 1;
-    });
-
-    const instructorByOffering = new Map(live.map((o) => [o.id, o.instructor_id]));
-    const { data: slots, error: slotsError } = live.length
-      ? await supabase.from("timetable_slots").select("offering_id").in("offering_id", live.map((o) => o.id))
-      : { data: [], error: null };
-    assertRead(slotsError);
-
-    const weeklyPeriods: Record<string, number> = {};
-    (slots || []).forEach((s) => {
-      const instructorId = instructorByOffering.get(s.offering_id);
-      if (!instructorId) return;
-      weeklyPeriods[instructorId] = (weeklyPeriods[instructorId] || 0) + 1;
-    });
+    const activity = await businessRpc<{ faculty_id: string; course_count: number | string; weekly_periods: number | string }>(
+      supabase,
+      "faculty_activity",
+      { p_college_id: actor.collegeId, p_faculty_ids: facultyIds }
+    );
+    const byId = new Map(activity.map((a) => [a.faculty_id, a]));
 
     return faculty
       .map((f) => {
-        const periods = weeklyPeriods[f.id] || 0;
+        const periods = num(byId.get(f.id)?.weekly_periods);
         return {
           id: f.id,
           fullName: f.full_name,
           email: f.email,
-          courseCount: courseCounts[f.id] || 0,
+          courseCount: num(byId.get(f.id)?.course_count),
           weeklyPeriods: periods,
           workloadPct: Math.round((periods / STANDARD_WEEKLY_LOAD) * 100),
         };

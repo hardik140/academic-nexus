@@ -5,14 +5,11 @@ import { createClient } from "@/lib/supabase/server";
 import { requireRole, requireRoleFromRequest, type AuthorizedActor } from "@/lib/rbac";
 import { getCachedWriteBehind } from "@/lib/cache";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { sendExpoPushNotifications } from "@/lib/push";
+import { fanOutAnnouncement, pushAnnouncement } from "@/lib/notification-fanout";
 import { PERMISSIONS } from "@/lib/permissions";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
-import { dbError } from "@/lib/internal-error";
 import { assertRead } from "@/lib/read-result-server";
-
-const STAFF_ROLES = ["teacher", "hod", "warden", "finance", "admin"] as const;
 
 export async function getDashboardStats() {
   const actor = await requireRole(["director", "admin"]);
@@ -61,54 +58,26 @@ export async function sendAnnouncementCore(
 ) {
   const { title, message, audience } = SendAnnouncementSchema.parse(params);
 
-  let query = supabase.from("profiles").select("id").eq("college_id", actor.collegeId);
-  if (audience === "staff") {
-    query = query.in("role", STAFF_ROLES);
-  } else if (audience === "students") {
-    query = query.eq("role", "student");
-  }
-
-  const { data: recipients, error: recipientsError } = await query;
-  if (recipientsError) {
-    throw dbError(recipientsError);
-  }
-  if (!recipients || recipients.length === 0) {
+  // Recipients selected and notifications written in ONE database statement
+  // (migration 059, send_announcement): no recipient list here, no
+  // PostgREST row cap, all rows or none. "staff" is teacher, hod, warden,
+  // finance and admin, as before (pinned by tests/staging-fanout.test.ts).
+  // See lib/notification-fanout.ts for what this replaced.
+  const { announcementId, recipientCount } = await fanOutAnnouncement(supabase, {
+    collegeId: actor.collegeId,
+    title,
+    message,
+    audience,
+  });
+  if (recipientCount === 0) {
     throw new Error("No recipients found for the selected audience.");
   }
 
-  const { error } = await supabase.from("notifications").insert(
-    recipients.map((r) => ({
-      college_id: actor.collegeId,
-      title,
-      message,
-      receiver_id: r.id,
-      sender_id: actor.userId,
-      type: "info" as const,
-    }))
-  );
+  // Best-effort push, a page of device tokens at a time; the notification
+  // rows are already committed.
+  await pushAnnouncement(supabase, announcementId, title, message);
 
-  if (error) {
-    throw dbError(error);
-  }
-
-  // Push delivery to any recipient with a registered device (mobile app).
-  // Best-effort — see lib/push.ts's doc comment; a push failure must never
-  // surface as "the announcement failed" since the notifications rows (the
-  // in-app source of truth) are already written by this point.
-  const { data: deviceTokens } = await supabase
-    .from("device_tokens")
-    .select("expo_push_token")
-    .in("user_id", recipients.map((r) => r.id));
-
-  if (deviceTokens && deviceTokens.length > 0) {
-    await sendExpoPushNotifications(
-      deviceTokens.map((d) => d.expo_push_token),
-      title,
-      message
-    );
-  }
-
-  return { recipientCount: recipients.length };
+  return { recipientCount };
 }
 
 export async function sendAnnouncement(

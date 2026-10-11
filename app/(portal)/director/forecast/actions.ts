@@ -8,6 +8,7 @@ import { PERMISSIONS } from "@/lib/permissions";
 import type { Json } from "@/types/database";
 import { dbError } from "@/lib/internal-error";
 import { assertRead } from "@/lib/read-result-server";
+import { businessRpc, num } from "@/lib/business-rpc";
 
 export async function getForecastBaseline() {
   const actor = await requireRole(PERMISSIONS.forecast_simulator_read);
@@ -28,12 +29,14 @@ export async function getForecastBaseline() {
 
   let hostelCapacity = 0;
   let hostelOccupancy = 0;
-  const blockIds = (hostelBlocksRes.data || []).map((b) => b.id);
-  if (blockIds.length > 0) {
-    const { data: rooms, error: roomsError } = await supabase.from("hostel_rooms").select("capacity, occupancy").in("block_id", blockIds);
-    assertRead(roomsError);
-    hostelCapacity = (rooms || []).reduce((s, r) => s + r.capacity, 0);
-    hostelOccupancy = (rooms || []).reduce((s, r) => s + r.occupancy, 0);
+  if ((hostelBlocksRes.data || []).length > 0) {
+    // Summed in PostgreSQL (migration 059): reading the rooms here was capped
+    // at PostgREST's 1,000 rows, so a large hostel's capacity read low.
+    const blocks = await businessRpc<{ capacity: number | string; occupancy: number | string }>(supabase, "hostel_block_capacity", {
+      p_college_id: actor.collegeId,
+    });
+    hostelCapacity = blocks.reduce((s, b) => s + num(b.capacity), 0);
+    hostelOccupancy = blocks.reduce((s, b) => s + num(b.occupancy), 0);
   }
 
   const placementValues = (placementRes.data || []).map((d) => d.placement_rate).filter((v): v is number => v != null);

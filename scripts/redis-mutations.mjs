@@ -19,7 +19,14 @@ const T = {
   middleware: "tests/middleware-rate-limit.test.ts",
   admission: "tests/middleware-admission-profile.test.ts",
   efficiency: "tests/cache-efficiency.test.ts",
+  businessReads: "tests/staging-business-reads.test.ts",
+  phase3Concurrency: "tests/realpg-phase3-concurrency.test.ts",
+  phase3Unit: "tests/phase3-bounded-processing.test.ts",
+  migration060: "tests/realpg-migration-060.test.ts",
 };
+
+const M059 = "supabase/migrations/059_business_reads_in_postgres.sql";
+const M060 = "supabase/migrations/060_finance_sync_runs.sql";
 
 const MUTATIONS = [
   ["1. timeout result read as allowed", "lib/rate-limit.ts",
@@ -63,6 +70,29 @@ const MUTATIONS = [
     "    if (opts?.backgroundWrite) {", "    if (false) {", [T.efficiency]],
   ["17. coalescing ignores the cache version (a post-invalidation read joins an old fill)", "lib/cache.ts",
     "      flight = `${vKey}|v${currentVersion}`;", "", [T.efficiency]],
+  // Phase 3 (migration 059): the rules that keep the new SQL safe.
+  ["18. push tokens returned to anyone holding an announcement id (sender check removed)", M059,
+    "         AND n.sender_id = auth.uid()\n", "", [T.businessReads]],
+  ["19. any role may announce to the whole college (role gate removed)", M059,
+    "OR public.get_my_role() NOT IN ('director', 'admin') THEN", "OR false THEN", [T.businessReads]],
+  ["20. the risk overview bypasses RLS (SECURITY DEFINER)", M059,
+    "  critical BIGINT\n)\nLANGUAGE sql\nSTABLE\nSECURITY INVOKER", "  critical BIGINT\n)\nLANGUAGE sql\nSTABLE\nSECURITY DEFINER", [T.businessReads]],
+  // Migration 060: "Sync now" as a durable run; reconciliation by keyset.
+  ["21. a rescan, or an existing enqueue(), collides with the unique key (ON CONFLICT removed)", M060,
+    "        ON CONFLICT (connection_id, idempotency_key) DO NOTHING;", "        ;", [T.businessReads, T.phase3Concurrency]],
+  ["22. the run forgets its cursor (every press restarts the window)", M060,
+    "      SET cursor_created = COALESCE(v_created[v_n], r.cursor_created),\n          cursor_id = COALESCE(v_batch[v_n], r.cursor_id),",
+    "      SET cursor_created = NULL,\n          cursor_id = NULL,", [T.businessReads]],
+  ["23. any role may drive a sync run (role gate removed)", M060,
+    "COALESCE(public.get_my_role(), '') NOT IN ('finance', 'admin')", "false", [T.businessReads]],
+  ["24. concurrent presses do not take turns on the run (row lock removed)", M060,
+    "    FOR UPDATE;\n", "    ;\n", [T.phase3Concurrency]],
+  ["25. reconciliation reads payments created after the run started (as_of removed)", M060,
+    "    AND p.created_at <= p_as_of\n", "", [T.businessReads]],
+  ["26. reconciliation re-reads the first page (keyset cursor not advanced)", "lib/finance/reconciliation.ts",
+    "    after = { created: last.created_at, id: last.id };", "    void last;", [T.phase3Unit]],
+  ["27. the payments index build queues behind a long transaction (lock_timeout removed)", M060,
+    "SET lock_timeout = '5s';\n", "", [T.migration060]],
 ];
 
 const sha = (s) => createHash("sha256").update(s).digest("hex");

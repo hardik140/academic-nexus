@@ -5,6 +5,7 @@ import { StatusBadge } from "@/components/ui/modal";
 import { DEFAULT_QUERY_LIMIT } from "@/lib/constants";
 import { assertRead } from "@/lib/read-result-server";
 import { NO_MATCH_ID } from "@/lib/read-result";
+import { businessRpc, num } from "@/lib/business-rpc";
 
 export default async function StudentAttendance() {
   const supabase = await createClient();
@@ -22,27 +23,41 @@ export default async function StudentAttendance() {
     .limit(DEFAULT_QUERY_LIMIT);
   assertRead(recordsError);
 
+  // The percentages count EVERY record, in PostgreSQL (migration 059,
+  // attendance_summary). They used to be computed from the records listed
+  // below — the latest DEFAULT_QUERY_LIMIT only — so after a few months a
+  // student's percentage covered just the recent weeks and could read well
+  // above or below the truth that attendance rules are applied to.
+  //
   // Grouped per CLASS, not per course: a student retaking a course, or
   // taking two sections of one, has separate attendance in each and merging
-  // them reports a percentage belonging to neither.
-  const courseSummary: Record<string, { name: string; code: string; present: number; total: number }> = {};
-  (records || []).forEach((r: any) => {
-    const key = r.offering_id;
-    const course = r.course_offerings?.courses;
-    const section = r.course_offerings?.sections?.name;
-    if (!courseSummary[key]) {
-      courseSummary[key] = {
-        name: section ? `${course?.name || ""} (${section})` : course?.name || "",
-        code: course?.code || "",
-        present: 0,
-        total: 0,
-      };
-    }
-    courseSummary[key].total++;
-    if (r.status === "present" || r.status === "late") courseSummary[key].present++;
+  // them reports a percentage belonging to neither. Present means present
+  // or late, as before.
+  const totals = await businessRpc<{ offering_id: string; present: number | string; total: number | string }>(supabase, "attendance_summary", {
+    p_student_id: student?.id || NO_MATCH_ID,
   });
+  const offeringIds = totals.map((t) => t.offering_id);
+  const { data: offerings, error: offeringsError } = offeringIds.length
+    ? await supabase
+        .from("course_offerings")
+        .select("id, courses:course_id(name, code), sections:section_id(name)")
+        .in("id", offeringIds)
+    : { data: [], error: null };
+  assertRead(offeringsError);
+  type OfferingName = { id: string; courses: { name: string; code: string } | null; sections: { name: string } | null };
+  const offeringById = new Map(((offerings || []) as unknown as OfferingName[]).map((o) => [o.id, o]));
 
-  const summaries = Object.values(courseSummary);
+  const summaries = totals.map((t) => {
+    const o = offeringById.get(t.offering_id);
+    const course = o?.courses;
+    const section = o?.sections?.name;
+    return {
+      name: section ? `${course?.name || ""} (${section})` : course?.name || "",
+      code: course?.code || "",
+      present: num(t.present),
+      total: num(t.total),
+    };
+  });
   const overall = summaries.reduce((acc, s) => ({ present: acc.present + s.present, total: acc.total + s.total }), { present: 0, total: 0 });
   const overallPct = overall.total > 0 ? (overall.present / overall.total) * 100 : 0;
 

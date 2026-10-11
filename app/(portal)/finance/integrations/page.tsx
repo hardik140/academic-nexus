@@ -163,9 +163,14 @@ export default function FinanceIntegrationsPage() {
     return run(
       syncFor.id,
       async () => {
-        const result = (await syncNow({ connectionId: syncFor.id, from: syncRange.from, to: syncRange.to })) as { queued: number; skipped: number };
+        const result = await syncNow({ connectionId: syncFor.id, from: syncRange.from, to: syncRange.to });
         setSyncFor(null);
-        setNotice(`Queued ${result.queued} payment(s); ${result.skipped} already posted.`);
+        setNotice(
+          result.complete
+            ? `Queued ${result.queued} payment(s); ${result.skipped} already posted. Every payment in the window is queued or posted.`
+            : `Queued ${result.queued} payment(s); ${result.skipped} already posted. NOT FINISHED: ${result.run.scanned} payment(s) ` +
+                `checked so far — press Sync Now again with the same dates to continue from where this stopped.`
+        );
       }
     );
   };

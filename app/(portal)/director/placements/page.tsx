@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { DataTable, type DataTableQuery } from "@/components/ui/data-table";
 import { Modal, Button, FormField, StatusBadge } from "@/components/ui/modal";
+import { StudentSearchField } from "@/components/student-search-field";
 import { Alert } from "@/components/ui/alert";
 import { ErrorAlert } from "@/components/ui/error-alert";
 import { ErrorState } from "@/components/ui/error-state";
@@ -89,14 +90,6 @@ export default function DirectorPlacements() {
     }
   };
 
-  const studentsResource = useAsyncResource(
-    async () =>
-      requireRows(
-        await supabase.from("students").select("id, enrollment_number, profiles:user_id(full_name)").order("enrollment_number")
-      ),
-    []
-  );
-  const students: any[] = studentsResource.data ?? [];
 
   const handleCreate = async () => {
     if (loading) return;
@@ -125,11 +118,6 @@ export default function DirectorPlacements() {
       setLoading(false);
     }
   };
-
-  const studentOptions = students.map((s: any) => ({
-    value: s.id,
-    label: `${s.enrollment_number} — ${(s.profiles as any)?.full_name || ""}`,
-  }));
 
   return (
     <div className="space-y-lg">
@@ -211,19 +199,8 @@ export default function DirectorPlacements() {
         }
       >
         <ErrorAlert error={error} className="mb-md" />
-        <Alert
-          tone="error"
-          className="mb-md"
-          action={<Button variant="outline" size="sm" onClick={studentsResource.reload}>Try again</Button>}
-        >
-          {studentsResource.status === "error" ? (
-            <>
-              Students couldn&apos;t be loaded, so none can be chosen yet.
-            </>
-          ) : null}
-        </Alert>
         <div className="space-y-md">
-          <FormField label="Student" id="student" type="select" value={form.student_id} onChange={(v) => setForm({ ...form, student_id: v })} options={studentOptions} required />
+          <StudentSearchField id="student" value={form.student_id} onChange={(v) => setForm({ ...form, student_id: v })} required />
           <FormField label="Company" id="company_name" value={form.company_name} onChange={(v) => setForm({ ...form, company_name: v })} placeholder="e.g. Acme Corp" required />
           <FormField label="Role" id="role_title" value={form.role_title} onChange={(v) => setForm({ ...form, role_title: v })} placeholder="e.g. Software Engineer" required />
           <FormField label="Package (LPA)" id="package_lpa" type="number" value={form.package_lpa} onChange={(v) => setForm({ ...form, package_lpa: v })} placeholder="0.00" />

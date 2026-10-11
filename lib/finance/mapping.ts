@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import { dbError } from "@/lib/internal-error";
+import { businessRpc, num } from "@/lib/business-rpc";
 
 /**
  * Mapping resolution and pre-flight validation (§48, §49, §62, §63).
@@ -128,30 +129,26 @@ export async function validateMappings(
   const index = indexMappings(await loadMappings(supabase, connectionId));
   const gaps: MappingGap[] = [];
 
-  const { data: feeRows } = await supabase
-    .from("fees")
-    .select("type")
-    .eq("college_id", collegeId);
-  const feeCounts = new Map<string, number>();
-  for (const row of feeRows ?? []) {
-    const key = (row as { type: string }).type;
-    feeCounts.set(key, (feeCounts.get(key) ?? 0) + 1);
-  }
+  // Every fee head and payment method in use, with how many records use it,
+  // grouped in PostgreSQL (migration 059, finance_mapping_usage). This used
+  // to read the fee and payment rows — each capped at PostgREST's 1,000 —
+  // and count here, so a head or method first used past the cap was never
+  // seen, the connection could be activated with it unmapped, and its
+  // postings failed later. A failed read used to count as "no gaps"; it now
+  // fails the validation instead.
+  const usage = await businessRpc<{ kind: "fee_head" | "payment_method"; local_key: string; record_count: number | string }>(
+    supabase,
+    "finance_mapping_usage",
+    { p_college_id: collegeId }
+  );
+  const feeCounts = new Map(usage.filter((u) => u.kind === "fee_head").map((u) => [u.local_key, num(u.record_count)]));
+  const methodCounts = new Map(usage.filter((u) => u.kind === "payment_method").map((u) => [u.local_key, num(u.record_count)]));
   for (const [type, count] of feeCounts) {
     if (!index.has(`fee_head:${type}`)) {
       gaps.push({ kind: "fee_head", localKey: type, affectedRecords: count });
     }
   }
 
-  const { data: paymentRows } = await supabase
-    .from("payments")
-    .select("method")
-    .eq("college_id", collegeId);
-  const methodCounts = new Map<string, number>();
-  for (const row of paymentRows ?? []) {
-    const key = (row as { method: string }).method;
-    methodCounts.set(key, (methodCounts.get(key) ?? 0) + 1);
-  }
   for (const [method, count] of methodCounts) {
     // A payment mode needs BOTH a mode name the provider understands and a
     // bank/cash ledger to land in (§62 and §63 are two different mappings,

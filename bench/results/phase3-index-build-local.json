@@ -1,0 +1,20 @@
+{
+  "label": "LOCAL",
+  "engine": "tests/realpg harness, fsync=off",
+  "results": [
+    {
+      "payments": 100000,
+      "build_ms_incl_psql_start": 185,
+      "index_size": "4624 kB",
+      "batch_ms_without_index": 44,
+      "batch_ms_with_index": 0.5
+    },
+    {
+      "payments": 1000000,
+      "build_ms_incl_psql_start": 1109,
+      "index_size": "45 MB",
+      "batch_ms_without_index": 159,
+      "batch_ms_with_index": 0.4
+    }
+  ]
+}

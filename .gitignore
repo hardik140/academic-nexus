@@ -18,6 +18,8 @@ build/
 .env.development.local
 .env.test.local
 .env.production.local
+# Local Supabase test target (scripts/local-supabase-preflight.mjs); never read by sync-cf-secrets
+.env.staging.local
 
 # Debug
 npm-debug.log*

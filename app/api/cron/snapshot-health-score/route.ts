@@ -3,6 +3,7 @@ import { verifySignatureAppRouter } from "@upstash/qstash/nextjs";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { unavailableCollegeIds } from "@/lib/college-access";
 import type { Json } from "@/types/database";
+import { businessRpc, num } from "@/lib/business-rpc";
 
 /**
  * Scheduled endpoint (QStash cron, same pattern as refresh-analytics and
@@ -25,73 +26,69 @@ function round1(n: number) {
   return Math.round(n * 10) / 10;
 }
 
+interface HealthInputs {
+  college_id: string;
+  open_risk_flags: number | string;
+  pending_decisions: number | string;
+  faculty_count: number | string;
+  active_students: number | string;
+  hostel_capacity: number | string;
+  hostel_occupancy: number | string;
+  dept_with_attendance: number | string;
+  dept_with_backlog: number | string;
+  dept_with_cgpa: number | string;
+  avg_attendance: number | string | null;
+  avg_backlog_inverse: number | string | null;
+  avg_cgpa_pct: number | string | null;
+  dept_with_placement: number | string;
+  avg_placement: number | string | null;
+  fee_collection_pct: number | string | null;
+}
+
 async function handler() {
   const supabase = createAdminClient();
 
-  const [collegesRes, deptHealthRes, feeSummaryRes, riskFlagsRes, decisionsRes, profilesRes, studentsRes, hostelBlocksRes, hostelRoomsRes] =
-    await Promise.all([
-      supabase.from("colleges").select("id").neq("id", PLATFORM_COLLEGE_ID),
-      supabase.from("mv_department_health_raw" as any).select("*"),
-      supabase.from("mv_fee_summary_raw" as any).select("*"),
-      supabase.from("risk_flags").select("college_id").in("status", ["open", "assigned", "acknowledged", "in_progress"]),
-      supabase.from("decisions").select("college_id").eq("status", "pending"),
-      supabase.from("profiles").select("college_id, role").in("role", ["teacher", "hod"]),
-      supabase.from("students").select("college_id").eq("status", "active"),
-      supabase.from("hostel_blocks").select("id, college_id"),
-      supabase.from("hostel_rooms").select("block_id, capacity, occupancy"),
-    ]);
-
-  const deptHealth = (deptHealthRes.data || []) as any[];
-  const feeSummary = (feeSummaryRes.data || []) as any[];
-  const riskFlags = riskFlagsRes.data || [];
-  const decisions = decisionsRes.data || [];
-  const facultyProfiles = profilesRes.data || [];
-  const activeStudents = studentsRes.data || [];
-  const hostelBlocks = hostelBlocksRes.data || [];
-  const hostelRooms = hostelRoomsRes.data || [];
+  // Every per-college input, computed in PostgreSQL (migration 059,
+  // college_health_inputs; service role only). This used to read whole
+  // tables across EVERY college — active students, faculty, open flags,
+  // pending decisions, hostel rooms, the per-department health rows — and
+  // filter them per college here. The service role is capped at PostgREST's
+  // 1,000 rows like anyone else, and that cap applied to all colleges
+  // TOGETHER, so once the platform passed 1,000 active students every
+  // college's faculty ratio, and soon every other score, was wrong.
+  // The scoring below is unchanged.
+  const inputs = await businessRpc<HealthInputs>(supabase, "college_health_inputs", {});
 
   // Lifecycle-blocked (migration 053): no snapshot for a college in
   // MAINTENANCE or SUSPENDED.
   const blocked = await unavailableCollegeIds(supabase);
-  const colleges = (collegesRes.data || []).filter((c) => !blocked.has(c.id));
   let written = 0;
 
-  for (const college of colleges) {
-    const collegeId = college.id;
-    const depts = deptHealth.filter((d) => d.college_id === collegeId);
-    const fee = feeSummary.find((f) => f.college_id === collegeId);
+  for (const c of inputs) {
+    const collegeId = c.college_id;
+    if (collegeId === PLATFORM_COLLEGE_ID || blocked.has(collegeId)) continue;
 
     const completeness: Record<string, string> = {};
 
-    // Academic: attendance (50%) + inverse backlog rate (30%) + CGPA/10 (20%).
+    // Academic: attendance (50%) + inverse backlog rate (30%) + CGPA/10 (20%),
+    // each averaged over the departments that report it.
     let academicScore: number | null = null;
-    if (depts.length > 0) {
-      const withAttendance = depts.filter((d) => d.attendance_pct != null);
-      const withBacklog = depts.filter((d) => d.backlog_rate != null);
-      const withCgpa = depts.filter((d) => d.avg_cgpa != null);
-      if (withAttendance.length && withBacklog.length && withCgpa.length) {
-        const avgAttendance = withAttendance.reduce((s, d) => s + d.attendance_pct, 0) / withAttendance.length;
-        const avgBacklogInverse = withBacklog.reduce((s, d) => s + Math.max(0, 100 - d.backlog_rate), 0) / withBacklog.length;
-        const avgCgpaPct = withCgpa.reduce((s, d) => s + (d.avg_cgpa / 10) * 100, 0) / withCgpa.length;
-        academicScore = round1(avgAttendance * 0.5 + avgBacklogInverse * 0.3 + avgCgpaPct * 0.2);
-      }
+    if (num(c.dept_with_attendance) && num(c.dept_with_backlog) && num(c.dept_with_cgpa)) {
+      academicScore = round1(num(c.avg_attendance) * 0.5 + num(c.avg_backlog_inverse) * 0.3 + num(c.avg_cgpa_pct) * 0.2);
     }
     if (academicScore == null) completeness.academic_score = "insufficient_data";
 
     // Fee collection: direct from mv_fee_summary.
-    const feeScore = fee?.collection_pct != null ? round1(fee.collection_pct) : null;
+    const feeScore = c.fee_collection_pct != null ? round1(num(c.fee_collection_pct)) : null;
     if (feeScore == null) completeness.fee_collection_score = "insufficient_data";
 
     // Placement: average department placement_rate.
-    const withPlacement = depts.filter((d) => d.placement_rate != null);
-    const placementScore = withPlacement.length ? round1(withPlacement.reduce((s, d) => s + d.placement_rate, 0) / withPlacement.length) : null;
+    const placementScore = num(c.dept_with_placement) ? round1(num(c.avg_placement)) : null;
     if (placementScore == null) completeness.placement_score = "insufficient_data";
 
     // Hostel: penalize occupancy above 85% capacity; no blocks = insufficient data.
-    const collegeBlocks = hostelBlocks.filter((b) => b.college_id === collegeId).map((b) => b.id);
-    const collegeRooms = hostelRooms.filter((r) => collegeBlocks.includes(r.block_id));
-    const totalCapacity = collegeRooms.reduce((s, r) => s + r.capacity, 0);
-    const totalOccupancy = collegeRooms.reduce((s, r) => s + r.occupancy, 0);
+    const totalCapacity = num(c.hostel_capacity);
+    const totalOccupancy = num(c.hostel_occupancy);
     let hostelScore: number | null = null;
     if (totalCapacity > 0) {
       const occupancyPct = (totalOccupancy / totalCapacity) * 100;
@@ -103,8 +100,8 @@ async function handler() {
     // Faculty: student:faculty ratio vs a 15:1 target — real counts, simple
     // capacity signal. Distinct from (and a precursor to) the richer
     // workload-completion signal planned for Faculty Intelligence.
-    const facultyCount = facultyProfiles.filter((p) => p.college_id === collegeId).length;
-    const studentCount = activeStudents.filter((s) => s.college_id === collegeId).length;
+    const facultyCount = num(c.faculty_count);
+    const studentCount = num(c.active_students);
     let facultyScore: number | null = null;
     if (facultyCount > 0 && studentCount > 0) {
       const actualRatio = studentCount / facultyCount;
@@ -119,8 +116,8 @@ async function handler() {
     const scores = [academicScore, feeScore, placementScore, hostelScore, facultyScore].filter((s): s is number => s != null);
     const overallScore = scores.length > 0 ? round1(scores.reduce((s, v) => s + v, 0) / scores.length) : null;
 
-    const riskOpenCount = riskFlags.filter((f) => f.college_id === collegeId).length;
-    const decisionsPendingCount = decisions.filter((d) => d.college_id === collegeId).length;
+    const riskOpenCount = num(c.open_risk_flags);
+    const decisionsPendingCount = num(c.pending_decisions);
 
     await supabase.from("institution_metric_snapshots").insert({
       college_id: collegeId,

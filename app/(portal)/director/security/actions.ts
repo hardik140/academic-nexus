@@ -17,6 +17,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import { dbError } from "@/lib/internal-error";
 import { assertRead } from "@/lib/read-result-server";
+import { businessRpc, num } from "@/lib/business-rpc";
 
 /**
  * Director-side security administration.
@@ -604,17 +605,26 @@ export async function securityOverview(): Promise<SecurityOverview> {
   const supabase = await createClient();
   const since = startOfToday();
 
-  const [movements, passes, guards, gates, refusals] = await Promise.all([
-    supabase
-      .from("gate_movements")
-      .select("movement_type")
-      .eq("college_id", actor.collegeId)
-      .gte("occurred_at", since),
-    supabase
-      .from("gate_passes")
-      .select("status, return_time")
-      .eq("college_id", actor.collegeId)
-      .in("status", ["pending", "active"]),
+  // Every count is PostgreSQL's (migration 059, gate_security_counts). This
+  // used to read today's movements, the open passes and today's scan audit
+  // rows — each capped at PostgREST's 1,000 rows — and count them here: on a
+  // busy campus the day's exits and refusals passed that by mid-morning and
+  // the tiles silently stopped rising.
+  //
+  // A refusal is any scan event that is not a recorded movement, split out
+  // because "someone presented something we did not recognise" and "someone
+  // presented a pass that was not usable yet" are different signals to a
+  // Director.
+  const [countRows, guards, gates] = await Promise.all([
+    businessRpc<{
+      exits_today: number | string;
+      returns_today: number | string;
+      currently_outside: number | string;
+      overdue: number | string;
+      pending_passes: number | string;
+      rejected_scans: number | string;
+      invalid_qr_attempts: number | string;
+    }>(supabase, "gate_security_counts", { p_college_id: actor.collegeId, p_since: since }),
     supabase
       .from("security_personnel")
       .select("id", { count: "exact", head: true })
@@ -625,45 +635,21 @@ export async function securityOverview(): Promise<SecurityOverview> {
       .select("id", { count: "exact", head: true })
       .eq("college_id", actor.collegeId)
       .eq("is_active", true),
-    supabase
-      .from("audit_logs")
-      .select("action")
-      .eq("college_id", actor.collegeId)
-      .eq("table_name", "gate_movements")
-      .gte("created_at", since),
   ]);
-  assertRead(movements.error);
-  assertRead(passes.error);
   assertRead(guards.error);
   assertRead(gates.error);
-  assertRead(refusals.error);
-
-  const moves = movements.data ?? [];
-  const open = passes.data ?? [];
-  const now = Date.now();
-  const events = refusals.data ?? [];
+  const c = countRows[0];
 
   return {
-    exitsToday: moves.filter((m) => m.movement_type === "OUT").length,
-    returnsToday: moves.filter((m) => m.movement_type === "IN").length,
-    currentlyOutside: open.filter((p) => p.status === "active").length,
-    overdue: open.filter((p) => p.status === "active" && Date.parse(p.return_time) < now).length,
-    pendingPasses: open.filter((p) => p.status === "pending").length,
+    exitsToday: num(c?.exits_today),
+    returnsToday: num(c?.returns_today),
+    currentlyOutside: num(c?.currently_outside),
+    overdue: num(c?.overdue),
+    pendingPasses: num(c?.pending_passes),
     activeGuards: guards.count ?? 0,
     activeGates: gates.count ?? 0,
-    // A refusal is any scan event that is not a recorded movement. Split out
-    // because "someone presented something we did not recognise" and
-    // "someone presented a pass that was not usable yet" are different
-    // signals to a Director.
-    rejectedScans: events.filter((e) => e.action.startsWith("gate_scan_")).length,
-    invalidQrAttempts: events.filter(
-      (e) =>
-        e.action === "gate_scan_invalid_qr" ||
-        e.action === "gate_scan_bad_signature" ||
-        e.action === "gate_scan_unparseable" ||
-        e.action === "gate_scan_unknown_credential" ||
-        e.action === "gate_scan_cross_college"
-    ).length,
+    rejectedScans: num(c?.rejected_scans),
+    invalidQrAttempts: num(c?.invalid_qr_attempts),
   };
 }
 

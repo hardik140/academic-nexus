@@ -9,7 +9,7 @@ import { getCached, invalidateCacheFamily, versionedKey } from "@/lib/cache";
 import { logAudit } from "@/lib/audit";
 import { assertClaimed } from "@/lib/concurrent-claim";
 import { PERMISSIONS } from "@/lib/permissions";
-import { computeEffectiveFeeStatus } from "@/lib/finance-status";
+import { businessRpc, num } from "@/lib/business-rpc";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import { dbError } from "@/lib/internal-error";
@@ -123,63 +123,27 @@ export async function getStudentRiskOverview() {
   );
 
   return getCached(cacheKey, 120, async () => {
-    let studentsQuery = supabase
-      .from("students")
-      .select("id, user_id, department_id, cgpa, departments:department_id(name, code)")
-      .eq("college_id", actor.collegeId)
-      .eq("status", "active");
-    if (departmentId) studentsQuery = studentsQuery.eq("department_id", departmentId);
+    // Computed in PostgreSQL (migration 059, student_risk_overview). This
+    // used to read every active student, every fee and every failed
+    // enrolment of the college — each capped at PostgREST's 1,000 rows — and
+    // count in JavaScript, so a large college's numbers were silently wrong.
+    // It also mapped enrolments through user_id, which since 047 they no
+    // longer carry, so the backlog factor never counted at all.
+    const rows = await businessRpc<{
+      department_id: string;
+      department_name: string;
+      department_code: string;
+      total_students: number | string;
+      at_risk: number | string;
+      critical: number | string;
+    }>(supabase, "student_risk_overview", { p_college_id: actor.collegeId, p_department_id: departmentId });
 
-    const [studentsRes, feesRes, enrollRes] = await Promise.all([
-      studentsQuery,
-      // No status filter here — nothing anywhere ever sets fees.status =
-      // 'overdue' (no cron, no trigger), so that raw filter always read
-      // zero. Overdue is computed live below via computeEffectiveFeeStatus.
-      // See lib/finance-status.ts.
-      supabase.from("fees").select("student_id, status, due_date, amount, paid_amount").eq("college_id", actor.collegeId),
-      supabase.from("course_enrollments").select("student_id").eq("college_id", actor.collegeId).eq("status", "failed"),
-    ]);
-    assertRead(studentsRes.error);
-    assertRead(feesRes.error);
-    assertRead(enrollRes.error);
-
-    // Cast to any: this hand-maintained types file doesn't declare table
-    // Relationships, so the embedded departments:department_id(...) join
-    // can't be inferred — same pattern used throughout the rest of the app
-    // (e.g. hod/approvals/actions.ts).
-    const students = (studentsRes.data || []) as any[];
-    const userIdToStudentId = new Map(students.map((s) => [s.user_id, s.id]));
-    const overdueFeeStudentIds = new Set(
-      (feesRes.data || []).filter((f) => computeEffectiveFeeStatus(f) === "overdue").map((f) => f.student_id)
+    const byDepartment = new Map(
+      rows.map((r) => [
+        r.department_id,
+        { name: r.department_name, code: r.department_code, totalStudents: num(r.total_students), atRisk: num(r.at_risk), critical: num(r.critical) },
+      ])
     );
-    const backlogStudentIds = new Set(
-      (enrollRes.data || [])
-        .map((e) => userIdToStudentId.get(e.student_id))
-        .filter((id): id is string => !!id)
-    );
-
-    const byDepartment = new Map<
-      string,
-      { name: string; code: string; totalStudents: number; atRisk: number; critical: number }
-    >();
-
-    for (const s of students) {
-      const dept = (s as any).departments;
-      const key = s.department_id;
-      if (!byDepartment.has(key)) {
-        byDepartment.set(key, { name: dept?.name || "Unknown", code: dept?.code || "", totalStudents: 0, atRisk: 0, critical: 0 });
-      }
-      const entry = byDepartment.get(key)!;
-      entry.totalStudents++;
-
-      let factors = 0;
-      if (s.cgpa != null && s.cgpa < 5) factors++;
-      if (overdueFeeStudentIds.has(s.id)) factors++;
-      if (backlogStudentIds.has(s.id)) factors++;
-
-      if (factors >= 1) entry.atRisk++;
-      if (factors >= 2) entry.critical++;
-    }
 
     return Array.from(byDepartment.entries()).map(([departmentId, v]) => ({ departmentId, ...v }));
   });
