@@ -1,8 +1,10 @@
 "use client";
 
 import "./globals.css";
+import { useEffect } from "react";
 import { ErrorState } from "@/components/ui/error-state";
 import { classifyError } from "@/lib/feedback-error";
+import { reportBoundaryError } from "@/lib/observability/boundary";
 
 /**
  * The last resort (M6.8): the root layout itself failed. It replaces that
@@ -12,6 +14,7 @@ import { classifyError } from "@/lib/feedback-error";
  */
 export default function GlobalError({ error, retry }: { error: Error & { digest?: string }; retry: () => void }) {
   const { reference } = classifyError(error);
+  useEffect(() => reportBoundaryError(error, "global"), [error]);
   return (
     <html lang="en">
       <body className="min-h-screen bg-surface">

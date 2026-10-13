@@ -105,6 +105,7 @@ const NAV_MAP: Record<
   super_admin: [
     { label: "Dashboard", href: "/super-admin/dashboard", icon: "📊" },
     { label: "Colleges", href: "/super-admin/colleges", icon: "🏛️" },
+    { label: "System Health", href: "/super-admin/system-health", icon: "🩺" },
   ],
   gate_security: [
     { label: "Dashboard", href: "/security/dashboard", icon: "🛡️" },
