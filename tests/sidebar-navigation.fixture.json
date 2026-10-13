@@ -353,6 +353,11 @@
       "label": "Colleges",
       "href": "/super-admin/colleges",
       "icon": "🏛️"
+    },
+    {
+      "label": "System Health",
+      "href": "/super-admin/system-health",
+      "icon": "🩺"
     }
   ],
   "gate_security": [

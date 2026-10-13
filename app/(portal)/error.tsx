@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect } from "react";
 import { ErrorState } from "@/components/ui/error-state";
 import { classifyError } from "@/lib/feedback-error";
+import { reportBoundaryError } from "@/lib/observability/boundary";
 
 /**
  * A portal page that failed to render (M6.8): shown inside the portal shell,
@@ -14,6 +16,7 @@ import { classifyError } from "@/lib/feedback-error";
  */
 export default function PortalError({ error, retry }: { error: Error & { digest?: string }; retry: () => void }) {
   const { kind, reference } = classifyError(error);
+  useEffect(() => reportBoundaryError(error, "portal"), [error]);
   return (
     <ErrorState
       kind={kind}
