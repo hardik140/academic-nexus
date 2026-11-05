@@ -10,7 +10,7 @@
  * protocol), not just against mocks. This server speaks the same wire
  * protocol on loopback.
  *
- * Supported: GET, SET (EX), DEL, MGET, INCR, EXPIRE, PING, EVALSHA/EVAL of
+ * Supported: GET, SET (EX), DEL, MGET, INCR, EXPIRE, PING, SCAN, EVALSHA/EVAL of
  * the sliding-window limit script, POST /pipeline and /multi-exec, and the
  * base64 response encoding the client asks for.
  *
@@ -18,6 +18,11 @@
  *   POST /__mode   {"mode":"healthy"|"slow"|"down"|"malformed"|"auth","delayMs":3000}
  *   POST /__reset  clears data, recorded keys and counters
  *   GET  /__state  { mode, requests, keys: [...distinct keys seen] }
+ *
+ * Audit modes: "flaky" drops each request with probability failRate;
+ * "partial" fails only EXPIRE (a half-applied pipeline). "slow", "flaky"
+ * and "partial" all honour delayMs. /__state also reports commands by name
+ * and bytes in/out.
  *
  * "down" destroys the socket without answering (the client sees a network
  * error and retries). "slow" answers after delayMs. "malformed" answers 200
@@ -49,9 +54,17 @@ function see(...keys) {
   for (const k of keys) if (typeof k === "string") seenKeys.add(k);
 }
 
+/** Commands executed, by name, and bytes received/sent (audit measurements). */
+let commands = {};
+let bytesIn = 0;
+let bytesOut = 0;
+
 function run(cmd) {
   const [rawName, ...args] = cmd;
   const name = String(rawName).toUpperCase();
+  commands[name] = (commands[name] ?? 0) + 1;
+  // "partial": every command succeeds except EXPIRE, so a pipeline half-applies.
+  if (mode === "partial" && name === "EXPIRE") throw new Error("ERR injected partial failure");
   switch (name) {
     case "PING":
       return "PONG";
@@ -100,6 +113,14 @@ function run(cmd) {
     case "EVALSHA":
     case "EVAL":
       return slidingWindow(args);
+    case "SCAN": {
+      // One page, everything: [cursor "0", keys]. MATCH supports a trailing "*" only.
+      const at = args.findIndex((a) => String(a).toUpperCase() === "MATCH");
+      const pattern = at === -1 ? "*" : String(args[at + 1]);
+      const prefix = pattern.endsWith("*") ? pattern.slice(0, -1) : pattern;
+      const keys = [...data.keys()].filter((k) => live(k) && (pattern.endsWith("*") ? k.startsWith(prefix) : k === pattern));
+      return ["0", keys];
+    }
     default:
       throw new Error(`ERR emulator does not support ${name}`);
   }
@@ -141,9 +162,13 @@ function encode(result, base64) {
   return result;
 }
 
+let failRate = 0;
+
 function reply(res, status, body) {
+  const text = typeof body === "string" ? body : JSON.stringify(body);
+  bytesOut += Buffer.byteLength(text);
   res.writeHead(status, { "content-type": "application/json" });
-  res.end(typeof body === "string" ? body : JSON.stringify(body));
+  res.end(text);
 }
 
 const server = createServer((req, res) => {
@@ -156,23 +181,31 @@ const server = createServer((req, res) => {
       const body = raw ? JSON.parse(raw) : {};
       mode = body.mode ?? "healthy";
       delayMs = Number(body.delayMs ?? 0);
-      return reply(res, 200, { mode, delayMs });
+      failRate = Number(body.failRate ?? 0);
+      return reply(res, 200, { mode, delayMs, failRate });
     }
     if (path === "/__reset") {
       data.clear();
       seenKeys.clear();
       requests = 0;
+      commands = {};
+      bytesIn = 0;
+      bytesOut = 0;
       mode = "healthy";
       delayMs = 0;
+      failRate = 0;
       return reply(res, 200, { ok: true });
     }
     if (path === "/__state") {
-      return reply(res, 200, { mode, delayMs, requests, keys: [...seenKeys] });
+      return reply(res, 200, { mode, delayMs, requests, commands, bytesIn, bytesOut, keys: [...seenKeys] });
     }
 
     requests++;
+    bytesIn += Buffer.byteLength(raw);
     const respond = () => {
       if (mode === "down") return req.socket.destroy();
+      // "flaky": each request independently dropped with probability failRate.
+      if (mode === "flaky" && Math.random() < failRate) return req.socket.destroy();
       if (mode === "auth") return reply(res, 401, { error: "WRONGPASS invalid or missing auth token" });
       if (mode === "malformed") return reply(res, 200, "<html>gateway error</html>");
       const base64 = String(req.headers["upstash-encoding"] ?? "").toLowerCase() === "base64";
@@ -201,7 +234,7 @@ const server = createServer((req, res) => {
         return reply(res, 400, { error: e.message });
       }
     };
-    if (mode === "slow" && delayMs > 0) setTimeout(respond, delayMs);
+    if ((mode === "slow" || mode === "flaky" || mode === "partial") && delayMs > 0) setTimeout(respond, delayMs);
     else respond();
   });
 });

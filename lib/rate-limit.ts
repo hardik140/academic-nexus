@@ -142,8 +142,11 @@ let warnedUnconfigured = false;
 export async function checkRateLimit(
   key: string,
   limit: number,
-  windowSeconds: number
+  windowSeconds: number,
+  /** Metrics only: a normalised route label (lib/redis-metrics.ts routeLabel). */
+  options: { route?: string } = {}
 ): Promise<void> {
+  const route = options.route;
   const policy = bucketPolicy(key);
   const bucket = bucketName(key);
 
@@ -158,24 +161,25 @@ export async function checkRateLimit(
       }
       return;
     }
-    return unavailable(bucket, policy, "unconfigured", 0);
+    return unavailable(bucket, policy, "unconfigured", 0, route);
   }
 
   const client = redis;
   const outcome = await redisOp(
     "ratelimit",
     () => limiterFor(client, limit, windowSeconds).limit(key) as Promise<LimitResult>,
-    limiterResultFault
+    limiterResultFault,
+    route
   );
 
-  if (!outcome.ok) return unavailable(bucket, policy, outcome.reason, outcome.ms);
+  if (!outcome.ok) return unavailable(bucket, policy, outcome.reason, outcome.ms, route);
 
   if (!outcome.value.success) {
-    emitRedisEvent({ event: "redis.ratelimit", bucket, outcome: "denied", ms: outcome.ms });
+    emitRedisEvent({ event: "redis.ratelimit", bucket, outcome: "denied", ms: outcome.ms, route });
     const retryAfter = Math.max(1, Math.ceil((outcome.value.reset - Date.now()) / 1000));
     throw new RateLimitError(undefined, retryAfter);
   }
-  emitRedisEvent({ event: "redis.ratelimit", bucket, outcome: "allowed", ms: outcome.ms });
+  emitRedisEvent({ event: "redis.ratelimit", bucket, outcome: "allowed", ms: outcome.ms, route });
 }
 
 /**
@@ -183,11 +187,17 @@ export async function checkRateLimit(
  * malformed result, circuit open). The bucket's risk class decides, here and
  * nowhere else.
  */
-function unavailable(bucket: string, policy: UnavailablePolicy, reason: RedisFailureReason, ms: number): void {
+function unavailable(
+  bucket: string,
+  policy: UnavailablePolicy,
+  reason: RedisFailureReason,
+  ms: number,
+  route?: string
+): void {
   if (policy === "allow") {
-    emitRedisEvent({ event: "redis.ratelimit", bucket, outcome: "fail_open", reason, ms });
+    emitRedisEvent({ event: "redis.ratelimit", bucket, outcome: "fail_open", reason, ms, route });
     return;
   }
-  emitRedisEvent({ event: "redis.ratelimit", bucket, outcome: "fail_closed", reason, ms });
+  emitRedisEvent({ event: "redis.ratelimit", bucket, outcome: "fail_closed", reason, ms, route });
   throw new RateLimiterUnavailableError();
 }

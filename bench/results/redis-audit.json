@@ -1,0 +1,897 @@
+{
+  "note": "LOCAL measurements against the Upstash emulator on loopback. Counts transfer to production; latencies and throughput do not.",
+  "roundTrips": {
+    "rate limit, one check": {
+      "httpRoundTrips": 1,
+      "commands": {
+        "EVALSHA": 1
+      },
+      "commandTotal": 1,
+      "bytesIn": 173,
+      "bytesOut": 113
+    },
+    "anonymous request (middleware)": {
+      "httpRoundTrips": 1,
+      "commands": {
+        "EVALSHA": 1
+      },
+      "commandTotal": 1,
+      "bytesIn": 154,
+      "bytesOut": 217
+    },
+    "signed-in page, profile cache cold": {
+      "httpRoundTrips": 4,
+      "commands": {
+        "EVALSHA": 2,
+        "GET": 1,
+        "SET": 1
+      },
+      "commandTotal": 4,
+      "bytesIn": 508,
+      "bytesOut": 346
+    },
+    "signed-in page, profile cache warm": {
+      "httpRoundTrips": 3,
+      "commands": {
+        "EVALSHA": 2,
+        "GET": 1
+      },
+      "commandTotal": 3,
+      "bytesIn": 383,
+      "bytesOut": 621
+    },
+    "versioned cached read, miss": {
+      "httpRoundTrips": 2,
+      "commands": {
+        "SET": 1,
+        "MGET": 1
+      },
+      "commandTotal": 2,
+      "bytesIn": 506,
+      "bytesOut": 530
+    },
+    "versioned cached read, hit": {
+      "httpRoundTrips": 1,
+      "commands": {
+        "MGET": 1
+      },
+      "commandTotal": 1,
+      "bytesIn": 99,
+      "bytesOut": 974
+    },
+    "plain cached read, miss": {
+      "httpRoundTrips": 2,
+      "commands": {
+        "GET": 1,
+        "SET": 1
+      },
+      "commandTotal": 2,
+      "bytesIn": 444,
+      "bytesOut": 622
+    },
+    "plain cached read, hit": {
+      "httpRoundTrips": 1,
+      "commands": {
+        "GET": 1
+      },
+      "commandTotal": 1,
+      "bytesIn": 59,
+      "bytesOut": 1001
+    },
+    "family invalidation": {
+      "httpRoundTrips": 1,
+      "commands": {
+        "INCR": 1,
+        "EXPIRE": 1
+      },
+      "commandTotal": 2,
+      "bytesIn": 93,
+      "bytesOut": 665
+    },
+    "server action: middleware (warm) + action bucket + warm list read + invalidation": {
+      "httpRoundTrips": 7,
+      "commands": {
+        "EVALSHA": 3,
+        "GET": 1,
+        "SET": 1,
+        "MGET": 1,
+        "INCR": 1,
+        "EXPIRE": 1
+      },
+      "commandTotal": 8,
+      "bytesIn": 1155,
+      "bytesOut": 1243
+    },
+    "three cached reads issued in parallel (auto-pipelining)": {
+      "httpRoundTrips": 2,
+      "commands": {
+        "GET": 3,
+        "SET": 3
+      },
+      "commandTotal": 6,
+      "bytesIn": 1196,
+      "bytesOut": 847
+    },
+    "two limiter checks issued in parallel": {
+      "httpRoundTrips": 1,
+      "commands": {
+        "EVALSHA": 2
+      },
+      "commandTotal": 2,
+      "bytesIn": 328,
+      "bytesOut": 878
+    }
+  },
+  "stampede": {
+    "readers": 100,
+    "cold": {
+      "dbQueries": 100,
+      "wallMs": 570
+    },
+    "warm": {
+      "dbQueries": 0,
+      "wallMs": 45
+    },
+    "afterInvalidation": {
+      "dbQueries": 100,
+      "wallMs": 344
+    },
+    "singleFlightAfterInvalidation": {
+      "dbQueries": 1
+    },
+    "note": "No stampede protection exists: every concurrent miss runs the database query. Single-flight is per isolate only; Workers run many isolates."
+  },
+  "invalidationRace": {
+    "plainKeyDel": {
+      "statusInDatabase": "suspended",
+      "statusServedFromCache": "active",
+      "staleForUpToSeconds": 20
+    },
+    "versionedFamily": {
+      "inDatabase": "new",
+      "served": "new"
+    },
+    "note": "Every non-versioned key (8 exact DELs, 18 TTL-only reads) can resurrect a pre-write value for one TTL. For the profile entry this is routing only; admission and requireRole() are uncached."
+  },
+  "rateLimitConcurrency": {
+    "parallel": 300,
+    "limit": 100,
+    "allowed": 100,
+    "limited": 200,
+    "redisCommands": {
+      "EVALSHA": 300
+    },
+    "httpRoundTrips": 1,
+    "note": "Atomic in the emulator because it is single-threaded; in Upstash the same script is atomic because Lua runs to completion. The library's in-memory ephemeral cache refuses already-blocked identifiers without Redis."
+  },
+  "natCampus": {
+    "anonymousRequestsInOneMinute": 400,
+    "anonymousAllowed": 100,
+    "note": "Each browser login costs several anonymous requests (GET /login, its RSC/prefetch requests, the post-login redirect) before the session cookie exists. At 3-4 requests per login the shared bucket admits about 25-33 logins per minute per campus IP. Supabase Auth's own per-IP sign-in limit applies on top and is unread."
+  },
+  "failureMatrix": {
+    "healthy": {
+      "flood (middleware ip)": "allowed in 3 ms",
+      "low (submitComplaint)": "allowed in 3 ms",
+      "high (recordPayment, finance)": "allowed in 3 ms",
+      "high (actOnGatePass, gate/approval)": "allowed in 4 ms",
+      "protected (revokeSession, identity)": "allowed in 3 ms",
+      "protected (timetable, academic)": "allowed in 3 ms",
+      "unknown bucket": "allowed in 3 ms",
+      "cached read (versioned)": "served (database) in 5 ms"
+    },
+    "100 ms latency": {
+      "flood (middleware ip)": "allowed in 144 ms",
+      "low (submitComplaint)": "allowed in 114 ms",
+      "high (recordPayment, finance)": "allowed in 189 ms",
+      "high (actOnGatePass, gate/approval)": "allowed in 111 ms",
+      "protected (revokeSession, identity)": "allowed in 115 ms",
+      "protected (timetable, academic)": "allowed in 104 ms",
+      "unknown bucket": "allowed in 122 ms",
+      "cached read (versioned)": "served (database) in 225 ms"
+    },
+    "500 ms latency": {
+      "flood (middleware ip)": "allowed in 511 ms",
+      "low (submitComplaint)": "allowed in 533 ms",
+      "high (recordPayment, finance)": "allowed in 517 ms",
+      "high (actOnGatePass, gate/approval)": "allowed in 533 ms",
+      "protected (revokeSession, identity)": "allowed in 524 ms",
+      "protected (timetable, academic)": "allowed in 538 ms",
+      "unknown bucket": "allowed in 532 ms",
+      "cached read (versioned)": "served (database) in 1079 ms"
+    },
+    "1 s latency": {
+      "flood (middleware ip)": "allowed in 1021 ms",
+      "low (submitComplaint)": "allowed in 1053 ms",
+      "high (recordPayment, finance)": "refused 503 in 1045 ms",
+      "high (actOnGatePass, gate/approval)": "refused 503 in 1033 ms",
+      "protected (revokeSession, identity)": "refused 503 in 1020 ms",
+      "protected (timetable, academic)": "refused 503 in 1029 ms",
+      "unknown bucket": "refused 503 in 1060 ms",
+      "cached read (versioned)": "served (database) in 1026 ms"
+    },
+    "2 s latency": {
+      "flood (middleware ip)": "allowed in 1033 ms",
+      "low (submitComplaint)": "allowed in 1024 ms",
+      "high (recordPayment, finance)": "refused 503 in 1050 ms",
+      "high (actOnGatePass, gate/approval)": "refused 503 in 1040 ms",
+      "protected (revokeSession, identity)": "refused 503 in 1034 ms",
+      "protected (timetable, academic)": "refused 503 in 1041 ms",
+      "unknown bucket": "refused 503 in 1045 ms",
+      "cached read (versioned)": "served (database) in 1037 ms"
+    },
+    "5 s latency": {
+      "flood (middleware ip)": "allowed in 1036 ms",
+      "low (submitComplaint)": "allowed in 1036 ms",
+      "high (recordPayment, finance)": "refused 503 in 1021 ms",
+      "high (actOnGatePass, gate/approval)": "refused 503 in 1030 ms",
+      "protected (revokeSession, identity)": "refused 503 in 1046 ms",
+      "protected (timetable, academic)": "refused 503 in 1054 ms",
+      "unknown bucket": "refused 503 in 1041 ms",
+      "cached read (versioned)": "served (database) in 1024 ms"
+    },
+    "unavailable / connection reset": {
+      "flood (middleware ip)": "allowed in 67 ms",
+      "low (submitComplaint)": "allowed in 67 ms",
+      "high (recordPayment, finance)": "refused 503 in 69 ms",
+      "high (actOnGatePass, gate/approval)": "refused 503 in 69 ms",
+      "protected (revokeSession, identity)": "refused 503 in 70 ms",
+      "protected (timetable, academic)": "refused 503 in 67 ms",
+      "unknown bucket": "refused 503 in 93 ms",
+      "cached read (versioned)": "served (database) in 58 ms"
+    },
+    "malformed response": {
+      "flood (middleware ip)": "allowed in 3 ms",
+      "low (submitComplaint)": "allowed in 3 ms",
+      "high (recordPayment, finance)": "refused 503 in 4 ms",
+      "high (actOnGatePass, gate/approval)": "refused 503 in 3 ms",
+      "protected (revokeSession, identity)": "refused 503 in 3 ms",
+      "protected (timetable, academic)": "refused 503 in 3 ms",
+      "unknown bucket": "refused 503 in 3 ms",
+      "cached read (versioned)": "served (database) in 3 ms"
+    },
+    "authentication failure": {
+      "flood (middleware ip)": "allowed in 3 ms",
+      "low (submitComplaint)": "allowed in 3 ms",
+      "high (recordPayment, finance)": "refused 503 in 4 ms",
+      "high (actOnGatePass, gate/approval)": "refused 503 in 3 ms",
+      "protected (revokeSession, identity)": "refused 503 in 3 ms",
+      "protected (timetable, academic)": "refused 503 in 4 ms",
+      "unknown bucket": "refused 503 in 3 ms",
+      "cached read (versioned)": "served (database) in 3 ms"
+    },
+    "random failure (50%)": {
+      "flood (middleware ip)": "allowed in 3 ms",
+      "low (submitComplaint)": "allowed in 63 ms",
+      "high (recordPayment, finance)": "refused 503 in 68 ms",
+      "high (actOnGatePass, gate/approval)": "allowed in 6 ms",
+      "protected (revokeSession, identity)": "refused 503 in 64 ms",
+      "protected (timetable, academic)": "refused 503 in 69 ms",
+      "unknown bucket": "allowed in 69 ms",
+      "cached read (versioned)": "served (database) in 74 ms"
+    }
+  },
+  "circuit": {
+    "failureTimingsMs": [
+      63,
+      62,
+      62,
+      0,
+      0
+    ],
+    "openAfter3": true,
+    "healthyButCircuitOpen": "refused 503",
+    "afterCooldownProbe": "allowed",
+    "closedAfterProbe": true,
+    "note": "Per isolate: each Worker isolate discovers an outage separately (3 failed calls each)."
+  },
+  "corruptionAndRestart": {
+    "partial": {
+      "databaseReadsAfterHalfAppliedInvalidation": 1,
+      "note": "INCR landed, so readers miss correctly; the counter is left without a TTL (a few bytes, permanent)."
+    },
+    "forgedProfileServed": {
+      "role": "admin",
+      "college_id": "c9",
+      "status": "active"
+    },
+    "forgedFeeStatsServed": {
+      "totalBilled": 1,
+      "totalCollected": 999999
+    },
+    "garbageValue": {
+      "served": "not json at all"
+    },
+    "restart": {
+      "databaseReadsAfterRestart": 1,
+      "rateLimitCountersReset": true,
+      "note": "A restart (or eviction) resets every limiter window: up to one extra window of requests per bucket."
+    },
+    "note": "Cached values carry no integrity check. Anyone holding the Upstash token can make the app display forged data (and route a session by a forged role). Today that token sits in every developer's .env.local, because development and production share one database."
+  },
+  "loadModel": {
+    "model": "Each user: middleware (ipCredentialed per campus NAT, per-user bucket, profile cache) + one college-scoped dashboard read. One NAT address per 500 users. Database = sleep (15 ms profile, 80 ms dashboard). Two waves: cold, then warm within TTL.",
+    "runs": {
+      "100 users, emulator +0 ms": {
+        "colleges": 1,
+        "cold": {
+          "redisFailures": {},
+          "circuitOpenAtEnd": false,
+          "latencyMs": {
+            "n": 100,
+            "p50": 649.2,
+            "p95": 704.1,
+            "p99": 705.6,
+            "max": 706
+          },
+          "wallMs": 715,
+          "requestsPerSecond": 140,
+          "redisCommands": 600,
+          "redisHttpRoundTrips": 303,
+          "commandsPerRequest": 6,
+          "dbQueries": 200,
+          "dbQueriesPerRequest": 2
+        },
+        "coldOutcome": {
+          "ok": 100,
+          "limited": 0,
+          "unavailable": 0
+        },
+        "warm": {
+          "redisFailures": {},
+          "circuitOpenAtEnd": false,
+          "latencyMs": {
+            "n": 100,
+            "p50": 19.9,
+            "p95": 21.4,
+            "p99": 21.7,
+            "max": 22
+          },
+          "wallMs": 22,
+          "requestsPerSecond": 4597,
+          "redisCommands": 400,
+          "redisHttpRoundTrips": 4,
+          "commandsPerRequest": 4,
+          "dbQueries": 0,
+          "dbQueriesPerRequest": 0
+        },
+        "warmOutcome": {
+          "ok": 100,
+          "limited": 0,
+          "unavailable": 0
+        }
+      },
+      "500 users, emulator +0 ms": {
+        "colleges": 1,
+        "cold": {
+          "redisFailures": {},
+          "circuitOpenAtEnd": false,
+          "latencyMs": {
+            "n": 500,
+            "p50": 1720.1,
+            "p95": 1850.8,
+            "p99": 1856.3,
+            "max": 1857
+          },
+          "wallMs": 1870,
+          "requestsPerSecond": 267,
+          "redisCommands": 2766,
+          "redisHttpRoundTrips": 1269,
+          "commandsPerRequest": 5.53,
+          "dbQueries": 766,
+          "dbQueriesPerRequest": 1.53
+        },
+        "coldOutcome": {
+          "ok": 500,
+          "limited": 0,
+          "unavailable": 0
+        },
+        "warm": {
+          "redisFailures": {},
+          "circuitOpenAtEnd": false,
+          "latencyMs": {
+            "n": 500,
+            "p50": 90.3,
+            "p95": 96.5,
+            "p99": 97.1,
+            "max": 97
+          },
+          "wallMs": 98,
+          "requestsPerSecond": 5121,
+          "redisCommands": 2000,
+          "redisHttpRoundTrips": 4,
+          "commandsPerRequest": 4,
+          "dbQueries": 0,
+          "dbQueriesPerRequest": 0
+        },
+        "warmOutcome": {
+          "ok": 500,
+          "limited": 0,
+          "unavailable": 0
+        }
+      },
+      "1000 users, emulator +0 ms": {
+        "colleges": 2,
+        "cold": {
+          "redisFailures": {
+            "timeout": 500,
+            "circuit_open": 740,
+            "circuit_closed": 7
+          },
+          "circuitOpenAtEnd": false,
+          "latencyMs": {
+            "n": 1000,
+            "p50": 2045.3,
+            "p95": 2312.7,
+            "p99": 2349.9,
+            "max": 2350
+          },
+          "wallMs": 2360,
+          "requestsPerSecond": 424,
+          "redisCommands": 4767,
+          "redisHttpRoundTrips": 1770,
+          "commandsPerRequest": 4.77,
+          "dbQueries": 1988,
+          "dbQueriesPerRequest": 1.99
+        },
+        "coldOutcome": {
+          "ok": 1000,
+          "limited": 0,
+          "unavailable": 0
+        },
+        "warm": {
+          "redisFailures": {},
+          "circuitOpenAtEnd": false,
+          "latencyMs": {
+            "n": 1000,
+            "p50": 126.5,
+            "p95": 140.5,
+            "p99": 142,
+            "max": 143
+          },
+          "wallMs": 143,
+          "requestsPerSecond": 6983,
+          "redisCommands": 4000,
+          "redisHttpRoundTrips": 4,
+          "commandsPerRequest": 4,
+          "dbQueries": 0,
+          "dbQueriesPerRequest": 0
+        },
+        "warmOutcome": {
+          "ok": 1000,
+          "limited": 0,
+          "unavailable": 0
+        }
+      },
+      "5000 users, emulator +0 ms": {
+        "colleges": 10,
+        "cold": {
+          "redisFailures": {
+            "timeout": 5002,
+            "circuit_open": 4873
+          },
+          "circuitOpenAtEnd": true,
+          "latencyMs": {
+            "n": 5000,
+            "p50": 5919.1,
+            "p95": 5997.8,
+            "p99": 6048.4,
+            "max": 6263
+          },
+          "wallMs": 6267,
+          "requestsPerSecond": 798,
+          "redisCommands": 16254,
+          "redisHttpRoundTrips": 1269,
+          "commandsPerRequest": 3.25,
+          "dbQueries": 10000,
+          "dbQueriesPerRequest": 2
+        },
+        "coldOutcome": {
+          "ok": 5000,
+          "limited": 0,
+          "unavailable": 0
+        },
+        "warm": {
+          "redisFailures": {
+            "circuit_open": 20000
+          },
+          "circuitOpenAtEnd": true,
+          "latencyMs": {
+            "n": 5000,
+            "p50": 220.7,
+            "p95": 237.1,
+            "p99": 238,
+            "max": 238
+          },
+          "wallMs": 278,
+          "requestsPerSecond": 18017,
+          "redisCommands": 0,
+          "redisHttpRoundTrips": 0,
+          "commandsPerRequest": 0,
+          "dbQueries": 10000,
+          "dbQueriesPerRequest": 2
+        },
+        "warmOutcome": {
+          "ok": 5000,
+          "limited": 0,
+          "unavailable": 0
+        }
+      },
+      "100 users, emulator +20 ms": {
+        "colleges": 1,
+        "cold": {
+          "redisFailures": {},
+          "circuitOpenAtEnd": false,
+          "latencyMs": {
+            "n": 100,
+            "p50": 347.9,
+            "p95": 360.5,
+            "p99": 361.2,
+            "max": 361
+          },
+          "wallMs": 363,
+          "requestsPerSecond": 275,
+          "redisCommands": 600,
+          "redisHttpRoundTrips": 303,
+          "commandsPerRequest": 6,
+          "dbQueries": 200,
+          "dbQueriesPerRequest": 2
+        },
+        "coldOutcome": {
+          "ok": 100,
+          "limited": 0,
+          "unavailable": 0
+        },
+        "warm": {
+          "redisFailures": {},
+          "circuitOpenAtEnd": false,
+          "latencyMs": {
+            "n": 100,
+            "p50": 125.3,
+            "p95": 125.9,
+            "p99": 126.1,
+            "max": 126
+          },
+          "wallMs": 126,
+          "requestsPerSecond": 793,
+          "redisCommands": 400,
+          "redisHttpRoundTrips": 4,
+          "commandsPerRequest": 4,
+          "dbQueries": 0,
+          "dbQueriesPerRequest": 0
+        },
+        "warmOutcome": {
+          "ok": 100,
+          "limited": 0,
+          "unavailable": 0
+        }
+      },
+      "500 users, emulator +20 ms": {
+        "colleges": 1,
+        "cold": {
+          "redisFailures": {},
+          "circuitOpenAtEnd": false,
+          "latencyMs": {
+            "n": 500,
+            "p50": 968.9,
+            "p95": 1030.1,
+            "p99": 1034.6,
+            "max": 1035
+          },
+          "wallMs": 1042,
+          "requestsPerSecond": 480,
+          "redisCommands": 3000,
+          "redisHttpRoundTrips": 1503,
+          "commandsPerRequest": 6,
+          "dbQueries": 1000,
+          "dbQueriesPerRequest": 2
+        },
+        "coldOutcome": {
+          "ok": 500,
+          "limited": 0,
+          "unavailable": 0
+        },
+        "warm": {
+          "redisFailures": {},
+          "circuitOpenAtEnd": false,
+          "latencyMs": {
+            "n": 500,
+            "p50": 152.1,
+            "p95": 155.7,
+            "p99": 156.1,
+            "max": 156
+          },
+          "wallMs": 156,
+          "requestsPerSecond": 3196,
+          "redisCommands": 2000,
+          "redisHttpRoundTrips": 4,
+          "commandsPerRequest": 4,
+          "dbQueries": 0,
+          "dbQueriesPerRequest": 0
+        },
+        "warmOutcome": {
+          "ok": 500,
+          "limited": 0,
+          "unavailable": 0
+        }
+      },
+      "1000 users, emulator +20 ms": {
+        "colleges": 2,
+        "cold": {
+          "redisFailures": {},
+          "circuitOpenAtEnd": false,
+          "latencyMs": {
+            "n": 1000,
+            "p50": 2169,
+            "p95": 2292.3,
+            "p99": 2301.4,
+            "max": 2304
+          },
+          "wallMs": 2320,
+          "requestsPerSecond": 431,
+          "redisCommands": 6000,
+          "redisHttpRoundTrips": 3003,
+          "commandsPerRequest": 6,
+          "dbQueries": 2000,
+          "dbQueriesPerRequest": 2
+        },
+        "coldOutcome": {
+          "ok": 1000,
+          "limited": 0,
+          "unavailable": 0
+        },
+        "warm": {
+          "redisFailures": {},
+          "circuitOpenAtEnd": false,
+          "latencyMs": {
+            "n": 1000,
+            "p50": 223,
+            "p95": 231.6,
+            "p99": 232.2,
+            "max": 232
+          },
+          "wallMs": 233,
+          "requestsPerSecond": 4292,
+          "redisCommands": 4000,
+          "redisHttpRoundTrips": 4,
+          "commandsPerRequest": 4,
+          "dbQueries": 0,
+          "dbQueriesPerRequest": 0
+        },
+        "warmOutcome": {
+          "ok": 1000,
+          "limited": 0,
+          "unavailable": 0
+        }
+      },
+      "5000 users, emulator +20 ms": {
+        "colleges": 10,
+        "cold": {
+          "redisFailures": {
+            "timeout": 3002,
+            "circuit_open": 6873
+          },
+          "circuitOpenAtEnd": true,
+          "latencyMs": {
+            "n": 5000,
+            "p50": 3214.5,
+            "p95": 3399.6,
+            "p99": 3725.1,
+            "max": 3766
+          },
+          "wallMs": 3768,
+          "requestsPerSecond": 1327,
+          "redisCommands": 16129,
+          "redisHttpRoundTrips": 1144,
+          "commandsPerRequest": 3.23,
+          "dbQueries": 10000,
+          "dbQueriesPerRequest": 2
+        },
+        "coldOutcome": {
+          "ok": 5000,
+          "limited": 0,
+          "unavailable": 0
+        },
+        "warm": {
+          "redisFailures": {
+            "circuit_open": 20000
+          },
+          "circuitOpenAtEnd": true,
+          "latencyMs": {
+            "n": 5000,
+            "p50": 213.2,
+            "p95": 221.3,
+            "p99": 222.2,
+            "max": 222
+          },
+          "wallMs": 255,
+          "requestsPerSecond": 19640,
+          "redisCommands": 0,
+          "redisHttpRoundTrips": 0,
+          "commandsPerRequest": 0,
+          "dbQueries": 10000,
+          "dbQueriesPerRequest": 2
+        },
+        "warmOutcome": {
+          "ok": 5000,
+          "limited": 0,
+          "unavailable": 0
+        }
+      }
+    }
+  },
+  "saturationSweep": {
+    "note": "LOCAL: the knee is the Node client + single-threaded stand-in on one machine, NOT Upstash. Auto-pipelining batching (commands per round trip) is a real client property.",
+    "sweep": {
+      "1 concurrent": {
+        "opsPerSecond": 1102,
+        "latencyMs": {
+          "n": 2204,
+          "p50": 0.8,
+          "p95": 1.2,
+          "p99": 3.7,
+          "max": 10
+        },
+        "commandsPerHttpRoundTrip": 1
+      },
+      "10 concurrent": {
+        "opsPerSecond": 3914,
+        "latencyMs": {
+          "n": 7831,
+          "p50": 1.7,
+          "p95": 4.2,
+          "p99": 8.1,
+          "max": 259
+        },
+        "commandsPerHttpRoundTrip": 5
+      },
+      "50 concurrent": {
+        "opsPerSecond": 15138,
+        "latencyMs": {
+          "n": 30310,
+          "p50": 3,
+          "p95": 5.2,
+          "p99": 6.2,
+          "max": 7
+        },
+        "commandsPerHttpRoundTrip": 25
+      },
+      "100 concurrent": {
+        "opsPerSecond": 19228,
+        "latencyMs": {
+          "n": 38500,
+          "p50": 5,
+          "p95": 6.7,
+          "p99": 7.7,
+          "max": 10
+        },
+        "commandsPerHttpRoundTrip": 100
+      },
+      "250 concurrent": {
+        "opsPerSecond": 20372,
+        "latencyMs": {
+          "n": 40750,
+          "p50": 11.6,
+          "p95": 17,
+          "p99": 27.2,
+          "max": 39
+        },
+        "commandsPerHttpRoundTrip": 250
+      },
+      "500 concurrent": {
+        "opsPerSecond": 21815,
+        "latencyMs": {
+          "n": 44000,
+          "p50": 22.4,
+          "p95": 28,
+          "p99": 33,
+          "max": 33
+        },
+        "commandsPerHttpRoundTrip": 500
+      },
+      "1000 concurrent": {
+        "opsPerSecond": 23333,
+        "latencyMs": {
+          "n": 47000,
+          "p50": 42.8,
+          "p95": 47.1,
+          "p99": 47.8,
+          "max": 48
+        },
+        "commandsPerHttpRoundTrip": 1000
+      }
+    }
+  },
+  "serialization": {
+    "note": "LOCAL CPU on this machine. Upstash responses are base64-encoded by the client's default, adding about a third to the bytes on the wire.",
+    "bySize": [
+      {
+        "targetKB": 1,
+        "actualKB": 1.1,
+        "rows": 4,
+        "stringifyMs": 0.004,
+        "parseMs": 0.006,
+        "base64DecodeMs": 0.003,
+        "wireKBWithBase64": 1.5
+      },
+      {
+        "targetKB": 10,
+        "actualKB": 10,
+        "rows": 36,
+        "stringifyMs": 0.03,
+        "parseMs": 0.057,
+        "base64DecodeMs": 0.01,
+        "wireKBWithBase64": 13.3
+      },
+      {
+        "targetKB": 50,
+        "actualKB": 50.7,
+        "rows": 182,
+        "stringifyMs": 0.17,
+        "parseMs": 0.288,
+        "base64DecodeMs": 0.049,
+        "wireKBWithBase64": 67.6
+      },
+      {
+        "targetKB": 100,
+        "actualKB": 101.3,
+        "rows": 363,
+        "stringifyMs": 0.333,
+        "parseMs": 0.558,
+        "base64DecodeMs": 0.076,
+        "wireKBWithBase64": 135.1
+      },
+      {
+        "targetKB": 500,
+        "actualKB": 509.3,
+        "rows": 1816,
+        "stringifyMs": 1.732,
+        "parseMs": 2.91,
+        "base64DecodeMs": 0.428,
+        "wireKBWithBase64": 679.1
+      },
+      {
+        "targetKB": 1000,
+        "actualKB": 1020.5,
+        "rows": 3631,
+        "stringifyMs": 3.853,
+        "parseMs": 5.738,
+        "base64DecodeMs": 0.756,
+        "wireKBWithBase64": 1360.6
+      }
+    ],
+    "representativeKB": {
+      "list page, 25 invoice rows with joins": 6.9,
+      "users list page, 25 profile rows (select *)": 7,
+      "risk overview, 12 departments (aggregated before caching)": 1.2,
+      "finance exceptions, 500 overdue fees with joins": 139.6,
+      "placement records, PostgREST cap of 1000 rows": 319.3,
+      "middleware profile entry": 0.1
+    }
+  },
+  "generatedAt": "2026-10-04T12:01:07.295Z",
+  "financeSyncDoubleClaim": {
+    "providerPostsForOneOperation": 2,
+    "outcomes": [
+      {
+        "operationId": "00000024-0000-4000-8000-000000000001",
+        "status": "SYNCED",
+        "externalId": "P-2"
+      },
+      {
+        "operationId": "00000024-0000-4000-8000-000000000001",
+        "status": "SYNCED",
+        "externalId": "P-2"
+      }
+    ],
+    "linksWritten": 2,
+    "cause": "lib/finance/pipeline.ts reads the status, checks it in memory, then claims with an UPDATE filtered only by id."
+  },
+  "forgedCookieFlood": {
+    "attackerRequests": 2000,
+    "victimBefore": 200,
+    "signedInCampusUserAfter": 429,
+    "anonymousCampusVisitorAfter": 429,
+    "cause": "lib/supabase/middleware.ts spends ipCredentialed:<campus ip> before getUser() verifies the cookie; a forged cookie is then also charged to ip:<campus ip>."
+  }
+}

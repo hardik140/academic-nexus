@@ -19,5 +19,14 @@
       "binding": "NEXT_CACHE_WORKERS_KV",
       "id": "8ed713ebc15641699cacce1b286bc86e"
     }
+  ],
+  // Redis metrics (lib/redis-metrics.ts): one unsampled data point per Redis
+  // event, queried with SQL (REDIS_METRICS.md). The dataset is created by
+  // Cloudflare on the first write after a deploy; nothing exists until then.
+  "analytics_engine_datasets": [
+    {
+      "binding": "REDIS_METRICS",
+      "dataset": "nexus_redis_metrics"
+    }
   ]
 }

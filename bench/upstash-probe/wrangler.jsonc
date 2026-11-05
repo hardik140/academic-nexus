@@ -1,0 +1,16 @@
+{
+  // A standalone measurement Worker. It is NOT the app and shares nothing
+  // with it: no routes, no KV, no app secrets. See README.md.
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "academic-nexus-upstash-probe",
+  "main": "worker.mjs",
+  "compatibility_date": "2025-04-01",
+  "workers_dev": true,
+  "vars": {
+    "REDIS_ENV": "preview"
+  }
+  // Secrets (wrangler secret put … --config bench/upstash-probe/wrangler.jsonc):
+  //   UPSTASH_REDIS_REST_URL, UPSTASH_REDIS_REST_TOKEN   the NON-production database
+  //   PROBE_KEY                                          any long random string
+  //   FORBIDDEN_REDIS_HOSTS                              the production Upstash host
+}

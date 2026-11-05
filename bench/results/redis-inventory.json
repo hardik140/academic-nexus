@@ -1,0 +1,4615 @@
+{
+  "generatedAt": "2026-10-04T11:39:12.264Z",
+  "commit": "d4d06e0",
+  "method": "static analysis of app/ and lib/ (bench/audit/redis-inventory.mjs)",
+  "cacheReads": [
+    {
+      "id": "app/(portal)/admin/audit/actions.ts#listAuditLogs",
+      "file": "app/(portal)/admin/audit/actions.ts",
+      "line": 27,
+      "function": "listAuditLogs",
+      "category": "A. cache (read-through, cache-aside)",
+      "operations": [
+        "MGET value+version",
+        "SET EX on miss"
+      ],
+      "dataStructure": "string (JSON)",
+      "keyExpression": "cacheKey",
+      "keyDefinition": "listCacheKey(LOGS_CACHE_PREFIX, actor.collegeId, q, column)",
+      "ttlSeconds": 30,
+      "versioned": true,
+      "options": null,
+      "registryScope": "college",
+      "roles": [
+        "admin"
+      ],
+      "buildScoped": true,
+      "environmentScoped": true,
+      "paginated": true,
+      "dbQueriesOnMiss": 1,
+      "unboundedQueries": [],
+      "exactCounts": 1,
+      "queries": [
+        {
+          "kind": "from",
+          "target": "audit_logs",
+          "countOnly": false,
+          "bounded": true,
+          "exactCount": true
+        }
+      ],
+      "failurePolicy": "fail open to the database (cache bypass), bounded by REDIS_TIMEOUT_MS",
+      "dbFallback": true,
+      "latencyBudgetMs": 1000,
+      "stampedeProtection": "none"
+    },
+    {
+      "id": "app/(portal)/admin/courses/actions.ts#listCourses",
+      "file": "app/(portal)/admin/courses/actions.ts",
+      "line": 32,
+      "function": "listCourses",
+      "category": "A. cache (read-through, cache-aside)",
+      "operations": [
+        "MGET value+version",
+        "SET EX on miss"
+      ],
+      "dataStructure": "string (JSON)",
+      "keyExpression": "cacheKey",
+      "keyDefinition": "versionedKey(listCacheKey(COURSES_CACHE_PREFIX, actor.collegeId, q, column), COURSES_CACHE_PREFIX, actor.collegeId)",
+      "ttlSeconds": 30,
+      "versioned": true,
+      "options": null,
+      "registryScope": "college",
+      "roles": [
+        "admin",
+        "hod",
+        "director"
+      ],
+      "buildScoped": true,
+      "environmentScoped": true,
+      "paginated": true,
+      "dbQueriesOnMiss": 1,
+      "unboundedQueries": [],
+      "exactCounts": 1,
+      "queries": [
+        {
+          "kind": "from",
+          "target": "courses",
+          "countOnly": false,
+          "bounded": true,
+          "exactCount": true
+        }
+      ],
+      "failurePolicy": "fail open to the database (cache bypass), bounded by REDIS_TIMEOUT_MS",
+      "dbFallback": true,
+      "latencyBudgetMs": 1000,
+      "stampedeProtection": "none"
+    },
+    {
+      "id": "app/(portal)/admin/dashboard/page.tsx#AdminDashboard",
+      "file": "app/(portal)/admin/dashboard/page.tsx",
+      "line": 30,
+      "function": "AdminDashboard",
+      "category": "A. cache (read-through, cache-aside)",
+      "operations": [
+        "GET",
+        "SET EX on miss"
+      ],
+      "dataStructure": "string (JSON)",
+      "keyExpression": "`dashboard:admin:${viewerProfile?.college_id}:counts`",
+      "keyDefinition": null,
+      "ttlSeconds": 60,
+      "versioned": false,
+      "options": null,
+      "registryScope": "college",
+      "roles": "route",
+      "buildScoped": true,
+      "environmentScoped": true,
+      "paginated": false,
+      "dbQueriesOnMiss": 6,
+      "unboundedQueries": [],
+      "exactCounts": 6,
+      "queries": [
+        {
+          "kind": "from",
+          "target": "profiles",
+          "countOnly": true,
+          "bounded": true,
+          "exactCount": true
+        },
+        {
+          "kind": "from",
+          "target": "profiles",
+          "countOnly": true,
+          "bounded": true,
+          "exactCount": true
+        },
+        {
+          "kind": "from",
+          "target": "courses",
+          "countOnly": true,
+          "bounded": true,
+          "exactCount": true
+        },
+        {
+          "kind": "from",
+          "target": "departments",
+          "countOnly": true,
+          "bounded": true,
+          "exactCount": true
+        },
+        {
+          "kind": "from",
+          "target": "complaints",
+          "countOnly": true,
+          "bounded": true,
+          "exactCount": true
+        },
+        {
+          "kind": "from",
+          "target": "gate_passes",
+          "countOnly": true,
+          "bounded": true,
+          "exactCount": true
+        }
+      ],
+      "failurePolicy": "fail open to the database (cache bypass), bounded by REDIS_TIMEOUT_MS",
+      "dbFallback": true,
+      "latencyBudgetMs": 1000,
+      "stampedeProtection": "none"
+    },
+    {
+      "id": "app/(portal)/admin/roles/page.tsx#AdminRoles",
+      "file": "app/(portal)/admin/roles/page.tsx",
+      "line": 21,
+      "function": "AdminRoles",
+      "category": "A. cache (read-through, cache-aside)",
+      "operations": [
+        "GET",
+        "SET EX on miss"
+      ],
+      "dataStructure": "string (JSON)",
+      "keyExpression": "`admin:roles:${viewerProfile?.college_id}:matrix`",
+      "keyDefinition": null,
+      "ttlSeconds": 300,
+      "versioned": false,
+      "options": null,
+      "registryScope": "college",
+      "roles": "route",
+      "buildScoped": true,
+      "environmentScoped": true,
+      "paginated": false,
+      "dbQueriesOnMiss": 2,
+      "unboundedQueries": [
+        "permissions",
+        "role_permissions"
+      ],
+      "exactCounts": 0,
+      "queries": [
+        {
+          "kind": "from",
+          "target": "permissions",
+          "countOnly": false,
+          "bounded": false,
+          "exactCount": false
+        },
+        {
+          "kind": "from",
+          "target": "role_permissions",
+          "countOnly": false,
+          "bounded": false,
+          "exactCount": false
+        }
+      ],
+      "failurePolicy": "fail open to the database (cache bypass), bounded by REDIS_TIMEOUT_MS",
+      "dbFallback": true,
+      "latencyBudgetMs": 1000,
+      "stampedeProtection": "none"
+    },
+    {
+      "id": "app/(portal)/admin/users/actions.ts#listUsers",
+      "file": "app/(portal)/admin/users/actions.ts",
+      "line": 61,
+      "function": "listUsers",
+      "category": "A. cache (read-through, cache-aside)",
+      "operations": [
+        "MGET value+version",
+        "SET EX on miss"
+      ],
+      "dataStructure": "string (JSON)",
+      "keyExpression": "cacheKey",
+      "keyDefinition": "usersCacheKey(actor.collegeId, q, sortColumn)",
+      "ttlSeconds": 30,
+      "versioned": true,
+      "options": null,
+      "registryScope": "college",
+      "roles": [
+        "admin"
+      ],
+      "buildScoped": true,
+      "environmentScoped": true,
+      "paginated": false,
+      "dbQueriesOnMiss": 1,
+      "unboundedQueries": [],
+      "exactCounts": 1,
+      "queries": [
+        {
+          "kind": "from",
+          "target": "profiles",
+          "countOnly": false,
+          "bounded": true,
+          "exactCount": true
+        }
+      ],
+      "failurePolicy": "fail open to the database (cache bypass), bounded by REDIS_TIMEOUT_MS",
+      "dbFallback": true,
+      "latencyBudgetMs": 1000,
+      "stampedeProtection": "none"
+    },
+    {
+      "id": "app/(portal)/director/analytics/page.tsx#DirectorAnalytics",
+      "file": "app/(portal)/director/analytics/page.tsx",
+      "line": 20,
+      "function": "DirectorAnalytics",
+      "category": "A. cache (read-through, cache-aside)",
+      "operations": [
+        "GET",
+        "SET EX on miss"
+      ],
+      "dataStructure": "string (JSON)",
+      "keyExpression": "`analytics:director:${viewerProfile?.college_id}:mv`",
+      "keyDefinition": null,
+      "ttlSeconds": 60,
+      "versioned": false,
+      "options": null,
+      "registryScope": "college",
+      "roles": "route",
+      "buildScoped": true,
+      "environmentScoped": true,
+      "paginated": false,
+      "dbQueriesOnMiss": 6,
+      "unboundedQueries": [
+        "mv_attendance_summary",
+        "mv_department_enrollment",
+        "mv_department_health"
+      ],
+      "exactCounts": 1,
+      "queries": [
+        {
+          "kind": "from",
+          "target": "mv_attendance_summary",
+          "countOnly": false,
+          "bounded": false,
+          "exactCount": false
+        },
+        {
+          "kind": "from",
+          "target": "mv_fee_summary",
+          "countOnly": false,
+          "bounded": true,
+          "exactCount": false
+        },
+        {
+          "kind": "from",
+          "target": "mv_department_enrollment",
+          "countOnly": false,
+          "bounded": false,
+          "exactCount": false
+        },
+        {
+          "kind": "from",
+          "target": "mv_placement_summary",
+          "countOnly": false,
+          "bounded": true,
+          "exactCount": false
+        },
+        {
+          "kind": "from",
+          "target": "mv_department_health",
+          "countOnly": false,
+          "bounded": false,
+          "exactCount": false
+        },
+        {
+          "kind": "from",
+          "target": "profiles",
+          "countOnly": true,
+          "bounded": true,
+          "exactCount": true
+        }
+      ],
+      "failurePolicy": "fail open to the database (cache bypass), bounded by REDIS_TIMEOUT_MS",
+      "dbFallback": true,
+      "latencyBudgetMs": 1000,
+      "stampedeProtection": "none"
+    },
+    {
+      "id": "app/(portal)/director/attention/actions.ts#listRiskFlags",
+      "file": "app/(portal)/director/attention/actions.ts",
+      "line": 48,
+      "function": "listRiskFlags",
+      "category": "A. cache (read-through, cache-aside)",
+      "operations": [
+        "MGET value+version",
+        "SET EX on miss"
+      ],
+      "dataStructure": "string (JSON)",
+      "keyExpression": "cacheKey",
+      "keyDefinition": "attentionCacheKey(actor.role === \"hod\" ? `hod:${actor.userId}` : `director:${actor.collegeId}`, actor.collegeId)",
+      "ttlSeconds": 30,
+      "versioned": true,
+      "options": null,
+      "registryScope": "split",
+      "roles": [
+        "director",
+        "hod"
+      ],
+      "buildScoped": true,
+      "environmentScoped": true,
+      "paginated": false,
+      "dbQueriesOnMiss": 1,
+      "unboundedQueries": [],
+      "exactCounts": 0,
+      "queries": [
+        {
+          "kind": "from",
+          "target": "risk_flags",
+          "countOnly": false,
+          "bounded": true,
+          "exactCount": false
+        }
+      ],
+      "failurePolicy": "fail open to the database (cache bypass), bounded by REDIS_TIMEOUT_MS",
+      "dbFallback": true,
+      "latencyBudgetMs": 1000,
+      "stampedeProtection": "none"
+    },
+    {
+      "id": "app/(portal)/director/attention/actions.ts#listMyRiskFlagAssignments",
+      "file": "app/(portal)/director/attention/actions.ts",
+      "line": 73,
+      "function": "listMyRiskFlagAssignments",
+      "category": "A. cache (read-through, cache-aside)",
+      "operations": [
+        "MGET value+version",
+        "SET EX on miss"
+      ],
+      "dataStructure": "string (JSON)",
+      "keyExpression": "attentionCacheKey(`assigned:${actor.userId}`, actor.collegeId)",
+      "keyDefinition": null,
+      "ttlSeconds": 30,
+      "versioned": true,
+      "options": null,
+      "registryScope": "user",
+      "roles": [
+        "hod",
+        "warden",
+        "placement_cell",
+        "teacher"
+      ],
+      "buildScoped": true,
+      "environmentScoped": true,
+      "paginated": false,
+      "dbQueriesOnMiss": 1,
+      "unboundedQueries": [
+        "risk_flags"
+      ],
+      "exactCounts": 0,
+      "queries": [
+        {
+          "kind": "from",
+          "target": "risk_flags",
+          "countOnly": false,
+          "bounded": false,
+          "exactCount": false
+        }
+      ],
+      "failurePolicy": "fail open to the database (cache bypass), bounded by REDIS_TIMEOUT_MS",
+      "dbFallback": true,
+      "latencyBudgetMs": 1000,
+      "stampedeProtection": "none"
+    },
+    {
+      "id": "app/(portal)/director/attention/actions.ts#getStudentRiskOverview",
+      "file": "app/(portal)/director/attention/actions.ts",
+      "line": 125,
+      "function": "getStudentRiskOverview",
+      "category": "A. cache (read-through, cache-aside)",
+      "operations": [
+        "MGET value+version",
+        "SET EX on miss"
+      ],
+      "dataStructure": "string (JSON)",
+      "keyExpression": "cacheKey",
+      "keyDefinition": "attentionCacheKey( `student-risk:${actor.role === \"hod\" ? `hod:${actor.userId}` : `director:${actor.collegeId}`}`, actor.collegeId )",
+      "ttlSeconds": 120,
+      "versioned": true,
+      "options": null,
+      "registryScope": "split",
+      "roles": [
+        "director",
+        "hod"
+      ],
+      "buildScoped": true,
+      "environmentScoped": true,
+      "paginated": false,
+      "dbQueriesOnMiss": 3,
+      "unboundedQueries": [
+        "students",
+        "fees",
+        "course_enrollments"
+      ],
+      "exactCounts": 0,
+      "queries": [
+        {
+          "kind": "from",
+          "target": "students",
+          "countOnly": false,
+          "bounded": false,
+          "exactCount": false
+        },
+        {
+          "kind": "from",
+          "target": "fees",
+          "countOnly": false,
+          "bounded": false,
+          "exactCount": false
+        },
+        {
+          "kind": "from",
+          "target": "course_enrollments",
+          "countOnly": false,
+          "bounded": false,
+          "exactCount": false
+        }
+      ],
+      "failurePolicy": "fail open to the database (cache bypass), bounded by REDIS_TIMEOUT_MS",
+      "dbFallback": true,
+      "latencyBudgetMs": 1000,
+      "stampedeProtection": "none"
+    },
+    {
+      "id": "app/(portal)/director/dashboard/actions.ts#getDashboardStats",
+      "file": "app/(portal)/director/dashboard/actions.ts",
+      "line": 21,
+      "function": "getDashboardStats",
+      "category": "A. cache (read-through, cache-aside)",
+      "operations": [
+        "GET",
+        "SET EX on miss"
+      ],
+      "dataStructure": "string (JSON)",
+      "keyExpression": "`dashboard:director:${actor.collegeId}:counts`",
+      "keyDefinition": null,
+      "ttlSeconds": 60,
+      "versioned": false,
+      "options": null,
+      "registryScope": "college",
+      "roles": [
+        "director",
+        "admin"
+      ],
+      "buildScoped": true,
+      "environmentScoped": true,
+      "paginated": false,
+      "dbQueriesOnMiss": 3,
+      "unboundedQueries": [],
+      "exactCounts": 3,
+      "queries": [
+        {
+          "kind": "from",
+          "target": "profiles",
+          "countOnly": true,
+          "bounded": true,
+          "exactCount": true
+        },
+        {
+          "kind": "from",
+          "target": "profiles",
+          "countOnly": true,
+          "bounded": true,
+          "exactCount": true
+        },
+        {
+          "kind": "from",
+          "target": "departments",
+          "countOnly": true,
+          "bounded": true,
+          "exactCount": true
+        }
+      ],
+      "failurePolicy": "fail open to the database (cache bypass), bounded by REDIS_TIMEOUT_MS",
+      "dbFallback": true,
+      "latencyBudgetMs": 1000,
+      "stampedeProtection": "none"
+    },
+    {
+      "id": "app/(portal)/director/decisions/actions.ts#listDecisions",
+      "file": "app/(portal)/director/decisions/actions.ts",
+      "line": 142,
+      "function": "listDecisions",
+      "category": "A. cache (read-through, cache-aside)",
+      "operations": [
+        "MGET value+version",
+        "SET EX on miss"
+      ],
+      "dataStructure": "string (JSON)",
+      "keyExpression": "decisionsCacheKey(actor.collegeId)",
+      "keyDefinition": null,
+      "ttlSeconds": 30,
+      "versioned": true,
+      "options": null,
+      "registryScope": "college",
+      "roles": [
+        "director"
+      ],
+      "buildScoped": true,
+      "environmentScoped": true,
+      "paginated": false,
+      "dbQueriesOnMiss": 1,
+      "unboundedQueries": [],
+      "exactCounts": 0,
+      "queries": [
+        {
+          "kind": "from",
+          "target": "decisions",
+          "countOnly": false,
+          "bounded": true,
+          "exactCount": false
+        }
+      ],
+      "failurePolicy": "fail open to the database (cache bypass), bounded by REDIS_TIMEOUT_MS",
+      "dbFallback": true,
+      "latencyBudgetMs": 1000,
+      "stampedeProtection": "none"
+    },
+    {
+      "id": "app/(portal)/director/departments/performance/actions.ts#listDepartmentHealth",
+      "file": "app/(portal)/director/departments/performance/actions.ts",
+      "line": 25,
+      "function": "listDepartmentHealth",
+      "category": "A. cache (read-through, cache-aside)",
+      "operations": [
+        "GET",
+        "SET EX on miss"
+      ],
+      "dataStructure": "string (JSON)",
+      "keyExpression": "`dept-performance:${actor.role === \"hod\" ? `hod:${actor.userId}` : `director:${actor.collegeId}`}`",
+      "keyDefinition": null,
+      "ttlSeconds": 60,
+      "versioned": false,
+      "options": null,
+      "registryScope": "split",
+      "roles": [
+        "director",
+        "hod"
+      ],
+      "buildScoped": true,
+      "environmentScoped": true,
+      "paginated": false,
+      "dbQueriesOnMiss": 2,
+      "unboundedQueries": [
+        "mv_department_health",
+        "risk_flags"
+      ],
+      "exactCounts": 0,
+      "queries": [
+        {
+          "kind": "from",
+          "target": "mv_department_health",
+          "countOnly": false,
+          "bounded": false,
+          "exactCount": false
+        },
+        {
+          "kind": "from",
+          "target": "risk_flags",
+          "countOnly": false,
+          "bounded": false,
+          "exactCount": false
+        }
+      ],
+      "failurePolicy": "fail open to the database (cache bypass), bounded by REDIS_TIMEOUT_MS",
+      "dbFallback": true,
+      "latencyBudgetMs": 1000,
+      "stampedeProtection": "none"
+    },
+    {
+      "id": "app/(portal)/director/faculty/actions.ts#listFaculty",
+      "file": "app/(portal)/director/faculty/actions.ts",
+      "line": 31,
+      "function": "listFaculty",
+      "category": "A. cache (read-through, cache-aside)",
+      "operations": [
+        "MGET value+version",
+        "SET EX on miss"
+      ],
+      "dataStructure": "string (JSON)",
+      "keyExpression": "cacheKey",
+      "keyDefinition": "listCacheKey(FACULTY_CACHE_PREFIX, actor.collegeId, q, column)",
+      "ttlSeconds": 30,
+      "versioned": true,
+      "options": null,
+      "registryScope": "college",
+      "roles": [
+        "director"
+      ],
+      "buildScoped": true,
+      "environmentScoped": true,
+      "paginated": true,
+      "dbQueriesOnMiss": 5,
+      "unboundedQueries": [
+        "attendance",
+        "marks"
+      ],
+      "exactCounts": 1,
+      "queries": [
+        {
+          "kind": "from",
+          "target": "profiles",
+          "countOnly": false,
+          "bounded": true,
+          "exactCount": true
+        },
+        {
+          "kind": "from",
+          "target": "course_offerings",
+          "countOnly": false,
+          "bounded": true,
+          "exactCount": false
+        },
+        {
+          "kind": "from",
+          "target": "timetable_slots",
+          "countOnly": false,
+          "bounded": true,
+          "exactCount": false
+        },
+        {
+          "kind": "from",
+          "target": "attendance",
+          "countOnly": false,
+          "bounded": false,
+          "exactCount": false
+        },
+        {
+          "kind": "from",
+          "target": "marks",
+          "countOnly": false,
+          "bounded": false,
+          "exactCount": false
+        }
+      ],
+      "failurePolicy": "fail open to the database (cache bypass), bounded by REDIS_TIMEOUT_MS",
+      "dbFallback": true,
+      "latencyBudgetMs": 1000,
+      "stampedeProtection": "none"
+    },
+    {
+      "id": "app/(portal)/director/hostel/actions.ts#getHostelRollup",
+      "file": "app/(portal)/director/hostel/actions.ts",
+      "line": 20,
+      "function": "getHostelRollup",
+      "category": "A. cache (read-through, cache-aside)",
+      "operations": [
+        "GET",
+        "SET EX on miss"
+      ],
+      "dataStructure": "string (JSON)",
+      "keyExpression": "`hostel-rollup:${actor.collegeId}`",
+      "keyDefinition": null,
+      "ttlSeconds": 60,
+      "versioned": false,
+      "options": null,
+      "registryScope": "college",
+      "roles": [
+        "director"
+      ],
+      "buildScoped": true,
+      "environmentScoped": true,
+      "paginated": false,
+      "dbQueriesOnMiss": 4,
+      "unboundedQueries": [
+        "hostel_blocks",
+        "hostel_rooms",
+        "gate_passes",
+        "complaints"
+      ],
+      "exactCounts": 0,
+      "queries": [
+        {
+          "kind": "from",
+          "target": "hostel_blocks",
+          "countOnly": false,
+          "bounded": false,
+          "exactCount": false
+        },
+        {
+          "kind": "from",
+          "target": "hostel_rooms",
+          "countOnly": false,
+          "bounded": false,
+          "exactCount": false
+        },
+        {
+          "kind": "from",
+          "target": "gate_passes",
+          "countOnly": false,
+          "bounded": false,
+          "exactCount": false
+        },
+        {
+          "kind": "from",
+          "target": "complaints",
+          "countOnly": false,
+          "bounded": false,
+          "exactCount": false
+        }
+      ],
+      "failurePolicy": "fail open to the database (cache bypass), bounded by REDIS_TIMEOUT_MS",
+      "dbFallback": true,
+      "latencyBudgetMs": 1000,
+      "stampedeProtection": "none"
+    },
+    {
+      "id": "app/(portal)/director/placement-cell/actions.ts#getPlacementOverview",
+      "file": "app/(portal)/director/placement-cell/actions.ts",
+      "line": 234,
+      "function": "getPlacementOverview",
+      "category": "A. cache (read-through, cache-aside)",
+      "operations": [
+        "GET",
+        "SET EX on miss"
+      ],
+      "dataStructure": "string (JSON)",
+      "keyExpression": "`placement:overview:${actor.collegeId}`",
+      "keyDefinition": null,
+      "ttlSeconds": 60,
+      "versioned": false,
+      "options": null,
+      "registryScope": "college",
+      "roles": [
+        "director",
+        "admin"
+      ],
+      "buildScoped": true,
+      "environmentScoped": true,
+      "paginated": false,
+      "dbQueriesOnMiss": 5,
+      "unboundedQueries": [],
+      "exactCounts": 4,
+      "queries": [
+        {
+          "kind": "from",
+          "target": "mv_placement_summary",
+          "countOnly": false,
+          "bounded": true,
+          "exactCount": false
+        },
+        {
+          "kind": "from",
+          "target": "companies",
+          "countOnly": true,
+          "bounded": true,
+          "exactCount": true
+        },
+        {
+          "kind": "from",
+          "target": "placement_drives",
+          "countOnly": true,
+          "bounded": true,
+          "exactCount": true
+        },
+        {
+          "kind": "from",
+          "target": "placement_applications",
+          "countOnly": true,
+          "bounded": true,
+          "exactCount": true
+        },
+        {
+          "kind": "from",
+          "target": "profiles",
+          "countOnly": true,
+          "bounded": true,
+          "exactCount": true
+        }
+      ],
+      "failurePolicy": "fail open to the database (cache bypass), bounded by REDIS_TIMEOUT_MS",
+      "dbFallback": true,
+      "latencyBudgetMs": 1000,
+      "stampedeProtection": "none"
+    },
+    {
+      "id": "app/(portal)/director/placements/actions.ts#listPlacements",
+      "file": "app/(portal)/director/placements/actions.ts",
+      "line": 32,
+      "function": "listPlacements",
+      "category": "A. cache (read-through, cache-aside)",
+      "operations": [
+        "MGET value+version",
+        "SET EX on miss"
+      ],
+      "dataStructure": "string (JSON)",
+      "keyExpression": "cacheKey",
+      "keyDefinition": "versionedKey(listCacheKey(PLACEMENTS_CACHE_PREFIX, actor.collegeId, q, column), PLACEMENTS_CACHE_PREFIX, actor.collegeId)",
+      "ttlSeconds": 30,
+      "versioned": true,
+      "options": null,
+      "registryScope": "college",
+      "roles": [
+        "director",
+        "admin"
+      ],
+      "buildScoped": true,
+      "environmentScoped": true,
+      "paginated": true,
+      "dbQueriesOnMiss": 1,
+      "unboundedQueries": [],
+      "exactCounts": 1,
+      "queries": [
+        {
+          "kind": "from",
+          "target": "placements",
+          "countOnly": false,
+          "bounded": true,
+          "exactCount": true
+        }
+      ],
+      "failurePolicy": "fail open to the database (cache bypass), bounded by REDIS_TIMEOUT_MS",
+      "dbFallback": true,
+      "latencyBudgetMs": 1000,
+      "stampedeProtection": "none"
+    },
+    {
+      "id": "app/(portal)/director/placements/funnel/actions.ts#getInstitutionPlacementFunnel",
+      "file": "app/(portal)/director/placements/funnel/actions.ts",
+      "line": 19,
+      "function": "getInstitutionPlacementFunnel",
+      "category": "A. cache (read-through, cache-aside)",
+      "operations": [
+        "GET",
+        "SET EX on miss"
+      ],
+      "dataStructure": "string (JSON)",
+      "keyExpression": "`placement-funnel:${actor.collegeId}`",
+      "keyDefinition": null,
+      "ttlSeconds": 60,
+      "versioned": false,
+      "options": null,
+      "registryScope": "college",
+      "roles": [
+        "director"
+      ],
+      "buildScoped": true,
+      "environmentScoped": true,
+      "paginated": false,
+      "dbQueriesOnMiss": 1,
+      "unboundedQueries": [
+        "mv_placement_funnel"
+      ],
+      "exactCounts": 0,
+      "queries": [
+        {
+          "kind": "from",
+          "target": "mv_placement_funnel",
+          "countOnly": false,
+          "bounded": false,
+          "exactCount": false
+        }
+      ],
+      "failurePolicy": "fail open to the database (cache bypass), bounded by REDIS_TIMEOUT_MS",
+      "dbFallback": true,
+      "latencyBudgetMs": 1000,
+      "stampedeProtection": "none"
+    },
+    {
+      "id": "app/(portal)/finance/dashboard/page.tsx#FinanceDashboard",
+      "file": "app/(portal)/finance/dashboard/page.tsx",
+      "line": 24,
+      "function": "FinanceDashboard",
+      "category": "A. cache (read-through, cache-aside)",
+      "operations": [
+        "GET",
+        "SET EX on miss"
+      ],
+      "dataStructure": "string (JSON)",
+      "keyExpression": "`dashboard:finance:${viewerProfile?.college_id}:fee-stats`",
+      "keyDefinition": null,
+      "ttlSeconds": 60,
+      "versioned": false,
+      "options": null,
+      "registryScope": "college",
+      "roles": "route",
+      "buildScoped": true,
+      "environmentScoped": true,
+      "paginated": false,
+      "dbQueriesOnMiss": 1,
+      "unboundedQueries": [
+        "fees"
+      ],
+      "exactCounts": 0,
+      "queries": [
+        {
+          "kind": "from",
+          "target": "fees",
+          "countOnly": false,
+          "bounded": false,
+          "exactCount": false
+        }
+      ],
+      "failurePolicy": "fail open to the database (cache bypass), bounded by REDIS_TIMEOUT_MS",
+      "dbFallback": true,
+      "latencyBudgetMs": 1000,
+      "stampedeProtection": "none"
+    },
+    {
+      "id": "app/(portal)/finance/disputes/actions.ts#listFinancialDisputes",
+      "file": "app/(portal)/finance/disputes/actions.ts",
+      "line": 30,
+      "function": "listFinancialDisputes",
+      "category": "A. cache (read-through, cache-aside)",
+      "operations": [
+        "MGET value+version",
+        "SET EX on miss"
+      ],
+      "dataStructure": "string (JSON)",
+      "keyExpression": "disputesCacheKey(actor.collegeId)",
+      "keyDefinition": null,
+      "ttlSeconds": 30,
+      "versioned": true,
+      "options": null,
+      "registryScope": "college",
+      "roles": [
+        "finance",
+        "admin"
+      ],
+      "buildScoped": true,
+      "environmentScoped": true,
+      "paginated": false,
+      "dbQueriesOnMiss": 1,
+      "unboundedQueries": [
+        "financial_disputes"
+      ],
+      "exactCounts": 0,
+      "queries": [
+        {
+          "kind": "from",
+          "target": "financial_disputes",
+          "countOnly": false,
+          "bounded": false,
+          "exactCount": false
+        }
+      ],
+      "failurePolicy": "fail open to the database (cache bypass), bounded by REDIS_TIMEOUT_MS",
+      "dbFallback": true,
+      "latencyBudgetMs": 1000,
+      "stampedeProtection": "none"
+    },
+    {
+      "id": "app/(portal)/finance/exceptions/actions.ts#getFinanceExceptions",
+      "file": "app/(portal)/finance/exceptions/actions.ts",
+      "line": 40,
+      "function": "getFinanceExceptions",
+      "category": "A. cache (read-through, cache-aside)",
+      "operations": [
+        "GET",
+        "SET EX on miss"
+      ],
+      "dataStructure": "string (JSON)",
+      "keyExpression": "`finance:exceptions:${actor.collegeId}`",
+      "keyDefinition": null,
+      "ttlSeconds": 30,
+      "versioned": false,
+      "options": null,
+      "registryScope": "college",
+      "roles": [
+        "finance",
+        "admin"
+      ],
+      "buildScoped": true,
+      "environmentScoped": true,
+      "paginated": false,
+      "dbQueriesOnMiss": 4,
+      "unboundedQueries": [
+        "fees",
+        "payments",
+        "refund_requests",
+        "financial_disputes"
+      ],
+      "exactCounts": 0,
+      "queries": [
+        {
+          "kind": "from",
+          "target": "fees",
+          "countOnly": false,
+          "bounded": false,
+          "exactCount": false
+        },
+        {
+          "kind": "from",
+          "target": "payments",
+          "countOnly": false,
+          "bounded": false,
+          "exactCount": false
+        },
+        {
+          "kind": "from",
+          "target": "refund_requests",
+          "countOnly": false,
+          "bounded": false,
+          "exactCount": false
+        },
+        {
+          "kind": "from",
+          "target": "financial_disputes",
+          "countOnly": false,
+          "bounded": false,
+          "exactCount": false
+        }
+      ],
+      "failurePolicy": "fail open to the database (cache bypass), bounded by REDIS_TIMEOUT_MS",
+      "dbFallback": true,
+      "latencyBudgetMs": 1000,
+      "stampedeProtection": "none"
+    },
+    {
+      "id": "app/(portal)/finance/invoices/actions.ts#listInvoices",
+      "file": "app/(portal)/finance/invoices/actions.ts",
+      "line": 33,
+      "function": "listInvoices",
+      "category": "A. cache (read-through, cache-aside)",
+      "operations": [
+        "MGET value+version",
+        "SET EX on miss"
+      ],
+      "dataStructure": "string (JSON)",
+      "keyExpression": "cacheKey",
+      "keyDefinition": "versionedKey(listCacheKey(FEES_CACHE_PREFIX, actor.collegeId, q, column), FEES_CACHE_PREFIX, actor.collegeId)",
+      "ttlSeconds": 30,
+      "versioned": true,
+      "options": null,
+      "registryScope": "college",
+      "roles": [
+        "finance",
+        "admin"
+      ],
+      "buildScoped": true,
+      "environmentScoped": true,
+      "paginated": true,
+      "dbQueriesOnMiss": 1,
+      "unboundedQueries": [],
+      "exactCounts": 1,
+      "queries": [
+        {
+          "kind": "from",
+          "target": "fees",
+          "countOnly": false,
+          "bounded": true,
+          "exactCount": true
+        }
+      ],
+      "failurePolicy": "fail open to the database (cache bypass), bounded by REDIS_TIMEOUT_MS",
+      "dbFallback": true,
+      "latencyBudgetMs": 1000,
+      "stampedeProtection": "none"
+    },
+    {
+      "id": "app/(portal)/finance/refunds/actions.ts#listRefundRequests",
+      "file": "app/(portal)/finance/refunds/actions.ts",
+      "line": 28,
+      "function": "listRefundRequests",
+      "category": "A. cache (read-through, cache-aside)",
+      "operations": [
+        "MGET value+version",
+        "SET EX on miss"
+      ],
+      "dataStructure": "string (JSON)",
+      "keyExpression": "refundsCacheKey(actor.collegeId)",
+      "keyDefinition": null,
+      "ttlSeconds": 30,
+      "versioned": true,
+      "options": null,
+      "registryScope": "college",
+      "roles": [
+        "finance",
+        "admin"
+      ],
+      "buildScoped": true,
+      "environmentScoped": true,
+      "paginated": false,
+      "dbQueriesOnMiss": 1,
+      "unboundedQueries": [],
+      "exactCounts": 0,
+      "queries": [
+        {
+          "kind": "from",
+          "target": "refund_requests",
+          "countOnly": false,
+          "bounded": true,
+          "exactCount": false
+        }
+      ],
+      "failurePolicy": "fail open to the database (cache bypass), bounded by REDIS_TIMEOUT_MS",
+      "dbFallback": true,
+      "latencyBudgetMs": 1000,
+      "stampedeProtection": "none"
+    },
+    {
+      "id": "app/(portal)/finance/reports/page.tsx#FinanceReports",
+      "file": "app/(portal)/finance/reports/page.tsx",
+      "line": 26,
+      "function": "FinanceReports",
+      "category": "A. cache (read-through, cache-aside)",
+      "operations": [
+        "GET",
+        "SET EX on miss"
+      ],
+      "dataStructure": "string (JSON)",
+      "keyExpression": "`reports:finance:${viewerProfile?.college_id}:mv`",
+      "keyDefinition": null,
+      "ttlSeconds": 60,
+      "versioned": false,
+      "options": null,
+      "registryScope": "college",
+      "roles": "route",
+      "buildScoped": true,
+      "environmentScoped": true,
+      "paginated": false,
+      "dbQueriesOnMiss": 2,
+      "unboundedQueries": [
+        "fees"
+      ],
+      "exactCounts": 0,
+      "queries": [
+        {
+          "kind": "from",
+          "target": "mv_fee_summary",
+          "countOnly": false,
+          "bounded": true,
+          "exactCount": false
+        },
+        {
+          "kind": "from",
+          "target": "fees",
+          "countOnly": false,
+          "bounded": false,
+          "exactCount": false
+        }
+      ],
+      "failurePolicy": "fail open to the database (cache bypass), bounded by REDIS_TIMEOUT_MS",
+      "dbFallback": true,
+      "latencyBudgetMs": 1000,
+      "stampedeProtection": "none"
+    },
+    {
+      "id": "app/(portal)/finance/scholarships/actions.ts#listScholarships",
+      "file": "app/(portal)/finance/scholarships/actions.ts",
+      "line": 32,
+      "function": "listScholarships",
+      "category": "A. cache (read-through, cache-aside)",
+      "operations": [
+        "MGET value+version",
+        "SET EX on miss"
+      ],
+      "dataStructure": "string (JSON)",
+      "keyExpression": "cacheKey",
+      "keyDefinition": "versionedKey(listCacheKey(SCHOLARSHIPS_CACHE_PREFIX, actor.collegeId, q, column), SCHOLARSHIPS_CACHE_PREFIX, actor.collegeId)",
+      "ttlSeconds": 30,
+      "versioned": true,
+      "options": null,
+      "registryScope": "college",
+      "roles": [
+        "finance",
+        "admin"
+      ],
+      "buildScoped": true,
+      "environmentScoped": true,
+      "paginated": true,
+      "dbQueriesOnMiss": 1,
+      "unboundedQueries": [],
+      "exactCounts": 1,
+      "queries": [
+        {
+          "kind": "from",
+          "target": "scholarships",
+          "countOnly": false,
+          "bounded": true,
+          "exactCount": true
+        }
+      ],
+      "failurePolicy": "fail open to the database (cache bypass), bounded by REDIS_TIMEOUT_MS",
+      "dbFallback": true,
+      "latencyBudgetMs": 1000,
+      "stampedeProtection": "none"
+    },
+    {
+      "id": "app/(portal)/finance/transactions/actions.ts#listPayments",
+      "file": "app/(portal)/finance/transactions/actions.ts",
+      "line": 38,
+      "function": "listPayments",
+      "category": "A. cache (read-through, cache-aside)",
+      "operations": [
+        "MGET value+version",
+        "SET EX on miss"
+      ],
+      "dataStructure": "string (JSON)",
+      "keyExpression": "cacheKey",
+      "keyDefinition": "versionedKey(listCacheKey(PAYMENTS_CACHE_PREFIX, actor.collegeId, q, column), PAYMENTS_CACHE_PREFIX, actor.collegeId)",
+      "ttlSeconds": 30,
+      "versioned": true,
+      "options": null,
+      "registryScope": "college",
+      "roles": [
+        "finance",
+        "admin"
+      ],
+      "buildScoped": true,
+      "environmentScoped": true,
+      "paginated": true,
+      "dbQueriesOnMiss": 1,
+      "unboundedQueries": [],
+      "exactCounts": 1,
+      "queries": [
+        {
+          "kind": "from",
+          "target": "payments",
+          "countOnly": false,
+          "bounded": true,
+          "exactCount": true
+        }
+      ],
+      "failurePolicy": "fail open to the database (cache bypass), bounded by REDIS_TIMEOUT_MS",
+      "dbFallback": true,
+      "latencyBudgetMs": 1000,
+      "stampedeProtection": "none"
+    },
+    {
+      "id": "app/(portal)/finance/transactions/actions.ts#getFeeStats",
+      "file": "app/(portal)/finance/transactions/actions.ts",
+      "line": 68,
+      "function": "getFeeStats",
+      "category": "A. cache (read-through, cache-aside)",
+      "operations": [
+        "MGET value+version",
+        "SET EX on miss"
+      ],
+      "dataStructure": "string (JSON)",
+      "keyExpression": "versionedKey(`stats:fees:${actor.collegeId}`, FEE_STATS_FAMILY, actor.collegeId)",
+      "keyDefinition": null,
+      "ttlSeconds": 30,
+      "versioned": true,
+      "options": null,
+      "registryScope": "college",
+      "roles": [
+        "finance",
+        "admin"
+      ],
+      "buildScoped": true,
+      "environmentScoped": true,
+      "paginated": false,
+      "dbQueriesOnMiss": 1,
+      "unboundedQueries": [
+        "fees"
+      ],
+      "exactCounts": 0,
+      "queries": [
+        {
+          "kind": "from",
+          "target": "fees",
+          "countOnly": false,
+          "bounded": false,
+          "exactCount": false
+        }
+      ],
+      "failurePolicy": "fail open to the database (cache bypass), bounded by REDIS_TIMEOUT_MS",
+      "dbFallback": true,
+      "latencyBudgetMs": 1000,
+      "stampedeProtection": "none"
+    },
+    {
+      "id": "app/(portal)/hod/approvals/actions.ts#listHodApprovals",
+      "file": "app/(portal)/hod/approvals/actions.ts",
+      "line": 44,
+      "function": "listHodApprovals",
+      "category": "A. cache (read-through, cache-aside)",
+      "operations": [
+        "MGET value+version",
+        "SET EX on miss"
+      ],
+      "dataStructure": "string (JSON)",
+      "keyExpression": "hodApprovalsCacheKey(actor.userId, actor.collegeId)",
+      "keyDefinition": null,
+      "ttlSeconds": 30,
+      "versioned": true,
+      "options": null,
+      "registryScope": "user",
+      "roles": [
+        "hod"
+      ],
+      "buildScoped": true,
+      "environmentScoped": true,
+      "paginated": false,
+      "dbQueriesOnMiss": 3,
+      "unboundedQueries": [
+        "profiles"
+      ],
+      "exactCounts": 0,
+      "queries": [
+        {
+          "kind": "from",
+          "target": "departments",
+          "countOnly": false,
+          "bounded": true,
+          "exactCount": false
+        },
+        {
+          "kind": "from",
+          "target": "profiles",
+          "countOnly": false,
+          "bounded": false,
+          "exactCount": false
+        },
+        {
+          "kind": "from",
+          "target": "leave_requests",
+          "countOnly": false,
+          "bounded": true,
+          "exactCount": false
+        }
+      ],
+      "failurePolicy": "fail open to the database (cache bypass), bounded by REDIS_TIMEOUT_MS",
+      "dbFallback": true,
+      "latencyBudgetMs": 1000,
+      "stampedeProtection": "none"
+    },
+    {
+      "id": "app/(portal)/hod/approvals/actions.ts#listCorrectionApprovals",
+      "file": "app/(portal)/hod/approvals/actions.ts",
+      "line": 396,
+      "function": "listCorrectionApprovals",
+      "category": "A. cache (read-through, cache-aside)",
+      "operations": [
+        "MGET value+version",
+        "SET EX on miss"
+      ],
+      "dataStructure": "string (JSON)",
+      "keyExpression": "correctionsCacheKey(actor.userId, actor.collegeId)",
+      "keyDefinition": null,
+      "ttlSeconds": 30,
+      "versioned": true,
+      "options": null,
+      "registryScope": "user",
+      "roles": [
+        "hod",
+        "admin"
+      ],
+      "buildScoped": true,
+      "environmentScoped": true,
+      "paginated": false,
+      "dbQueriesOnMiss": 4,
+      "unboundedQueries": [
+        "course_offerings"
+      ],
+      "exactCounts": 0,
+      "queries": [
+        {
+          "kind": "from",
+          "target": "attendance_correction_requests",
+          "countOnly": false,
+          "bounded": true,
+          "exactCount": false
+        },
+        {
+          "kind": "from",
+          "target": "departments",
+          "countOnly": false,
+          "bounded": true,
+          "exactCount": false
+        },
+        {
+          "kind": "from",
+          "target": "course_offerings",
+          "countOnly": false,
+          "bounded": false,
+          "exactCount": false
+        },
+        {
+          "kind": "from",
+          "target": "attendance_correction_requests",
+          "countOnly": false,
+          "bounded": true,
+          "exactCount": false
+        }
+      ],
+      "failurePolicy": "fail open to the database (cache bypass), bounded by REDIS_TIMEOUT_MS",
+      "dbFallback": true,
+      "latencyBudgetMs": 1000,
+      "stampedeProtection": "none"
+    },
+    {
+      "id": "app/(portal)/hod/dashboard/page.tsx#HodDashboard",
+      "file": "app/(portal)/hod/dashboard/page.tsx",
+      "line": 37,
+      "function": "HodDashboard",
+      "category": "A. cache (read-through, cache-aside)",
+      "operations": [
+        "GET",
+        "SET EX on miss"
+      ],
+      "dataStructure": "string (JSON)",
+      "keyExpression": "`dashboard:hod:${department?.id}:faculty-courses`",
+      "keyDefinition": null,
+      "ttlSeconds": 60,
+      "versioned": false,
+      "options": null,
+      "registryScope": "department",
+      "roles": "route",
+      "buildScoped": true,
+      "environmentScoped": true,
+      "paginated": false,
+      "dbQueriesOnMiss": 2,
+      "unboundedQueries": [
+        "profiles",
+        "courses"
+      ],
+      "exactCounts": 0,
+      "queries": [
+        {
+          "kind": "from",
+          "target": "profiles",
+          "countOnly": false,
+          "bounded": false,
+          "exactCount": false
+        },
+        {
+          "kind": "from",
+          "target": "courses",
+          "countOnly": false,
+          "bounded": false,
+          "exactCount": false
+        }
+      ],
+      "failurePolicy": "fail open to the database (cache bypass), bounded by REDIS_TIMEOUT_MS",
+      "dbFallback": true,
+      "latencyBudgetMs": 1000,
+      "stampedeProtection": "none"
+    },
+    {
+      "id": "app/(portal)/hod/faculty/actions.ts#listDepartmentFacultyWorkload",
+      "file": "app/(portal)/hod/faculty/actions.ts",
+      "line": 29,
+      "function": "listDepartmentFacultyWorkload",
+      "category": "A. cache (read-through, cache-aside)",
+      "operations": [
+        "GET",
+        "SET EX on miss"
+      ],
+      "dataStructure": "string (JSON)",
+      "keyExpression": "cacheKey",
+      "keyDefinition": "`hod-workload:${actor.role === \"hod\" ? actor.userId : actor.collegeId}`",
+      "ttlSeconds": 60,
+      "versioned": false,
+      "options": null,
+      "registryScope": "split",
+      "roles": [
+        "director",
+        "hod"
+      ],
+      "buildScoped": true,
+      "environmentScoped": true,
+      "paginated": false,
+      "dbQueriesOnMiss": 4,
+      "unboundedQueries": [
+        "profiles",
+        "course_offerings",
+        "timetable_slots"
+      ],
+      "exactCounts": 0,
+      "queries": [
+        {
+          "kind": "from",
+          "target": "departments",
+          "countOnly": false,
+          "bounded": true,
+          "exactCount": false
+        },
+        {
+          "kind": "from",
+          "target": "profiles",
+          "countOnly": false,
+          "bounded": false,
+          "exactCount": false
+        },
+        {
+          "kind": "from",
+          "target": "course_offerings",
+          "countOnly": false,
+          "bounded": false,
+          "exactCount": false
+        },
+        {
+          "kind": "from",
+          "target": "timetable_slots",
+          "countOnly": false,
+          "bounded": false,
+          "exactCount": false
+        }
+      ],
+      "failurePolicy": "fail open to the database (cache bypass), bounded by REDIS_TIMEOUT_MS",
+      "dbFallback": true,
+      "latencyBudgetMs": 1000,
+      "stampedeProtection": "none"
+    },
+    {
+      "id": "app/(portal)/hod/reports/page.tsx#HodReports",
+      "file": "app/(portal)/hod/reports/page.tsx",
+      "line": 21,
+      "function": "HodReports",
+      "category": "A. cache (read-through, cache-aside)",
+      "operations": [
+        "GET",
+        "SET EX on miss"
+      ],
+      "dataStructure": "string (JSON)",
+      "keyExpression": "`reports:hod:${deptId}:mv`",
+      "keyDefinition": null,
+      "ttlSeconds": 60,
+      "versioned": false,
+      "options": null,
+      "registryScope": "department",
+      "roles": "route",
+      "buildScoped": true,
+      "environmentScoped": true,
+      "paginated": false,
+      "dbQueriesOnMiss": 5,
+      "unboundedQueries": [
+        "mv_attendance_summary",
+        "courses",
+        "course_offerings",
+        "course_enrollments"
+      ],
+      "exactCounts": 0,
+      "queries": [
+        {
+          "kind": "from",
+          "target": "mv_department_enrollment",
+          "countOnly": false,
+          "bounded": true,
+          "exactCount": false
+        },
+        {
+          "kind": "from",
+          "target": "mv_attendance_summary",
+          "countOnly": false,
+          "bounded": false,
+          "exactCount": false
+        },
+        {
+          "kind": "from",
+          "target": "courses",
+          "countOnly": false,
+          "bounded": false,
+          "exactCount": false
+        },
+        {
+          "kind": "from",
+          "target": "course_offerings",
+          "countOnly": false,
+          "bounded": false,
+          "exactCount": false
+        },
+        {
+          "kind": "from",
+          "target": "course_enrollments",
+          "countOnly": false,
+          "bounded": false,
+          "exactCount": false
+        }
+      ],
+      "failurePolicy": "fail open to the database (cache bypass), bounded by REDIS_TIMEOUT_MS",
+      "dbFallback": true,
+      "latencyBudgetMs": 1000,
+      "stampedeProtection": "none"
+    },
+    {
+      "id": "app/(portal)/hod/substitutions/actions.ts#listSubstitutionNeeds",
+      "file": "app/(portal)/hod/substitutions/actions.ts",
+      "line": 44,
+      "function": "listSubstitutionNeeds",
+      "category": "A. cache (read-through, cache-aside)",
+      "operations": [
+        "MGET value+version",
+        "SET EX on miss"
+      ],
+      "dataStructure": "string (JSON)",
+      "keyExpression": "substitutionsCacheKey(actor.userId, actor.collegeId)",
+      "keyDefinition": null,
+      "ttlSeconds": 30,
+      "versioned": true,
+      "options": null,
+      "registryScope": "user",
+      "roles": [
+        "hod",
+        "admin"
+      ],
+      "buildScoped": true,
+      "environmentScoped": true,
+      "paginated": false,
+      "dbQueriesOnMiss": 3,
+      "unboundedQueries": [
+        "substitution_assignments",
+        "course_offerings",
+        "substitution_assignments"
+      ],
+      "exactCounts": 0,
+      "queries": [
+        {
+          "kind": "from",
+          "target": "substitution_assignments",
+          "countOnly": false,
+          "bounded": false,
+          "exactCount": false
+        },
+        {
+          "kind": "from",
+          "target": "course_offerings",
+          "countOnly": false,
+          "bounded": false,
+          "exactCount": false
+        },
+        {
+          "kind": "from",
+          "target": "substitution_assignments",
+          "countOnly": false,
+          "bounded": false,
+          "exactCount": false
+        }
+      ],
+      "failurePolicy": "fail open to the database (cache bypass), bounded by REDIS_TIMEOUT_MS",
+      "dbFallback": true,
+      "latencyBudgetMs": 1000,
+      "stampedeProtection": "none"
+    },
+    {
+      "id": "app/(portal)/placement-cell/companies/actions.ts#listCompanies",
+      "file": "app/(portal)/placement-cell/companies/actions.ts",
+      "line": 28,
+      "function": "listCompanies",
+      "category": "A. cache (read-through, cache-aside)",
+      "operations": [
+        "MGET value+version",
+        "SET EX on miss"
+      ],
+      "dataStructure": "string (JSON)",
+      "keyExpression": "cacheKey",
+      "keyDefinition": "versionedKey(listCacheKey(COMPANIES_CACHE_PREFIX, actor.collegeId, q, column), COMPANIES_CACHE_PREFIX, actor.collegeId)",
+      "ttlSeconds": 30,
+      "versioned": true,
+      "options": null,
+      "registryScope": "college",
+      "roles": [
+        "placement_cell",
+        "director",
+        "admin"
+      ],
+      "buildScoped": true,
+      "environmentScoped": true,
+      "paginated": true,
+      "dbQueriesOnMiss": 1,
+      "unboundedQueries": [],
+      "exactCounts": 1,
+      "queries": [
+        {
+          "kind": "from",
+          "target": "companies",
+          "countOnly": false,
+          "bounded": true,
+          "exactCount": true
+        }
+      ],
+      "failurePolicy": "fail open to the database (cache bypass), bounded by REDIS_TIMEOUT_MS",
+      "dbFallback": true,
+      "latencyBudgetMs": 1000,
+      "stampedeProtection": "none"
+    },
+    {
+      "id": "app/(portal)/placement-cell/dashboard/actions.ts#getPlacementCellDashboard",
+      "file": "app/(portal)/placement-cell/dashboard/actions.ts",
+      "line": 16,
+      "function": "getPlacementCellDashboard",
+      "category": "A. cache (read-through, cache-aside)",
+      "operations": [
+        "GET",
+        "SET EX on miss"
+      ],
+      "dataStructure": "string (JSON)",
+      "keyExpression": "`placement:cell-dashboard:${actor.collegeId}:${actor.role}`",
+      "keyDefinition": null,
+      "ttlSeconds": 60,
+      "versioned": false,
+      "options": null,
+      "registryScope": "role",
+      "roles": [
+        "placement_cell",
+        "director",
+        "admin"
+      ],
+      "buildScoped": true,
+      "environmentScoped": true,
+      "paginated": false,
+      "dbQueriesOnMiss": 8,
+      "unboundedQueries": [],
+      "exactCounts": 5,
+      "queries": [
+        {
+          "kind": "from",
+          "target": "students",
+          "countOnly": true,
+          "bounded": true,
+          "exactCount": true
+        },
+        {
+          "kind": "from",
+          "target": "student_placement_profiles",
+          "countOnly": true,
+          "bounded": true,
+          "exactCount": true
+        },
+        {
+          "kind": "from",
+          "target": "mv_placement_summary",
+          "countOnly": false,
+          "bounded": true,
+          "exactCount": false
+        },
+        {
+          "kind": "from",
+          "target": "companies",
+          "countOnly": true,
+          "bounded": true,
+          "exactCount": true
+        },
+        {
+          "kind": "from",
+          "target": "placement_drives",
+          "countOnly": true,
+          "bounded": true,
+          "exactCount": true
+        },
+        {
+          "kind": "from",
+          "target": "placement_applications",
+          "countOnly": true,
+          "bounded": true,
+          "exactCount": true
+        },
+        {
+          "kind": "from",
+          "target": "placement_drives",
+          "countOnly": false,
+          "bounded": true,
+          "exactCount": false
+        },
+        {
+          "kind": "from",
+          "target": "placement_applications",
+          "countOnly": false,
+          "bounded": true,
+          "exactCount": false
+        }
+      ],
+      "failurePolicy": "fail open to the database (cache bypass), bounded by REDIS_TIMEOUT_MS",
+      "dbFallback": true,
+      "latencyBudgetMs": 1000,
+      "stampedeProtection": "none"
+    },
+    {
+      "id": "app/(portal)/placement-cell/drives/actions.ts#listDrives",
+      "file": "app/(portal)/placement-cell/drives/actions.ts",
+      "line": 49,
+      "function": "listDrives",
+      "category": "A. cache (read-through, cache-aside)",
+      "operations": [
+        "MGET value+version",
+        "SET EX on miss"
+      ],
+      "dataStructure": "string (JSON)",
+      "keyExpression": "cacheKey",
+      "keyDefinition": "versionedKey(listCacheKey(DRIVES_CACHE_PREFIX, actor.collegeId, q, column), DRIVES_CACHE_PREFIX, actor.collegeId)",
+      "ttlSeconds": 30,
+      "versioned": true,
+      "options": null,
+      "registryScope": "college",
+      "roles": [
+        "placement_cell",
+        "director",
+        "admin"
+      ],
+      "buildScoped": true,
+      "environmentScoped": true,
+      "paginated": true,
+      "dbQueriesOnMiss": 1,
+      "unboundedQueries": [],
+      "exactCounts": 1,
+      "queries": [
+        {
+          "kind": "from",
+          "target": "placement_drives",
+          "countOnly": false,
+          "bounded": true,
+          "exactCount": true
+        }
+      ],
+      "failurePolicy": "fail open to the database (cache bypass), bounded by REDIS_TIMEOUT_MS",
+      "dbFallback": true,
+      "latencyBudgetMs": 1000,
+      "stampedeProtection": "none"
+    },
+    {
+      "id": "app/(portal)/placement-cell/records/actions.ts#listStudentPlacementRecords",
+      "file": "app/(portal)/placement-cell/records/actions.ts",
+      "line": 67,
+      "function": "listStudentPlacementRecords",
+      "category": "A. cache (read-through, cache-aside)",
+      "operations": [
+        "MGET value+version",
+        "SET EX on miss"
+      ],
+      "dataStructure": "string (JSON)",
+      "keyExpression": "cacheKey",
+      "keyDefinition": "versionedKey( listCacheKey(RECORDS_CACHE_PREFIX, `${actor.collegeId}:${actor.role}`, q, column), RECORDS_CACHE_PREFIX, actor.collegeId )",
+      "ttlSeconds": 30,
+      "versioned": true,
+      "options": null,
+      "registryScope": "role",
+      "roles": [
+        "placement_cell",
+        "director",
+        "admin"
+      ],
+      "buildScoped": true,
+      "environmentScoped": true,
+      "paginated": true,
+      "dbQueriesOnMiss": 2,
+      "unboundedQueries": [
+        "placements"
+      ],
+      "exactCounts": 1,
+      "queries": [
+        {
+          "kind": "from",
+          "target": "students",
+          "countOnly": false,
+          "bounded": true,
+          "exactCount": true
+        },
+        {
+          "kind": "from",
+          "target": "placements",
+          "countOnly": false,
+          "bounded": false,
+          "exactCount": false
+        }
+      ],
+      "failurePolicy": "fail open to the database (cache bypass), bounded by REDIS_TIMEOUT_MS",
+      "dbFallback": true,
+      "latencyBudgetMs": 1000,
+      "stampedeProtection": "none"
+    },
+    {
+      "id": "app/(portal)/placement-cell/reports/actions.ts#getPlacementReports",
+      "file": "app/(portal)/placement-cell/reports/actions.ts",
+      "line": 35,
+      "function": "getPlacementReports",
+      "category": "A. cache (read-through, cache-aside)",
+      "operations": [
+        "GET",
+        "SET EX on miss"
+      ],
+      "dataStructure": "string (JSON)",
+      "keyExpression": "`placement:reports:${actor.collegeId}:${actor.role}`",
+      "keyDefinition": null,
+      "ttlSeconds": 120,
+      "versioned": false,
+      "options": null,
+      "registryScope": "role",
+      "roles": [
+        "placement_cell",
+        "director",
+        "admin"
+      ],
+      "buildScoped": true,
+      "environmentScoped": true,
+      "paginated": false,
+      "dbQueriesOnMiss": 2,
+      "unboundedQueries": [
+        "placements"
+      ],
+      "exactCounts": 1,
+      "queries": [
+        {
+          "kind": "from",
+          "target": "placements",
+          "countOnly": false,
+          "bounded": false,
+          "exactCount": false
+        },
+        {
+          "kind": "from",
+          "target": "students",
+          "countOnly": true,
+          "bounded": true,
+          "exactCount": true
+        }
+      ],
+      "failurePolicy": "fail open to the database (cache bypass), bounded by REDIS_TIMEOUT_MS",
+      "dbFallback": true,
+      "latencyBudgetMs": 1000,
+      "stampedeProtection": "none"
+    },
+    {
+      "id": "app/(portal)/super-admin/colleges/actions.ts#listColleges",
+      "file": "app/(portal)/super-admin/colleges/actions.ts",
+      "line": 40,
+      "function": "listColleges",
+      "category": "A. cache (read-through, cache-aside)",
+      "operations": [
+        "MGET value+version",
+        "SET EX on miss"
+      ],
+      "dataStructure": "string (JSON)",
+      "keyExpression": "cacheKey",
+      "keyDefinition": "versionedKey(listCacheKey(COLLEGES_CACHE_PREFIX, \"platform\", q, column), COLLEGES_CACHE_PREFIX, \"platform\")",
+      "ttlSeconds": 30,
+      "versioned": true,
+      "options": null,
+      "registryScope": "platform",
+      "roles": [
+        "super_admin"
+      ],
+      "buildScoped": true,
+      "environmentScoped": true,
+      "paginated": true,
+      "dbQueriesOnMiss": 1,
+      "unboundedQueries": [],
+      "exactCounts": 1,
+      "queries": [
+        {
+          "kind": "from",
+          "target": "colleges",
+          "countOnly": false,
+          "bounded": true,
+          "exactCount": true
+        }
+      ],
+      "failurePolicy": "fail open to the database (cache bypass), bounded by REDIS_TIMEOUT_MS",
+      "dbFallback": true,
+      "latencyBudgetMs": 1000,
+      "stampedeProtection": "none"
+    },
+    {
+      "id": "app/(portal)/warden/complaints/actions.ts#listHostelComplaints",
+      "file": "app/(portal)/warden/complaints/actions.ts",
+      "line": 64,
+      "function": "listHostelComplaints",
+      "category": "A. cache (read-through, cache-aside)",
+      "operations": [
+        "MGET value+version",
+        "SET EX on miss"
+      ],
+      "dataStructure": "string (JSON)",
+      "keyExpression": "cacheKey",
+      "keyDefinition": "versionedKey( listCacheKey(COMPLAINTS_CACHE_PREFIX, actor.role === \"admin\" ? actor.collegeId : actor.userId, q, column), COMPLAINTS_CACHE_PREFIX, actor.collegeId )",
+      "ttlSeconds": 30,
+      "versioned": true,
+      "options": null,
+      "registryScope": "split",
+      "roles": [
+        "warden",
+        "admin"
+      ],
+      "buildScoped": true,
+      "environmentScoped": true,
+      "paginated": true,
+      "dbQueriesOnMiss": 1,
+      "unboundedQueries": [],
+      "exactCounts": 1,
+      "queries": [
+        {
+          "kind": "from",
+          "target": "complaints",
+          "countOnly": false,
+          "bounded": true,
+          "exactCount": true
+        }
+      ],
+      "failurePolicy": "fail open to the database (cache bypass), bounded by REDIS_TIMEOUT_MS",
+      "dbFallback": true,
+      "latencyBudgetMs": 1000,
+      "stampedeProtection": "none"
+    },
+    {
+      "id": "app/(portal)/warden/dashboard/page.tsx#WardenDashboard",
+      "file": "app/(portal)/warden/dashboard/page.tsx",
+      "line": 23,
+      "function": "WardenDashboard",
+      "category": "A. cache (read-through, cache-aside)",
+      "operations": [
+        "GET",
+        "SET EX on miss"
+      ],
+      "dataStructure": "string (JSON)",
+      "keyExpression": "`dashboard:warden:${user.id}:overview`",
+      "keyDefinition": null,
+      "ttlSeconds": 60,
+      "versioned": false,
+      "options": null,
+      "registryScope": "user",
+      "roles": "route",
+      "buildScoped": true,
+      "environmentScoped": true,
+      "paginated": false,
+      "dbQueriesOnMiss": 3,
+      "unboundedQueries": [
+        "hostel_blocks",
+        "hostel_rooms"
+      ],
+      "exactCounts": 0,
+      "queries": [
+        {
+          "kind": "from",
+          "target": "hostel_blocks",
+          "countOnly": false,
+          "bounded": false,
+          "exactCount": false
+        },
+        {
+          "kind": "from",
+          "target": "hostel_rooms",
+          "countOnly": false,
+          "bounded": false,
+          "exactCount": false
+        },
+        {
+          "kind": "from",
+          "target": "complaints",
+          "countOnly": false,
+          "bounded": true,
+          "exactCount": false
+        }
+      ],
+      "failurePolicy": "fail open to the database (cache bypass), bounded by REDIS_TIMEOUT_MS",
+      "dbFallback": true,
+      "latencyBudgetMs": 1000,
+      "stampedeProtection": "none"
+    },
+    {
+      "id": "app/(portal)/warden/gatepasses/actions.ts#listPendingGatePasses",
+      "file": "app/(portal)/warden/gatepasses/actions.ts",
+      "line": 107,
+      "function": "listPendingGatePasses",
+      "category": "A. cache (read-through, cache-aside)",
+      "operations": [
+        "MGET value+version",
+        "SET EX on miss"
+      ],
+      "dataStructure": "string (JSON)",
+      "keyExpression": "pendingCacheKey(actor.role === \"admin\" ? actor.collegeId : actor.userId, actor.collegeId)",
+      "keyDefinition": null,
+      "ttlSeconds": 15,
+      "versioned": true,
+      "options": null,
+      "registryScope": "split",
+      "roles": [
+        "warden",
+        "admin"
+      ],
+      "buildScoped": true,
+      "environmentScoped": true,
+      "paginated": false,
+      "dbQueriesOnMiss": 1,
+      "unboundedQueries": [
+        "gate_passes"
+      ],
+      "exactCounts": 0,
+      "queries": [
+        {
+          "kind": "from",
+          "target": "gate_passes",
+          "countOnly": false,
+          "bounded": false,
+          "exactCount": false
+        }
+      ],
+      "failurePolicy": "fail open to the database (cache bypass), bounded by REDIS_TIMEOUT_MS",
+      "dbFallback": true,
+      "latencyBudgetMs": 1000,
+      "stampedeProtection": "none"
+    },
+    {
+      "id": "app/(portal)/warden/gatepasses/actions.ts#listProcessedGatePasses",
+      "file": "app/(portal)/warden/gatepasses/actions.ts",
+      "line": 133,
+      "function": "listProcessedGatePasses",
+      "category": "A. cache (read-through, cache-aside)",
+      "operations": [
+        "MGET value+version",
+        "SET EX on miss"
+      ],
+      "dataStructure": "string (JSON)",
+      "keyExpression": "cacheKey",
+      "keyDefinition": "versionedKey( listCacheKey(PROCESSED_CACHE_PREFIX, actor.role === \"admin\" ? actor.collegeId : actor.userId, q, column), GATEPASS_FAMILY, actor.collegeId )",
+      "ttlSeconds": 30,
+      "versioned": true,
+      "options": null,
+      "registryScope": "split",
+      "roles": [
+        "warden",
+        "admin"
+      ],
+      "buildScoped": true,
+      "environmentScoped": true,
+      "paginated": true,
+      "dbQueriesOnMiss": 1,
+      "unboundedQueries": [],
+      "exactCounts": 1,
+      "queries": [
+        {
+          "kind": "from",
+          "target": "gate_passes",
+          "countOnly": false,
+          "bounded": true,
+          "exactCount": true
+        }
+      ],
+      "failurePolicy": "fail open to the database (cache bypass), bounded by REDIS_TIMEOUT_MS",
+      "dbFallback": true,
+      "latencyBudgetMs": 1000,
+      "stampedeProtection": "none"
+    },
+    {
+      "id": "app/(portal)/warden/gatepasses/actions.ts#getGateOperationsSnapshot",
+      "file": "app/(portal)/warden/gatepasses/actions.ts",
+      "line": 451,
+      "function": "getGateOperationsSnapshot",
+      "category": "A. cache (read-through, cache-aside)",
+      "operations": [
+        "GET",
+        "SET EX on miss"
+      ],
+      "dataStructure": "string (JSON)",
+      "keyExpression": "`gate-ops:${actor.role === \"admin\" ? actor.collegeId : actor.userId}`",
+      "keyDefinition": null,
+      "ttlSeconds": 30,
+      "versioned": false,
+      "options": null,
+      "registryScope": "split",
+      "roles": [
+        "warden",
+        "admin"
+      ],
+      "buildScoped": true,
+      "environmentScoped": true,
+      "paginated": false,
+      "dbQueriesOnMiss": 2,
+      "unboundedQueries": [
+        "gate_passes"
+      ],
+      "exactCounts": 1,
+      "queries": [
+        {
+          "kind": "from",
+          "target": "hostel_allocations",
+          "countOnly": true,
+          "bounded": true,
+          "exactCount": true
+        },
+        {
+          "kind": "from",
+          "target": "gate_passes",
+          "countOnly": false,
+          "bounded": false,
+          "exactCount": false
+        }
+      ],
+      "failurePolicy": "fail open to the database (cache bypass), bounded by REDIS_TIMEOUT_MS",
+      "dbFallback": true,
+      "latencyBudgetMs": 1000,
+      "stampedeProtection": "none"
+    },
+    {
+      "id": "app/(portal)/warden/rooms/actions.ts#listWardenRooms",
+      "file": "app/(portal)/warden/rooms/actions.ts",
+      "line": 29,
+      "function": "listWardenRooms",
+      "category": "A. cache (read-through, cache-aside)",
+      "operations": [
+        "MGET value+version",
+        "SET EX on miss"
+      ],
+      "dataStructure": "string (JSON)",
+      "keyExpression": "cacheKey",
+      "keyDefinition": "listCacheKey(ROOMS_CACHE_PREFIX, actor.role === \"admin\" ? actor.collegeId : actor.userId, q, column)",
+      "ttlSeconds": 30,
+      "versioned": true,
+      "options": "which never\r\n    // matches any block and silently produced an empty room list.\r\n    let blockIds: string[] | null = null;\r\n    if (actor.role !== \"admin\") {\r\n      const { data: blocks, error: blocksError } = await supabase.from(\"hostel_blocks\").select(\"id\").eq(\"warden_id\", actor.userId);\r\n      assertRead(blocksError);\r\n      blockIds = (blocks || []).map((b) => b.id);\r\n      if (blockIds.length === 0) {\r\n        return { data: [], count: 0 };\r\n      }\r\n    }\r\n\r\n    let dbQuery = supabase\r\n      .from(\"hostel_rooms\")\r\n      .select(\"*\", { count: \"exact\" })\r\n      .eq(\"college_id\", actor.collegeId);\r\n    if (blockIds !== null) dbQuery = dbQuery.in(\"block_id\", blockIds);\r\n\r\n    if (q.search) dbQuery = dbQuery.ilike(\"room_number\", `%${q.search}%`);\r\n    dbQuery = dbQuery.order(column, { ascending });\r\n    if (!q.sortKey) dbQuery = dbQuery.order(\"room_number\", { ascending: true });\r\n\r\n    const from = q.page * ROOMS_PAGE_SIZE;\r\n    const { data, count, error: dataError } = await dbQuery.range(from, from + ROOMS_PAGE_SIZE - 1);\r\n    assertRead(dataError);\r\n    return { data: data || [], count: count ?? 0 };\r\n  }",
+      "registryScope": "split",
+      "roles": [
+        "warden",
+        "admin"
+      ],
+      "buildScoped": true,
+      "environmentScoped": true,
+      "paginated": true,
+      "dbQueriesOnMiss": 0,
+      "unboundedQueries": [],
+      "exactCounts": 0,
+      "queries": [],
+      "failurePolicy": "fail open to the database (cache bypass), bounded by REDIS_TIMEOUT_MS",
+      "dbFallback": true,
+      "latencyBudgetMs": 1000,
+      "stampedeProtection": "none"
+    },
+    {
+      "id": "app/(portal)/warden/transfers/actions.ts#listRoomTransferRequests",
+      "file": "app/(portal)/warden/transfers/actions.ts",
+      "line": 59,
+      "function": "listRoomTransferRequests",
+      "category": "A. cache (read-through, cache-aside)",
+      "operations": [
+        "MGET value+version",
+        "SET EX on miss"
+      ],
+      "dataStructure": "string (JSON)",
+      "keyExpression": "transfersCacheKey(actor.role === \"admin\" ? actor.collegeId : actor.userId, actor.collegeId)",
+      "keyDefinition": null,
+      "ttlSeconds": 30,
+      "versioned": true,
+      "options": null,
+      "registryScope": "split",
+      "roles": [
+        "warden",
+        "admin"
+      ],
+      "buildScoped": true,
+      "environmentScoped": true,
+      "paginated": false,
+      "dbQueriesOnMiss": 1,
+      "unboundedQueries": [],
+      "exactCounts": 0,
+      "queries": [
+        {
+          "kind": "from",
+          "target": "room_transfer_requests",
+          "countOnly": false,
+          "bounded": true,
+          "exactCount": false
+        }
+      ],
+      "failurePolicy": "fail open to the database (cache bypass), bounded by REDIS_TIMEOUT_MS",
+      "dbFallback": true,
+      "latencyBudgetMs": 1000,
+      "stampedeProtection": "none"
+    },
+    {
+      "id": "lib/supabase/middleware.ts#updateSession",
+      "file": "lib/supabase/middleware.ts",
+      "line": 157,
+      "function": "updateSession",
+      "category": "A. cache (read-through, cache-aside)",
+      "operations": [
+        "MGET value+version",
+        "SET EX on miss"
+      ],
+      "dataStructure": "string (JSON)",
+      "keyExpression": "middlewareProfileCacheKey(user.id)",
+      "keyDefinition": null,
+      "ttlSeconds": 20,
+      "versioned": true,
+      "options": "MIDDLEWARE_PROFILE_CACHE",
+      "registryScope": "user",
+      "roles": "route",
+      "buildScoped": false,
+      "environmentScoped": true,
+      "paginated": false,
+      "dbQueriesOnMiss": 1,
+      "unboundedQueries": [],
+      "exactCounts": 0,
+      "queries": [
+        {
+          "kind": "from",
+          "target": "profiles",
+          "countOnly": false,
+          "bounded": true,
+          "exactCount": false
+        }
+      ],
+      "failurePolicy": "fail open to the database (cache bypass), bounded by REDIS_TIMEOUT_MS",
+      "dbFallback": true,
+      "latencyBudgetMs": 1000,
+      "stampedeProtection": "none"
+    }
+  ],
+  "rateLimits": [
+    {
+      "file": "app/(portal)/admin/academic-periods/actions.ts",
+      "line": 110,
+      "function": "createAcademicYearCore",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`createAcademicYear:${actor.userId}`",
+      "bucket": "createAcademicYear",
+      "identity": "user",
+      "limit": "20",
+      "windowSeconds": "60",
+      "riskClass": "high",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/admin/academic-periods/actions.ts",
+      "line": 131,
+      "function": "createSemesterCore",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`createSemester:${actor.userId}`",
+      "bucket": "createSemester",
+      "identity": "user",
+      "limit": "20",
+      "windowSeconds": "60",
+      "riskClass": "high",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/admin/academic-periods/actions.ts",
+      "line": 177,
+      "function": "updateSemesterCore",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`updateSemester:${actor.userId}`",
+      "bucket": "updateSemester",
+      "identity": "user",
+      "limit": "30",
+      "windowSeconds": "60",
+      "riskClass": "high",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/admin/academic-periods/actions.ts",
+      "line": 212,
+      "function": "transitionCore",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`${transition}:${table}:${actor.userId}`",
+      "bucket": "`${transition}:${table}:${actor.userId}`",
+      "identity": "user",
+      "limit": "30",
+      "windowSeconds": "60",
+      "riskClass": "see policy table",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/admin/academic-periods/actions.ts",
+      "line": 267,
+      "function": "deleteSemesterCore",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`deleteSemester:${actor.userId}`",
+      "bucket": "deleteSemester",
+      "identity": "user",
+      "limit": "20",
+      "windowSeconds": "60",
+      "riskClass": "high",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/admin/courses/actions.ts",
+      "line": 80,
+      "function": "createCourseCore",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`createCourse:${actor.userId}`",
+      "bucket": "createCourse",
+      "identity": "user",
+      "limit": "20",
+      "windowSeconds": "60",
+      "riskClass": "high",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/admin/departments/actions.ts",
+      "line": 35,
+      "function": "createDepartmentCore",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`createDepartment:${actor.userId}`",
+      "bucket": "createDepartment",
+      "identity": "user",
+      "limit": "20",
+      "windowSeconds": "60",
+      "riskClass": "high",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/admin/hostel/actions.ts",
+      "line": 28,
+      "function": "assignWardenCore",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`assignWarden:${actor.userId}`",
+      "bucket": "assignWarden",
+      "identity": "user",
+      "limit": "20",
+      "windowSeconds": "60",
+      "riskClass": "high",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/admin/settings/actions.ts",
+      "line": 53,
+      "function": "updateCollegeCore",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`updateCollege:${actor.userId}`",
+      "bucket": "updateCollege",
+      "identity": "user",
+      "limit": "10",
+      "windowSeconds": "60",
+      "riskClass": "high",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/admin/users/actions.ts",
+      "line": 158,
+      "function": "updateUserProfileCore",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`updateUserProfile:${actor.userId}`",
+      "bucket": "updateUserProfile",
+      "identity": "user",
+      "limit": "20",
+      "windowSeconds": "60",
+      "riskClass": "high",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/admin/users/actions.ts",
+      "line": 220,
+      "function": "updateUserStatusCore",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`updateUserStatus:${actor.userId}`",
+      "bucket": "updateUserStatus",
+      "identity": "user",
+      "limit": "20",
+      "windowSeconds": "60",
+      "riskClass": "high",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/admin/users/actions.ts",
+      "line": 335,
+      "function": "updateStudentAcademicStatusCore",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`updateStudentAcademicStatus:${actor.userId}`",
+      "bucket": "updateStudentAcademicStatus",
+      "identity": "user",
+      "limit": "20",
+      "windowSeconds": "60",
+      "riskClass": "high",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/admin/users/actions.ts",
+      "line": 405,
+      "function": "revokeUserSession",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`revokeSession:${actor.userId}`",
+      "bucket": "revokeSession",
+      "identity": "user",
+      "limit": "30",
+      "windowSeconds": "60",
+      "riskClass": "protected",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/director/attention/actions.ts",
+      "line": 209,
+      "function": "createManualRiskFlag",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`createManualRiskFlag:${actor.userId}`",
+      "bucket": "createManualRiskFlag",
+      "identity": "user",
+      "limit": "20",
+      "windowSeconds": "3600",
+      "riskClass": "protected",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/director/dashboard/actions.ts",
+      "line": 120,
+      "function": "sendAnnouncement",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`sendAnnouncement:${actor.userId}`",
+      "bucket": "sendAnnouncement",
+      "identity": "user",
+      "limit": "10",
+      "windowSeconds": "3600",
+      "riskClass": "protected",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/director/dashboard/actions.ts",
+      "line": 128,
+      "function": "sendAnnouncementViaRequest",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`sendAnnouncement:${actor.userId}`",
+      "bucket": "sendAnnouncement",
+      "identity": "user",
+      "limit": "10",
+      "windowSeconds": "3600",
+      "riskClass": "protected",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/director/decisions/actions.ts",
+      "line": 124,
+      "function": "submitDecision",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`submitDecision:${actor.userId}`",
+      "bucket": "submitDecision",
+      "identity": "user",
+      "limit": "10",
+      "windowSeconds": "3600",
+      "riskClass": "protected",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/director/decisions/actions.ts",
+      "line": 282,
+      "function": "decideOnDecision",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`decideOnDecision:${actor.userId}`",
+      "bucket": "decideOnDecision",
+      "identity": "user",
+      "limit": "30",
+      "windowSeconds": "3600",
+      "riskClass": "protected",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/director/departments/actions.ts",
+      "line": 35,
+      "function": "assignHodCore",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`assignHod:${actor.userId}`",
+      "bucket": "assignHod",
+      "identity": "user",
+      "limit": "20",
+      "windowSeconds": "60",
+      "riskClass": "high",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/director/forecast/actions.ts",
+      "line": 109,
+      "function": "saveForecastScenario",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`saveForecastScenario:${actor.userId}`",
+      "bucket": "saveForecastScenario",
+      "identity": "user",
+      "limit": "20",
+      "windowSeconds": "3600",
+      "riskClass": "protected",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/director/goals/actions.ts",
+      "line": 115,
+      "function": "createGoal",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`createGoal:${actor.userId}`",
+      "bucket": "createGoal",
+      "identity": "user",
+      "limit": "20",
+      "windowSeconds": "3600",
+      "riskClass": "protected",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/director/placement-cell/actions.ts",
+      "line": 69,
+      "function": "promoteToPlacementCellCore",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`promoteToPlacementCell:${actor.userId}`",
+      "bucket": "promoteToPlacementCell",
+      "identity": "user",
+      "limit": "20",
+      "windowSeconds": "60",
+      "riskClass": "high",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/director/placement-cell/actions.ts",
+      "line": 168,
+      "function": "revokePlacementCellCore",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`revokePlacementCell:${actor.userId}`",
+      "bucket": "revokePlacementCell",
+      "identity": "user",
+      "limit": "20",
+      "windowSeconds": "60",
+      "riskClass": "high",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/director/placement-cell/actions.ts",
+      "line": 202,
+      "function": "reactivatePlacementCell",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`reactivatePlacementCell:${actor.userId}`",
+      "bucket": "reactivatePlacementCell",
+      "identity": "user",
+      "limit": "20",
+      "windowSeconds": "60",
+      "riskClass": "high",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/director/placements/actions.ts",
+      "line": 79,
+      "function": "createPlacementCore",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`createPlacement:${actor.userId}`",
+      "bucket": "createPlacement",
+      "identity": "user",
+      "limit": "20",
+      "windowSeconds": "60",
+      "riskClass": "protected",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/director/security/actions.ts",
+      "line": 157,
+      "function": "authorizeSecurityPersonnel",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`authorizeSecurity:${actor.userId}`",
+      "bucket": "authorizeSecurity",
+      "identity": "user",
+      "limit": "20",
+      "windowSeconds": "60",
+      "riskClass": "high",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/director/security/actions.ts",
+      "line": 220,
+      "function": "setSecurityPersonnelStatus",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`securityStatus:${actor.userId}`",
+      "bucket": "securityStatus",
+      "identity": "user",
+      "limit": "30",
+      "windowSeconds": "60",
+      "riskClass": "high",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/director/security/actions.ts",
+      "line": 369,
+      "function": "assignGate",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`assignGate:${actor.userId}`",
+      "bucket": "assignGate",
+      "identity": "user",
+      "limit": "40",
+      "windowSeconds": "60",
+      "riskClass": "high",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/director/security/actions.ts",
+      "line": 460,
+      "function": "sendSecurityInstruction",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`securityInstruction:${actor.userId}`",
+      "bucket": "securityInstruction",
+      "identity": "user",
+      "limit": "20",
+      "windowSeconds": "60",
+      "riskClass": "high",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/finance/disputes/actions.ts",
+      "line": 90,
+      "function": "finalizeDispute",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`finalizeDispute:${actor.userId}`",
+      "bucket": "finalizeDispute",
+      "identity": "user",
+      "limit": "30",
+      "windowSeconds": "60",
+      "riskClass": "high",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/finance/integrations/actions.ts",
+      "line": 263,
+      "function": "createConnection",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`financeConnection:${actor.userId}`",
+      "bucket": "financeConnection",
+      "identity": "user",
+      "limit": "10",
+      "windowSeconds": "60",
+      "riskClass": "high",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/finance/integrations/actions.ts",
+      "line": 322,
+      "function": "setCredential",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`financeCredential:${actor.userId}`",
+      "bucket": "financeCredential",
+      "identity": "user",
+      "limit": "10",
+      "windowSeconds": "60",
+      "riskClass": "high",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/finance/integrations/actions.ts",
+      "line": 359,
+      "function": "verifyConnection",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`financeVerify:${actor.userId}`",
+      "bucket": "financeVerify",
+      "identity": "user",
+      "limit": "20",
+      "windowSeconds": "60",
+      "riskClass": "high",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/finance/integrations/actions.ts",
+      "line": 536,
+      "function": "upsertMapping",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`financeMapping:${actor.userId}`",
+      "bucket": "financeMapping",
+      "identity": "user",
+      "limit": "60",
+      "windowSeconds": "60",
+      "riskClass": "high",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/finance/integrations/actions.ts",
+      "line": 612,
+      "function": "syncNow",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`financeSyncNow:${actor.userId}`",
+      "bucket": "financeSyncNow",
+      "identity": "user",
+      "limit": "10",
+      "windowSeconds": "60",
+      "riskClass": "high",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/finance/integrations/actions.ts",
+      "line": 734,
+      "function": "runReconciliation",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`financeReconcile:${actor.userId}`",
+      "bucket": "financeReconcile",
+      "identity": "user",
+      "limit": "10",
+      "windowSeconds": "60",
+      "riskClass": "high",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/finance/invoices/actions.ts",
+      "line": 75,
+      "function": "createInvoiceCore",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`createInvoice:${actor.userId}`",
+      "bucket": "createInvoice",
+      "identity": "user",
+      "limit": "20",
+      "windowSeconds": "60",
+      "riskClass": "high",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/finance/refunds/actions.ts",
+      "line": 48,
+      "function": "rejectRefund",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`rejectRefund:${actor.userId}`",
+      "bucket": "rejectRefund",
+      "identity": "user",
+      "limit": "30",
+      "windowSeconds": "60",
+      "riskClass": "high",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/finance/refunds/actions.ts",
+      "line": 129,
+      "function": "approveRefund",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`approveRefund:${actor.userId}`",
+      "bucket": "approveRefund",
+      "identity": "user",
+      "limit": "30",
+      "windowSeconds": "60",
+      "riskClass": "high",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/finance/scholarships/actions.ts",
+      "line": 75,
+      "function": "createScholarshipCore",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`createScholarship:${actor.userId}`",
+      "bucket": "createScholarship",
+      "identity": "user",
+      "limit": "15",
+      "windowSeconds": "60",
+      "riskClass": "high",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/finance/transactions/actions.ts",
+      "line": 118,
+      "function": "recordPaymentCore",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`recordPayment:${actor.userId}`",
+      "bucket": "recordPayment",
+      "identity": "user",
+      "limit": "15",
+      "windowSeconds": "60",
+      "riskClass": "high",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/hod/academics/actions.ts",
+      "line": 163,
+      "function": "startDepartmentTerm",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`startDepartmentTerm:${actor.userId}`",
+      "bucket": "startDepartmentTerm",
+      "identity": "user",
+      "limit": "10",
+      "windowSeconds": "60",
+      "riskClass": "protected",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/hod/academics/actions.ts",
+      "line": 172,
+      "function": "endDepartmentTerm",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`endDepartmentTerm:${actor.userId}`",
+      "bucket": "endDepartmentTerm",
+      "identity": "user",
+      "limit": "10",
+      "windowSeconds": "60",
+      "riskClass": "protected",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/hod/academics/actions.ts",
+      "line": 181,
+      "function": "assignClassIncharge",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`assignClassIncharge:${actor.userId}`",
+      "bucket": "assignClassIncharge",
+      "identity": "user",
+      "limit": "30",
+      "windowSeconds": "60",
+      "riskClass": "protected",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/hod/academics/actions.ts",
+      "line": 228,
+      "function": "createProgramme",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`academicStructure:${actor.userId}`",
+      "bucket": "academicStructure",
+      "identity": "user",
+      "limit": "30",
+      "windowSeconds": "60",
+      "riskClass": "protected",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/hod/academics/actions.ts",
+      "line": 247,
+      "function": "updateProgramme",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`academicStructure:${actor.userId}`",
+      "bucket": "academicStructure",
+      "identity": "user",
+      "limit": "30",
+      "windowSeconds": "60",
+      "riskClass": "protected",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/hod/academics/actions.ts",
+      "line": 275,
+      "function": "createSection",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`academicStructure:${actor.userId}`",
+      "bucket": "academicStructure",
+      "identity": "user",
+      "limit": "30",
+      "windowSeconds": "60",
+      "riskClass": "protected",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/hod/academics/actions.ts",
+      "line": 291,
+      "function": "setSectionStatus",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`academicStructure:${actor.userId}`",
+      "bucket": "academicStructure",
+      "identity": "user",
+      "limit": "30",
+      "windowSeconds": "60",
+      "riskClass": "protected",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/hod/academics/actions.ts",
+      "line": 406,
+      "function": "createOffering",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`offering:${actor.userId}`",
+      "bucket": "offering",
+      "identity": "user",
+      "limit": "60",
+      "windowSeconds": "60",
+      "riskClass": "protected",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/hod/academics/actions.ts",
+      "line": 424,
+      "function": "setOfferingInstructor",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`offering:${actor.userId}`",
+      "bucket": "offering",
+      "identity": "user",
+      "limit": "60",
+      "windowSeconds": "60",
+      "riskClass": "protected",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/hod/academics/actions.ts",
+      "line": 438,
+      "function": "grantExternalTeaching",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`externalTeaching:${actor.userId}`",
+      "bucket": "externalTeaching",
+      "identity": "user",
+      "limit": "20",
+      "windowSeconds": "60",
+      "riskClass": "protected",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/hod/academics/actions.ts",
+      "line": 447,
+      "function": "revokeExternalTeaching",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`externalTeaching:${actor.userId}`",
+      "bucket": "externalTeaching",
+      "identity": "user",
+      "limit": "20",
+      "windowSeconds": "60",
+      "riskClass": "protected",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/hod/academics/actions.ts",
+      "line": 516,
+      "function": "createTimetableSlot",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`timetable:${actor.userId}`",
+      "bucket": "timetable",
+      "identity": "user",
+      "limit": "60",
+      "windowSeconds": "60",
+      "riskClass": "protected",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/hod/academics/actions.ts",
+      "line": 527,
+      "function": "deleteTimetableSlot",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`timetable:${actor.userId}`",
+      "bucket": "timetable",
+      "identity": "user",
+      "limit": "60",
+      "windowSeconds": "60",
+      "riskClass": "protected",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/hod/academics/actions.ts",
+      "line": 558,
+      "function": "placeStudentInSection",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`placeStudent:${actor.userId}`",
+      "bucket": "placeStudent",
+      "identity": "user",
+      "limit": "60",
+      "windowSeconds": "60",
+      "riskClass": "protected",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/hod/approvals/actions.ts",
+      "line": 235,
+      "function": "actOnLeaveRequestCore",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`actOnLeaveRequest:${actor.userId}`",
+      "bucket": "actOnLeaveRequest",
+      "identity": "user",
+      "limit": "30",
+      "windowSeconds": "60",
+      "riskClass": "high",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/hod/approvals/actions.ts",
+      "line": 448,
+      "function": "actOnAttendanceCorrectionCore",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`actOnAttendanceCorrection:${actor.userId}`",
+      "bucket": "actOnAttendanceCorrection",
+      "identity": "user",
+      "limit": "30",
+      "windowSeconds": "60",
+      "riskClass": "high",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/hod/substitutions/actions.ts",
+      "line": 112,
+      "function": "assignSubstitute",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`assignSubstitute:${actor.userId}`",
+      "bucket": "assignSubstitute",
+      "identity": "user",
+      "limit": "30",
+      "windowSeconds": "60",
+      "riskClass": "protected",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/placement-cell/companies/actions.ts",
+      "line": 66,
+      "function": "createCompanyCore",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`createCompany:${actor.userId}`",
+      "bucket": "createCompany",
+      "identity": "user",
+      "limit": "20",
+      "windowSeconds": "60",
+      "riskClass": "protected",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/placement-cell/companies/actions.ts",
+      "line": 111,
+      "function": "updateCompany",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`updateCompany:${actor.userId}`",
+      "bucket": "updateCompany",
+      "identity": "user",
+      "limit": "20",
+      "windowSeconds": "60",
+      "riskClass": "protected",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/placement-cell/drives/actions.ts",
+      "line": 161,
+      "function": "createDriveCore",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`createDrive:${actor.userId}`",
+      "bucket": "createDrive",
+      "identity": "user",
+      "limit": "20",
+      "windowSeconds": "60",
+      "riskClass": "protected",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/placement-cell/drives/actions.ts",
+      "line": 207,
+      "function": "updateDrive",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`updateDrive:${actor.userId}`",
+      "bucket": "updateDrive",
+      "identity": "user",
+      "limit": "20",
+      "windowSeconds": "60",
+      "riskClass": "protected",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/placement-cell/drives/actions.ts",
+      "line": 250,
+      "function": "setDriveStatus",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`setDriveStatus:${actor.userId}`",
+      "bucket": "setDriveStatus",
+      "identity": "user",
+      "limit": "20",
+      "windowSeconds": "60",
+      "riskClass": "protected",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/placement-cell/drives/actions.ts",
+      "line": 310,
+      "function": "updateApplicationStatus",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`updateApplicationStatus:${actor.userId}`",
+      "bucket": "updateApplicationStatus",
+      "identity": "user",
+      "limit": "30",
+      "windowSeconds": "60",
+      "riskClass": "protected",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/placement-cell/notifications/actions.ts",
+      "line": 143,
+      "function": "sendPlacementNotificationCore",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`sendPlacementNotification:${actor.userId}`",
+      "bucket": "sendPlacementNotification",
+      "identity": "user",
+      "limit": "10",
+      "windowSeconds": "3600",
+      "riskClass": "protected",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/placement-cell/records/actions.ts",
+      "line": 117,
+      "function": "updateStudentPlacementStatus",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`updateStudentPlacementStatus:${actor.userId}`",
+      "bucket": "updateStudentPlacementStatus",
+      "identity": "user",
+      "limit": "30",
+      "windowSeconds": "60",
+      "riskClass": "protected",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/security/actions.ts",
+      "line": 132,
+      "function": "scanGatePassCore",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`gateScan:${actor.userId}`",
+      "bucket": "gateScan",
+      "identity": "user",
+      "limit": "120",
+      "windowSeconds": "60",
+      "riskClass": "low",
+      "failurePolicy": "fail open (logged)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/security/actions.ts",
+      "line": 347,
+      "function": "securityScanFeed",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`gateFeed:${actor.userId}`",
+      "bucket": "gateFeed",
+      "identity": "user",
+      "limit": "120",
+      "windowSeconds": "60",
+      "riskClass": "low",
+      "failurePolicy": "fail open (logged)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/student/complaints/actions.ts",
+      "line": 44,
+      "function": "submitComplaintCore",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`submitComplaint:${actor.userId}`",
+      "bucket": "submitComplaint",
+      "identity": "user",
+      "limit": "5",
+      "windowSeconds": "60",
+      "riskClass": "low",
+      "failurePolicy": "fail open (logged)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/student/fees/actions.ts",
+      "line": 32,
+      "function": "requestRefund",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`requestRefund:${actor.userId}`",
+      "bucket": "requestRefund",
+      "identity": "user",
+      "limit": "10",
+      "windowSeconds": "3600",
+      "riskClass": "high",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/student/fees/actions.ts",
+      "line": 110,
+      "function": "submitDispute",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`submitDispute:${actor.userId}`",
+      "bucket": "submitDispute",
+      "identity": "user",
+      "limit": "10",
+      "windowSeconds": "3600",
+      "riskClass": "high",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/student/gatepass/actions.ts",
+      "line": 41,
+      "function": "applyForGatePassCore",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`applyForGatePass:${actor.userId}`",
+      "bucket": "applyForGatePass",
+      "identity": "user",
+      "limit": "5",
+      "windowSeconds": "60",
+      "riskClass": "low",
+      "failurePolicy": "fail open (logged)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/student/gatepass/actions.ts",
+      "line": 133,
+      "function": "getGatePassCredential",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`gatePassCredential:${actor.userId}`",
+      "bucket": "gatePassCredential",
+      "identity": "user",
+      "limit": "60",
+      "windowSeconds": "60",
+      "riskClass": "low",
+      "failurePolicy": "fail open (logged)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/student/hostel/actions.ts",
+      "line": 19,
+      "function": "requestRoomTransfer",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`requestRoomTransfer:${actor.userId}`",
+      "bucket": "requestRoomTransfer",
+      "identity": "user",
+      "limit": "5",
+      "windowSeconds": "3600",
+      "riskClass": "low",
+      "failurePolicy": "fail open (logged)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/student/placements/actions.ts",
+      "line": 88,
+      "function": "applyToDrive",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`applyToDrive:${actor.userId}`",
+      "bucket": "applyToDrive",
+      "identity": "user",
+      "limit": "20",
+      "windowSeconds": "60",
+      "riskClass": "low",
+      "failurePolicy": "fail open (logged)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/super-admin/colleges/actions.ts",
+      "line": 85,
+      "function": "createCollegeCore",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`createCollege:${actor.userId}`",
+      "bucket": "createCollege",
+      "identity": "user",
+      "limit": "5",
+      "windowSeconds": "60",
+      "riskClass": "high",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/super-admin/colleges/actions.ts",
+      "line": 179,
+      "function": "setCollegeLifecycle",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`collegeLifecycle:${actor.userId}`",
+      "bucket": "collegeLifecycle",
+      "identity": "user",
+      "limit": "20",
+      "windowSeconds": "60",
+      "riskClass": "protected",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/super-admin/dashboard/actions.ts",
+      "line": 47,
+      "function": "setSessionEnforcement",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`sessionEnforcement:${actor.userId}`",
+      "bucket": "sessionEnforcement",
+      "identity": "user",
+      "limit": "5",
+      "windowSeconds": "60",
+      "riskClass": "protected",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/teacher/attendance/actions.ts",
+      "line": 56,
+      "function": "saveAttendanceCore",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`saveAttendance:${actor.userId}`",
+      "bucket": "saveAttendance",
+      "identity": "user",
+      "limit": "30",
+      "windowSeconds": "60",
+      "riskClass": "low",
+      "failurePolicy": "fail open (logged)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/teacher/attendance/actions.ts",
+      "line": 152,
+      "function": "requestAttendanceCorrection",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`requestAttendanceCorrection:${actor.userId}`",
+      "bucket": "requestAttendanceCorrection",
+      "identity": "user",
+      "limit": "20",
+      "windowSeconds": "60",
+      "riskClass": "low",
+      "failurePolicy": "fail open (logged)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/teacher/grading/actions.ts",
+      "line": 58,
+      "function": "saveMarksCore",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`saveMarks:${actor.userId}`",
+      "bucket": "saveMarks",
+      "identity": "user",
+      "limit": "30",
+      "windowSeconds": "60",
+      "riskClass": "low",
+      "failurePolicy": "fail open (logged)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/teacher/leave/actions.ts",
+      "line": 42,
+      "function": "applyForLeaveCore",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`applyForLeave:${actor.userId}`",
+      "bucket": "applyForLeave",
+      "identity": "user",
+      "limit": "10",
+      "windowSeconds": "60",
+      "riskClass": "low",
+      "failurePolicy": "fail open (logged)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/warden/complaints/actions.ts",
+      "line": 99,
+      "function": "updateComplaintStatusCore",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`updateComplaintStatus:${actor.userId}`",
+      "bucket": "updateComplaintStatus",
+      "identity": "user",
+      "limit": "30",
+      "windowSeconds": "60",
+      "riskClass": "protected",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/warden/gatepasses/actions.ts",
+      "line": 165,
+      "function": "actOnGatePassCore",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`actOnGatePass:${actor.userId}`",
+      "bucket": "actOnGatePass",
+      "identity": "user",
+      "limit": "30",
+      "windowSeconds": "60",
+      "riskClass": "high",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/warden/gatepasses/actions.ts",
+      "line": 294,
+      "function": "recordManualGateMovementCore",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`manualGateMovement:${actor.userId}`",
+      "bucket": "manualGateMovement",
+      "identity": "user",
+      "limit": "30",
+      "windowSeconds": "60",
+      "riskClass": "high",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/warden/gatepasses/actions.ts",
+      "line": 381,
+      "function": "revokeGatePassCredential",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`revokeGateCredential:${actor.userId}`",
+      "bucket": "revokeGateCredential",
+      "identity": "user",
+      "limit": "30",
+      "windowSeconds": "60",
+      "riskClass": "high",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/warden/transfers/actions.ts",
+      "line": 107,
+      "function": "rejectRoomTransfer",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`rejectRoomTransfer:${actor.userId}`",
+      "bucket": "rejectRoomTransfer",
+      "identity": "user",
+      "limit": "30",
+      "windowSeconds": "60",
+      "riskClass": "high",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/(portal)/warden/transfers/actions.ts",
+      "line": 171,
+      "function": "approveRoomTransfer",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`approveRoomTransfer:${actor.userId}`",
+      "bucket": "approveRoomTransfer",
+      "identity": "user",
+      "limit": "30",
+      "windowSeconds": "60",
+      "riskClass": "high",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "app/api/finance/reconciliation/run/route.ts",
+      "line": 32,
+      "function": "POST",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`financeReconcileApi:${actor.userId}`",
+      "bucket": "financeReconcileApi",
+      "identity": "user",
+      "limit": "10",
+      "windowSeconds": "60",
+      "riskClass": "high",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "lib/invitations.ts",
+      "line": 118,
+      "function": "createInvitationCore",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`inviteUser:${actor.userId}`",
+      "bucket": "inviteUser",
+      "identity": "user",
+      "limit": "20",
+      "windowSeconds": "60",
+      "riskClass": "high",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "lib/invitations.ts",
+      "line": 295,
+      "function": "resendInvitationCore",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`resendInvitation:${actor.userId}`",
+      "bucket": "resendInvitation",
+      "identity": "user",
+      "limit": "10",
+      "windowSeconds": "60",
+      "riskClass": "high",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "lib/student-invitations.ts",
+      "line": 63,
+      "function": "inviteStudentCore",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "`inviteStudent:${actor.userId}`",
+      "bucket": "inviteStudent",
+      "identity": "user",
+      "limit": "20",
+      "windowSeconds": "60",
+      "riskClass": "protected",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    },
+    {
+      "file": "lib/supabase/middleware.ts",
+      "line": 308,
+      "function": "limitedResponse",
+      "category": "B. rate limiting",
+      "operations": [
+        "EVALSHA sliding-window script (EVAL once on NOSCRIPT)"
+      ],
+      "dataStructure": "2 strings (current + previous window counters)",
+      "keyExpression": "key",
+      "bucket": "key",
+      "identity": "other",
+      "limit": "limit",
+      "windowSeconds": "WINDOW_SECONDS",
+      "riskClass": "see policy table",
+      "failurePolicy": "fail closed (503)",
+      "ttl": "library-managed: window x 2 + 1 s",
+      "consistency": "atomic per key (one Lua script)"
+    }
+  ],
+  "invalidations": [
+    {
+      "file": "app/(portal)/admin/courses/actions.ts",
+      "line": 126,
+      "function": "createCourse",
+      "category": "A. cache invalidation",
+      "operations": [
+        "INCR + EXPIRE 86400 (one pipeline)"
+      ],
+      "target": "COURSES_CACHE_PREFIX, actor.collegeId",
+      "failurePolicy": "fail open: a failed invalidation leaves the entry until its TTL"
+    },
+    {
+      "file": "app/(portal)/admin/users/actions.ts",
+      "line": 178,
+      "function": "updateUserProfileCore",
+      "category": "A. cache invalidation",
+      "operations": [
+        "DEL"
+      ],
+      "target": "middlewareProfileCacheKey(targetUserId), MIDDLEWARE_PROFILE_CACHE",
+      "failurePolicy": "fail open: a failed invalidation leaves the entry until its TTL"
+    },
+    {
+      "file": "app/(portal)/admin/users/actions.ts",
+      "line": 195,
+      "function": "updateUserProfile",
+      "category": "A. cache invalidation",
+      "operations": [
+        "INCR + EXPIRE 86400 (one pipeline)"
+      ],
+      "target": "USERS_CACHE_FAMILY, actor.collegeId",
+      "failurePolicy": "fail open: a failed invalidation leaves the entry until its TTL"
+    },
+    {
+      "file": "app/(portal)/admin/users/actions.ts",
+      "line": 240,
+      "function": "updateUserStatusCore",
+      "category": "A. cache invalidation",
+      "operations": [
+        "DEL"
+      ],
+      "target": "middlewareProfileCacheKey(targetUserId), MIDDLEWARE_PROFILE_CACHE",
+      "failurePolicy": "fail open: a failed invalidation leaves the entry until its TTL"
+    },
+    {
+      "file": "app/(portal)/admin/users/actions.ts",
+      "line": 250,
+      "function": "updateUserStatus",
+      "category": "A. cache invalidation",
+      "operations": [
+        "INCR + EXPIRE 86400 (one pipeline)"
+      ],
+      "target": "USERS_CACHE_FAMILY, actor.collegeId",
+      "failurePolicy": "fail open: a failed invalidation leaves the entry until its TTL"
+    },
+    {
+      "file": "app/(portal)/admin/users/actions.ts",
+      "line": 360,
+      "function": "updateStudentAcademicStatusCore",
+      "category": "A. cache invalidation",
+      "operations": [
+        "DEL"
+      ],
+      "target": "middlewareProfileCacheKey(targetUserId), MIDDLEWARE_PROFILE_CACHE",
+      "failurePolicy": "fail open: a failed invalidation leaves the entry until its TTL"
+    },
+    {
+      "file": "app/(portal)/admin/users/actions.ts",
+      "line": 376,
+      "function": "updateStudentAcademicStatus",
+      "category": "A. cache invalidation",
+      "operations": [
+        "INCR + EXPIRE 86400 (one pipeline)"
+      ],
+      "target": "USERS_CACHE_FAMILY, actor.collegeId",
+      "failurePolicy": "fail open: a failed invalidation leaves the entry until its TTL"
+    },
+    {
+      "file": "app/(portal)/director/attention/actions.ts",
+      "line": 237,
+      "function": "createManualRiskFlag",
+      "category": "A. cache invalidation",
+      "operations": [
+        "INCR + EXPIRE 86400 (one pipeline)"
+      ],
+      "target": "ATTENTION_CACHE_FAMILY, actor.collegeId",
+      "failurePolicy": "fail open: a failed invalidation leaves the entry until its TTL"
+    },
+    {
+      "file": "app/(portal)/director/attention/actions.ts",
+      "line": 297,
+      "function": "assignRiskFlag",
+      "category": "A. cache invalidation",
+      "operations": [
+        "INCR + EXPIRE 86400 (one pipeline)"
+      ],
+      "target": "ATTENTION_CACHE_FAMILY, actor.collegeId",
+      "failurePolicy": "fail open: a failed invalidation leaves the entry until its TTL"
+    },
+    {
+      "file": "app/(portal)/director/attention/actions.ts",
+      "line": 384,
+      "function": "actOnRiskFlag",
+      "category": "A. cache invalidation",
+      "operations": [
+        "INCR + EXPIRE 86400 (one pipeline)"
+      ],
+      "target": "ATTENTION_CACHE_FAMILY, actor.collegeId",
+      "failurePolicy": "fail open: a failed invalidation leaves the entry until its TTL"
+    },
+    {
+      "file": "app/(portal)/director/attention/actions.ts",
+      "line": 461,
+      "function": "reviewRiskFlag",
+      "category": "A. cache invalidation",
+      "operations": [
+        "INCR + EXPIRE 86400 (one pipeline)"
+      ],
+      "target": "ATTENTION_CACHE_FAMILY, actor.collegeId",
+      "failurePolicy": "fail open: a failed invalidation leaves the entry until its TTL"
+    },
+    {
+      "file": "app/(portal)/director/decisions/actions.ts",
+      "line": 127,
+      "function": "submitDecision",
+      "category": "A. cache invalidation",
+      "operations": [
+        "INCR + EXPIRE 86400 (one pipeline)"
+      ],
+      "target": "DECISIONS_CACHE_FAMILY, actor.collegeId",
+      "failurePolicy": "fail open: a failed invalidation leaves the entry until its TTL"
+    },
+    {
+      "file": "app/(portal)/director/decisions/actions.ts",
+      "line": 285,
+      "function": "decideOnDecision",
+      "category": "A. cache invalidation",
+      "operations": [
+        "INCR + EXPIRE 86400 (one pipeline)"
+      ],
+      "target": "DECISIONS_CACHE_FAMILY, actor.collegeId",
+      "failurePolicy": "fail open: a failed invalidation leaves the entry until its TTL"
+    },
+    {
+      "file": "app/(portal)/director/placement-cell/actions.ts",
+      "line": 112,
+      "function": "promoteToPlacementCellCore",
+      "category": "A. cache invalidation",
+      "operations": [
+        "DEL"
+      ],
+      "target": "middlewareProfileCacheKey(userId), MIDDLEWARE_PROFILE_CACHE",
+      "failurePolicy": "fail open: a failed invalidation leaves the entry until its TTL"
+    },
+    {
+      "file": "app/(portal)/director/placement-cell/actions.ts",
+      "line": 186,
+      "function": "revokePlacementCellCore",
+      "category": "A. cache invalidation",
+      "operations": [
+        "DEL"
+      ],
+      "target": "middlewareProfileCacheKey(userId), MIDDLEWARE_PROFILE_CACHE",
+      "failurePolicy": "fail open: a failed invalidation leaves the entry until its TTL"
+    },
+    {
+      "file": "app/(portal)/director/placement-cell/actions.ts",
+      "line": 219,
+      "function": "reactivatePlacementCell",
+      "category": "A. cache invalidation",
+      "operations": [
+        "DEL"
+      ],
+      "target": "middlewareProfileCacheKey(validatedId), MIDDLEWARE_PROFILE_CACHE",
+      "failurePolicy": "fail open: a failed invalidation leaves the entry until its TTL"
+    },
+    {
+      "file": "app/(portal)/director/placements/actions.ts",
+      "line": 120,
+      "function": "createPlacement",
+      "category": "A. cache invalidation",
+      "operations": [
+        "INCR + EXPIRE 86400 (one pipeline)"
+      ],
+      "target": "PLACEMENTS_CACHE_PREFIX, actor.collegeId",
+      "failurePolicy": "fail open: a failed invalidation leaves the entry until its TTL"
+    },
+    {
+      "file": "app/(portal)/finance/disputes/actions.ts",
+      "line": 78,
+      "function": "claimDispute",
+      "category": "A. cache invalidation",
+      "operations": [
+        "INCR + EXPIRE 86400 (one pipeline)"
+      ],
+      "target": "DISPUTES_CACHE_FAMILY, actor.collegeId",
+      "failurePolicy": "fail open: a failed invalidation leaves the entry until its TTL"
+    },
+    {
+      "file": "app/(portal)/finance/disputes/actions.ts",
+      "line": 125,
+      "function": "finalizeDispute",
+      "category": "A. cache invalidation",
+      "operations": [
+        "INCR + EXPIRE 86400 (one pipeline)"
+      ],
+      "target": "DISPUTES_CACHE_FAMILY, actor.collegeId",
+      "failurePolicy": "fail open: a failed invalidation leaves the entry until its TTL"
+    },
+    {
+      "file": "app/(portal)/finance/invoices/actions.ts",
+      "line": 121,
+      "function": "createInvoice",
+      "category": "A. cache invalidation",
+      "operations": [
+        "INCR + EXPIRE 86400 (one pipeline)"
+      ],
+      "target": "FEES_CACHE_PREFIX, actor.collegeId",
+      "failurePolicy": "fail open: a failed invalidation leaves the entry until its TTL"
+    },
+    {
+      "file": "app/(portal)/finance/refunds/actions.ts",
+      "line": 89,
+      "function": "rejectRefund",
+      "category": "A. cache invalidation",
+      "operations": [
+        "INCR + EXPIRE 86400 (one pipeline)"
+      ],
+      "target": "REFUNDS_CACHE_FAMILY, actor.collegeId",
+      "failurePolicy": "fail open: a failed invalidation leaves the entry until its TTL"
+    },
+    {
+      "file": "app/(portal)/finance/refunds/actions.ts",
+      "line": 168,
+      "function": "approveRefund",
+      "category": "A. cache invalidation",
+      "operations": [
+        "INCR + EXPIRE 86400 (one pipeline)"
+      ],
+      "target": "REFUNDS_CACHE_FAMILY, actor.collegeId",
+      "failurePolicy": "fail open: a failed invalidation leaves the entry until its TTL"
+    },
+    {
+      "file": "app/(portal)/finance/scholarships/actions.ts",
+      "line": 121,
+      "function": "createScholarship",
+      "category": "A. cache invalidation",
+      "operations": [
+        "INCR + EXPIRE 86400 (one pipeline)"
+      ],
+      "target": "SCHOLARSHIPS_CACHE_PREFIX, actor.collegeId",
+      "failurePolicy": "fail open: a failed invalidation leaves the entry until its TTL"
+    },
+    {
+      "file": "app/(portal)/finance/transactions/actions.ts",
+      "line": 178,
+      "function": "recordPayment",
+      "category": "A. cache invalidation",
+      "operations": [
+        "INCR + EXPIRE 86400 (one pipeline)"
+      ],
+      "target": "FEE_STATS_FAMILY, actor.collegeId",
+      "failurePolicy": "fail open: a failed invalidation leaves the entry until its TTL"
+    },
+    {
+      "file": "app/(portal)/finance/transactions/actions.ts",
+      "line": 179,
+      "function": "recordPayment",
+      "category": "A. cache invalidation",
+      "operations": [
+        "INCR + EXPIRE 86400 (one pipeline)"
+      ],
+      "target": "FEES_CACHE_PREFIX, actor.collegeId",
+      "failurePolicy": "fail open: a failed invalidation leaves the entry until its TTL"
+    },
+    {
+      "file": "app/(portal)/finance/transactions/actions.ts",
+      "line": 180,
+      "function": "recordPayment",
+      "category": "A. cache invalidation",
+      "operations": [
+        "INCR + EXPIRE 86400 (one pipeline)"
+      ],
+      "target": "PAYMENTS_CACHE_PREFIX, actor.collegeId",
+      "failurePolicy": "fail open: a failed invalidation leaves the entry until its TTL"
+    },
+    {
+      "file": "app/(portal)/hod/approvals/actions.ts",
+      "line": 365,
+      "function": "actOnLeaveRequest",
+      "category": "A. cache invalidation",
+      "operations": [
+        "INCR + EXPIRE 86400 (one pipeline)"
+      ],
+      "target": "HOD_APPROVALS_FAMILY, actor.collegeId",
+      "failurePolicy": "fail open: a failed invalidation leaves the entry until its TTL"
+    },
+    {
+      "file": "app/(portal)/hod/approvals/actions.ts",
+      "line": 522,
+      "function": "actOnAttendanceCorrection",
+      "category": "A. cache invalidation",
+      "operations": [
+        "INCR + EXPIRE 86400 (one pipeline)"
+      ],
+      "target": "HOD_CORRECTIONS_FAMILY, actor.collegeId",
+      "failurePolicy": "fail open: a failed invalidation leaves the entry until its TTL"
+    },
+    {
+      "file": "app/(portal)/hod/substitutions/actions.ts",
+      "line": 181,
+      "function": "assignSubstitute",
+      "category": "A. cache invalidation",
+      "operations": [
+        "INCR + EXPIRE 86400 (one pipeline)"
+      ],
+      "target": "SUBSTITUTIONS_FAMILY, actor.collegeId",
+      "failurePolicy": "fail open: a failed invalidation leaves the entry until its TTL"
+    },
+    {
+      "file": "app/(portal)/placement-cell/companies/actions.ts",
+      "line": 99,
+      "function": "createCompany",
+      "category": "A. cache invalidation",
+      "operations": [
+        "INCR + EXPIRE 86400 (one pipeline)"
+      ],
+      "target": "COMPANIES_CACHE_PREFIX, actor.collegeId",
+      "failurePolicy": "fail open: a failed invalidation leaves the entry until its TTL"
+    },
+    {
+      "file": "app/(portal)/placement-cell/companies/actions.ts",
+      "line": 144,
+      "function": "updateCompany",
+      "category": "A. cache invalidation",
+      "operations": [
+        "INCR + EXPIRE 86400 (one pipeline)"
+      ],
+      "target": "COMPANIES_CACHE_PREFIX, actor.collegeId",
+      "failurePolicy": "fail open: a failed invalidation leaves the entry until its TTL"
+    },
+    {
+      "file": "app/(portal)/placement-cell/drives/actions.ts",
+      "line": 197,
+      "function": "createDrive",
+      "category": "A. cache invalidation",
+      "operations": [
+        "INCR + EXPIRE 86400 (one pipeline)"
+      ],
+      "target": "DRIVES_CACHE_PREFIX, actor.collegeId",
+      "failurePolicy": "fail open: a failed invalidation leaves the entry until its TTL"
+    },
+    {
+      "file": "app/(portal)/placement-cell/drives/actions.ts",
+      "line": 238,
+      "function": "updateDrive",
+      "category": "A. cache invalidation",
+      "operations": [
+        "INCR + EXPIRE 86400 (one pipeline)"
+      ],
+      "target": "DRIVES_CACHE_PREFIX, actor.collegeId",
+      "failurePolicy": "fail open: a failed invalidation leaves the entry until its TTL"
+    },
+    {
+      "file": "app/(portal)/placement-cell/drives/actions.ts",
+      "line": 264,
+      "function": "setDriveStatus",
+      "category": "A. cache invalidation",
+      "operations": [
+        "INCR + EXPIRE 86400 (one pipeline)"
+      ],
+      "target": "DRIVES_CACHE_PREFIX, actor.collegeId",
+      "failurePolicy": "fail open: a failed invalidation leaves the entry until its TTL"
+    },
+    {
+      "file": "app/(portal)/placement-cell/records/actions.ts",
+      "line": 141,
+      "function": "updateStudentPlacementStatus",
+      "category": "A. cache invalidation",
+      "operations": [
+        "INCR + EXPIRE 86400 (one pipeline)"
+      ],
+      "target": "RECORDS_CACHE_PREFIX, actor.collegeId",
+      "failurePolicy": "fail open: a failed invalidation leaves the entry until its TTL"
+    },
+    {
+      "file": "app/(portal)/super-admin/colleges/actions.ts",
+      "line": 114,
+      "function": "createCollege",
+      "category": "A. cache invalidation",
+      "operations": [
+        "INCR + EXPIRE 86400 (one pipeline)"
+      ],
+      "target": "COLLEGES_CACHE_PREFIX, \"platform\"",
+      "failurePolicy": "fail open: a failed invalidation leaves the entry until its TTL"
+    },
+    {
+      "file": "app/(portal)/super-admin/colleges/actions.ts",
+      "line": 196,
+      "function": "setCollegeLifecycle",
+      "category": "A. cache invalidation",
+      "operations": [
+        "INCR + EXPIRE 86400 (one pipeline)"
+      ],
+      "target": "COLLEGES_CACHE_PREFIX, \"platform\"",
+      "failurePolicy": "fail open: a failed invalidation leaves the entry until its TTL"
+    },
+    {
+      "file": "app/(portal)/warden/complaints/actions.ts",
+      "line": 162,
+      "function": "updateComplaintStatus",
+      "category": "A. cache invalidation",
+      "operations": [
+        "INCR + EXPIRE 86400 (one pipeline)"
+      ],
+      "target": "COMPLAINTS_CACHE_PREFIX, actor.collegeId",
+      "failurePolicy": "fail open: a failed invalidation leaves the entry until its TTL"
+    },
+    {
+      "file": "app/(portal)/warden/gatepasses/actions.ts",
+      "line": 241,
+      "function": "actOnGatePass",
+      "category": "A. cache invalidation",
+      "operations": [
+        "INCR + EXPIRE 86400 (one pipeline)"
+      ],
+      "target": "GATEPASS_FAMILY, actor.collegeId",
+      "failurePolicy": "fail open: a failed invalidation leaves the entry until its TTL"
+    },
+    {
+      "file": "app/(portal)/warden/gatepasses/actions.ts",
+      "line": 356,
+      "function": "recordManualGateMovement",
+      "category": "A. cache invalidation",
+      "operations": [
+        "INCR + EXPIRE 86400 (one pipeline)"
+      ],
+      "target": "GATEPASS_FAMILY, actor.collegeId",
+      "failurePolicy": "fail open: a failed invalidation leaves the entry until its TTL"
+    },
+    {
+      "file": "app/(portal)/warden/transfers/actions.ts",
+      "line": 158,
+      "function": "rejectRoomTransfer",
+      "category": "A. cache invalidation",
+      "operations": [
+        "INCR + EXPIRE 86400 (one pipeline)"
+      ],
+      "target": "TRANSFERS_FAMILY, actor.collegeId",
+      "failurePolicy": "fail open: a failed invalidation leaves the entry until its TTL"
+    },
+    {
+      "file": "app/(portal)/warden/transfers/actions.ts",
+      "line": 292,
+      "function": "approveRoomTransfer",
+      "category": "A. cache invalidation",
+      "operations": [
+        "INCR + EXPIRE 86400 (one pipeline)"
+      ],
+      "target": "TRANSFERS_FAMILY, actor.collegeId",
+      "failurePolicy": "fail open: a failed invalidation leaves the entry until its TTL"
+    },
+    {
+      "file": "app/auth/accept-invite/actions.ts",
+      "line": 85,
+      "function": "acceptInvitation",
+      "category": "A. cache invalidation",
+      "operations": [
+        "DEL"
+      ],
+      "target": "middlewareProfileCacheKey(user.id), MIDDLEWARE_PROFILE_CACHE",
+      "failurePolicy": "fail open: a failed invalidation leaves the entry until its TTL"
+    },
+    {
+      "file": "app/auth/accept-invite/actions.ts",
+      "line": 100,
+      "function": "acceptInvitation",
+      "category": "A. cache invalidation",
+      "operations": [
+        "DEL"
+      ],
+      "target": "middlewareProfileCacheKey(user.id), MIDDLEWARE_PROFILE_CACHE",
+      "failurePolicy": "fail open: a failed invalidation leaves the entry until its TTL"
+    }
+  ],
+  "adjacent": [
+    {
+      "name": "QStash (Upstash scheduler)",
+      "category": "I. scheduled background work",
+      "where": "app/api/cron/*/route.ts",
+      "note": "signed HTTP callbacks; not Redis; at-least-once delivery"
+    },
+    {
+      "name": "Workers KV NEXT_CACHE_WORKERS_KV",
+      "category": "A. cache (OpenNext incremental cache)",
+      "where": "wrangler.jsonc",
+      "note": "Next data/ISR cache; not Redis"
+    },
+    {
+      "name": "pg_advisory_xact_lock in register_current_session",
+      "category": "C/H. lock + session coordination",
+      "where": "supabase/migrations/054_session_registry.sql",
+      "note": "device-limit race handled in PostgreSQL"
+    },
+    {
+      "name": "assertClaimed compare-and-swap",
+      "category": "D/E. idempotency + dedup",
+      "where": "lib/concurrent-claim.ts",
+      "note": "approval races handled in PostgreSQL"
+    }
+  ]
+}

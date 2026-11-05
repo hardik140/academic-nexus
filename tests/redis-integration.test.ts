@@ -295,3 +295,50 @@ describe("nothing sensitive reaches the log", () => {
     expect(logged).not.toMatch(/user-secret-id|college-secret-id|emulator-token|127\.0\.0\.1|WRONGPASS/);
   });
 });
+
+describe("metrics and stored values (lib/redis-metrics.ts)", () => {
+  it("records a stored size and a data point for every operation, with no key in any of them", async () => {
+    const m = await load();
+    const metrics = await import("@/lib/redis-metrics");
+    const points: { blobs?: string[]; doubles?: number[] }[] = [];
+    metrics.setRedisMetricsDataset({ writeDataPoint: (p) => void points.push(p) });
+    try {
+      const key = m.versionedKey("list:fees:college-a:0:due_date:desc:-", "list:fees", "college-a")!;
+      await m.getCached(key, 60, async () => ({ rows: [1, 2, 3] }), { route: "/finance/invoices" });
+      await m.getCached(key, 60, async () => ({ rows: [9] }), { route: "/finance/invoices" });
+      await m.checkRateLimit("recordPayment:user-a", 5, 60, { route: "/finance/transactions" });
+
+      const outcomes = points.map((p) => `${p.blobs![0]}/${p.blobs![2]}`);
+      expect(outcomes).toEqual([
+        "redis.command/ok", // MGET
+        "redis.cache/miss",
+        "redis.command/ok", // SET
+        "redis.cache/stored",
+        "redis.command/ok", // MGET
+        "redis.cache/hit",
+        "redis.command/ok", // EVALSHA
+        "redis.rate_limit/allowed",
+      ]);
+      const stored = points.find((p) => p.blobs![2] === "stored")!;
+      expect(stored.doubles![2]).toBe(JSON.stringify({ v: 0, d: { rows: [1, 2, 3] } }).length);
+      expect(points.every((p) => p.blobs![4] === "test")).toBe(true);
+      expect(points.filter((p) => p.blobs![0] !== "redis.rate_limit").every((p) => p.blobs![5] === "/finance/invoices" || p.blobs![1] === "ratelimit")).toBe(true);
+      const text = JSON.stringify(points);
+      expect(text).not.toContain("college-a");
+      expect(text).not.toContain("user-a");
+      expect(text).not.toContain("nexus:");
+    } finally {
+      metrics.setRedisMetricsDataset(undefined);
+    }
+  });
+
+  it("stores objects exactly as the client serialises them", async () => {
+    const m = await load();
+    const value = { a: 1, b: ["x", null], c: { d: true } };
+    await m.getCached("dashboard:director:college-a:shape", 60, async () => value);
+    const { keys } = await control("/__state");
+    const k = keys.find((x: string) => x.endsWith("dashboard:director:college-a:shape"));
+    const stored = await (await fetch(`http://127.0.0.1:${port}/`, { method: "POST", body: JSON.stringify(["GET", k]) })).json();
+    expect(stored.result).toBe(JSON.stringify(value));
+  });
+});
